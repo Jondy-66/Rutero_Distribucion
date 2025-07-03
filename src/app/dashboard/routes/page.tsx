@@ -12,6 +12,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
@@ -28,27 +29,27 @@ export default function RoutesPage() {
 
   return (
     <>
-      <PageHeader title="Route Planning" description="Create and manage your sales routes.">
+      <PageHeader title="Planificación de Rutas" description="Crea y gestiona tus rutas de venta.">
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Create Route
+          Crear Ruta
         </Button>
       </PageHeader>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle>Route Details</CardTitle>
-              <CardDescription>Fill in the details for your new route plan.</CardDescription>
+              <CardTitle>Detalles de la Ruta</CardTitle>
+              <CardDescription>Completa los detalles para tu nuevo plan de ruta.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-2">
-                <Label htmlFor="routeName">Route Name</Label>
-                <Input id="routeName" placeholder="e.g., Quito North - Week 24" />
+                <Label htmlFor="routeName">Nombre de la Ruta</Label>
+                <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" />
               </div>
               
               <div className="space-y-2">
-                <Label>Date</Label>
+                <Label>Fecha</Label>
                 <Popover>
                   <PopoverTrigger asChild>
                     <Button
@@ -59,17 +60,17 @@ export default function RoutesPage() {
                       )}
                     >
                       <CalendarIcon className="mr-2 h-4 w-4" />
-                      {date ? format(date, 'PPP') : <span>Pick a date</span>}
+                      {date ? format(date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                    <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={es} />
                   </PopoverContent>
                 </Popover>
               </div>
 
               <div className="space-y-2">
-                <Label>Select Clients</Label>
+                <Label>Seleccionar Clientes</Label>
                 <Popover open={open} onOpenChange={setOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -78,15 +79,15 @@ export default function RoutesPage() {
                       aria-expanded={open}
                       className="w-full justify-between"
                     >
-                      {selectedClients.length > 0 ? `${selectedClients.length} clients selected` : "Select clients..."}
+                      {selectedClients.length > 0 ? `${selectedClients.length} clientes seleccionados` : "Seleccionar clientes..."}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                     <Command>
-                      <CommandInput placeholder="Search clients..." />
+                      <CommandInput placeholder="Buscar clientes..." />
                       <CommandList>
-                        <CommandEmpty>No clients found.</CommandEmpty>
+                        <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                         <CommandGroup>
                           {mockClients.map((client) => (
                             <CommandItem
@@ -110,10 +111,10 @@ export default function RoutesPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="supervisor">Assign Supervisor</Label>
+                <Label htmlFor="supervisor">Asignar Supervisor</Label>
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-muted-foreground" />
-                  <Input id="supervisor" placeholder="Select a supervisor" />
+                  <Input id="supervisor" placeholder="Selecciona un supervisor" />
                 </div>
               </div>
             </CardContent>
@@ -122,13 +123,13 @@ export default function RoutesPage() {
         <div className="lg:col-span-1">
           <Card>
             <CardHeader>
-              <CardTitle>Selected Clients</CardTitle>
-              <CardDescription>{selectedClients.length} clients selected for this route.</CardDescription>
+              <CardTitle>Clientes Seleccionados</CardTitle>
+              <CardDescription>{selectedClients.length} clientes seleccionados para esta ruta.</CardDescription>
             </CardHeader>
             <CardContent>
               {selectedClients.length === 0 ? (
                 <div className="text-center text-muted-foreground py-8">
-                  <p>No clients selected yet.</p>
+                  <p>Aún no hay clientes seleccionados.</p>
                 </div>
               ) : (
                 <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
@@ -137,10 +138,10 @@ export default function RoutesPage() {
                       <p className="font-semibold">{client.nombre_comercial}</p>
                       <p className="text-sm text-muted-foreground">{client.direccion}</p>
                       <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-2">
-                        <Input placeholder="Sales" type="number" />
-                        <Input placeholder="Payments" type="number" />
-                        <Input placeholder="Returns" type="number" />
-                        <Input placeholder="Expired" type="number" />
+                        <Input placeholder="Ventas" type="number" />
+                        <Input placeholder="Pagos" type="number" />
+                        <Input placeholder="Devoluciones" type="number" />
+                        <Input placeholder="Caducados" type="number" />
                       </div>
                     </div>
                   ))}

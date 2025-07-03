@@ -40,13 +40,13 @@ export default function DashboardLayout({
             <Link href="/dashboard/profile">
               <Button variant="ghost" className="w-full justify-start gap-2">
                 <Settings className="h-5 w-5" />
-                <span className="group-data-[collapsible=icon]:hidden">Settings</span>
+                <span className="group-data-[collapsible=icon]:hidden">Configuración</span>
               </Button>
             </Link>
              <Link href="/login">
               <Button variant="ghost" className="w-full justify-start gap-2">
                 <LogOut className="h-5 w-5" />
-                <span className="group-data-[collapsible=icon]:hidden">Logout</span>
+                <span className="group-data-[collapsible=icon]:hidden">Cerrar Sesión</span>
               </Button>
             </Link>
           </SidebarFooter>

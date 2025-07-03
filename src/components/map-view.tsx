@@ -12,9 +12,9 @@ export function MapView() {
     return (
       <Card className="h-[600px] w-full flex items-center justify-center bg-muted">
         <div className="text-center">
-          <p className="font-semibold">Google Maps API Key is missing.</p>
+          <p className="font-semibold">Falta la clave de API de Google Maps.</p>
           <p className="text-sm text-muted-foreground">
-            Please add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to your .env.local file.
+            Por favor, añade NEXT_PUBLIC_GOOGLE_MAPS_API_KEY a tu archivo .env.local.
           </p>
         </div>
       </Card>

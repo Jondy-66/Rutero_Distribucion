@@ -25,44 +25,44 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 export default function ClientsPage() {
   return (
     <>
-      <PageHeader title="Clients" description="View, manage, and import your client data.">
+      <PageHeader title="Clientes" description="Visualiza, gestiona e importa los datos de tus clientes.">
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add Client
+          Añadir Cliente
         </Button>
         <Button variant="outline">
           <UploadCloud className="mr-2 h-4 w-4" />
-          Import
+          Importar
         </Button>
       </PageHeader>
       
       <Card>
         <CardHeader>
-          <CardTitle>Client List</CardTitle>
-          <CardDescription>A list of all clients in your database.</CardDescription>
+          <CardTitle>Lista de Clientes</CardTitle>
+          <CardDescription>Una lista de todos los clientes en tu base de datos.</CardDescription>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="all">
             <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
               <TabsList>
-                <TabsTrigger value="all">All</TabsTrigger>
-                <TabsTrigger value="active">Active</TabsTrigger>
-                <TabsTrigger value="inactive">Inactive</TabsTrigger>
+                <TabsTrigger value="all">Todos</TabsTrigger>
+                <TabsTrigger value="active">Activos</TabsTrigger>
+                <TabsTrigger value="inactive">Inactivos</TabsTrigger>
               </TabsList>
               <div className="flex w-full items-center gap-2 sm:w-auto">
                 <div className="relative flex-1 sm:flex-initial">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search clients..." className="w-full pl-8" />
+                  <Input placeholder="Buscar clientes..." className="w-full pl-8" />
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="gap-1">
                       <File className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Columns</span>
+                      <span className="hidden sm:inline">Columnas</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+                    <DropdownMenuLabel>Alternar columnas</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <DropdownMenuCheckboxItem checked>Ejecutivo</DropdownMenuCheckboxItem>
                     <DropdownMenuCheckboxItem checked>RUC</DropdownMenuCheckboxItem>

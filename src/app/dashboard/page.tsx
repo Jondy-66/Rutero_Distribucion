@@ -19,65 +19,65 @@ import {
 } from 'recharts';
 
 const data = [
-  { name: 'Mon', routes: 4, sales: 2400 },
-  { name: 'Tue', routes: 3, sales: 1398 },
-  { name: 'Wed', routes: 5, sales: 9800 },
-  { name: 'Thu', routes: 2, sales: 3908 },
-  { name: 'Fri', routes: 6, sales: 4800 },
-  { name: 'Sat', routes: 1, sales: 3800 },
+  { name: 'Lun', routes: 4, sales: 2400 },
+  { name: 'Mar', routes: 3, sales: 1398 },
+  { name: 'Mié', routes: 5, sales: 9800 },
+  { name: 'Jue', routes: 2, sales: 3908 },
+  { name: 'Vie', routes: 6, sales: 4800 },
+  { name: 'Sáb', routes: 1, sales: 3800 },
 ];
 
 
 export default function DashboardPage() {
   return (
     <>
-      <PageHeader title="Dashboard" description="Here's a summary of your operations." />
+      <PageHeader title="Panel de Control" description="Aquí tienes un resumen de tus operaciones." />
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Clients</CardTitle>
+            <CardTitle className="text-sm font-medium">Clientes Totales</CardTitle>
             <Briefcase className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">1,234</div>
-            <p className="text-xs text-muted-foreground">+20.1% from last month</p>
+            <p className="text-xs text-muted-foreground">+20.1% desde el mes pasado</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Routes Planned</CardTitle>
+            <CardTitle className="text-sm font-medium">Rutas Planificadas</CardTitle>
             <Route className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+235</div>
-            <p className="text-xs text-muted-foreground">+180.1% from last month</p>
+            <p className="text-xs text-muted-foreground">+180.1% desde el mes pasado</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+            <CardTitle className="text-sm font-medium">Usuarios Activos</CardTitle>
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">+12</div>
-            <p className="text-xs text-muted-foreground">+19% from last month</p>
+            <p className="text-xs text-muted-foreground">+19% desde el mes pasado</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Performance</CardTitle>
+            <CardTitle className="text-sm font-medium">Rendimiento</CardTitle>
             <BarChart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">Good</div>
-            <p className="text-xs text-muted-foreground">Meeting all targets</p>
+            <div className="text-2xl font-bold">Bueno</div>
+            <p className="text-xs text-muted-foreground">Cumpliendo todos los objetivos</p>
           </CardContent>
         </Card>
       </div>
       <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-1 mt-6">
         <Card>
           <CardHeader>
-            <CardTitle>Weekly Activity</CardTitle>
+            <CardTitle>Actividad Semanal</CardTitle>
           </CardHeader>
           <CardContent className="pl-2">
             <ResponsiveContainer width="100%" height={350}>
@@ -105,8 +105,8 @@ export default function DashboardPage() {
                   }}
                 />
                 <Legend />
-                <Bar dataKey="sales" fill="hsl(var(--primary))" name="Sales" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="routes" fill="hsl(var(--accent))" name="Routes" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="sales" fill="hsl(var(--primary))" name="Ventas" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="routes" fill="hsl(var(--accent))" name="Rutas" radius={[4, 4, 0, 0]} />
               </RechartsBarChart>
             </ResponsiveContainer>
           </CardContent>

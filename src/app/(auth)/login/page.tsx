@@ -20,36 +20,36 @@ export default function LoginPage() {
             <Route className="h-8 w-8" />
           </div>
           <CardTitle className="text-3xl font-bold font-headline">Routero</CardTitle>
-          <CardDescription>Enter your credentials to access your routes</CardDescription>
+          <CardDescription>Ingresa tus credenciales para acceder a tus rutas</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Correo Electrónico</Label>
               <Input id="email" type="email" placeholder="m@example.com" required />
             </div>
             <div className="space-y-2">
               <div className="flex items-center">
-                <Label htmlFor="password">Password</Label>
+                <Label htmlFor="password">Contraseña</Label>
                 <Link href="#" className="ml-auto inline-block text-sm underline">
-                  Forgot your password?
+                  ¿Olvidaste tu contraseña?
                 </Link>
               </div>
               <Input id="password" type="password" required />
             </div>
             <Link href="/dashboard" className="w-full">
               <Button type="submit" className="w-full">
-                Sign In
+                Iniciar Sesión
               </Button>
             </Link>
             <Button variant="outline" className="w-full">
-              Sign in with Google
+              Iniciar sesión con Google
             </Button>
           </div>
           <div className="mt-4 text-center text-sm">
-            Don&apos;t have an account?{' '}
+            ¿No tienes una cuenta?{' '}
             <Link href="#" className="underline">
-              Contact Admin
+              Contactar al Administrador
             </Link>
           </div>
         </CardContent>

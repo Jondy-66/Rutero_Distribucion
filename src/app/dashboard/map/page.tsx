@@ -5,8 +5,8 @@ export default function MapPage() {
   return (
     <>
       <PageHeader
-        title="Location Visualization"
-        description="Visualize all client locations on the map."
+        title="Visualización de Ubicaciones"
+        description="Visualiza todas las ubicaciones de los clientes en el mapa."
       />
       <ClientMap />
     </>

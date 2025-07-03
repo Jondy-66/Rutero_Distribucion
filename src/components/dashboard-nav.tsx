@@ -12,11 +12,11 @@ import {
 } from '@/components/ui/sidebar';
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/dashboard/clients', label: 'Clients', icon: Briefcase },
-  { href: '/dashboard/routes', label: 'Routes', icon: Route },
-  { href: '/dashboard/map', label: 'Map', icon: Map },
-  { href: '/dashboard/users', label: 'Users', icon: Users },
+  { href: '/dashboard', label: 'Panel', icon: LayoutDashboard },
+  { href: '/dashboard/clients', label: 'Clientes', icon: Briefcase },
+  { href: '/dashboard/routes', label: 'Rutas', icon: Route },
+  { href: '/dashboard/map', label: 'Mapa', icon: Map },
+  { href: '/dashboard/users', label: 'Usuarios', icon: Users },
 ];
 
 export function DashboardNav() {

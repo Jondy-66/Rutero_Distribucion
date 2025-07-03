@@ -2,7 +2,7 @@ export type User = {
   id: string;
   name: string;
   email: string;
-  role: 'Admin' | 'Supervisor' | 'User';
+  role: 'Administrador' | 'Supervisor' | 'Usuario';
   avatar: string;
 };
 
@@ -24,5 +24,5 @@ export type RoutePlan = {
   routeName: string;
   date: Date;
   clients: Client[];
-  status: 'Planned' | 'In Progress' | 'Completed';
+  status: 'Planificada' | 'En Progreso' | 'Completada';
 };

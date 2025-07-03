@@ -22,27 +22,27 @@ import {
 
 export default function UsersPage() {
   const getBadgeVariant = (role: string) => {
-    if (role === 'Admin') return 'default';
+    if (role === 'Administrador') return 'default';
     if (role === 'Supervisor') return 'secondary';
     return 'outline';
   };
 
   return (
     <>
-      <PageHeader title="Users" description="Manage all users in the system.">
+      <PageHeader title="Usuarios" description="Gestiona todos los usuarios del sistema.">
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add User
+          Añadir Usuario
         </Button>
       </PageHeader>
       <div className="bg-card p-4 rounded-lg border shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead className="hidden sm:table-cell">Status</TableHead>
-              <TableHead>Actions</TableHead>
+              <TableHead>Nombre</TableHead>
+              <TableHead>Rol</TableHead>
+              <TableHead className="hidden sm:table-cell">Estado</TableHead>
+              <TableHead>Acciones</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -64,20 +64,20 @@ export default function UsersPage() {
                   <Badge variant={getBadgeVariant(user.role)}>{user.role}</Badge>
                 </TableCell>
                 <TableCell className="hidden sm:table-cell">
-                  <Badge variant="outline">Active</Badge>
+                  <Badge variant="outline">Activo</Badge>
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button aria-haspopup="true" size="icon" variant="ghost">
                         <MoreHorizontal className="h-4 w-4" />
-                        <span className="sr-only">Toggle menu</span>
+                        <span className="sr-only">Alternar menú</span>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem>Edit</DropdownMenuItem>
-                      <DropdownMenuItem>Delete</DropdownMenuItem>
+                      <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                      <DropdownMenuItem>Editar</DropdownMenuItem>
+                      <DropdownMenuItem>Eliminar</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

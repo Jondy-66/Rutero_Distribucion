@@ -1,10 +1,10 @@
 import type { User, Client } from '@/lib/types';
 
 export const mockUsers: User[] = [
-  { id: '1', name: 'Admin User', email: 'admin@routero.com', role: 'Admin', avatar: '/avatars/01.png' },
-  { id: '2', name: 'Supervisor Sam', email: 'supervisor@routero.com', role: 'Supervisor', avatar: '/avatars/02.png' },
-  { id: '3', name: 'Regular User', email: 'user@routero.com', role: 'User', avatar: '/avatars/03.png' },
-  { id: '4', name: 'Elena Rodriguez', email: 'elena.r@example.com', role: 'User', avatar: '/avatars/04.png' },
+  { id: '1', name: 'Usuario Administrador', email: 'admin@routero.com', role: 'Administrador', avatar: '/avatars/01.png' },
+  { id: '2', name: 'Supervisor Samuel', email: 'supervisor@routero.com', role: 'Supervisor', avatar: '/avatars/02.png' },
+  { id: '3', name: 'Usuario Regular', email: 'user@routero.com', role: 'Usuario', avatar: '/avatars/03.png' },
+  { id: '4', name: 'Elena Rodriguez', email: 'elena.r@example.com', role: 'Usuario', avatar: '/avatars/04.png' },
   { id: '5', name: 'Carlos Gomez', email: 'carlos.g@example.com', role: 'Supervisor', avatar: '/avatars/05.png' },
 ];
 
