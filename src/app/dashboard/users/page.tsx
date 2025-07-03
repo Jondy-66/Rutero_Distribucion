@@ -1,3 +1,6 @@
+'use client';
+
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,10 +24,16 @@ import {
 } from '@/components/ui/dropdown-menu';
 
 export default function UsersPage() {
+  const router = useRouter();
+
   const getBadgeVariant = (role: string) => {
     if (role === 'Administrador') return 'default';
     if (role === 'Supervisor') return 'secondary';
     return 'outline';
+  };
+
+  const handleEdit = (userId: string) => {
+    router.push(`/dashboard/users/${userId}`);
   };
 
   return (
@@ -76,7 +85,7 @@ export default function UsersPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                      <DropdownMenuItem>Editar</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleEdit(user.id)}>Editar</DropdownMenuItem>
                       <DropdownMenuItem>Eliminar</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
