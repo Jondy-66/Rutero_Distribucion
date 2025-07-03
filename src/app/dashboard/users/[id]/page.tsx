@@ -16,6 +16,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { PasswordInput } from '@/components/password-input';
 
 
 export default function UserProfilePage({ params }: { params: { id: string } }) {
@@ -97,11 +98,11 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
           <CardContent className="space-y-4">
              <div className="space-y-2">
               <Label htmlFor="new-password">Nueva Contraseña</Label>
-              <Input id="new-password" type="password" />
+              <PasswordInput id="new-password" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-password">Confirmar Nueva Contraseña</Label>
-              <Input id="confirm-password" type="password" />
+              <PasswordInput id="confirm-password" />
             </div>
           </CardContent>
           <CardFooter>

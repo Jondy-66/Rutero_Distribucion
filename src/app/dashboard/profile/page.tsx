@@ -11,6 +11,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PasswordInput } from '@/components/password-input';
 
 export default function ProfilePage() {
   return (
@@ -69,15 +70,15 @@ export default function ProfilePage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="current-password">Contraseña Actual</Label>
-              <Input id="current-password" type="password" />
+              <PasswordInput id="current-password" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="new-password">Nueva Contraseña</Label>
-              <Input id="new-password" type="password" />
+              <PasswordInput id="new-password" />
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-password">Confirmar Nueva Contraseña</Label>
-              <Input id="confirm-password" type="password" />
+              <PasswordInput id="confirm-password" />
             </div>
           </CardContent>
           <CardFooter>
