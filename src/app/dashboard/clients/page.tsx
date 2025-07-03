@@ -43,22 +43,22 @@ export default function ClientsPage() {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="all">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
               <TabsList>
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="active">Active</TabsTrigger>
                 <TabsTrigger value="inactive">Inactive</TabsTrigger>
               </TabsList>
-              <div className="flex items-center gap-2">
-                <div className="relative">
+              <div className="flex w-full items-center gap-2 sm:w-auto">
+                <div className="relative flex-1 sm:flex-initial">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search clients..." className="pl-8" />
+                  <Input placeholder="Search clients..." className="w-full pl-8" />
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button variant="outline" className="gap-1">
                       <File className="h-3.5 w-3.5" />
-                      <span>Columns</span>
+                      <span className="hidden sm:inline">Columns</span>
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
@@ -79,9 +79,9 @@ export default function ClientsPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre Cliente</TableHead>
-                  <TableHead>RUC</TableHead>
-                  <TableHead>Ejecutivo</TableHead>
-                  <TableHead>Provincia</TableHead>
+                  <TableHead className="hidden sm:table-cell">RUC</TableHead>
+                  <TableHead className="hidden md:table-cell">Ejecutivo</TableHead>
+                  <TableHead className="hidden lg:table-cell">Provincia</TableHead>
                   <TableHead>Dirección</TableHead>
                 </TableRow>
               </TableHeader>
@@ -92,9 +92,9 @@ export default function ClientsPage() {
                       <div className="font-medium">{client.nombre_cliente}</div>
                       <div className="text-sm text-muted-foreground">{client.nombre_comercial}</div>
                     </TableCell>
-                    <TableCell>{client.ruc}</TableCell>
-                    <TableCell>{client.ejecutivo}</TableCell>
-                    <TableCell>{client.provincia}</TableCell>
+                    <TableCell className="hidden sm:table-cell">{client.ruc}</TableCell>
+                    <TableCell className="hidden md:table-cell">{client.ejecutivo}</TableCell>
+                    <TableCell className="hidden lg:table-cell">{client.provincia}</TableCell>
                     <TableCell>{client.direccion}</TableCell>
                   </TableRow>
                 ))}

@@ -41,7 +41,7 @@ export default function UsersPage() {
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead className="hidden sm:table-cell">Status</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -63,7 +63,7 @@ export default function UsersPage() {
                 <TableCell>
                   <Badge variant={getBadgeVariant(user.role)}>{user.role}</Badge>
                 </TableCell>
-                <TableCell>
+                <TableCell className="hidden sm:table-cell">
                   <Badge variant="outline">Active</Badge>
                 </TableCell>
                 <TableCell>
