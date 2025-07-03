@@ -22,6 +22,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import Link from 'next/link';
 
 export default function UsersPage() {
   const router = useRouter();
@@ -39,10 +40,12 @@ export default function UsersPage() {
   return (
     <>
       <PageHeader title="Usuarios" description="Gestiona todos los usuarios del sistema.">
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Añadir Usuario
-        </Button>
+        <Link href="/dashboard/users/new">
+          <Button>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Añadir Usuario
+          </Button>
+        </Link>
       </PageHeader>
       <div className="bg-card p-4 rounded-lg border shadow-sm">
         <Table>
