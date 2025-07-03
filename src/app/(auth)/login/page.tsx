@@ -19,7 +19,7 @@ export default function LoginPage() {
           <div className="inline-block bg-primary text-primary-foreground p-3 rounded-full mx-auto">
             <Route className="h-8 w-8" />
           </div>
-          <CardTitle className="text-3xl font-bold font-headline">Routero</CardTitle>
+          <CardTitle className="text-3xl font-bold font-headline">Rutero</CardTitle>
           <CardDescription>Ingresa tus credenciales para acceder a tus rutas</CardDescription>
         </CardHeader>
         <CardContent>

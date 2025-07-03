@@ -30,7 +30,7 @@ export function UserNav() {
           <div className="flex flex-col space-y-1">
             <p className="text-sm font-medium leading-none">Usuario Administrador</p>
             <p className="text-xs leading-none text-muted-foreground">
-              admin@routero.com
+              admin@rutero.com
             </p>
           </div>
         </DropdownMenuLabel>

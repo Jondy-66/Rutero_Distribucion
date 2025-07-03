@@ -29,7 +29,7 @@ export default function DashboardLayout({
                 <Route className="h-6 w-6" />
               </div>
               <h1 className="text-xl font-semibold font-headline text-sidebar-foreground group-data-[collapsible=icon]:hidden">
-                Routero
+                Rutero
               </h1>
             </Link>
           </SidebarHeader>

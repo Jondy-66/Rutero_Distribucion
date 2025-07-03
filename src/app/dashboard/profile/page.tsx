@@ -47,7 +47,7 @@ export default function ProfilePage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Correo Electrónico</Label>
-              <Input id="email" type="email" defaultValue="admin@routero.com" />
+              <Input id="email" type="email" defaultValue="admin@rutero.com" />
             </div>
              <div className="space-y-2">
               <Label htmlFor="role">Rol</Label>
