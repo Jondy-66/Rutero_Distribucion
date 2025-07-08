@@ -8,7 +8,7 @@ const firebaseConfig = {
   apiKey: "AIzaSyBf28yfROnTCqwgLpXY-GJqIhwC7zIbQMo",
   authDomain: "rutero-fed.firebaseapp.com",
   projectId: "rutero-fed",
-  storageBucket: "rutero-fed.appspot.com",
+  storageBucket: "rutero-fed.firebasestorage.app",
   messagingSenderId: "938904325205",
   appId: "1:938904325205:web:1e8a2b471eff36f4d118dc",
   measurementId: "G-T0NYMCV1HR"
