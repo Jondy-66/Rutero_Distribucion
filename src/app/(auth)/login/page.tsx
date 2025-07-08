@@ -63,9 +63,9 @@ export default function LoginPage() {
 
   const handleSeedDatabase = async () => {
       const seedUsers = [
-        { email: 'sysadmin@rutero.com', password: 'j6FS&p^jM6!NmG', name: 'Sys4dmin', role: 'Administrador' },
-        { email: 'wonate@rutero.com', password: '12345678', name: 'wonate', role: 'Supervisor' },
-        { email: 'jdiaz@rutero.com', password: '123456789', name: 'jdiaz', role: 'Usuario' },
+        { email: 'jdiaza@farmaenlace.com', password: 'j6FS&p^jM6!NmG', name: 'jdiaza', role: 'Administrador' },
+        { email: 'wonate@farmaenlace.com', password: '12345678', name: 'wonate', role: 'Supervisor' },
+        { email: 'jrueda@farmaenlace.com', password: '123456789', name: 'jrueda', role: 'Usuario' },
       ];
       setIsSeeding(true);
       toast({ title: "Iniciando creación de usuarios...", description: "Por favor espera." });
