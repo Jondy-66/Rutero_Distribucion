@@ -1,11 +1,10 @@
 'use client';
 
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { User as FirebaseAuthUser, onAuthStateChanged, getAuth } from 'firebase/auth';
-import { app, db } from '@/lib/firebase/config';
+import { User as FirebaseAuthUser, onAuthStateChanged } from 'firebase/auth';
+import { app, db, auth } from '@/lib/firebase/config';
 import type { User } from '@/lib/types';
-import { doc, getDoc, onSnapshot } from 'firebase/firestore';
-import { Skeleton } from '@/components/ui/skeleton';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { Route } from 'lucide-react';
 
 interface AuthContextType {
@@ -22,7 +21,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const auth = getAuth(app);
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
       setFirebaseUser(fbUser);
       if (fbUser) {
