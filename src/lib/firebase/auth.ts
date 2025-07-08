@@ -4,27 +4,28 @@ import {
   createUserWithEmailAndPassword,
   GoogleAuthProvider,
   signInWithPopup,
+  getAuth,
 } from 'firebase/auth';
-import { getFirebaseAuth, db } from './config';
+import { app, db } from './config';
 import { doc, setDoc } from 'firebase/firestore';
 
 export const handleSignIn = (email, password) => {
-  const auth = getFirebaseAuth();
+  const auth = getAuth(app);
   return signInWithEmailAndPassword(auth, email, password);
 };
 
 export const handleSignOut = () => {
-  const auth = getFirebaseAuth();
+  const auth = getAuth(app);
   return signOut(auth);
 };
 
 export const handleSignUp = (email, password) => {
-  const auth = getFirebaseAuth();
+  const auth = getAuth(app);
   return createUserWithEmailAndPassword(auth, email, password);
 };
 
 export const handleGoogleSignIn = async () => {
-    const auth = getFirebaseAuth();
+    const auth = getAuth(app);
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
