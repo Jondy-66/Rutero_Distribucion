@@ -8,21 +8,23 @@ import {
 import { getFirebaseAuth, db } from './config';
 import { doc, setDoc } from 'firebase/firestore';
 
-const auth = getFirebaseAuth();
-
 export const handleSignIn = (email, password) => {
+  const auth = getFirebaseAuth();
   return signInWithEmailAndPassword(auth, email, password);
 };
 
 export const handleSignOut = () => {
+  const auth = getFirebaseAuth();
   return signOut(auth);
 };
 
 export const handleSignUp = (email, password) => {
+  const auth = getFirebaseAuth();
   return createUserWithEmailAndPassword(auth, email, password);
 };
 
 export const handleGoogleSignIn = async () => {
+    const auth = getFirebaseAuth();
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
