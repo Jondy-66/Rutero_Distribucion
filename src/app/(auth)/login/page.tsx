@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { Route, LoaderCircle } from 'lucide-react';
 import { PasswordInput } from '@/components/password-input';
 import { useToast } from '@/hooks/use-toast';
-import { handleSignIn, handleGoogleSignIn } from '@/lib/firebase/auth';
+import { handleSignIn, handleGoogleSignIn, handleSignUp } from '@/lib/firebase/auth';
+import { addUser } from '@/lib/firebase/firestore';
 import { useAuth } from '@/hooks/use-auth';
 import { redirect } from 'next/navigation';
 
@@ -21,6 +22,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSeeding, setIsSeeding] = useState(false);
 
   const onSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +61,43 @@ export default function LoginPage() {
     }
   }
 
+  const handleSeedDatabase = async () => {
+      const seedUsers = [
+        { email: 'sysadmin@rutero.com', password: 'j6FS&p^jM6!NmG', name: 'Sys4dmin', role: 'Administrador' },
+        { email: 'wonate@rutero.com', password: '12345678', name: 'wonate', role: 'Supervisor' },
+        { email: 'jdiaz@rutero.com', password: '123456789', name: 'jdiaz', role: 'Usuario' },
+      ];
+      setIsSeeding(true);
+      toast({ title: "Iniciando creación de usuarios...", description: "Por favor espera." });
+      try {
+        for (const userData of seedUsers) {
+          try {
+            const userCredential = await handleSignUp(userData.email, userData.password);
+            const uid = userCredential.user.uid;
+            await addUser(uid, {
+              name: userData.name,
+              email: userData.email,
+              role: userData.role as 'Administrador' | 'Supervisor' | 'Usuario',
+              avatar: `https://placehold.co/100x100/011688/FFFFFF/png?text=${userData.name.charAt(0)}`
+            });
+          } catch (error: any) {
+            if (error.code !== 'auth/email-already-in-use') {
+              console.error(`Error creando usuario ${userData.email}:`, error);
+              throw new Error(`Fallo al crear ${userData.email}.`);
+            } else {
+               console.log(`Usuario ${userData.email} ya existe. Saltando.`);
+            }
+          }
+        }
+        toast({ title: "Éxito", description: "Usuarios por defecto creados o ya existentes." });
+      } catch (error: any) {
+        console.error(error);
+        toast({ title: "Error en la creación", description: error.message, variant: 'destructive' });
+      } finally {
+        setIsSeeding(false);
+      }
+    };
+
   if(authLoading) {
     return (
        <div className="w-full min-h-screen flex items-center justify-center bg-background">
@@ -95,7 +134,7 @@ export default function LoginPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Correo Electrónico</Label>
-                <Input id="email" type="email" placeholder="m@example.com" required value={email} onChange={e => setEmail(e.target.value)} disabled={isLoading} />
+                <Input id="email" type="email" placeholder="m@example.com" required value={email} onChange={e => setEmail(e.target.value)} disabled={isLoading || isSeeding} />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center">
@@ -104,17 +143,21 @@ export default function LoginPage() {
                     ¿Olvidaste tu contraseña?
                   </Link>
                 </div>
-                <PasswordInput id="password" required value={password} onChange={e => setPassword(e.target.value)} disabled={isLoading} />
+                <PasswordInput id="password" required value={password} onChange={e => setPassword(e.target.value)} disabled={isLoading || isSeeding} />
               </div>
               <div className="space-y-2 pt-2">
-                  <Button type="submit" className="w-full" disabled={isLoading}>
+                  <Button type="submit" className="w-full" disabled={isLoading || isSeeding}>
                     {isLoading && <LoaderCircle className="animate-spin" />}
                     Iniciar Sesión
                   </Button>
-                <Button variant="outline" className="w-full" onClick={onGoogleSignIn} type="button" disabled={isLoading}>
-                   {isLoading && <LoaderCircle className="animate-spin" />}
+                <Button variant="outline" className="w-full" onClick={onGoogleSignIn} type="button" disabled={isLoading || isSeeding}>
+                   {(isLoading || isSeeding) && <LoaderCircle className="animate-spin" />}
                   Iniciar sesión con Google
                 </Button>
+                 <Button variant="secondary" className="w-full" onClick={handleSeedDatabase} type="button" disabled={isLoading || isSeeding}>
+                   {isSeeding && <LoaderCircle className="animate-spin" />}
+                   Crear Usuarios por Defecto
+                 </Button>
               </div>
             </div>
           </form>
