@@ -1,38 +1,84 @@
 'use client';
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, Check, ChevronsUpDown } from 'lucide-react';
-import { mockClients } from '@/lib/mock-data';
-import { Checkbox } from '@/components/ui/checkbox';
+import { PlusCircle, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle } from 'lucide-react';
+import { getClients, addRoute } from '@/lib/firebase/firestore';
+import type { Client } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { useToast } from '@/hooks/use-toast';
+import { Timestamp } from 'firebase/firestore';
 
 export default function RoutesPage() {
+  const { toast } = useToast();
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [open, setOpen] = useState(false);
+  const [clients, setClients] = useState<Client[]>([]);
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [loadingClients, setLoadingClients] = useState(true);
+  const [isCreating, setIsCreating] = useState(false);
+  const [routeName, setRouteName] = useState('');
+
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const clientsData = await getClients();
+        setClients(clientsData);
+      } catch (error) {
+        console.error("Failed to fetch clients:", error);
+      } finally {
+        setLoadingClients(false);
+      }
+    };
+    fetchClients();
+  }, []);
 
   const handleSelectClient = (ruc: string) => {
     setSelectedClients(prev => 
       prev.includes(ruc) ? prev.filter(c => c !== ruc) : [...prev, ruc]
     );
   };
+  
+  const handleCreateRoute = async () => {
+    if (!routeName || !date || selectedClients.length === 0) {
+      toast({ title: 'Faltan datos', description: 'Por favor completa todos los campos para crear la ruta.', variant: 'destructive' });
+      return;
+    }
+    setIsCreating(true);
+    try {
+        const clientsForRoute = clients.filter(c => selectedClients.includes(c.ruc));
+        await addRoute({
+            routeName,
+            date: Timestamp.fromDate(date),
+            clients: clientsForRoute,
+            status: 'Planificada'
+        });
+        toast({ title: 'Ruta Creada', description: 'La ruta ha sido planificada exitosamente.' });
+        setRouteName('');
+        setSelectedClients([]);
+        setDate(new Date());
+    } catch(error) {
+        console.error(error);
+        toast({ title: 'Error', description: 'No se pudo crear la ruta.', variant: 'destructive' });
+    } finally {
+        setIsCreating(false);
+    }
+  }
 
   return (
     <>
       <PageHeader title="Planificación de Rutas" description="Crea y gestiona tus rutas de venta.">
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Crear Ruta
+        <Button onClick={handleCreateRoute} disabled={isCreating}>
+            {isCreating ? <LoaderCircle className="animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
+            Crear Ruta
         </Button>
       </PageHeader>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -45,7 +91,7 @@ export default function RoutesPage() {
             <CardContent className="space-y-6">
               <div className="space-y-2">
                 <Label htmlFor="routeName">Nombre de la Ruta</Label>
-                <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" />
+                <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
               </div>
               
               <div className="space-y-2">
@@ -78,8 +124,9 @@ export default function RoutesPage() {
                       role="combobox"
                       aria-expanded={open}
                       className="w-full justify-between"
+                      disabled={loadingClients}
                     >
-                      {selectedClients.length > 0 ? `${selectedClients.length} clientes seleccionados` : "Seleccionar clientes..."}
+                      {loadingClients ? 'Cargando clientes...' : selectedClients.length > 0 ? `${selectedClients.length} clientes seleccionados` : "Seleccionar clientes..."}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -89,10 +136,11 @@ export default function RoutesPage() {
                       <CommandList>
                         <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                         <CommandGroup>
-                          {mockClients.map((client) => (
+                          {clients.map((client) => (
                             <CommandItem
                               key={client.ruc}
                               onSelect={() => handleSelectClient(client.ruc)}
+                              value={client.nombre_comercial}
                             >
                               <Check
                                 className={cn(
@@ -133,7 +181,7 @@ export default function RoutesPage() {
                 </div>
               ) : (
                 <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                  {mockClients.filter(c => selectedClients.includes(c.ruc)).map(client => (
+                  {clients.filter(c => selectedClients.includes(c.ruc)).map(client => (
                     <div key={client.id} className="p-3 border rounded-md shadow-sm">
                       <p className="font-semibold">{client.nombre_comercial}</p>
                       <p className="text-sm text-muted-foreground">{client.direccion}</p>

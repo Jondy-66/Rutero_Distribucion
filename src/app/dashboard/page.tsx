@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import {
   Card,
@@ -17,6 +18,8 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
+import { getClients, getUsers } from '@/lib/firebase/firestore';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const data = [
   { name: 'Lun', routes: 4, sales: 2400 },
@@ -29,6 +32,28 @@ const data = [
 
 
 export default function DashboardPage() {
+  const [clientCount, setClientCount] = useState(0);
+  const [userCount, setUserCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [clients, users] = await Promise.all([
+          getClients(),
+          getUsers()
+        ]);
+        setClientCount(clients.length);
+        setUserCount(users.length);
+      } catch (error) {
+        console.error("Error fetching dashboard data:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
   return (
     <>
       <PageHeader title="Panel de Control" description="Aquí tienes un resumen de tus operaciones." />
@@ -39,8 +64,8 @@ export default function DashboardPage() {
             <Briefcase className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,234</div>
-            <p className="text-xs text-muted-foreground">+20.1% desde el mes pasado</p>
+            {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{clientCount}</div>}
+            <p className="text-xs text-muted-foreground">Clientes registrados en el sistema</p>
           </CardContent>
         </Card>
         <Card>
@@ -49,8 +74,8 @@ export default function DashboardPage() {
             <Route className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+235</div>
-            <p className="text-xs text-muted-foreground">+180.1% desde el mes pasado</p>
+             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">0</div>}
+            <p className="text-xs text-muted-foreground">Próximamente</p>
           </CardContent>
         </Card>
         <Card>
@@ -59,8 +84,8 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+12</div>
-            <p className="text-xs text-muted-foreground">+19% desde el mes pasado</p>
+            {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{userCount}</div>}
+            <p className="text-xs text-muted-foreground">Usuarios en el sistema</p>
           </CardContent>
         </Card>
         <Card>

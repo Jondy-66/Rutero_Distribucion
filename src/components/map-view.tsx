@@ -1,12 +1,12 @@
 'use client';
 
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
-import { mockClients } from '@/lib/mock-data';
+import type { Client } from '@/lib/types';
 import { Card } from './ui/card';
 
-export function MapView() {
+export function MapView({ clients }: { clients: Client[] }) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  const position = { lat: -1.8312, lng: -78.1834 };
+  const position = { lat: -1.8312, lng: -78.1834 }; // Centered on Ecuador
 
   if (!apiKey) {
     return (
@@ -31,7 +31,7 @@ export function MapView() {
           gestureHandling={'greedy'}
           disableDefaultUI={true}
         >
-          {mockClients.map((client) => (
+          {clients.map((client) => (
             <AdvancedMarker
               key={client.id}
               position={{ lat: client.latitud, lng: client.longitud }}

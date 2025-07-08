@@ -1,3 +1,5 @@
+'use client';
+import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -8,7 +10,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { mockClients } from '@/lib/mock-data';
+import { getClients } from '@/lib/firebase/firestore';
+import type { Client } from '@/lib/types';
 import { PlusCircle, UploadCloud, File, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
@@ -21,8 +24,26 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function ClientsPage() {
+  const [clients, setClients] = useState<Client[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchClients = async () => {
+      try {
+        const clientsData = await getClients();
+        setClients(clientsData);
+      } catch (error) {
+        console.error("Failed to fetch clients:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchClients();
+  }, []);
+
   return (
     <>
       <PageHeader title="Clientes" description="Visualiza, gestiona e importa los datos de tus clientes.">
@@ -86,18 +107,30 @@ export default function ClientsPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {mockClients.map((client) => (
-                  <TableRow key={client.id}>
-                    <TableCell>
-                      <div className="font-medium">{client.nombre_cliente}</div>
-                      <div className="text-sm text-muted-foreground">{client.nombre_comercial}</div>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">{client.ruc}</TableCell>
-                    <TableCell className="hidden md:table-cell">{client.ejecutivo}</TableCell>
-                    <TableCell className="hidden lg:table-cell">{client.provincia}</TableCell>
-                    <TableCell>{client.direccion}</TableCell>
-                  </TableRow>
-                ))}
+                {loading ? (
+                  Array.from({ length: 5 }).map((_, i) => (
+                    <TableRow key={i}>
+                      <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
+                      <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
+                      <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
+                      <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : (
+                  clients.map((client) => (
+                    <TableRow key={client.id}>
+                      <TableCell>
+                        <div className="font-medium">{client.nombre_cliente}</div>
+                        <div className="text-sm text-muted-foreground">{client.nombre_comercial}</div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">{client.ruc}</TableCell>
+                      <TableCell className="hidden md:table-cell">{client.ejecutivo}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{client.provincia}</TableCell>
+                      <TableCell>{client.direccion}</TableCell>
+                    </TableRow>
+                  ))
+                )}
               </TableBody>
             </Table>
           </div>
