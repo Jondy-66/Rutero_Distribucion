@@ -1,5 +1,5 @@
 import { db } from './config';
-import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch } from 'firebase/firestore';
 import type { User, Client, RoutePlan } from '@/lib/types';
 
 // Users Collection
@@ -48,6 +48,33 @@ export const getClients = async (): Promise<Client[]> => {
 export const addClient = (clientData: Omit<Client, 'id'>) => {
   return addDoc(clientsCollection, clientData);
 };
+
+export const updateClientLocations = async (locations: { ruc: string; provincia: string; canton: string; direccion: string; latitud: number; longitud: number; }[]) => {
+    const batch = writeBatch(db);
+    const clientsCollectionRef = collection(db, 'clients');
+    
+    for (const location of locations) {
+        const q = query(clientsCollectionRef, where("ruc", "==", location.ruc));
+        const querySnapshot = await getDocs(q);
+
+        if (!querySnapshot.empty) {
+            const clientDoc = querySnapshot.docs[0];
+            const clientDocRef = doc(db, 'clients', clientDoc.id);
+            batch.update(clientDocRef, {
+                provincia: location.provincia,
+                canton: location.canton,
+                direccion: location.direccion,
+                latitud: location.latitud,
+                longitud: location.longitud,
+            });
+        } else {
+            console.warn(`Client with RUC ${location.ruc} not found. Skipping update.`);
+        }
+    }
+
+    await batch.commit();
+}
+
 
 // Routes Collection
 const routesCollection = collection(db, 'routes');
