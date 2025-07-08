@@ -5,8 +5,10 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
-import { auth, db } from './config';
+import { getFirebaseAuth, db } from './config';
 import { doc, setDoc } from 'firebase/firestore';
+
+const auth = getFirebaseAuth();
 
 export const handleSignIn = (email, password) => {
   return signInWithEmailAndPassword(auth, email, password);

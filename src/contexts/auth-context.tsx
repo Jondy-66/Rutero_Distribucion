@@ -2,7 +2,7 @@
 
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { User as FirebaseAuthUser, onAuthStateChanged } from 'firebase/auth';
-import { auth, db } from '@/lib/firebase/config';
+import { getFirebaseAuth, db } from '@/lib/firebase/config';
 import type { User } from '@/lib/types';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -22,6 +22,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const auth = getFirebaseAuth();
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
       setFirebaseUser(fbUser);
       if (fbUser) {

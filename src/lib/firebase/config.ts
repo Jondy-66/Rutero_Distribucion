@@ -17,7 +17,11 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const auth = getAuth(app);
 const db = getFirestore(app);
 
-export { app, auth, db };
+// We export a function to ensure auth is initialized only when needed,
+// preventing it from running on the server.
+export const getFirebaseAuth = () => getAuth(app);
+
+
+export { app, db };
