@@ -49,6 +49,33 @@ export const addClient = (clientData: Omit<Client, 'id'>) => {
   return addDoc(clientsCollection, clientData);
 };
 
+export const addClientsBatch = async (clientsData: Omit<Client, 'id'>[]) => {
+    const batch = writeBatch(db);
+    const clientsCollectionRef = collection(db, 'clients');
+    
+    // Efficiently get all RUCs from the database to check for duplicates.
+    const allClientsSnapshot = await getDocs(clientsCollectionRef);
+    const rucsInDb = new Set<string>();
+    allClientsSnapshot.forEach(doc => {
+        rucsInDb.add(doc.data().ruc);
+    });
+
+    let addedCount = 0;
+    for (const client of clientsData) {
+        if (client.ruc && !rucsInDb.has(client.ruc)) {
+            const newClientRef = doc(clientsCollectionRef); // Auto-generate ID
+            batch.set(newClientRef, client);
+            rucsInDb.add(client.ruc); // Add to set to prevent duplicates within the same batch
+            addedCount++;
+        } else {
+            console.warn(`Client with RUC ${client.ruc} already exists or RUC is missing. Skipping.`);
+        }
+    }
+
+    await batch.commit();
+    return addedCount;
+}
+
 export const updateClientLocations = async (locations: { ruc: string; provincia: string; canton: string; direccion: string; latitud: number; longitud: number; }[]) => {
     const batch = writeBatch(db);
     const clientsCollectionRef = collection(db, 'clients');

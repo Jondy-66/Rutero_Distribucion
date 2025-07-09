@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -10,7 +10,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getClients } from '@/lib/firebase/firestore';
+import { getClients, addClientsBatch } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
 import { PlusCircle, UploadCloud, File, Search } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -26,28 +26,154 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import Papa from 'papaparse';
+
+type ClientCsvData = {
+    ejecutivo: string;
+    ruc: string;
+    nombre_cliente: string;
+    nombre_comercial: string;
+    provincia: string;
+    canton: string;
+    direccion: string;
+    latitud: string;
+    longitud: string;
+}
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchClients = async () => {
+    // setLoading(true) is not needed here as it's part of the main loading state
+    try {
+      const clientsData = await getClients();
+      setClients(clientsData);
+    } catch (error: any) {
+      console.error("Failed to fetch clients:", error);
+      if (error.code === 'permission-denied') {
+        toast({ title: "Error de Permisos", description: "No tienes permiso para ver los clientes. Revisa las reglas de seguridad de Firestore.", variant: "destructive" });
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchClients = async () => {
-      try {
-        const clientsData = await getClients();
-        setClients(clientsData);
-      } catch (error: any) {
-        console.error("Failed to fetch clients:", error);
-        if (error.code === 'permission-denied') {
-          toast({ title: "Error de Permisos", description: "No tienes permiso para ver los clientes. Revisa las reglas de seguridad de Firestore.", variant: "destructive" });
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
     fetchClients();
   }, [toast]);
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    Papa.parse<ClientCsvData>(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: async (results) => {
+        const requiredColumns = ['ejecutivo', 'ruc', 'nombre_cliente', 'nombre_comercial', 'provincia', 'canton', 'direccion', 'latitud', 'longitud'];
+        const headers = results.meta.fields || [];
+        const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+
+        if (missingColumns.length > 0) {
+          toast({
+            title: 'Error de formato',
+            description: `Faltan las siguientes columnas en el archivo: ${missingColumns.join(', ')}`,
+            variant: 'destructive',
+          });
+          setIsUploading(false);
+          return;
+        }
+        
+        const dataWithParsedCoords = results.data.map(row => ({
+            ...row,
+            latitud: parseFloat(row.latitud?.replace(',', '.')),
+            longitud: parseFloat(row.longitud?.replace(',', '.'))
+        }));
+
+        const validData = dataWithParsedCoords.filter(row => 
+            row.ruc && row.nombre_cliente && !isNaN(row.latitud) && !isNaN(row.longitud)
+        );
+
+        const invalidRows = results.data.length - validData.length;
+        if(invalidRows > 0) {
+            toast({
+                title: 'Datos inválidos',
+                description: `Se omitieron ${invalidRows} filas por datos faltantes o con formato incorrecto.`,
+            });
+        }
+        
+        if (validData.length === 0) {
+            toast({
+                title: 'No hay datos válidos',
+                description: `No se encontraron filas con datos válidos para procesar.`,
+                variant: 'destructive',
+            });
+            setIsUploading(false);
+            return;
+        }
+
+        try {
+          const clientsToAdd = validData.map(item => ({
+              ejecutivo: item.ejecutivo || '',
+              ruc: item.ruc,
+              nombre_cliente: item.nombre_cliente,
+              nombre_comercial: item.nombre_comercial || '',
+              provincia: item.provincia || '',
+              canton: item.canton || '',
+              direccion: item.direccion || '',
+              latitud: item.latitud,
+              longitud: item.longitud,
+          }));
+
+          const addedCount = await addClientsBatch(clientsToAdd);
+
+          toast({
+            title: 'Carga exitosa',
+            description: `${addedCount} de ${validData.length} clientes nuevos han sido añadidos. Se omitieron duplicados por RUC.`,
+          });
+          setLoading(true);
+          await fetchClients(); 
+        } catch (error: any)
+        {
+          console.error("Failed to add new clients:", error);
+          if (error.code === 'permission-denied') {
+            toast({
+              title: 'Error de Permisos',
+              description: 'No tienes permiso para añadir clientes.',
+              variant: 'destructive',
+            });
+          } else {
+            toast({
+              title: 'Error en la carga',
+              description: 'Ocurrió un error al añadir los clientes.',
+              variant: 'destructive',
+            });
+          }
+        } finally {
+          setIsUploading(false);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+          document.getElementById('close-dialog-clients')?.click();
+        }
+      },
+      error: (error) => {
+        console.error('Error parsing CSV:', error);
+        toast({
+          title: 'Error de archivo',
+          description: 'No se pudo procesar el archivo CSV.',
+          variant: 'destructive',
+        });
+        setIsUploading(false);
+      }
+    });
+  };
 
   return (
     <>
@@ -56,10 +182,39 @@ export default function ClientsPage() {
           <PlusCircle className="mr-2 h-4 w-4" />
           Añadir Cliente
         </Button>
-        <Button variant="outline">
-          <UploadCloud className="mr-2 h-4 w-4" />
-          Importar
-        </Button>
+        <Dialog>
+            <DialogTrigger asChild>
+                <Button variant="outline">
+                    <UploadCloud className="mr-2 h-4 w-4" />
+                    Importar
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Importar Clientes desde CSV</DialogTitle>
+                    <DialogDescription>
+                        Sube un archivo CSV para añadir clientes nuevos. Columnas requeridas: ejecutivo, ruc, nombre_cliente, nombre_comercial, provincia, canton, direccion, latitud, longitud.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                <Input
+                    type="file"
+                    accept=".csv"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    disabled={isUploading}
+                />
+                </div>
+                <DialogFooter className="sm:justify-between">
+                    <span className="text-sm text-muted-foreground">{isUploading ? 'Procesando archivo...' : 'Selecciona un archivo para empezar.'}</span>
+                    <DialogClose asChild>
+                        <Button type="button" variant="secondary" id="close-dialog-clients">
+                            Cerrar
+                        </Button>
+                    </DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
       </PageHeader>
       
       <Card>
