@@ -29,8 +29,8 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await handleSignIn(email, password);
-      toast({ title: "Inicio de sesión exitoso", description: "¡Bienvenido de vuelta!" });
-      router.push('/dashboard');
+      toast({ title: "Inicio de sesión exitoso", description: "Verificando perfil..." });
+      // The redirect is now handled by the AuthContext and page effects
     } catch (error: any) {
       console.error(error);
       let description = "Ocurrió un error al iniciar sesión.";
@@ -53,8 +53,8 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       await handleGoogleSignIn();
-      toast({ title: "Inicio de sesión con Google exitoso", description: "¡Bienvenido!" });
-      router.push('/dashboard');
+      toast({ title: "Inicio de sesión con Google exitoso", description: "Verificando perfil..." });
+      // The redirect is now handled by the AuthContext and page effects
     } catch (error: any) {
        console.error(error);
        toast({
@@ -98,7 +98,13 @@ export default function LoginPage() {
         toast({ title: "Éxito", description: "Usuarios por defecto creados o ya existentes." });
       } catch (error: any) {
         console.error(error);
-        toast({ title: "Error en la creación", description: error.message, variant: 'destructive' });
+        let description = "Ocurrió un error al crear los usuarios por defecto.";
+        if (error.code === 'permission-denied') {
+          description = "Error de permisos. Asegúrate de haber configurado las reglas de seguridad de Firestore en la consola de Firebase.";
+        } else {
+            description = error.message || description;
+        }
+        toast({ title: "Error en la creación", description: description, variant: 'destructive' });
       } finally {
         setIsSeeding(false);
       }
