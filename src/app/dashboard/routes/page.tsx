@@ -32,14 +32,19 @@ export default function RoutesPage() {
       try {
         const clientsData = await getClients();
         setClients(clientsData);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to fetch clients:", error);
+        if (error.code === 'permission-denied') {
+            toast({ title: "Error de Permisos", description: "No se pudieron cargar los clientes.", variant: "destructive" });
+        } else {
+            toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" });
+        }
       } finally {
         setLoadingClients(false);
       }
     };
     fetchClients();
-  }, []);
+  }, [toast]);
 
   const handleSelectClient = (ruc: string) => {
     setSelectedClients(prev => 
@@ -65,9 +70,13 @@ export default function RoutesPage() {
         setRouteName('');
         setSelectedClients([]);
         setDate(new Date());
-    } catch(error) {
+    } catch(error: any) {
         console.error(error);
-        toast({ title: 'Error', description: 'No se pudo crear la ruta.', variant: 'destructive' });
+        if (error.code === 'permission-denied') {
+            toast({ title: 'Error de Permisos', description: 'No tienes permiso para crear rutas.', variant: 'destructive' });
+        } else {
+            toast({ title: 'Error', description: 'No se pudo crear la ruta.', variant: 'destructive' });
+        }
     } finally {
         setIsCreating(false);
     }

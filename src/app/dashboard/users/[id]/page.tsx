@@ -39,8 +39,11 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
             notFound();
           }
           setUser(userData);
-        } catch (error) {
+        } catch (error: any) {
           console.error("Failed to fetch user:", error);
+          if(error.code === 'permission-denied') {
+            toast({ title: "Error de Permisos", description: "No tienes permiso para ver este usuario.", variant: "destructive" });
+          }
           notFound();
         } finally {
           setLoading(false);
@@ -48,7 +51,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       };
       fetchUser();
     }
-  }, [params.id]);
+  }, [params.id, toast]);
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,7 +67,11 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       router.push('/dashboard/users');
     } catch (error: any) {
       console.error(error);
-      toast({ title: "Error", description: error.message || "No se pudo actualizar el usuario.", variant: "destructive" });
+      if (error.code === 'permission-denied') {
+        toast({ title: "Error de Permisos", description: "No tienes permiso para actualizar usuarios.", variant: "destructive" });
+      } else {
+        toast({ title: "Error", description: error.message || "No se pudo actualizar el usuario.", variant: "destructive" });
+      }
     } finally {
       setIsSaving(false);
     }

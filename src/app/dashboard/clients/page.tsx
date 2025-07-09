@@ -25,24 +25,29 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchClients = async () => {
       try {
         const clientsData = await getClients();
         setClients(clientsData);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to fetch clients:", error);
+        if (error.code === 'permission-denied') {
+          toast({ title: "Error de Permisos", description: "No tienes permiso para ver los clientes. Revisa las reglas de seguridad de Firestore.", variant: "destructive" });
+        }
       } finally {
         setLoading(false);
       }
     };
     fetchClients();
-  }, []);
+  }, [toast]);
 
   return (
     <>

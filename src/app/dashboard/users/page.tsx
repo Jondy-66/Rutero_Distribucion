@@ -51,9 +51,13 @@ export default function UsersPage() {
     try {
       const usersData = await getUsers();
       setUsers(usersData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch users:", error);
-      toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" });
+      if (error.code === 'permission-denied') {
+        toast({ title: "Error de Permisos", description: "No tienes permiso para ver usuarios. Revisa las reglas de seguridad de Firestore.", variant: "destructive" });
+      } else {
+        toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" });
+      }
     } finally {
       setLoading(false);
     }
@@ -78,9 +82,13 @@ export default function UsersPage() {
       await deleteUser(userId);
       toast({ title: "Éxito", description: "Usuario eliminado correctamente." });
       fetchUsers(); // Refresh the list
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete user:", error);
-      toast({ title: "Error", description: "No se pudo eliminar el usuario.", variant: "destructive" });
+      if (error.code === 'permission-denied') {
+        toast({ title: "Error de Permisos", description: "No tienes permiso para eliminar usuarios.", variant: "destructive" });
+      } else {
+        toast({ title: "Error", description: "No se pudo eliminar el usuario.", variant: "destructive" });
+      }
     }
   };
 

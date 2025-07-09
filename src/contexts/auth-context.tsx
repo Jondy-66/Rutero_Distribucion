@@ -6,6 +6,7 @@ import { app, db, auth } from '@/lib/firebase/config';
 import type { User } from '@/lib/types';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { Route } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 interface AuthContextType {
   user: User | null;
@@ -19,6 +20,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseAuthUser | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
@@ -30,10 +32,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             if (userDoc.exists()) {
               setUser({ id: fbUser.uid, ...userDoc.data() } as User);
             } else {
-              // This is an inconsistent state. The user is authenticated with Firebase Auth,
-              // but has no corresponding user document in Firestore.
-              // This can happen if the document creation failed during sign-up.
-              // We'll treat them as not properly logged in to prevent errors.
               console.error(`Inconsistent state: User document not found in Firestore for UID: ${fbUser.uid}`);
               setUser(null);
             }
@@ -41,6 +39,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           },
           (error) => {
             console.error("Firestore user profile subscription error:", error);
+            if ((error as any).code === 'permission-denied') {
+                toast({
+                    title: "Error de Permisos",
+                    description: "No se pudo verificar tu perfil. Revisa las reglas de seguridad de Firestore.",
+                    variant: "destructive"
+                });
+            }
             setUser(null);
             setLoading(false);
           }
@@ -53,7 +58,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribeAuth();
-  }, []);
+  }, [toast]);
 
   if (loading) {
       return (

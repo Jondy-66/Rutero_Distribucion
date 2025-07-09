@@ -45,9 +45,13 @@ export default function LocationsPage() {
       const clientsData = await getClients();
       setClients(clientsData);
       setFilteredClients(clientsData);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch clients:", error);
-      toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" });
+      if (error.code === 'permission-denied') {
+        toast({ title: "Error de Permisos", description: "No se pudieron cargar los clientes. Revisa las reglas de seguridad de Firestore.", variant: "destructive" });
+      } else {
+        toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" });
+      }
     } finally {
       setLoading(false);
     }
@@ -144,13 +148,21 @@ export default function LocationsPage() {
             description: `${validData.length} ubicaciones de clientes han sido actualizadas.`,
           });
           await fetchClients(); 
-        } catch (error) {
+        } catch (error: any) {
           console.error("Failed to update client locations:", error);
-          toast({
-            title: 'Error en la carga',
-            description: 'Ocurrió un error al actualizar las ubicaciones.',
-            variant: 'destructive',
-          });
+          if (error.code === 'permission-denied') {
+            toast({
+              title: 'Error de Permisos',
+              description: 'No tienes permiso para actualizar ubicaciones. Revisa las reglas de seguridad de Firestore.',
+              variant: 'destructive',
+            });
+          } else {
+            toast({
+              title: 'Error en la carga',
+              description: 'Ocurrió un error al actualizar las ubicaciones.',
+              variant: 'destructive',
+            });
+          }
         } finally {
           setIsUploading(false);
           if (fileInputRef.current) {

@@ -20,6 +20,7 @@ import {
 } from 'recharts';
 import { getClients, getUsers } from '@/lib/firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
 const data = [
   { name: 'Lun', routes: 4, sales: 2400 },
@@ -35,6 +36,7 @@ export default function DashboardPage() {
   const [clientCount, setClientCount] = useState(0);
   const [userCount, setUserCount] = useState(0);
   const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
   useEffect(() => {
     const fetchData = async () => {
@@ -45,14 +47,19 @@ export default function DashboardPage() {
         ]);
         setClientCount(clients.length);
         setUserCount(users.length);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error fetching dashboard data:", error);
+        if (error.code === 'permission-denied') {
+            toast({ title: "Error de Permisos", description: "No se pudieron cargar los datos del panel. Revisa las reglas de seguridad de Firestore.", variant: "destructive" });
+        } else {
+            toast({ title: "Error", description: "No se pudieron cargar los datos del panel.", variant: "destructive" });
+        }
       } finally {
         setLoading(false);
       }
     };
     fetchData();
-  }, []);
+  }, [toast]);
 
   return (
     <>

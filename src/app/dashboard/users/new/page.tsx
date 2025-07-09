@@ -55,7 +55,11 @@ export default function NewUserPage() {
       router.push('/dashboard/users');
     } catch (error: any) {
       console.error(error);
-      toast({ title: "Error", description: error.message || "No se pudo crear el usuario.", variant: "destructive" });
+      if (error.code === 'permission-denied') {
+        toast({ title: "Error de Permisos", description: "No tienes permiso para crear usuarios.", variant: "destructive" });
+      } else {
+        toast({ title: "Error", description: error.message || "No se pudo crear el usuario.", variant: "destructive" });
+      }
     } finally {
       setIsLoading(false);
     }

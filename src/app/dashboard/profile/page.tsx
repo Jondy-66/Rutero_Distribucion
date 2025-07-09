@@ -38,7 +38,11 @@ export default function ProfilePage() {
         toast({ title: "Éxito", description: "Perfil actualizado." });
     } catch (error: any) {
         console.error(error);
-        toast({ title: "Error", description: "No se pudo actualizar el perfil.", variant: "destructive" });
+        if (error.code === 'permission-denied') {
+            toast({ title: "Error de Permisos", description: "No tienes permiso para actualizar este perfil.", variant: "destructive" });
+        } else {
+            toast({ title: "Error", description: "No se pudo actualizar el perfil.", variant: "destructive" });
+        }
     } finally {
         setIsSaving(false);
     }
