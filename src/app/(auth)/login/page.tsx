@@ -35,7 +35,7 @@ export default function LoginPage() {
       console.error(error);
       let description = "Ocurrió un error al iniciar sesión.";
       if (error.code === 'auth/invalid-credential') {
-        description = "Credenciales incorrectas. Por favor, verifica tu correo y contraseña.";
+        description = "Credenciales incorrectas. Por favor, verifica tus datos o crea los usuarios por defecto.";
       } else {
         description = error.message || description;
       }
