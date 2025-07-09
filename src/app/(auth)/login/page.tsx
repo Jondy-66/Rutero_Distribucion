@@ -33,9 +33,15 @@ export default function LoginPage() {
       router.push('/dashboard');
     } catch (error: any) {
       console.error(error);
+      let description = "Ocurrió un error al iniciar sesión.";
+      if (error.code === 'auth/invalid-credential') {
+        description = "Credenciales incorrectas. Por favor, verifica tu correo y contraseña.";
+      } else {
+        description = error.message || description;
+      }
       toast({
         title: "Error de inicio de sesión",
-        description: error.message || "Ocurrió un error al iniciar sesión.",
+        description: description,
         variant: 'destructive'
       });
     } finally {
