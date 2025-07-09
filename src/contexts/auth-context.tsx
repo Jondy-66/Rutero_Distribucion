@@ -24,28 +24,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
       setFirebaseUser(fbUser);
       if (fbUser) {
-        // Listen for real-time updates to the user's profile
         const userDocRef = doc(db, 'users', fbUser.uid);
         const unsubscribeFirestore = onSnapshot(userDocRef, 
           (userDoc) => {
             if (userDoc.exists()) {
               setUser({ id: fbUser.uid, ...userDoc.data() } as User);
             } else {
-              // This might happen if the user signed up but the Firestore doc creation failed or is pending
-              setUser({
-                id: fbUser.uid,
-                name: fbUser.displayName || 'Usuario',
-                email: fbUser.email || '',
-                role: 'Usuario',
-                avatar: fbUser.photoURL || ''
-              });
+              // This is an inconsistent state. The user is authenticated with Firebase Auth,
+              // but has no corresponding user document in Firestore.
+              // This can happen if the document creation failed during sign-up.
+              // We'll treat them as not properly logged in to prevent errors.
+              console.error(`Inconsistent state: User document not found in Firestore for UID: ${fbUser.uid}`);
+              setUser(null);
             }
             setLoading(false);
           },
           (error) => {
             console.error("Firestore user profile subscription error:", error);
-            // If we get a permission error, it's safer to assume the user is not fully logged in
-            // or has no profile. Set user to null and stop loading so they land on the login page.
             setUser(null);
             setLoading(false);
           }
