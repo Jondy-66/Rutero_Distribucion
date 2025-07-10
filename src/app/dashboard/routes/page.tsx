@@ -117,6 +117,50 @@ export default function RoutesPage() {
               <CardDescription>Completa los detalles para tu nuevo plan de ruta.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
+              
+              <div className="space-y-2">
+                <Label>Seleccionar Clientes</Label>
+                <Popover open={open} onOpenChange={setOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={open}
+                      className="w-full justify-between"
+                      disabled={loadingClients}
+                    >
+                      {loadingClients ? 'Cargando clientes...' : selectedClients.length > 0 ? `${selectedClients.length} clientes seleccionados` : "Seleccionar clientes..."}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                    <Command>
+                      <CommandInput placeholder="Buscar clientes..." />
+                      <CommandList>
+                        <CommandEmpty>No se encontraron clientes.</CommandEmpty>
+                        <CommandGroup>
+                          {clients.map((client) => (
+                            <CommandItem
+                              key={client.ruc}
+                              onSelect={() => handleSelectClient(client.ruc)}
+                              value={client.nombre_comercial}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  selectedClients.includes(client.ruc) ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              {client.nombre_comercial}
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="routeName">Nombre de la Ruta</Label>
                 <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
@@ -174,51 +218,6 @@ export default function RoutesPage() {
                     </div>
                 </div>
               </div>
-
-
-              <div className="space-y-2">
-                <Label>Seleccionar Clientes</Label>
-                <Popover open={open} onOpenChange={setOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={open}
-                      className="w-full justify-between"
-                      disabled={loadingClients}
-                    >
-                      {loadingClients ? 'Cargando clientes...' : selectedClients.length > 0 ? `${selectedClients.length} clientes seleccionados` : "Seleccionar clientes..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                    <Command>
-                      <CommandInput placeholder="Buscar clientes..." />
-                      <CommandList>
-                        <CommandEmpty>No se encontraron clientes.</CommandEmpty>
-                        <CommandGroup>
-                          {clients.map((client) => (
-                            <CommandItem
-                              key={client.ruc}
-                              onSelect={() => handleSelectClient(client.ruc)}
-                              value={client.nombre_comercial}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  selectedClients.includes(client.ruc) ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                              {client.nombre_comercial}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="supervisor">Asignar Supervisor</Label>
                 <div className="flex items-center gap-2">
