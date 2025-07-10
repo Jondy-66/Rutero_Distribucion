@@ -135,7 +135,7 @@ export default function RoutesPage() {
                   </PopoverTrigger>
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                     <Command>
-                      <CommandInput placeholder="Buscar clientes..." />
+                      <CommandInput placeholder="Buscar por RUC, nombre comercial o cliente..." />
                       <CommandList>
                         <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                         <CommandGroup>
@@ -143,7 +143,7 @@ export default function RoutesPage() {
                             <CommandItem
                               key={client.ruc}
                               onSelect={() => handleSelectClient(client.ruc)}
-                              value={client.nombre_comercial}
+                              value={`${client.nombre_comercial} ${client.nombre_cliente} ${client.ruc}`}
                             >
                               <Check
                                 className={cn(
@@ -151,7 +151,10 @@ export default function RoutesPage() {
                                   selectedClients.includes(client.ruc) ? "opacity-100" : "opacity-0"
                                 )}
                               />
-                              {client.nombre_comercial}
+                                <div>
+                                    <p>{client.nombre_comercial}</p>
+                                    <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                                </div>
                             </CommandItem>
                           ))}
                         </CommandGroup>
