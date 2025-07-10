@@ -122,55 +122,57 @@ export default function RoutesPage() {
                 <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                 <div className="space-y-2">
-                    <Label>Fecha</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant={'outline'}
-                          className={cn(
-                            'w-full justify-start text-left font-normal',
-                            !date && 'text-muted-foreground'
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {date ? format(date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={es} />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="start-time">Hora de Inicio</Label>
-                    <Select value={startTime} onValueChange={setStartTime}>
-                        <SelectTrigger id="start-time">
-                            <Clock className="mr-2 h-4 w-4" />
-                            <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {startTimeSlots.map(time => (
-                                <SelectItem key={time} value={time}>{time}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="end-time">Hora de Fin</Label>
-                     <Select value={endTime} onValueChange={setEndTime}>
-                        <SelectTrigger id="end-time">
-                             <Clock className="mr-2 h-4 w-4" />
-                            <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {endTimeSlots.map(time => (
-                                <SelectItem key={time} value={time}>{time}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-4">
+                   <div className="space-y-2">
+                      <Label>Fecha</Label>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant={'outline'}
+                            className={cn(
+                              'w-full justify-start text-left font-normal',
+                              !date && 'text-muted-foreground'
+                            )}
+                          >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            {date ? format(date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                          <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={es} />
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="start-time">Hora de Inicio</Label>
+                      <Select value={startTime} onValueChange={setStartTime}>
+                          <SelectTrigger id="start-time">
+                              <Clock className="mr-2 h-4 w-4" />
+                              <SelectValue placeholder="Seleccionar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {startTimeSlots.map(time => (
+                                  <SelectItem key={time} value={time}>{time}</SelectItem>
+                              ))}
+                          </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="end-time">Hora de Fin</Label>
+                       <Select value={endTime} onValueChange={setEndTime}>
+                          <SelectTrigger id="end-time">
+                               <Clock className="mr-2 h-4 w-4" />
+                              <SelectValue placeholder="Seleccionar" />
+                          </SelectTrigger>
+                          <SelectContent>
+                              {endTimeSlots.map(time => (
+                                  <SelectItem key={time} value={time}>{time}</SelectItem>
+                              ))}
+                          </SelectContent>
+                      </Select>
+                    </div>
+                </div>
               </div>
 
 
