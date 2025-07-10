@@ -35,7 +35,7 @@ export default function LoginPage() {
       console.error(error);
       let description = "Ocurrió un error al iniciar sesión.";
       if (error.code === 'auth/invalid-credential') {
-        description = "Credenciales incorrectas. Por favor, verifica tus datos o crea los usuarios por defecto.";
+        description = "Credenciales incorrectas. Por favor, verifica tus datos o crea el usuario administrador por defecto.";
       } else {
         description = error.message || description;
       }
@@ -70,11 +70,9 @@ export default function LoginPage() {
   const handleSeedDatabase = async () => {
       const seedUsers = [
         { email: 'jdiaza@farmaenlace.com', password: 'j6FS&p^jM6!NmG', name: 'jdiaza', role: 'Administrador' },
-        { email: 'wonate@farmaenlace.com', password: '12345678', name: 'wonate', role: 'Supervisor' },
-        { email: 'jrueda@farmaenlace.com', password: '123456789', name: 'jrueda', role: 'Usuario' },
       ];
       setIsSeeding(true);
-      toast({ title: "Iniciando creación de usuarios...", description: "Por favor espera." });
+      toast({ title: "Iniciando creación de usuario administrador...", description: "Por favor espera." });
       try {
         for (const userData of seedUsers) {
           try {
@@ -95,10 +93,10 @@ export default function LoginPage() {
             }
           }
         }
-        toast({ title: "Éxito", description: "Usuarios por defecto creados o ya existentes." });
+        toast({ title: "Éxito", description: "Usuario administrador por defecto creado o ya existente." });
       } catch (error: any) {
         console.error(error);
-        let description = "Ocurrió un error al crear los usuarios por defecto.";
+        let description = "Ocurrió un error al crear el usuario por defecto.";
         if (error.code === 'permission-denied') {
           description = "Error de permisos. Asegúrate de haber configurado las reglas de seguridad de Firestore en la consola de Firebase.";
         } else {
@@ -168,7 +166,7 @@ export default function LoginPage() {
                 </Button>
                  <Button variant="secondary" className="w-full" onClick={handleSeedDatabase} type="button" disabled={isLoading || isSeeding}>
                    {isSeeding && <LoaderCircle className="animate-spin" />}
-                   Crear Usuarios por Defecto
+                   Crear Usuario Administrador
                  </Button>
               </div>
             </div>
