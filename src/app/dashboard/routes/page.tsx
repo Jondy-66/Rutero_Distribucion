@@ -89,6 +89,8 @@ export default function RoutesPage() {
         setRouteName('');
         setSelectedClients([]);
         setDate(new Date());
+        setStartTime(undefined);
+        setEndTime(undefined);
     } catch(error: any) {
         console.error(error);
         if (error.code === 'permission-denied') {
@@ -104,7 +106,7 @@ export default function RoutesPage() {
   return (
     <>
       <PageHeader title="Planificación de Rutas" description="Crea y gestiona tus rutas de venta.">
-        <Button onClick={handleCreateRoute} disabled={isCreating}>
+        <Button onClick={handleCreateRoute} disabled={isCreating || loadingClients}>
             {isCreating ? <LoaderCircle className="animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
             Crear Ruta
         </Button>
