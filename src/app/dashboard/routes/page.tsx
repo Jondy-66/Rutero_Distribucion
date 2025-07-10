@@ -6,8 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PlusCircle, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock } from 'lucide-react';
-import { getClients, addRoute } from '@/lib/firebase/firestore';
-import type { Client } from '@/lib/types';
+import { getClients, addRoute, getUsers } from '@/lib/firebase/firestore';
+import type { Client, User } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
@@ -17,6 +17,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { useToast } from '@/hooks/use-toast';
 import { Timestamp } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useAuth } from '@/hooks/use-auth';
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
     const slots = [];
@@ -36,34 +37,58 @@ const endTimeSlots = generateTimeSlots(8, 18, 30, 30);
 
 export default function RoutesPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [date, setDate] = useState<Date | undefined>(new Date());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>(new Date());
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [startTime, setStartTime] = useState<string | undefined>();
   const [endTime, setEndTime] = useState<string | undefined>();
   const [open, setOpen] = useState(false);
   const [clients, setClients] = useState<Client[]>([]);
+  const [supervisors, setSupervisors] = useState<User[]>([]);
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [selectedSupervisor, setSelectedSupervisor] = useState<string | undefined>();
   const [loadingClients, setLoadingClients] = useState(true);
+  const [loadingSupervisors, setLoadingSupervisors] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
   const [routeName, setRouteName] = useState('');
 
   useEffect(() => {
     const fetchClients = async () => {
+      setLoadingClients(true);
       try {
         const clientsData = await getClients();
         setClients(clientsData);
       } catch (error: any) {
         console.error("Failed to fetch clients:", error);
-        if (error.code === 'permission-denied') {
-            toast({ title: "Error de Permisos", description: "No se pudieron cargar los clientes.", variant: "destructive" });
-        } else {
-            toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" });
-        }
+        toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" });
       } finally {
         setLoadingClients(false);
       }
     };
+
+    const fetchSupervisors = async () => {
+        setLoadingSupervisors(true);
+        try {
+            const allUsers = await getUsers();
+            const supervisorUsers = allUsers.filter(u => u.role === 'Supervisor');
+            setSupervisors(supervisorUsers);
+        } catch (error: any) {
+            console.error("Failed to fetch supervisors:", error);
+            toast({ title: "Error", description: "No se pudieron cargar los supervisores.", variant: "destructive" });
+        } finally {
+            setLoadingSupervisors(false);
+        }
+    }
+
     fetchClients();
+    fetchSupervisors();
   }, [toast]);
+  
+  const handleCalendarSelect = () => {
+      setDate(selectedCalendarDate);
+      setIsCalendarOpen(false);
+  };
 
   const handleSelectClient = (ruc: string) => {
     setSelectedClients(prev => 
@@ -72,10 +97,15 @@ export default function RoutesPage() {
   };
   
   const handleCreateRoute = async () => {
-    if (!routeName || !date || selectedClients.length === 0) {
+    if (!routeName || !date || selectedClients.length === 0 || !selectedSupervisor || !startTime || !endTime) {
       toast({ title: 'Faltan datos', description: 'Por favor completa todos los campos para crear la ruta.', variant: 'destructive' });
       return;
     }
+    if (!user) {
+        toast({ title: 'Error', description: 'Debes iniciar sesión para crear una ruta.', variant: 'destructive' });
+        return;
+    }
+
     setIsCreating(true);
     try {
         const clientsForRoute = clients.filter(c => selectedClients.includes(c.ruc));
@@ -83,7 +113,11 @@ export default function RoutesPage() {
             routeName,
             date: Timestamp.fromDate(date),
             clients: clientsForRoute,
-            status: 'Planificada'
+            status: 'Planificada',
+            supervisorId: selectedSupervisor,
+            createdBy: user.id,
+            startTime,
+            endTime
         });
         toast({ title: 'Ruta Creada', description: 'La ruta ha sido planificada exitosamente.' });
         setRouteName('');
@@ -91,6 +125,7 @@ export default function RoutesPage() {
         setDate(new Date());
         setStartTime(undefined);
         setEndTime(undefined);
+        setSelectedSupervisor(undefined);
     } catch(error: any) {
         console.error(error);
         if (error.code === 'permission-denied') {
@@ -103,15 +138,17 @@ export default function RoutesPage() {
     }
   }
 
+  const isLoading = loadingClients || loadingSupervisors;
+
   return (
     <>
       <PageHeader title="Planificación de Rutas" description="Crea y gestiona tus rutas de venta.">
-        <Button onClick={handleCreateRoute} disabled={isCreating || loadingClients}>
+        <Button onClick={handleCreateRoute} disabled={isCreating || isLoading}>
             {isCreating ? <LoaderCircle className="animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
             Crear Ruta
         </Button>
       </PageHeader>
-      <div className="grid grid-cols-1 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <Card>
             <CardHeader>
@@ -137,7 +174,7 @@ export default function RoutesPage() {
                   </PopoverTrigger>
                   <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
                     <Command>
-                      <CommandInput placeholder="Buscar por RUC, nombre comercial o cliente..." />
+                      <CommandInput placeholder="Buscar por RUC, nombre..." />
                       <CommandList>
                         <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                         <CommandGroup>
@@ -168,67 +205,80 @@ export default function RoutesPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="routeName">Nombre de la Ruta</Label>
-                <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
+                <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isLoading}/>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-4">
-                   <div className="space-y-2">
-                      <Label>Fecha</Label>
-                      <Popover>
-                        <PopoverTrigger asChild>
-                          <Button
-                            variant={'outline'}
-                            className={cn(
-                              'w-full justify-start text-left font-normal',
-                              !date && 'text-muted-foreground'
-                            )}
-                          >
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            {date ? format(date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-auto p-0">
-                          <Calendar mode="single" selected={date} onSelect={setDate} initialFocus locale={es} />
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="start-time">Hora de Inicio</Label>
-                      <Select value={startTime} onValueChange={setStartTime}>
-                          <SelectTrigger id="start-time">
-                              <Clock className="mr-2 h-4 w-4" />
-                              <SelectValue placeholder="Seleccionar" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              {startTimeSlots.map(time => (
-                                  <SelectItem key={time} value={time}>{time}</SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="end-time">Hora de Fin</Label>
-                       <Select value={endTime} onValueChange={setEndTime}>
-                          <SelectTrigger id="end-time">
-                               <Clock className="mr-2 h-4 w-4" />
-                              <SelectValue placeholder="Seleccionar" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              {endTimeSlots.map(time => (
-                                  <SelectItem key={time} value={time}>{time}</SelectItem>
-                              ))}
-                          </SelectContent>
-                      </Select>
-                    </div>
-                </div>
+              <div className="space-y-4">
+                 <div className="space-y-2">
+                    <Label>Fecha</Label>
+                    <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant={'outline'}
+                          className={cn(
+                            'w-full justify-start text-left font-normal',
+                            !date && 'text-muted-foreground'
+                          )}
+                           disabled={isLoading}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {date ? format(date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar mode="single" selected={selectedCalendarDate} onSelect={setSelectedCalendarDate} initialFocus locale={es} />
+                        <div className="p-2 border-t border-border">
+                            <Button onClick={handleCalendarSelect} className="w-full">Seleccionar</Button>
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="start-time">Hora de Inicio</Label>
+                    <Select value={startTime} onValueChange={setStartTime}  disabled={isLoading}>
+                        <SelectTrigger id="start-time">
+                            <Clock className="mr-2 h-4 w-4" />
+                            <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {startTimeSlots.map(time => (
+                                <SelectItem key={time} value={time}>{time}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="end-time">Hora de Fin</Label>
+                     <Select value={endTime} onValueChange={setEndTime}  disabled={isLoading}>
+                        <SelectTrigger id="end-time">
+                             <Clock className="mr-2 h-4 w-4" />
+                            <SelectValue placeholder="Seleccionar" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {endTimeSlots.map(time => (
+                                <SelectItem key={time} value={time}>{time}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                  </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="supervisor">Asignar Supervisor</Label>
-                <div className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-muted-foreground" />
-                  <Input id="supervisor" placeholder="Selecciona un supervisor" />
-                </div>
+                 <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor} disabled={isLoading}>
+                    <SelectTrigger id="supervisor">
+                        <Users className="mr-2 h-4 w-4" />
+                        <SelectValue placeholder="Seleccionar supervisor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {loadingSupervisors ? (
+                            <SelectItem value="loading" disabled>Cargando...</SelectItem>
+                        ) : (
+                            supervisors.map(s => (
+                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))
+                        )}
+                    </SelectContent>
+                </Select>
               </div>
             </CardContent>
           </Card>
@@ -250,12 +300,6 @@ export default function RoutesPage() {
                     <div key={client.id} className="p-3 border rounded-md shadow-sm">
                       <p className="font-semibold">{client.nombre_comercial}</p>
                       <p className="text-sm text-muted-foreground">{client.direccion}</p>
-                      <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-2">
-                        <Input placeholder="Ventas" type="number" />
-                        <Input placeholder="Pagos" type="number" />
-                        <Input placeholder="Devoluciones" type="number" />
-                        <Input placeholder="Caducados" type="number" />
-                      </div>
                     </div>
                   ))}
                 </div>
