@@ -221,69 +221,66 @@ export default function LocationsPage() {
         </Dialog>
       </PageHeader>
       
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-            <Card>
-                <CardHeader>
-                <CardTitle>Listado de Ubicaciones de Clientes</CardTitle>
-                <CardDescription>Filtra y busca las ubicaciones de los clientes.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
-                        <Input placeholder="Filtrar por Provincia..." name="provincia" value={filters.provincia} onChange={handleFilterChange} />
-                        <Input placeholder="Filtrar por Cantón..." name="canton" value={filters.canton} onChange={handleFilterChange} />
-                        <Input placeholder="Filtrar por Dirección..." name="direccion" value={filters.direccion} onChange={handleFilterChange} />
-                    </div>
-                    <div className="border rounded-lg max-h-[60vh] overflow-auto">
-                        <Table>
-                        <TableHeader className="sticky top-0 bg-card">
-                            <TableRow>
-                            <TableHead>Nombre Comercial</TableHead>
-                            <TableHead>Provincia</TableHead>
-                            <TableHead className="hidden sm:table-cell">Cantón</TableHead>
-                            <TableHead>Dirección</TableHead>
+      <div className="grid grid-cols-1 gap-6">
+        <Card>
+            <CardHeader>
+            <CardTitle>Listado de Ubicaciones de Clientes</CardTitle>
+            <CardDescription>Filtra y busca las ubicaciones de los clientes.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
+                    <Input placeholder="Filtrar por Provincia..." name="provincia" value={filters.provincia} onChange={handleFilterChange} />
+                    <Input placeholder="Filtrar por Cantón..." name="canton" value={filters.canton} onChange={handleFilterChange} />
+                    <Input placeholder="Filtrar por Dirección..." name="direccion" value={filters.direccion} onChange={handleFilterChange} />
+                </div>
+                <div className="border rounded-lg max-h-[60vh] overflow-auto">
+                    <Table>
+                    <TableHeader className="sticky top-0 bg-card">
+                        <TableRow>
+                        <TableHead>Nombre Comercial</TableHead>
+                        <TableHead>Provincia</TableHead>
+                        <TableHead className="hidden sm:table-cell">Cantón</TableHead>
+                        <TableHead>Dirección</TableHead>
+                        </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                        {loading ? (
+                        Array.from({ length: 8 }).map((_, i) => (
+                            <TableRow key={i}>
+                            <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+                            <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
+                            <TableCell><Skeleton className="h-5 w-full" /></TableCell>
                             </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                            {loading ? (
-                            Array.from({ length: 8 }).map((_, i) => (
-                                <TableRow key={i}>
-                                <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-full" /></TableCell>
-                                <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
-                                <TableCell><Skeleton className="h-5 w-full" /></TableCell>
-                                </TableRow>
-                            ))
-                            ) : (
-                            filteredClients.map((client) => (
-                                <TableRow key={client.id}>
-                                <TableCell>
-                                    <div className="font-medium">{client.nombre_comercial}</div>
-                                    <div className="text-sm text-muted-foreground">{client.ruc}</div>
-                                </TableCell>
-                                <TableCell>{client.provincia}</TableCell>
-                                <TableCell className="hidden sm:table-cell">{client.canton}</TableCell>
-                                <TableCell>{client.direccion}</TableCell>
-                                </TableRow>
-                            ))
-                            )}
-                        </TableBody>
-                        </Table>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
-        <div className="lg:col-span-1">
-             <Card>
-                <CardHeader>
-                    <CardTitle>Previsualización en Mapa</CardTitle>
-                    <CardDescription>Ubicaciones de los clientes filtrados.</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {loading ? <Skeleton className="h-[400px] w-full" /> : <ClientMap clients={filteredClients} />}
-                </CardContent>
-             </Card>
-        </div>
+                        ))
+                        ) : (
+                        filteredClients.map((client) => (
+                            <TableRow key={client.id}>
+                            <TableCell>
+                                <div className="font-medium">{client.nombre_comercial}</div>
+                                <div className="text-sm text-muted-foreground">{client.ruc}</div>
+                            </TableCell>
+                            <TableCell>{client.provincia}</TableCell>
+                            <TableCell className="hidden sm:table-cell">{client.canton}</TableCell>
+                            <TableCell>{client.direccion}</TableCell>
+                            </TableRow>
+                        ))
+                        )}
+                    </TableBody>
+                    </Table>
+                </div>
+            </CardContent>
+        </Card>
+        
+        <Card>
+            <CardHeader>
+                <CardTitle>Previsualización en Mapa</CardTitle>
+                <CardDescription>Ubicaciones de los clientes filtrados.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {loading ? <Skeleton className="h-[400px] w-full" /> : <ClientMap clients={filteredClients} />}
+            </CardContent>
+        </Card>
       </div>
     </>
   );
