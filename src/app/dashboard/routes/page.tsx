@@ -156,7 +156,7 @@ export default function RoutesPage() {
             <CardDescription>Completa los detalles para tu nuevo plan de ruta.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-2">
+             <div className="space-y-2">
               <Label>Seleccionar Clientes</Label>
               <Popover open={open} onOpenChange={setOpen}>
                 <PopoverTrigger asChild>
@@ -201,7 +201,7 @@ export default function RoutesPage() {
                 </PopoverContent>
               </Popover>
             </div>
-
+            
             <div className="space-y-2">
               <Label htmlFor="routeName">Nombre de la Ruta</Label>
               <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isLoading}/>
@@ -259,6 +259,26 @@ export default function RoutesPage() {
                           ))}
                       </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="product">Producto</Label>
+                  <Input id="product" placeholder="ej., Producto A" disabled={isLoading}/>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="sale-value">Ingresar valor de venta</Label>
+                  <Input id="sale-value" type="number" placeholder="0.00" disabled={isLoading}/>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="collection-value">Ingresar Valor de Cobro</Label>
+                  <Input id="collection-value" type="number" placeholder="0.00" disabled={isLoading}/>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="returns">Devoluciones</Label>
+                  <Input id="returns" type="number" placeholder="0" disabled={isLoading}/>
+                </div>
+                 <div className="space-y-2">
+                  <Label htmlFor="expired">Expirados</Label>
+                  <Input id="expired" type="number" placeholder="0" disabled={isLoading}/>
                 </div>
             </div>
             <div className="space-y-2">
