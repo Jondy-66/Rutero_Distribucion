@@ -1,22 +1,58 @@
 
 'use client';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { CalendarIcon, Clock, Plus, Route, Search } from 'lucide-react';
+import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 const availableClients = [
-    { name: 'GTI', description: 'Global Tech Inc.' },
-    { name: 'Innovatech', description: 'Soluciones Innovadoras' },
-    { name: 'Quantum', description: 'Industrias Quantum' },
-    { name: 'Pioneer', description: 'Logística Pionera' },
-    { name: 'Starlight', description: 'Empresas Starlight' },
+    { name: 'GTI', description: 'Global Tech Inc.', address: '123 Calle Tech' },
+    { name: 'Innovatech', description: 'Soluciones Innovadoras', address: '456 Av. Innovación' },
+    { name: 'Quantum', description: 'Industrias Quantum', address: '789 Bulevar Futuro' },
+    { name: 'Pioneer', description: 'Logística Pionera', address: '101 Camino del Progreso' },
+    { name: 'Starlight', description: 'Empresas Starlight', address: '212 Plaza Central' },
 ]
 
+type RouteClient = {
+    name: string;
+    description: string;
+    address: string;
+    valorVenta: string;
+    valorCobro: string;
+    devoluciones: string;
+    expirados: string;
+}
+
 export default function RouteManagementPage() {
+  const [routeClients, setRouteClients] = useState<RouteClient[]>([]);
+
+  const handleAddClient = (client: typeof availableClients[0]) => {
+    const newClient: RouteClient = {
+        ...client,
+        valorVenta: '0.00',
+        valorCobro: '0.00',
+        devoluciones: '0.00',
+        expirados: '0.00',
+    };
+    setRouteClients(prev => [...prev, newClient]);
+  }
+
+  const handleRemoveClient = (index: number) => {
+    setRouteClients(prev => prev.filter((_, i) => i !== index));
+  }
+  
+  const handleClientValueChange = (index: number, field: keyof Omit<RouteClient, 'name' | 'description' | 'address'>, value: string) => {
+      const updatedClients = [...routeClients];
+      updatedClients[index][field] = value;
+      setRouteClients(updatedClients);
+  }
+
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left Column */}
@@ -97,7 +133,7 @@ export default function RouteManagementPage() {
                                 <p className="font-medium">{client.name}</p>
                                 <p className="text-sm text-muted-foreground">{client.description}</p>
                             </div>
-                            <Button variant="ghost" size="sm">
+                            <Button variant="ghost" size="sm" onClick={() => handleAddClient(client)}>
                                 <Plus className="mr-2 h-4 w-4" />
                                 Añadir
                             </Button>
@@ -116,12 +152,57 @@ export default function RouteManagementPage() {
                     <CardDescription>Arrastra para reordenar los clientes en tu ruta.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="flex items-center justify-center min-h-[60vh] rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/20 p-8 text-center">
-                        <div>
-                            <p className="font-semibold text-lg">Tu ruta está vacía.</p>
-                            <p className="text-muted-foreground">Selecciona una ruta o añade clientes para empezar.</p>
+                    {routeClients.length === 0 ? (
+                        <div className="flex items-center justify-center min-h-[60vh] rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/20 p-8 text-center">
+                            <div>
+                                <p className="font-semibold text-lg">Tu ruta está vacía.</p>
+                                <p className="text-muted-foreground">Selecciona una ruta o añade clientes para empezar.</p>
+                            </div>
                         </div>
-                    </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {routeClients.map((client, index) => (
+                                <Card key={index} className="p-4 bg-background">
+                                    <div className="flex items-start gap-4">
+                                        <div className="flex items-center gap-2 pt-1">
+                                            <span className="font-bold text-lg">{index + 1}</span>
+                                            <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
+                                        </div>
+                                        <div className="flex-1">
+                                            <div className="flex justify-between items-start">
+                                                <div>
+                                                    <p className="font-bold text-lg">{client.name}</p>
+                                                    <p className="text-sm text-muted-foreground">{client.address}</p>
+                                                </div>
+                                                <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleRemoveClient(index)}>
+                                                    <Trash2 className="h-5 w-5" />
+                                                </Button>
+                                            </div>
+                                            <Separator className="my-4" />
+                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                <div className="space-y-1">
+                                                    <Label htmlFor={`venta-${index}`}>Valor de Venta ($)</Label>
+                                                    <Input id={`venta-${index}`} type="number" value={client.valorVenta} onChange={(e) => handleClientValueChange(index, 'valorVenta', e.target.value)} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label htmlFor={`cobro-${index}`}>Valor de Cobro ($)</Label>
+                                                    <Input id={`cobro-${index}`} type="number" value={client.valorCobro} onChange={(e) => handleClientValueChange(index, 'valorCobro', e.target.value)} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label htmlFor={`devoluciones-${index}`}>Devoluciones ($)</Label>
+                                                    <Input id={`devoluciones-${index}`} type="number" value={client.devoluciones} onChange={(e) => handleClientValueChange(index, 'devoluciones', e.target.value)} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label htmlFor={`expirados-${index}`}>Expirados ($)</Label>
+                                                    <Input id={`expirados-${index}`} type="number" value={client.expirados} onChange={(e) => handleClientValueChange(index, 'expirados', e.target.value)} />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </Card>
+                            ))}
+                        </div>
+                    )}
                 </CardContent>
             </Card>
         </div>
