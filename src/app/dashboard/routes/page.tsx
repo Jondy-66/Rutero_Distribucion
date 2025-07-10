@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -148,165 +149,161 @@ export default function RoutesPage() {
             Crear Ruta
         </Button>
       </PageHeader>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Detalles de la Ruta</CardTitle>
-              <CardDescription>Completa los detalles para tu nuevo plan de ruta.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              
-              <div className="space-y-2">
-                <Label>Seleccionar Clientes</Label>
-                <Popover open={open} onOpenChange={setOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={open}
-                      className="w-full justify-between"
-                      disabled={loadingClients}
-                    >
-                      {loadingClients ? 'Cargando clientes...' : selectedClients.length > 0 ? `${selectedClients.length} clientes seleccionados` : "Seleccionar clientes..."}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                    <Command>
-                      <CommandInput placeholder="Buscar por RUC, nombre..." />
-                      <CommandList>
-                        <CommandEmpty>No se encontraron clientes.</CommandEmpty>
-                        <CommandGroup>
-                          {clients.map((client) => (
-                            <CommandItem
-                              key={client.ruc}
-                              onSelect={() => handleSelectClient(client.ruc)}
-                              value={`${client.nombre_comercial} ${client.nombre_cliente} ${client.ruc}`}
-                            >
-                              <Check
-                                className={cn(
-                                  "mr-2 h-4 w-4",
-                                  selectedClients.includes(client.ruc) ? "opacity-100" : "opacity-0"
-                                )}
-                              />
-                                <div>
-                                    <p>{client.nombre_comercial}</p>
-                                    <p className="text-xs text-muted-foreground">{client.ruc}</p>
-                                </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
+      <div className="grid grid-cols-1 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Detalles de la Ruta</CardTitle>
+            <CardDescription>Completa los detalles para tu nuevo plan de ruta.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label>Seleccionar Clientes</Label>
+              <Popover open={open} onOpenChange={setOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={open}
+                    className="w-full justify-between"
+                    disabled={loadingClients}
+                  >
+                    {loadingClients ? 'Cargando clientes...' : selectedClients.length > 0 ? `${selectedClients.length} clientes seleccionados` : "Seleccionar clientes..."}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+                  <Command>
+                    <CommandInput placeholder="Buscar por RUC, nombre..." />
+                    <CommandList>
+                      <CommandEmpty>No se encontraron clientes.</CommandEmpty>
+                      <CommandGroup>
+                        {clients.map((client) => (
+                          <CommandItem
+                            key={client.ruc}
+                            onSelect={() => handleSelectClient(client.ruc)}
+                            value={`${client.nombre_comercial} ${client.nombre_cliente} ${client.ruc}`}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedClients.includes(client.ruc) ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                              <div>
+                                  <p>{client.nombre_comercial}</p>
+                                  <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                              </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="routeName">Nombre de la Ruta</Label>
-                <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isLoading}/>
-              </div>
-              
-              <div className="space-y-4">
-                 <div className="space-y-2">
-                    <Label>Fecha</Label>
-                    <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant={'outline'}
-                          className={cn(
-                            'w-full justify-start text-left font-normal',
-                            !date && 'text-muted-foreground'
-                          )}
-                           disabled={isLoading}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
-                          {date ? format(date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0">
-                        <Calendar mode="single" selected={selectedCalendarDate} onSelect={setSelectedCalendarDate} initialFocus locale={es} />
-                        <div className="p-2 border-t border-border">
-                            <Button onClick={handleCalendarSelect} className="w-full">Seleccionar</Button>
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="start-time">Hora de Inicio</Label>
-                    <Select value={startTime} onValueChange={setStartTime}  disabled={isLoading}>
-                        <SelectTrigger id="start-time">
-                            <Clock className="mr-2 h-4 w-4" />
-                            <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {startTimeSlots.map(time => (
-                                <SelectItem key={time} value={time}>{time}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="end-time">Hora de Fin</Label>
-                     <Select value={endTime} onValueChange={setEndTime}  disabled={isLoading}>
-                        <SelectTrigger id="end-time">
-                             <Clock className="mr-2 h-4 w-4" />
-                            <SelectValue placeholder="Seleccionar" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {endTimeSlots.map(time => (
-                                <SelectItem key={time} value={time}>{time}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                  </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="supervisor">Asignar Supervisor</Label>
-                 <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor} disabled={isLoading}>
-                    <SelectTrigger id="supervisor">
-                        <Users className="mr-2 h-4 w-4" />
-                        <SelectValue placeholder="Seleccionar supervisor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {loadingSupervisors ? (
-                            <SelectItem value="loading" disabled>Cargando...</SelectItem>
-                        ) : (
-                            supervisors.map(s => (
-                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                            ))
+            <div className="space-y-2">
+              <Label htmlFor="routeName">Nombre de la Ruta</Label>
+              <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isLoading}/>
+            </div>
+            
+            <div className="space-y-4">
+               <div className="space-y-2">
+                  <Label>Fecha</Label>
+                  <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant={'outline'}
+                        className={cn(
+                          'w-full justify-start text-left font-normal',
+                          !date && 'text-muted-foreground'
                         )}
-                    </SelectContent>
-                </Select>
+                         disabled={isLoading}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {date ? format(date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar mode="single" selected={selectedCalendarDate} onSelect={setSelectedCalendarDate} initialFocus locale={es} />
+                      <div className="p-2 border-t border-border">
+                          <Button onClick={handleCalendarSelect} className="w-full">Seleccionar</Button>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="start-time">Hora de Inicio</Label>
+                  <Select value={startTime} onValueChange={setStartTime}  disabled={isLoading}>
+                      <SelectTrigger id="start-time">
+                          <Clock className="mr-2 h-4 w-4" />
+                          <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          {startTimeSlots.map(time => (
+                              <SelectItem key={time} value={time}>{time}</SelectItem>
+                          ))}
+                      </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="end-time">Hora de Fin</Label>
+                   <Select value={endTime} onValueChange={setEndTime}  disabled={isLoading}>
+                      <SelectTrigger id="end-time">
+                           <Clock className="mr-2 h-4 w-4" />
+                          <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          {endTimeSlots.map(time => (
+                              <SelectItem key={time} value={time}>{time}</SelectItem>
+                          ))}
+                      </SelectContent>
+                  </Select>
+                </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="supervisor">Asignar Supervisor</Label>
+               <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor} disabled={isLoading}>
+                  <SelectTrigger id="supervisor">
+                      <Users className="mr-2 h-4 w-4" />
+                      <SelectValue placeholder="Seleccionar supervisor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                      {loadingSupervisors ? (
+                          <SelectItem value="loading" disabled>Cargando...</SelectItem>
+                      ) : (
+                          supervisors.map(s => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          ))
+                      )}
+                  </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Clientes Seleccionados</CardTitle>
+            <CardDescription>{selectedClients.length} clientes seleccionados para esta ruta.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {selectedClients.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8">
+                <p>Aún no hay clientes seleccionados.</p>
               </div>
-            </CardContent>
-          </Card>
-        </div>
-        <div>
-          <Card>
-            <CardHeader>
-              <CardTitle>Clientes Seleccionados</CardTitle>
-              <CardDescription>{selectedClients.length} clientes seleccionados para esta ruta.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {selectedClients.length === 0 ? (
-                <div className="text-center text-muted-foreground py-8">
-                  <p>Aún no hay clientes seleccionados.</p>
-                </div>
-              ) : (
-                <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                  {clients.filter(c => selectedClients.includes(c.ruc)).map(client => (
-                    <div key={client.id} className="p-3 border rounded-md shadow-sm">
-                      <p className="font-semibold">{client.nombre_comercial}</p>
-                      <p className="text-sm text-muted-foreground">{client.direccion}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+            ) : (
+              <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
+                {clients.filter(c => selectedClients.includes(c.ruc)).map(client => (
+                  <div key={client.id} className="p-3 border rounded-md shadow-sm">
+                    <p className="font-semibold">{client.nombre_comercial}</p>
+                    <p className="text-sm text-muted-foreground">{client.direccion}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </>
   );
