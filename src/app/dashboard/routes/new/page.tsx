@@ -36,7 +36,7 @@ const startTimeSlots = generateTimeSlots(8, 18, 30);
 const endTimeSlots = generateTimeSlots(8, 18, 30, 30);
 
 
-export default function RoutesPage() {
+export default function NewRoutePage() {
   const { toast } = useToast();
   const { user } = useAuth();
   const [date, setDate] = useState<Date | undefined>(new Date());
