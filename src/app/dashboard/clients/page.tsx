@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
+import Link from 'next/link';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -178,10 +179,12 @@ export default function ClientsPage() {
   return (
     <>
       <PageHeader title="Clientes" description="Visualiza, gestiona e importa los datos de tus clientes.">
-        <Button>
-          <PlusCircle className="mr-2 h-4 w-4" />
-          Añadir Cliente
-        </Button>
+        <Link href="/dashboard/clients/new">
+          <Button>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Añadir Cliente
+          </Button>
+        </Link>
         <Dialog>
             <DialogTrigger asChild>
                 <Button variant="outline">
