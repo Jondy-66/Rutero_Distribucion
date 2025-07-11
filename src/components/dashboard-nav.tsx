@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -50,18 +51,19 @@ const navItems = [
     roles: ['Administrador'],
   },
   {
-    href: '/dashboard/users',
-    label: 'Usuarios',
-    icon: Users,
-    roles: ['Administrador'],
-  },
-  {
     href: '/dashboard/map',
     label: 'Mapa',
     icon: Map,
     roles: ['Administrador', 'Supervisor', 'Usuario'],
   },
 ];
+
+const usersNavItem = {
+  href: '/dashboard/users',
+  label: 'Usuarios',
+  icon: Users,
+  roles: ['Administrador'],
+};
 
 export function DashboardNav() {
   const pathname = usePathname();
@@ -79,6 +81,9 @@ export function DashboardNav() {
     user?.role === 'Administrador' ||
     user?.role === 'Supervisor' ||
     user?.role === 'Usuario';
+    
+  const canSeeUsers =
+    user?.role && usersNavItem.roles.includes(user.role);
 
   return (
     <nav>
@@ -134,6 +139,22 @@ export function DashboardNav() {
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
+        )}
+        {canSeeUsers && (
+            <SidebarMenuItem key={usersNavItem.href}>
+                <Link href={usersNavItem.href}>
+                <SidebarMenuButton
+                    isActive={
+                    pathname === usersNavItem.href ||
+                    (usersNavItem.href !== '/dashboard' && pathname.startsWith(usersNavItem.href))
+                    }
+                    tooltip={usersNavItem.label}
+                >
+                    <usersNavItem.icon className="h-5 w-5" />
+                    <span>{usersNavItem.label}</span>
+                </SidebarMenuButton>
+                </Link>
+            </SidebarMenuItem>
         )}
       </SidebarMenu>
     </nav>
