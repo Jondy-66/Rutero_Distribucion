@@ -1,3 +1,4 @@
+
 'use client';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import Link from 'next/link';
@@ -212,7 +213,7 @@ export default function ClientsPage() {
     return clients
       .filter(client => {
         if (filter === 'all') return true;
-        // Handle old data that might not have the status field
+        // Handle old data that might not have the status field, defaulting to 'active'
         return (client.status || 'active') === filter;
       })
       .filter(client => {
@@ -348,8 +349,8 @@ export default function ClientsPage() {
                       <TableCell className="hidden sm:table-cell">{client.ruc}</TableCell>
                       <TableCell className="hidden md:table-cell">{client.ejecutivo}</TableCell>
                       <TableCell>
-                        <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
-                          {client.status === 'active' ? 'Activo' : 'Inactivo'}
+                        <Badge variant={(client.status ?? 'active') === 'active' ? 'default' : 'secondary'}>
+                          {(client.status ?? 'active') === 'active' ? 'Activo' : 'Inactivo'}
                         </Badge>
                       </TableCell>
                       <TableCell>{client.direccion}</TableCell>
