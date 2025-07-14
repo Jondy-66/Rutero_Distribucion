@@ -25,9 +25,9 @@ export const handleGoogleSignIn = async () => {
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
     
-    // Create user document in Firestore
-    const userDoc = doc(db, "users", user.uid);
-    await setDoc(userDoc, {
+    // Create user document in Firestore if it doesn't exist
+    const userDocRef = doc(db, "users", user.uid);
+    await setDoc(userDocRef, {
       name: user.displayName,
       email: user.email,
       role: 'Usuario', // Default role

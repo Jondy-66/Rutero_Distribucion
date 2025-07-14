@@ -9,8 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Route, LoaderCircle } from 'lucide-react';
 import { PasswordInput } from '@/components/password-input';
 import { useToast } from '@/hooks/use-toast';
-import { handleSignIn, handleGoogleSignIn, handleSignUp } from '@/lib/firebase/auth';
-import { addUser } from '@/lib/firebase/firestore';
+import { handleSignIn } from '@/lib/firebase/auth';
 import { useAuth } from '@/hooks/use-auth';
 import { redirect } from 'next/navigation';
 
@@ -22,7 +21,6 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
 
   const onSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -35,7 +33,7 @@ export default function LoginPage() {
       console.error(error);
       let description = "Ocurrió un error al iniciar sesión.";
       if (error.code === 'auth/invalid-credential') {
-        description = "Credenciales incorrectas. Por favor, verifica tus datos o crea el usuario administrador por defecto.";
+        description = "Credenciales incorrectas. Por favor, verifica tus datos.";
       } else {
         description = error.message || description;
       }
@@ -48,65 +46,6 @@ export default function LoginPage() {
       setIsLoading(false);
     }
   };
-
-  const onGoogleSignIn = async () => {
-    setIsLoading(true);
-    try {
-      await handleGoogleSignIn();
-      toast({ title: "Inicio de sesión con Google exitoso", description: "Verificando perfil..." });
-      // The redirect is now handled by the AuthContext and page effects
-    } catch (error: any) {
-       console.error(error);
-       toast({
-        title: "Error con Google",
-        description: error.message || "No se pudo iniciar sesión con Google.",
-        variant: 'destructive'
-      });
-    } finally {
-        setIsLoading(false);
-    }
-  }
-
-  const handleSeedDatabase = async () => {
-      const seedUsers = [
-        { email: 'jdiaza@farmaenlace.com', password: 'j6FS&p^jM6!NmG', name: 'jdiaza', role: 'Administrador' },
-      ];
-      setIsSeeding(true);
-      toast({ title: "Iniciando creación de usuario administrador...", description: "Por favor espera." });
-      try {
-        for (const userData of seedUsers) {
-          try {
-            const userCredential = await handleSignUp(userData.email, userData.password);
-            const uid = userCredential.user.uid;
-            await addUser(uid, {
-              name: userData.name,
-              email: userData.email,
-              role: userData.role as 'Administrador' | 'Supervisor' | 'Usuario',
-              avatar: `https://placehold.co/100x100/011688/FFFFFF/png?text=${userData.name.charAt(0)}`
-            });
-          } catch (error: any) {
-            if (error.code !== 'auth/email-already-in-use') {
-              console.error(`Error creando usuario ${userData.email}:`, error);
-              throw new Error(`Fallo al crear ${userData.email}.`);
-            } else {
-               console.log(`Usuario ${userData.email} ya existe. Saltando.`);
-            }
-          }
-        }
-        toast({ title: "Éxito", description: "Usuario administrador por defecto creado o ya existente." });
-      } catch (error: any) {
-        console.error(error);
-        let description = "Ocurrió un error al crear el usuario por defecto.";
-        if (error.code === 'permission-denied') {
-          description = "Error de permisos. Asegúrate de haber configurado las reglas de seguridad de Firestore en la consola de Firebase.";
-        } else {
-            description = error.message || description;
-        }
-        toast({ title: "Error en la creación", description: description, variant: 'destructive' });
-      } finally {
-        setIsSeeding(false);
-      }
-    };
 
   if(authLoading) {
     return (
@@ -144,7 +83,7 @@ export default function LoginPage() {
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Correo Electrónico</Label>
-                <Input id="email" type="email" placeholder="m@example.com" required value={email} onChange={e => setEmail(e.target.value)} disabled={isLoading || isSeeding} />
+                <Input id="email" type="email" placeholder="m@example.com" required value={email} onChange={e => setEmail(e.target.value)} disabled={isLoading} />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center">
@@ -153,21 +92,13 @@ export default function LoginPage() {
                     ¿Olvidaste tu contraseña?
                   </Link>
                 </div>
-                <PasswordInput id="password" required value={password} onChange={e => setPassword(e.target.value)} disabled={isLoading || isSeeding} />
+                <PasswordInput id="password" required value={password} onChange={e => setPassword(e.target.value)} disabled={isLoading} />
               </div>
               <div className="space-y-2 pt-2">
-                  <Button type="submit" className="w-full" disabled={isLoading || isSeeding}>
+                  <Button type="submit" className="w-full" disabled={isLoading}>
                     {isLoading && <LoaderCircle className="animate-spin" />}
                     Iniciar Sesión
                   </Button>
-                <Button variant="outline" className="w-full" onClick={onGoogleSignIn} type="button" disabled={isLoading || isSeeding}>
-                   {(isLoading || isSeeding) && <LoaderCircle className="animate-spin" />}
-                  Iniciar sesión con Google
-                </Button>
-                 <Button variant="secondary" className="w-full" onClick={handleSeedDatabase} type="button" disabled={isLoading || isSeeding}>
-                   {isSeeding && <LoaderCircle className="animate-spin" />}
-                   Crear Usuario Administrador
-                 </Button>
               </div>
             </div>
           </form>
