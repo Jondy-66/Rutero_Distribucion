@@ -1,6 +1,6 @@
 
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,19 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Slider } from '@/components/ui/slider';
 import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
+import { getClients } from '@/lib/firebase/firestore';
+import type { Client } from '@/lib/types';
+import { useToast } from '@/hooks/use-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
-const availableClients = [
-    { name: 'GTI', description: 'Global Tech Inc.', address: '123 Calle Tech' },
-    { name: 'Innovatech', description: 'Soluciones Innovadoras', address: '456 Av. Innovación' },
-    { name: 'Quantum', description: 'Industrias Quantum', address: '789 Bulevar Futuro' },
-    { name: 'Pioneer', description: 'Logística Pionera', address: '101 Camino del Progreso' },
-    { name: 'Starlight', description: 'Empresas Starlight', address: '212 Plaza Central' },
-]
-
-type RouteClient = {
-    name: string;
-    description: string;
-    address: string;
+type RouteClient = Client & {
     valorVenta: string;
     valorCobro: string;
     devoluciones: string;
@@ -29,9 +22,29 @@ type RouteClient = {
 }
 
 export default function RouteManagementPage() {
+  const [availableClients, setAvailableClients] = useState<Client[]>([]);
   const [routeClients, setRouteClients] = useState<RouteClient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
 
-  const handleAddClient = (client: typeof availableClients[0]) => {
+  useEffect(() => {
+    const fetchClients = async () => {
+      setLoading(true);
+      try {
+        const clientsData = await getClients();
+        setAvailableClients(clientsData);
+      } catch (error: any) {
+        console.error("Failed to fetch clients:", error);
+        toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchClients();
+  }, [toast]);
+
+
+  const handleAddClient = (client: Client) => {
     const newClient: RouteClient = {
         ...client,
         valorVenta: '0.00',
@@ -46,7 +59,7 @@ export default function RouteManagementPage() {
     setRouteClients(prev => prev.filter((_, i) => i !== index));
   }
   
-  const handleClientValueChange = (index: number, field: keyof Omit<RouteClient, 'name' | 'description' | 'address'>, value: string) => {
+  const handleClientValueChange = (index: number, field: keyof Omit<RouteClient, 'id' | 'ejecutivo' | 'ruc' | 'nombre_cliente' | 'nombre_comercial' | 'provincia' | 'canton' | 'direccion' | 'latitud' | 'longitud'>, value: string) => {
       const updatedClients = [...routeClients];
       updatedClients[index][field] = value;
       setRouteClients(updatedClients);
@@ -127,18 +140,30 @@ export default function RouteManagementPage() {
                         <Input placeholder="Buscar por RUC, nombre..." className="pl-8" />
                     </div>
                     <div className="space-y-4 max-h-96 overflow-y-auto">
-                       {availableClients.map((client) => (
-                         <div key={client.name} className="flex items-center justify-between">
-                            <div>
-                                <p className="font-medium">{client.name}</p>
-                                <p className="text-sm text-muted-foreground">{client.description}</p>
-                            </div>
-                            <Button variant="ghost" size="sm" onClick={() => handleAddClient(client)}>
-                                <Plus className="mr-2 h-4 w-4" />
-                                Añadir
-                            </Button>
-                        </div>
-                       ))}
+                       {loading ? (
+                         Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className="flex items-center justify-between">
+                               <div className="space-y-2">
+                                   <Skeleton className="h-4 w-32" />
+                                   <Skeleton className="h-3 w-48" />
+                               </div>
+                               <Skeleton className="h-8 w-20" />
+                           </div>
+                         ))
+                       ) : (
+                         availableClients.map((client) => (
+                           <div key={client.id} className="flex items-center justify-between">
+                              <div>
+                                  <p className="font-medium">{client.nombre_comercial}</p>
+                                  <p className="text-sm text-muted-foreground">{client.nombre_cliente}</p>
+                              </div>
+                              <Button variant="ghost" size="sm" onClick={() => handleAddClient(client)}>
+                                  <Plus className="mr-2 h-4 w-4" />
+                                  Añadir
+                              </Button>
+                          </div>
+                         ))
+                       )}
                     </div>
                 </CardContent>
             </Card>
@@ -171,8 +196,8 @@ export default function RouteManagementPage() {
                                         <div className="flex-1">
                                             <div className="flex justify-between items-start">
                                                 <div>
-                                                    <p className="font-bold text-lg">{client.name}</p>
-                                                    <p className="text-sm text-muted-foreground">{client.address}</p>
+                                                    <p className="font-bold text-lg">{client.nombre_comercial}</p>
+                                                    <p className="text-sm text-muted-foreground">{client.direccion}</p>
                                                 </div>
                                                 <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleRemoveClient(index)}>
                                                     <Trash2 className="h-5 w-5" />
