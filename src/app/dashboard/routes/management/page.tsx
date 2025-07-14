@@ -13,6 +13,7 @@ import { getClients } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { format } from 'date-fns';
 
 type RouteClient = Client & {
     valorVenta: string;
@@ -20,6 +21,21 @@ type RouteClient = Client & {
     devoluciones: string;
     expirados: string;
 }
+
+const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
+    const slots = [];
+    for (let hour = startHour; hour <= endHour; hour++) {
+        for (let minute = (hour === startHour ? startMinute : 0); minute < 60; minute += interval) {
+            if (hour === endHour && minute > 0) break;
+            const time = new Date(1970, 0, 1, hour, minute);
+            slots.push(format(time, 'HH:mm'));
+        }
+    }
+    return slots;
+};
+
+const timeSlots = generateTimeSlots(8, 18, 30);
+
 
 export default function RouteManagementPage() {
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
@@ -106,9 +122,9 @@ export default function RouteManagementPage() {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="08:00">08:00</SelectItem>
-                                    <SelectItem value="08:30">08:30</SelectItem>
-                                    <SelectItem value="09:00">09:00</SelectItem>
+                                    {timeSlots.map(time => (
+                                        <SelectItem key={time} value={time}>{time}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
@@ -120,9 +136,9 @@ export default function RouteManagementPage() {
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="17:00">17:00</SelectItem>
-                                    <SelectItem value="17:30">17:30</SelectItem>
-                                    <SelectItem value="18:00">18:00</SelectItem>
+                                     {timeSlots.map(time => (
+                                        <SelectItem key={time} value={time}>{time}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
