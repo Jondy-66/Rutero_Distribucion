@@ -51,6 +51,7 @@ export default function NewClientPage() {
         ...formData,
         latitud: parseFloat(formData.latitud) || 0,
         longitud: parseFloat(formData.longitud) || 0,
+        status: 'active',
       });
 
       toast({ title: "Éxito", description: "Cliente creado correctamente." });

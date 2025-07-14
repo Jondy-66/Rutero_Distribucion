@@ -17,6 +17,7 @@ export type Client = {
   direccion: string;
   latitud: number;
   longitud: number;
+  status: 'active' | 'inactive';
 };
 
 export type RoutePlan = {

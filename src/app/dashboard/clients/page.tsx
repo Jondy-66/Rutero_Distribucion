@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
@@ -38,6 +38,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -58,6 +59,8 @@ type ClientCsvData = {
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -80,7 +83,7 @@ export default function ClientsPage() {
 
   useEffect(() => {
     fetchClients();
-  }, [toast]);
+  }, []);
 
   const handleEdit = (clientId: string) => {
     router.push(`/dashboard/clients/${clientId}`);
@@ -96,7 +99,6 @@ export default function ClientsPage() {
       toast({ title: "Error", description: "No se pudo eliminar el cliente.", variant: "destructive" });
     }
   };
-
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -206,6 +208,25 @@ export default function ClientsPage() {
     });
   };
 
+  const filteredClients = useMemo(() => {
+    return clients
+      .filter(client => {
+        if (filter === 'all') return true;
+        // Handle old data that might not have the status field
+        return (client.status || 'active') === filter;
+      })
+      .filter(client => {
+        const search = searchTerm.toLowerCase();
+        return (
+          client.nombre_cliente.toLowerCase().includes(search) ||
+          client.nombre_comercial.toLowerCase().includes(search) ||
+          client.ruc.toLowerCase().includes(search) ||
+          client.ejecutivo.toLowerCase().includes(search) ||
+          client.provincia.toLowerCase().includes(search)
+        );
+      });
+  }, [clients, filter, searchTerm]);
+
   return (
     <>
       <PageHeader title="Clientes" description="Visualiza, gestiona e importa los datos de tus clientes.">
@@ -256,7 +277,7 @@ export default function ClientsPage() {
           <CardDescription>Una lista de todos los clientes en tu base de datos.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="all">
+          <Tabs defaultValue="all" onValueChange={(value) => setFilter(value)}>
             <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
               <TabsList>
                 <TabsTrigger value="all">Todos</TabsTrigger>
@@ -266,7 +287,12 @@ export default function ClientsPage() {
               <div className="flex w-full items-center gap-2 sm:w-auto">
                 <div className="relative flex-1 sm:flex-initial">
                   <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Buscar clientes..." className="w-full pl-8" />
+                  <Input 
+                    placeholder="Buscar clientes..." 
+                    className="w-full pl-8" 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -295,7 +321,7 @@ export default function ClientsPage() {
                   <TableHead>Nombre Cliente</TableHead>
                   <TableHead className="hidden sm:table-cell">RUC</TableHead>
                   <TableHead className="hidden md:table-cell">Ejecutivo</TableHead>
-                  <TableHead className="hidden lg:table-cell">Provincia</TableHead>
+                  <TableHead>Estado</TableHead>
                   <TableHead>Dirección</TableHead>
                   <TableHead>Acciones</TableHead>
                 </TableRow>
@@ -307,13 +333,13 @@ export default function ClientsPage() {
                       <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
                       <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
                       <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
-                      <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
+                       <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-full" /></TableCell>
                       <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                     </TableRow>
                   ))
                 ) : (
-                  clients.map((client) => (
+                  filteredClients.map((client) => (
                     <TableRow key={client.id}>
                       <TableCell>
                         <div className="font-medium">{client.nombre_cliente}</div>
@@ -321,7 +347,11 @@ export default function ClientsPage() {
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">{client.ruc}</TableCell>
                       <TableCell className="hidden md:table-cell">{client.ejecutivo}</TableCell>
-                      <TableCell className="hidden lg:table-cell">{client.provincia}</TableCell>
+                      <TableCell>
+                        <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
+                          {client.status === 'active' ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                      </TableCell>
                       <TableCell>{client.direccion}</TableCell>
                       <TableCell>
                         <AlertDialog>

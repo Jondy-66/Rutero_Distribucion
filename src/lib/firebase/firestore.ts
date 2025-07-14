@@ -54,7 +54,7 @@ export const getClient = async (id: string): Promise<Client | null> => {
     return null;
 }
 
-export const addClient = (clientData: Omit<Client, 'id'>) => {
+export const addClient = (clientData: Omit<Client, 'id' | 'status'> & {status: 'active' | 'inactive'}) => {
   return addDoc(clientsCollection, clientData);
 };
 
@@ -68,7 +68,7 @@ export const deleteClient = (id: string) => {
   return deleteDoc(clientDoc);
 }
 
-export const addClientsBatch = async (clientsData: Omit<Client, 'id'>[]) => {
+export const addClientsBatch = async (clientsData: Omit<Client, 'id' | 'status'>[]) => {
     const batch = writeBatch(db);
     const clientsCollectionRef = collection(db, 'clients');
     
@@ -83,7 +83,7 @@ export const addClientsBatch = async (clientsData: Omit<Client, 'id'>[]) => {
     for (const client of clientsData) {
         if (client.ruc && !rucsInDb.has(client.ruc)) {
             const newClientRef = doc(clientsCollectionRef); // Auto-generate ID
-            batch.set(newClientRef, client);
+            batch.set(newClientRef, {...client, status: 'active'});
             rucsInDb.add(client.ruc); // Add to set to prevent duplicates within the same batch
             addedCount++;
         } else {

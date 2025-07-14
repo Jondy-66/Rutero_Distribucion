@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Link from 'next/link';
 import { ArrowLeft, LoaderCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -53,6 +54,11 @@ export default function EditClientPage({ params }: { params: { id: string } }) {
     setClient(prev => ({ ...prev!, [id]: value }));
   };
 
+  const handleStatusChange = (value: 'active' | 'inactive') => {
+    if (!client) return;
+    setClient(prev => ({...prev!, status: value}));
+  };
+
   const handleUpdateClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!client || !client.ruc || !client.nombre_cliente) {
@@ -91,7 +97,7 @@ export default function EditClientPage({ params }: { params: { id: string } }) {
                     <Skeleton className="h-4 w-1/2" />
                 </CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {Array.from({ length: 8 }).map((_, i) => (
+                    {Array.from({ length: 10 }).map((_, i) => (
                         <div key={i} className="space-y-2">
                            <Skeleton className="h-4 w-1/3" />
                            <Skeleton className="h-10 w-full" />
@@ -156,9 +162,21 @@ export default function EditClientPage({ params }: { params: { id: string } }) {
               <Label htmlFor="canton">Cantón</Label>
               <Input id="canton" placeholder="Ej: Quito" value={client.canton} onChange={handleInputChange} disabled={isSaving}/>
             </div>
-            <div className="space-y-2 md:col-span-2">
+            <div className="space-y-2">
               <Label htmlFor="direccion">Dirección</Label>
               <Input id="direccion" placeholder="Ej: Av. de los Shyris y Naciones Unidas" value={client.direccion} onChange={handleInputChange} disabled={isSaving}/>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="status">Estado</Label>
+              <Select value={client.status || 'active'} onValueChange={handleStatusChange} disabled={isSaving}>
+                <SelectTrigger id="status">
+                  <SelectValue placeholder="Seleccionar estado" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Activo</SelectItem>
+                  <SelectItem value="inactive">Inactivo</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="latitud">Latitud</Label>
