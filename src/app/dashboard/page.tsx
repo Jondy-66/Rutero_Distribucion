@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -21,6 +22,7 @@ import {
 import { getClients, getUsers } from '@/lib/firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 const data = [
   { name: 'Lun', routes: 4, sales: 2400 },
@@ -37,16 +39,23 @@ export default function DashboardPage() {
   const [userCount, setUserCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { user } = useAuth();
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [clients, users] = await Promise.all([
-          getClients(),
-          getUsers()
-        ]);
+        const promises = [getClients()];
+        if (user?.role === 'Administrador' || user?.role === 'Supervisor') {
+            promises.push(getUsers());
+        }
+        
+        const [clients, users] = await Promise.all(promises);
+
         setClientCount(clients.length);
-        setUserCount(users.length);
+        if (users) {
+            setUserCount(users.length);
+        }
+
       } catch (error: any) {
         console.error("Error fetching dashboard data:", error);
         if (error.code === 'permission-denied') {
@@ -58,8 +67,12 @@ export default function DashboardPage() {
         setLoading(false);
       }
     };
-    fetchData();
-  }, [toast]);
+    if (user) {
+        fetchData();
+    }
+  }, [toast, user]);
+
+  const canSeeUserCount = user?.role === 'Administrador' || user?.role === 'Supervisor';
 
   return (
     <>
@@ -85,16 +98,18 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">Próximamente</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Usuarios Activos</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{userCount}</div>}
-            <p className="text-xs text-muted-foreground">Usuarios en el sistema</p>
-          </CardContent>
-        </Card>
+        {canSeeUserCount && (
+            <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Usuarios Activos</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+                {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{userCount}</div>}
+                <p className="text-xs text-muted-foreground">Usuarios en el sistema</p>
+            </CardContent>
+            </Card>
+        )}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Rendimiento</CardTitle>
