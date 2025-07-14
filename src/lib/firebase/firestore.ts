@@ -45,9 +45,28 @@ export const getClients = async (): Promise<Client[]> => {
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
 };
 
+export const getClient = async (id: string): Promise<Client | null> => {
+    const docRef = doc(db, 'clients', id);
+    const docSnap = await getDoc(docRef);
+    if(docSnap.exists()) {
+        return {id: docSnap.id, ...docSnap.data()} as Client;
+    }
+    return null;
+}
+
 export const addClient = (clientData: Omit<Client, 'id'>) => {
   return addDoc(clientsCollection, clientData);
 };
+
+export const updateClient = (id: string, clientData: Partial<Client>) => {
+  const clientDoc = doc(db, 'clients', id);
+  return updateDoc(clientDoc, clientData);
+};
+
+export const deleteClient = (id: string) => {
+  const clientDoc = doc(db, 'clients', id);
+  return deleteDoc(clientDoc);
+}
 
 export const addClientsBatch = async (clientsData: Omit<Client, 'id'>[]) => {
     const batch = writeBatch(db);

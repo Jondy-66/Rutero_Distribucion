@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,18 +12,30 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getClients, addClientsBatch } from '@/lib/firebase/firestore';
+import { getClients, addClientsBatch, deleteClient } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
-import { PlusCircle, UploadCloud, File, Search } from 'lucide-react';
+import { PlusCircle, UploadCloud, File, Search, MoreHorizontal } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -48,6 +61,7 @@ export default function ClientsPage() {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
 
   const fetchClients = async () => {
     // setLoading(true) is not needed here as it's part of the main loading state
@@ -67,6 +81,22 @@ export default function ClientsPage() {
   useEffect(() => {
     fetchClients();
   }, [toast]);
+
+  const handleEdit = (clientId: string) => {
+    router.push(`/dashboard/clients/${clientId}`);
+  };
+
+  const handleDelete = async (clientId: string) => {
+     try {
+      await deleteClient(clientId);
+      toast({ title: "Éxito", description: "Cliente eliminado correctamente." });
+      fetchClients(); // Refresh the list
+    } catch (error: any) {
+      console.error("Failed to delete client:", error);
+      toast({ title: "Error", description: "No se pudo eliminar el cliente.", variant: "destructive" });
+    }
+  };
+
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -267,6 +297,7 @@ export default function ClientsPage() {
                   <TableHead className="hidden md:table-cell">Ejecutivo</TableHead>
                   <TableHead className="hidden lg:table-cell">Provincia</TableHead>
                   <TableHead>Dirección</TableHead>
+                  <TableHead>Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -278,6 +309,7 @@ export default function ClientsPage() {
                       <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
                       <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
                       <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+                      <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                     </TableRow>
                   ))
                 ) : (
@@ -291,6 +323,38 @@ export default function ClientsPage() {
                       <TableCell className="hidden md:table-cell">{client.ejecutivo}</TableCell>
                       <TableCell className="hidden lg:table-cell">{client.provincia}</TableCell>
                       <TableCell>{client.direccion}</TableCell>
+                      <TableCell>
+                        <AlertDialog>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button aria-haspopup="true" size="icon" variant="ghost">
+                                <MoreHorizontal className="h-4 w-4" />
+                                <span className="sr-only">Alternar menú</span>
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => handleEdit(client.id)}>Editar</DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem className="text-red-600">Eliminar</DropdownMenuItem>
+                              </AlertDialogTrigger>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                           <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Esta acción no se puede deshacer. Esto eliminará permanentemente al cliente.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(client.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
