@@ -12,6 +12,7 @@ import {
   MapPin,
   ClipboardList,
   PlusCircle,
+  FileText,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -37,6 +38,12 @@ const navItems = [
     label: 'Panel',
     icon: LayoutDashboard,
     roles: ['Administrador', 'Supervisor', 'Usuario'],
+  },
+   {
+    href: '/dashboard/reports',
+    label: 'Reportes',
+    icon: FileText,
+    roles: ['Supervisor'],
   },
   {
     href: '/dashboard/clients',
