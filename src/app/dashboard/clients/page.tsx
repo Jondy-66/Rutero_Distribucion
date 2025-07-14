@@ -349,7 +349,7 @@ export default function ClientsPage() {
                       <TableCell className="hidden sm:table-cell">{client.ruc}</TableCell>
                       <TableCell className="hidden md:table-cell">{client.ejecutivo}</TableCell>
                       <TableCell>
-                        <Badge variant={(client.status ?? 'active') === 'active' ? 'default' : 'secondary'}>
+                        <Badge variant={(client.status ?? 'active') === 'active' ? 'success' : 'destructive'}>
                           {(client.status ?? 'active') === 'active' ? 'Activo' : 'Inactivo'}
                         </Badge>
                       </TableCell>
