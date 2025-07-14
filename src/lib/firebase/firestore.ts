@@ -1,5 +1,5 @@
 import { db } from './config';
-import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp } from 'firebase/firestore';
 import type { User, Client, RoutePlan } from '@/lib/types';
 
 // Users Collection
@@ -128,3 +128,16 @@ const routesCollection = collection(db, 'routes');
 export const addRoute = (routeData: Omit<RoutePlan, 'id' | 'date'> & {date: any}) => {
     return addDoc(routesCollection, {...routeData, createdAt: serverTimestamp()});
 }
+
+export const getRoutesBySupervisor = async (supervisorId: string): Promise<RoutePlan[]> => {
+    const q = query(routesCollection, where("supervisorId", "==", supervisorId), orderBy('date', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            date: (data.date as Timestamp).toDate(), // Convert Firestore Timestamp to JS Date
+        } as RoutePlan;
+    });
+};
