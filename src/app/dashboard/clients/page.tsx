@@ -44,15 +44,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
 type ClientCsvData = {
-    Ejecutivo: string;
-    Ruc: string;
-    Nombre_cliente: string;
-    Nombre_comercial: string;
-    Provincia: string;
-    Canton: string;
-    Direccion: string;
+    [key: string]: string;
 }
 
 export default function ClientsPage() {
@@ -99,105 +94,150 @@ export default function ClientsPage() {
     }
   };
 
+  const processImportedData = async (data: ClientCsvData[], fields: string[] | undefined) => {
+    const requiredColumns = ['ejecutivo', 'ruc', 'nombrecliente', 'nombrecomercial', 'provincia', 'canton', 'direccion'];
+    const headers = (fields || []).map(h => h.toString().trim().toLowerCase().replace(/_/g, ''));
+    const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+
+    if (missingColumns.length > 0) {
+      toast({
+        title: 'Error de formato',
+        description: `Faltan las siguientes columnas en el archivo: ${missingColumns.join(', ')}`,
+        variant: 'destructive',
+      });
+      setIsUploading(false);
+      return;
+    }
+    
+    // Normalize keys in data objects
+    const normalizedData = data.map(row => {
+        const newRow: ClientCsvData = {};
+        for(const key in row) {
+            newRow[key.trim().toLowerCase().replace(/_/g, '')] = row[key];
+        }
+        return newRow;
+    });
+
+    const validData = normalizedData.filter(row => row.ruc && row.nombrecliente);
+
+    const invalidRows = normalizedData.length - validData.length;
+    if(invalidRows > 0) {
+        toast({
+            title: 'Datos inválidos',
+            description: `Se omitieron ${invalidRows} filas por datos faltantes (Ruc y Nombre_cliente son obligatorios).`,
+        });
+    }
+    
+    if (validData.length === 0) {
+        toast({
+            title: 'No hay datos válidos',
+            description: `No se encontraron filas con datos válidos para procesar.`,
+            variant: 'destructive',
+        });
+        setIsUploading(false);
+        return;
+    }
+
+    try {
+      const clientsToAdd = validData.map(item => ({
+          ejecutivo: item.ejecutivo || '',
+          ruc: item.ruc,
+          nombre_cliente: item.nombrecliente,
+          nombre_comercial: item.nombrecomercial || '',
+          provincia: item.provincia || '',
+          canton: item.canton || '',
+          direccion: item.direccion || '',
+          latitud: 0,
+          longitud: 0,
+      }));
+
+      const addedCount = await addClientsBatch(clientsToAdd);
+
+      toast({
+        title: 'Carga exitosa',
+        description: `${addedCount} de ${validData.length} clientes nuevos han sido añadidos. Se omitieron duplicados por RUC.`,
+      });
+      setLoading(true);
+      await fetchClients(); 
+    } catch (error: any)
+    {
+      console.error("Failed to add new clients:", error);
+      if (error.code === 'permission-denied') {
+        toast({
+          title: 'Error de Permisos',
+          description: 'No tienes permiso para añadir clientes.',
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Error en la carga',
+          description: 'Ocurrió un error al añadir los clientes.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      document.getElementById('close-dialog-clients')?.click();
+    }
+  }
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     setIsUploading(true);
-    Papa.parse<ClientCsvData>(file, {
-      header: true,
-      skipEmptyLines: true,
-      transformHeader: header => header.trim().toLowerCase().replace(/_/g, ''),
-      complete: async (results) => {
-        const requiredColumns = ['ejecutivo', 'ruc', 'nombrecliente', 'nombrecomercial', 'provincia', 'canton', 'direccion'];
-        const headers = (results.meta.fields || []).map(h => h.trim().toLowerCase().replace(/_/g, ''));
-        const missingColumns = requiredColumns.filter(col => !headers.includes(col));
 
-        if (missingColumns.length > 0) {
-          toast({
-            title: 'Error de formato',
-            description: `Faltan las siguientes columnas en el archivo: ${missingColumns.join(', ')}`,
+    if (file.name.endsWith('.csv')) {
+        Papa.parse<ClientCsvData>(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+            processImportedData(results.data, results.meta.fields);
+        },
+        error: (error) => {
+            console.error('Error parsing CSV:', error);
+            toast({
+            title: 'Error de archivo',
+            description: 'No se pudo procesar el archivo CSV.',
             variant: 'destructive',
-          });
-          setIsUploading(false);
-          return;
-        }
-        
-        const validData = results.data.filter(row => row.Ruc && row.Nombre_cliente);
-
-        const invalidRows = results.data.length - validData.length;
-        if(invalidRows > 0) {
-            toast({
-                title: 'Datos inválidos',
-                description: `Se omitieron ${invalidRows} filas por datos faltantes (Ruc y Nombre_cliente son obligatorios).`,
-            });
-        }
-        
-        if (validData.length === 0) {
-            toast({
-                title: 'No hay datos válidos',
-                description: `No se encontraron filas con datos válidos para procesar.`,
-                variant: 'destructive',
             });
             setIsUploading(false);
-            return;
         }
-
-        try {
-          const clientsToAdd = validData.map(item => ({
-              ejecutivo: item.Ejecutivo || '',
-              ruc: item.Ruc,
-              nombre_cliente: item.Nombre_cliente,
-              nombre_comercial: item.Nombre_comercial || '',
-              provincia: item.Provincia || '',
-              canton: item.Canton || '',
-              direccion: item.Direccion || '',
-              latitud: 0,
-              longitud: 0,
-          }));
-
-          const addedCount = await addClientsBatch(clientsToAdd);
-
-          toast({
-            title: 'Carga exitosa',
-            description: `${addedCount} de ${validData.length} clientes nuevos han sido añadidos. Se omitieron duplicados por RUC.`,
-          });
-          setLoading(true);
-          await fetchClients(); 
-        } catch (error: any)
-        {
-          console.error("Failed to add new clients:", error);
-          if (error.code === 'permission-denied') {
-            toast({
-              title: 'Error de Permisos',
-              description: 'No tienes permiso para añadir clientes.',
-              variant: 'destructive',
-            });
-          } else {
-            toast({
-              title: 'Error en la carga',
-              description: 'Ocurrió un error al añadir los clientes.',
-              variant: 'destructive',
-            });
-          }
-        } finally {
-          setIsUploading(false);
-          if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-          }
-          document.getElementById('close-dialog-clients')?.click();
-        }
-      },
-      error: (error) => {
-        console.error('Error parsing CSV:', error);
-        toast({
-          title: 'Error de archivo',
-          description: 'No se pudo procesar el archivo CSV.',
-          variant: 'destructive',
         });
+    } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = e.target?.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const json: ClientCsvData[] = XLSX.utils.sheet_to_json(worksheet);
+                const headers = json.length > 0 ? Object.keys(json[0]) : [];
+                processImportedData(json, headers);
+            } catch (error) {
+                 console.error('Error processing Excel file:', error);
+                toast({
+                    title: 'Error de archivo',
+                    description: 'No se pudo procesar el archivo Excel.',
+                    variant: 'destructive',
+                });
+                setIsUploading(false);
+            }
+        };
+        reader.onerror = (error) => {
+            console.error('Error reading file:', error);
+            toast({ title: 'Error', description: 'No se pudo leer el archivo.', variant: 'destructive' });
+            setIsUploading(false);
+        };
+        reader.readAsBinaryString(file);
+    } else {
+        toast({ title: 'Formato no soportado', description: 'Por favor, sube un archivo CSV o Excel.', variant: 'destructive' });
         setIsUploading(false);
-      }
-    });
+    }
   };
 
   const filteredClients = useMemo(() => {
@@ -237,15 +277,15 @@ export default function ClientsPage() {
             </DialogTrigger>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Importar Clientes desde CSV</DialogTitle>
+                    <DialogTitle>Importar Clientes desde CSV o Excel</DialogTitle>
                     <DialogDescription>
-                        Sube un archivo CSV para añadir clientes nuevos. Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia.
+                        Sube un archivo para añadir clientes nuevos. Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
                 <Input
                     type="file"
-                    accept=".csv"
+                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
                     ref={fileInputRef}
                     onChange={handleFileUpload}
                     disabled={isUploading}
