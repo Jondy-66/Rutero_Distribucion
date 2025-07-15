@@ -46,15 +46,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import Papa from 'papaparse';
 
 type ClientCsvData = {
-    ejecutivo: string;
-    ruc: string;
-    nombre_cliente: string;
-    nombre_comercial: string;
-    provincia: string;
-    canton: string;
-    direccion: string;
-    latitud: string;
-    longitud: string;
+    Ejecutivo: string;
+    Ruc: string;
+    Nombre_cliente: string;
+    Nombre_comercial: string;
+    Provincia: string;
+    Canton: string;
+    Direccion: string;
 }
 
 export default function ClientsPage() {
@@ -109,9 +107,10 @@ export default function ClientsPage() {
     Papa.parse<ClientCsvData>(file, {
       header: true,
       skipEmptyLines: true,
+      transformHeader: header => header.trim().toLowerCase().replace(/_/g, ''),
       complete: async (results) => {
-        const requiredColumns = ['ejecutivo', 'ruc', 'nombre_cliente', 'nombre_comercial', 'provincia', 'canton', 'direccion', 'latitud', 'longitud'];
-        const headers = results.meta.fields || [];
+        const requiredColumns = ['ejecutivo', 'ruc', 'nombrecliente', 'nombrecomercial', 'provincia', 'canton', 'direccion'];
+        const headers = (results.meta.fields || []).map(h => h.trim().toLowerCase().replace(/_/g, ''));
         const missingColumns = requiredColumns.filter(col => !headers.includes(col));
 
         if (missingColumns.length > 0) {
@@ -124,21 +123,13 @@ export default function ClientsPage() {
           return;
         }
         
-        const dataWithParsedCoords = results.data.map(row => ({
-            ...row,
-            latitud: parseFloat(row.latitud?.replace(',', '.')),
-            longitud: parseFloat(row.longitud?.replace(',', '.'))
-        }));
-
-        const validData = dataWithParsedCoords.filter(row => 
-            row.ruc && row.nombre_cliente && !isNaN(row.latitud) && !isNaN(row.longitud)
-        );
+        const validData = results.data.filter(row => row.Ruc && row.Nombre_cliente);
 
         const invalidRows = results.data.length - validData.length;
         if(invalidRows > 0) {
             toast({
                 title: 'Datos inválidos',
-                description: `Se omitieron ${invalidRows} filas por datos faltantes o con formato incorrecto.`,
+                description: `Se omitieron ${invalidRows} filas por datos faltantes (Ruc y Nombre_cliente son obligatorios).`,
             });
         }
         
@@ -154,15 +145,15 @@ export default function ClientsPage() {
 
         try {
           const clientsToAdd = validData.map(item => ({
-              ejecutivo: item.ejecutivo || '',
-              ruc: item.ruc,
-              nombre_cliente: item.nombre_cliente,
-              nombre_comercial: item.nombre_comercial || '',
-              provincia: item.provincia || '',
-              canton: item.canton || '',
-              direccion: item.direccion || '',
-              latitud: item.latitud,
-              longitud: item.longitud,
+              ejecutivo: item.Ejecutivo || '',
+              ruc: item.Ruc,
+              nombre_cliente: item.Nombre_cliente,
+              nombre_comercial: item.Nombre_comercial || '',
+              provincia: item.Provincia || '',
+              canton: item.Canton || '',
+              direccion: item.Direccion || '',
+              latitud: 0,
+              longitud: 0,
           }));
 
           const addedCount = await addClientsBatch(clientsToAdd);
@@ -248,7 +239,7 @@ export default function ClientsPage() {
                 <DialogHeader>
                     <DialogTitle>Importar Clientes desde CSV</DialogTitle>
                     <DialogDescription>
-                        Sube un archivo CSV para añadir clientes nuevos. Columnas requeridas: ejecutivo, ruc, nombre_cliente, nombre_comercial, provincia, canton, direccion, latitud, longitud.
+                        Sube un archivo CSV para añadir clientes nuevos. Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
