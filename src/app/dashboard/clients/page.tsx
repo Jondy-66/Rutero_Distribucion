@@ -95,9 +95,9 @@ export default function ClientsPage() {
   };
 
   const processImportedData = async (data: ClientCsvData[], fields: string[] | undefined) => {
-    const requiredColumns = ['ejecutivo', 'ruc', 'nombrecliente', 'nombrecomercial', 'provincia', 'canton', 'direccion'];
+    const requiredColumns = ['ejecutivo', 'ruc', 'nombre_cliente', 'nombre_comercial', 'canton', 'direccion', 'provincia'];
     const headers = (fields || []).map(h => h.toString().trim().toLowerCase().replace(/_/g, ''));
-    const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+    const missingColumns = requiredColumns.filter(col => !headers.includes(col.replace(/_/g, '')));
 
     if (missingColumns.length > 0) {
       toast({
@@ -142,8 +142,8 @@ export default function ClientsPage() {
       const clientsToAdd = validData.map(item => ({
           ejecutivo: item.ejecutivo || '',
           ruc: item.ruc,
-          nombre_cliente: item.nombrecliente,
-          nombre_comercial: item.nombrecomercial || '',
+          nombre_cliente: item.nombrecliente || item.nombre_cliente || '',
+          nombre_comercial: item.nombrecomercial || item.nombre_comercial || '',
           provincia: item.provincia || '',
           canton: item.canton || '',
           direccion: item.direccion || '',
@@ -309,53 +309,34 @@ export default function ClientsPage() {
           <CardDescription>Una lista de todos los clientes en tu base de datos.</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="all" onValueChange={(value) => setFilter(value)}>
-            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
+            <Tabs defaultValue="all" onValueChange={(value) => setFilter(value)}>
               <TabsList>
                 <TabsTrigger value="all">Todos</TabsTrigger>
                 <TabsTrigger value="active">Activos</TabsTrigger>
                 <TabsTrigger value="inactive">Inactivos</TabsTrigger>
               </TabsList>
-              <div className="flex w-full items-center gap-2 sm:w-auto">
-                <div className="relative flex-1 sm:flex-initial">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input 
-                    placeholder="Buscar clientes..." 
-                    className="w-full pl-8" 
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
-                </div>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" className="gap-1">
-                      <File className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Columnas</span>
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuLabel>Alternar columnas</DropdownMenuLabel>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuCheckboxItem checked>Ejecutivo</DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem checked>RUC</DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem checked>Nombre Cliente</DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem checked>Provincia</DropdownMenuCheckboxItem>
-                    <DropdownMenuCheckboxItem>Canton</DropdownMenuCheckboxItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              </div>
+            </Tabs>
+            <div className="relative w-full sm:max-w-xs">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input 
+                placeholder="Buscar clientes..." 
+                className="w-full pl-8" 
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-          </Tabs>
-          <div className="border rounded-lg mt-4">
+          </div>
+          <div className="border rounded-lg mt-4 overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nombre Cliente</TableHead>
                   <TableHead className="hidden sm:table-cell">RUC</TableHead>
-                  <TableHead className="hidden md:table-cell">Ejecutivo</TableHead>
+                  <TableHead className="hidden lg:table-cell">Ejecutivo</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead>Dirección</TableHead>
-                  <TableHead>Acciones</TableHead>
+                  <TableHead className="hidden md:table-cell">Dirección</TableHead>
+                  <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -364,10 +345,10 @@ export default function ClientsPage() {
                     <TableRow key={i}>
                       <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
                       <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
+                      <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
+                      <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
                       <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
-                       <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
-                      <TableCell><Skeleton className="h-5 w-full" /></TableCell>
-                      <TableCell><Skeleton className="h-8 w-8" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                     </TableRow>
                   ))
                 ) : (
@@ -375,17 +356,17 @@ export default function ClientsPage() {
                     <TableRow key={client.id}>
                       <TableCell>
                         <div className="font-medium">{client.nombre_cliente}</div>
-                        <div className="text-sm text-muted-foreground">{client.nombre_comercial}</div>
+                        <div className="text-sm text-muted-foreground md:hidden">{client.ruc}</div>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell">{client.ruc}</TableCell>
-                      <TableCell className="hidden md:table-cell">{client.ejecutivo}</TableCell>
+                      <TableCell className="hidden lg:table-cell">{client.ejecutivo}</TableCell>
                       <TableCell>
                         <Badge variant={(client.status ?? 'active') === 'active' ? 'success' : 'destructive'}>
                           {(client.status ?? 'active') === 'active' ? 'Activo' : 'Inactivo'}
                         </Badge>
                       </TableCell>
-                      <TableCell>{client.direccion}</TableCell>
-                      <TableCell>
+                      <TableCell className="hidden md:table-cell">{client.direccion}</TableCell>
+                      <TableCell className="text-right">
                         <AlertDialog>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
