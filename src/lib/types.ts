@@ -4,6 +4,7 @@ export type User = {
   email: string;
   role: 'Administrador' | 'Supervisor' | 'Usuario';
   avatar?: string;
+  status?: 'active' | 'inactive';
 };
 
 export type Client = {

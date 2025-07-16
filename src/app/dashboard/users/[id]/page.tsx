@@ -62,6 +62,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
         name: user.name,
         email: user.email,
         role: user.role,
+        status: user.status,
       });
       toast({ title: "Éxito", description: "Usuario actualizado correctamente." });
       router.push('/dashboard/users');
@@ -91,7 +92,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
         </PageHeader>
         <div className="grid gap-6 md:grid-cols-3">
             <Card className="md:col-span-1"><CardContent className="pt-6"><Skeleton className="h-32 w-32 rounded-full mx-auto" /></CardContent></Card>
-            <Card className="md:col-span-2"><CardContent className="pt-6 space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></CardContent></Card>
+            <Card className="md:col-span-2"><CardContent className="pt-6 space-y-4"><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /><Skeleton className="h-10 w-full" /></CardContent></Card>
         </div>
         </>
     );
@@ -157,6 +158,18 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                     <SelectItem value="Usuario">Usuario</SelectItem>
                     </SelectContent>
                 </Select>
+                </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="status">Estado</Label>
+                    <Select value={user.status || 'active'} onValueChange={(value: 'active' | 'inactive') => handleFieldChange('status', value)} disabled={isSaving}>
+                        <SelectTrigger id="status">
+                        <SelectValue placeholder="Seleccionar estado" />
+                        </SelectTrigger>
+                        <SelectContent>
+                        <SelectItem value="active">Activo</SelectItem>
+                        <SelectItem value="inactive">Inactivo</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
             </CardContent>
             <CardFooter>

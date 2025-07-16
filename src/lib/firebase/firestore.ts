@@ -20,9 +20,9 @@ export const getUser = async (id: string): Promise<User | null> => {
     return null;
 }
 
-export const addUser = (uid: string, userData: Omit<User, 'id'>) => {
+export const addUser = (uid: string, userData: Omit<User, 'id' | 'status'>) => {
     const userDoc = doc(db, "users", uid);
-    return setDoc(userDoc, userData);
+    return setDoc(userDoc, { ...userData, status: 'active' });
 };
 
 export const updateUser = (id: string, userData: Partial<User>) => {

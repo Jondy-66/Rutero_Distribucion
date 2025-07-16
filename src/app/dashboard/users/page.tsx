@@ -67,11 +67,15 @@ export default function UsersPage() {
     fetchUsers();
   }, []);
 
-  const getBadgeVariant = (role: string) => {
+  const getBadgeVariantForRole = (role: string) => {
     if (role === 'Administrador') return 'default';
     if (role === 'Supervisor') return 'secondary';
     return 'outline';
   };
+  
+  const getBadgeVariantForStatus = (status: 'active' | 'inactive' | undefined) => {
+    return (status ?? 'active') === 'active' ? 'success' : 'destructive';
+  }
 
   const handleEdit = (userId: string) => {
     router.push(`/dashboard/users/${userId}`);
@@ -126,7 +130,7 @@ export default function UsersPage() {
                     </div>
                   </TableCell>
                   <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                  <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-16" /></TableCell>
+                  <TableCell className="hidden sm:table-cell"><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
                   <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                 </TableRow>
               ))
@@ -146,10 +150,12 @@ export default function UsersPage() {
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={getBadgeVariant(user.role)}>{user.role}</Badge>
+                    <Badge variant={getBadgeVariantForRole(user.role)}>{user.role}</Badge>
                   </TableCell>
                   <TableCell className="hidden sm:table-cell">
-                    <Badge variant="outline">Activo</Badge>
+                    <Badge variant={getBadgeVariantForStatus(user.status)}>
+                        {(user.status ?? 'active') === 'active' ? 'Activo' : 'Inactivo'}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <AlertDialog>
