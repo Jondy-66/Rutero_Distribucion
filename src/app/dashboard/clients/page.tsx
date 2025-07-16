@@ -38,7 +38,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
@@ -50,11 +50,14 @@ type ClientCsvData = {
     [key: string]: string;
 }
 
+const ITEMS_PER_PAGE = 10;
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -78,6 +81,10 @@ export default function ClientsPage() {
   useEffect(() => {
     fetchClients();
   }, []);
+  
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filter, searchTerm]);
 
   const handleEdit = (clientId: string) => {
     router.push(`/dashboard/clients/${clientId}`);
@@ -258,6 +265,14 @@ export default function ClientsPage() {
         );
       });
   }, [clients, filter, searchTerm]);
+  
+  const paginatedClients = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return filteredClients.slice(startIndex, endIndex);
+  }, [filteredClients, currentPage]);
+
+  const totalPages = Math.ceil(filteredClients.length / ITEMS_PER_PAGE);
 
   return (
     <>
@@ -352,7 +367,7 @@ export default function ClientsPage() {
                     </TableRow>
                   ))
                 ) : (
-                  filteredClients.map((client) => (
+                  paginatedClients.map((client) => (
                     <TableRow key={client.id}>
                       <TableCell>
                         <div className="font-medium">{client.nombre_cliente}</div>
@@ -405,6 +420,34 @@ export default function ClientsPage() {
             </Table>
           </div>
         </CardContent>
+        <CardFooter>
+            <div className="flex items-center justify-between w-full">
+                <div className="text-xs text-muted-foreground">
+                Mostrando <strong>{paginatedClients.length}</strong> de <strong>{filteredClients.length}</strong> clientes
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                    >
+                        Anterior
+                    </Button>
+                    <span className="text-sm font-medium">
+                        Página {currentPage} de {totalPages}
+                    </span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                    >
+                        Siguiente
+                    </Button>
+                </div>
+            </div>
+        </CardFooter>
       </Card>
     </>
   );
