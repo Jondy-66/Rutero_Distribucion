@@ -132,9 +132,9 @@ export default function LoginPage() {
                 
                 <div className="mt-6 text-center text-sm">
                     ¿No tienes una cuenta?{' '}
-                    <Link href="#" className="underline">
+                    <a href="mailto:admin@rutero.com" className="underline">
                     Contactar al Administrador
-                    </Link>
+                    </a>
                 </div>
             </div>
         </div>
