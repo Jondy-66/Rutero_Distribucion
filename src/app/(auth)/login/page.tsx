@@ -5,14 +5,13 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Route, LoaderCircle } from 'lucide-react';
-import { PasswordInput } from '@/components/password-input';
 import { useToast } from '@/hooks/use-toast';
 import { handleSignIn } from '@/lib/firebase/auth';
 import { useAuth } from '@/hooks/use-auth';
 import { redirect } from 'next/navigation';
+import { FloatingLabelInput } from '@/components/ui/floating-label-input';
+import { FloatingLabelPasswordInput } from '@/components/ui/floating-label-password-input';
 
 
 export default function LoginPage() {
@@ -81,19 +80,30 @@ export default function LoginPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={onSignIn}>
-            <div className="space-y-4">
+            <div className="space-y-6">
+              <FloatingLabelInput 
+                id="email" 
+                label="Correo Electrónico" 
+                type="email"
+                required 
+                value={email} 
+                onChange={e => setEmail(e.target.value)} 
+                disabled={isLoading} 
+              />
               <div className="space-y-2">
-                <Label htmlFor="email">Correo Electrónico</Label>
-                <Input id="email" type="email" placeholder="m@example.com" required value={email} onChange={e => setEmail(e.target.value)} disabled={isLoading} />
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center">
-                  <Label htmlFor="password">Contraseña</Label>
-                  <Link href="/forgot-password" className="ml-auto inline-block text-sm underline">
+                 <FloatingLabelPasswordInput 
+                    id="password"
+                    label="Contraseña" 
+                    required 
+                    value={password} 
+                    onChange={e => setPassword(e.target.value)} 
+                    disabled={isLoading}
+                 />
+                <div className="flex items-center pt-1">
+                  <Link href="/forgot-password" className="ml-auto inline-block text-sm text-primary hover:underline">
                     ¿Olvidaste tu contraseña?
                   </Link>
                 </div>
-                <PasswordInput id="password" required value={password} onChange={e => setPassword(e.target.value)} disabled={isLoading} />
               </div>
               <div className="space-y-2 pt-2">
                   <Button type="submit" className="w-full" disabled={isLoading}>
