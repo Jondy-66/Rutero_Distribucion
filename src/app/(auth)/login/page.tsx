@@ -1,3 +1,4 @@
+
 'use client';
 import { useState } from 'react';
 import Link from 'next/link';
@@ -88,7 +89,7 @@ export default function LoginPage() {
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label htmlFor="password">Contraseña</Label>
-                  <Link href="#" className="ml-auto inline-block text-sm underline">
+                  <Link href="/forgot-password" className="ml-auto inline-block text-sm underline">
                     ¿Olvidaste tu contraseña?
                   </Link>
                 </div>

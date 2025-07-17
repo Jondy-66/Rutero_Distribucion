@@ -2,11 +2,9 @@ import {
   signInWithEmailAndPassword,
   signOut,
   createUserWithEmailAndPassword,
-  GoogleAuthProvider,
-  signInWithPopup,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
-import { auth, db } from './config';
-import { doc, setDoc } from 'firebase/firestore';
+import { auth } from './config';
 
 export const handleSignIn = (email, password) => {
   return signInWithEmailAndPassword(auth, email, password);
@@ -20,19 +18,6 @@ export const handleSignUp = (email, password) => {
   return createUserWithEmailAndPassword(auth, email, password);
 };
 
-export const handleGoogleSignIn = async () => {
-    const provider = new GoogleAuthProvider();
-    const result = await signInWithPopup(auth, provider);
-    const user = result.user;
-    
-    // Create user document in Firestore if it doesn't exist
-    const userDocRef = doc(db, "users", user.uid);
-    await setDoc(userDocRef, {
-      name: user.displayName,
-      email: user.email,
-      role: 'Usuario', // Default role
-      avatar: user.photoURL
-    }, { merge: true }); // Use merge to not overwrite existing data if user logs in again
-    
-    return result;
+export const handlePasswordReset = (email: string) => {
+    return sendPasswordResetEmail(auth, email);
 }
