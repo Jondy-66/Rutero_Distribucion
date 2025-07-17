@@ -29,7 +29,7 @@ export default function ForgotPasswordPage() {
     } catch (error: any) {
       console.error(error);
       let description = "Ocurrió un error al enviar el correo.";
-      if (error.code === 'auth/user-not-found') {
+      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
         description = "No se encontró ningún usuario con ese correo electrónico.";
       } else {
         description = error.message || description;
