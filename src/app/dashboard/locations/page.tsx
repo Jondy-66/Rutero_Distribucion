@@ -1,5 +1,7 @@
+
 'use client';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,9 +14,9 @@ import {
 } from '@/components/ui/table';
 import { getClients, updateClientLocations } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
-import { UploadCloud } from 'lucide-react';
+import { UploadCloud, Edit } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ClientMap } from '@/components/client-map';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -30,21 +32,23 @@ type LocationData = {
   Longitud: string;
 }
 
+const ITEMS_PER_PAGE = 10;
+
 export default function LocationsPage() {
   const [clients, setClients] = useState<Client[]>([]);
-  const [filteredClients, setFilteredClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ provincia: '', canton: '', direccion: '' });
   const [isUploading, setIsUploading] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+  const router = useRouter();
 
   const fetchClients = async () => {
     setLoading(true);
     try {
       const clientsData = await getClients();
       setClients(clientsData);
-      setFilteredClients(clientsData);
     } catch (error: any) {
       console.error("Failed to fetch clients:", error);
       if (error.code === 'permission-denied') {
@@ -62,6 +66,10 @@ export default function LocationsPage() {
   }, []);
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
+
+  const filteredClients = useMemo(() => {
     let result = clients;
     if (filters.provincia) {
       result = result.filter(c => c.provincia.toLowerCase().includes(filters.provincia.toLowerCase()));
@@ -72,12 +80,24 @@ export default function LocationsPage() {
     if (filters.direccion) {
       result = result.filter(c => c.direccion.toLowerCase().includes(filters.direccion.toLowerCase()));
     }
-    setFilteredClients(result);
+    return result;
   }, [filters, clients]);
+
+  const paginatedClients = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    return filteredClients.slice(startIndex, endIndex);
+  }, [filteredClients, currentPage]);
+
+  const totalPages = Math.ceil(filteredClients.length / ITEMS_PER_PAGE);
 
   const handleFilterChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
     setFilters(prev => ({ ...prev, [name]: value }));
+  };
+  
+  const handleEdit = (clientId: string) => {
+    router.push(`/dashboard/clients/${clientId}`);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -241,6 +261,7 @@ export default function LocationsPage() {
                         <TableHead>Provincia</TableHead>
                         <TableHead className="hidden sm:table-cell">Cantón</TableHead>
                         <TableHead>Dirección</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -251,10 +272,11 @@ export default function LocationsPage() {
                             <TableCell><Skeleton className="h-5 w-full" /></TableCell>
                             <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
                             <TableCell><Skeleton className="h-5 w-full" /></TableCell>
+                            <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                             </TableRow>
                         ))
                         ) : (
-                        filteredClients.map((client) => (
+                        paginatedClients.map((client) => (
                             <TableRow key={client.id}>
                             <TableCell>
                                 <div className="font-medium">{client.nombre_comercial}</div>
@@ -263,6 +285,12 @@ export default function LocationsPage() {
                             <TableCell>{client.provincia}</TableCell>
                             <TableCell className="hidden sm:table-cell">{client.canton}</TableCell>
                             <TableCell>{client.direccion}</TableCell>
+                            <TableCell className="text-right">
+                                <Button variant="ghost" size="icon" onClick={() => handleEdit(client.id)}>
+                                    <Edit className="h-4 w-4" />
+                                    <span className="sr-only">Editar</span>
+                                </Button>
+                            </TableCell>
                             </TableRow>
                         ))
                         )}
@@ -270,6 +298,34 @@ export default function LocationsPage() {
                     </Table>
                 </div>
             </CardContent>
+             <CardFooter>
+                <div className="flex items-center justify-between w-full">
+                    <div className="text-xs text-muted-foreground">
+                    Mostrando <strong>{paginatedClients.length}</strong> de <strong>{filteredClients.length}</strong> clientes
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                        >
+                            Anterior
+                        </Button>
+                        <span className="text-sm font-medium">
+                            Página {currentPage} de {totalPages}
+                        </span>
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                        >
+                            Siguiente
+                        </Button>
+                    </div>
+                </div>
+            </CardFooter>
         </Card>
         
         <Card>
