@@ -13,6 +13,7 @@ import {
   ClipboardList,
   PlusCircle,
   FileText,
+  UserCheck,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -77,6 +78,9 @@ export function DashboardNav() {
   const { user } = useAuth();
   const [isRoutesOpen, setIsRoutesOpen] = useState(
     pathname.startsWith('/dashboard/routes')
+  );
+  const [isUsersOpen, setIsUsersOpen] = useState(
+    pathname.startsWith('/dashboard/users')
   );
 
   const filteredNavItems = navItems.filter((item) => {
@@ -148,20 +152,40 @@ export function DashboardNav() {
           </Collapsible>
         )}
         {canSeeUsers && (
-            <SidebarMenuItem key={usersNavItem.href}>
-                <Link href={usersNavItem.href}>
-                <SidebarMenuButton
-                    isActive={
-                    pathname === usersNavItem.href ||
-                    (usersNavItem.href !== '/dashboard' && pathname.startsWith(usersNavItem.href))
-                    }
-                    tooltip={usersNavItem.label}
-                >
-                    <usersNavItem.icon className="h-5 w-5" />
-                    <span>{usersNavItem.label}</span>
+          <Collapsible open={isUsersOpen} onOpenChange={setIsUsersOpen}>
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton tooltip="Usuarios">
+                  <Users className="h-5 w-5" />
+                  <span>Usuarios</span>
                 </SidebarMenuButton>
-                </Link>
+              </CollapsibleTrigger>
             </SidebarMenuItem>
+            <CollapsibleContent>
+              <SidebarMenuSub>
+                <SidebarMenuSubItem>
+                  <Link href="/dashboard/users">
+                    <SidebarMenuSubButton
+                      isActive={pathname === '/dashboard/users' || pathname.startsWith('/dashboard/users/[id]')}
+                    >
+                      <Users />
+                      <span>Todos los Usuarios</span>
+                    </SidebarMenuSubButton>
+                  </Link>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <Link href="/dashboard/users/supervisors">
+                    <SidebarMenuSubButton
+                      isActive={pathname === '/dashboard/users/supervisors'}
+                    >
+                      <UserCheck />
+                      <span>Supervisores</span>
+                    </SidebarMenuSubButton>
+                  </Link>
+                </SidebarMenuSubItem>
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
         )}
       </SidebarMenu>
     </nav>

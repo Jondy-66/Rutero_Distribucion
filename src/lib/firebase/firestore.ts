@@ -11,6 +11,12 @@ export const getUsers = async (): Promise<User[]> => {
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
 };
 
+export const getSupervisors = async (): Promise<User[]> => {
+    const q = query(usersCollection, where('role', '==', 'Supervisor'), orderBy('name'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+};
+
 export const getUser = async (id: string): Promise<User | null> => {
     const docRef = doc(db, 'users', id);
     const docSnap = await getDoc(docRef);
