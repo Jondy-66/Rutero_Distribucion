@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -57,6 +58,11 @@ export default function NewUserPage() {
       toast({ title: "Error", description: "Las contraseñas no coinciden.", variant: "destructive" });
       return;
     }
+    if (role === 'Usuario' && !selectedSupervisor) {
+      toast({ title: "Error", description: "Debes asignar un supervisor para el rol de Usuario.", variant: "destructive" });
+      return;
+    }
+
     setIsLoading(true);
     try {
       // 1. Create user in Firebase Auth
@@ -83,7 +89,10 @@ export default function NewUserPage() {
       console.error(error);
       if (error.code === 'permission-denied') {
         toast({ title: "Error de Permisos", description: "No tienes permiso para crear usuarios.", variant: "destructive" });
-      } else {
+      } else if (error.code === 'auth/email-already-in-use') {
+        toast({ title: "Error", description: "El correo electrónico ya está en uso.", variant: "destructive" });
+      }
+      else {
         toast({ title: "Error", description: error.message || "No se pudo crear el usuario.", variant: "destructive" });
       }
     } finally {
