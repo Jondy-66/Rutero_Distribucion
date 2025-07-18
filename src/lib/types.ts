@@ -5,6 +5,7 @@ export type User = {
   role: 'Administrador' | 'Supervisor' | 'Usuario';
   avatar?: string;
   status?: 'active' | 'inactive';
+  supervisorId?: string;
 };
 
 export type Client = {

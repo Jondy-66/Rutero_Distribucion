@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -16,10 +16,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PasswordInput } from '@/components/password-input';
 import Link from 'next/link';
-import { ArrowLeft, LoaderCircle } from 'lucide-react';
+import { ArrowLeft, LoaderCircle, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { handleSignUp } from '@/lib/firebase/auth';
-import { addUser } from '@/lib/firebase/firestore';
+import { addUser, getSupervisors } from '@/lib/firebase/firestore';
+import type { User } from '@/lib/types';
 
 export default function NewUserPage() {
   const router = useRouter();
@@ -30,6 +31,25 @@ export default function NewUserPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [supervisors, setSupervisors] = useState<User[]>([]);
+  const [selectedSupervisor, setSelectedSupervisor] = useState<string | undefined>();
+  const [loadingSupervisors, setLoadingSupervisors] = useState(true);
+
+  useEffect(() => {
+    const fetchSupervisors = async () => {
+        setLoadingSupervisors(true);
+        try {
+            const supervisorUsers = await getSupervisors();
+            setSupervisors(supervisorUsers);
+        } catch (error: any) {
+            console.error("Failed to fetch supervisors:", error);
+            toast({ title: "Error", description: "No se pudieron cargar los supervisores.", variant: "destructive" });
+        } finally {
+            setLoadingSupervisors(false);
+        }
+    }
+    fetchSupervisors();
+  }, [toast]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,12 +64,18 @@ export default function NewUserPage() {
       const uid = userCredential.user.uid;
 
       // 2. Create user document in Firestore
-      await addUser(uid, {
+      const newUser: Omit<User, 'id' | 'status'> = {
         name,
         email,
         role,
         avatar: `https://placehold.co/100x100/011688/FFFFFF/png?text=${name.charAt(0)}`
-      });
+      };
+
+      if (role === 'Usuario' && selectedSupervisor) {
+          newUser.supervisorId = selectedSupervisor;
+      }
+
+      await addUser(uid, newUser);
 
       toast({ title: "Éxito", description: "Usuario creado correctamente." });
       router.push('/dashboard/users');
@@ -108,6 +134,26 @@ export default function NewUserPage() {
                 </SelectContent>
               </Select>
             </div>
+            {role === 'Usuario' && (
+              <div className="space-y-2">
+                <Label htmlFor="supervisor">Asignar Supervisor</Label>
+                <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor} disabled={isLoading || loadingSupervisors}>
+                    <SelectTrigger id="supervisor">
+                        <Users className="mr-2 h-4 w-4" />
+                        <SelectValue placeholder="Seleccionar supervisor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {loadingSupervisors ? (
+                            <SelectItem value="loading" disabled>Cargando...</SelectItem>
+                        ) : (
+                            supervisors.map(s => (
+                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))
+                        )}
+                    </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="new-password">Contraseña</Label>
               <PasswordInput id="new-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={isLoading}/>

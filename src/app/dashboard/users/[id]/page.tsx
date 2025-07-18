@@ -13,32 +13,51 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getUser, updateUser } from '@/lib/firebase/firestore';
+import { getUser, updateUser, getUsersBySupervisor, getSupervisors } from '@/lib/firebase/firestore';
 import type { User } from '@/lib/types';
 import { notFound, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, LoaderCircle } from 'lucide-react';
+import { ArrowLeft, LoaderCircle, Users } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { PasswordInput } from '@/components/password-input';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
 
 export default function UserProfilePage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
   const [user, setUser] = useState<User | null>(null);
+  const [assignedUsers, setAssignedUsers] = useState<User[]>([]);
+  const [supervisors, setSupervisors] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [loadingAssignedUsers, setLoadingAssignedUsers] = useState(false);
 
   useEffect(() => {
     if (params.id) {
-      const fetchUser = async () => {
+      const fetchUserAndRelatedData = async () => {
+        setLoading(true);
         try {
           const userData = await getUser(params.id);
           if (!userData) {
             notFound();
+            return;
           }
           setUser(userData);
+
+          if (userData.role === 'Supervisor') {
+            setLoadingAssignedUsers(true);
+            const users = await getUsersBySupervisor(userData.id);
+            setAssignedUsers(users);
+            setLoadingAssignedUsers(false);
+          }
+
+          if (userData.role === 'Usuario') {
+            const supervisorList = await getSupervisors();
+            setSupervisors(supervisorList);
+          }
+
         } catch (error: any) {
           console.error("Failed to fetch user:", error);
           if(error.code === 'permission-denied') {
@@ -49,7 +68,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
           setLoading(false);
         }
       };
-      fetchUser();
+      fetchUserAndRelatedData();
     }
   }, [params.id, toast]);
 
@@ -58,12 +77,18 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     if (!user) return;
     setIsSaving(true);
     try {
-      await updateUser(user.id, {
+      const dataToUpdate: Partial<User> = {
         name: user.name,
         email: user.email,
         role: user.role,
         status: user.status,
-      });
+      };
+
+      if (user.role === 'Usuario') {
+        dataToUpdate.supervisorId = user.supervisorId || '';
+      }
+
+      await updateUser(user.id, dataToUpdate);
       toast({ title: "Éxito", description: "Usuario actualizado correctamente." });
       router.push('/dashboard/users');
     } catch (error: any) {
@@ -115,93 +140,140 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
           </Button>
         </Link>
       </PageHeader>
-      <div className="grid gap-6 md:grid-cols-3">
-        <Card className="md:col-span-1">
-          <CardHeader>
-            <CardTitle>Avatar del Usuario</CardTitle>
-          </CardHeader>
-          <CardContent className="flex flex-col items-center gap-4">
-            <Avatar className="h-32 w-32">
-              <AvatarImage src={user.avatar} data-ai-hint="user avatar" />
-              <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-            </Avatar>
-            <Button variant="outline">Cambiar Avatar</Button>
-          </CardContent>
-        </Card>
-
-        <form onSubmit={handleUpdateUser} className="md:col-span-2">
-            <Card>
+      <div className="grid gap-6">
+        <div className="grid md:grid-cols-3 gap-6">
+            <Card className="md:col-span-1">
             <CardHeader>
-                <CardTitle>Información Personal</CardTitle>
-                <CardDescription>
-                Actualiza los datos personales del usuario aquí. Haz clic en guardar cuando hayas terminado.
-                </CardDescription>
+                <CardTitle>Avatar del Usuario</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="space-y-2">
-                <Label htmlFor="name">Nombre Completo</Label>
-                <Input id="name" value={user.name} onChange={e => handleFieldChange('name', e.target.value)} disabled={isSaving}/>
-                </div>
-                <div className="space-y-2">
-                <Label htmlFor="email">Correo Electrónico</Label>
-                <Input id="email" type="email" value={user.email} disabled />
-                </div>
-                <div className="space-y-2">
-                <Label htmlFor="role">Rol</Label>
-                <Select value={user.role} onValueChange={(value: any) => handleFieldChange('role', value)} disabled={isSaving}>
-                    <SelectTrigger id="role">
-                    <SelectValue placeholder="Seleccionar rol" />
-                    </SelectTrigger>
-                    <SelectContent>
-                    <SelectItem value="Administrador">Administrador</SelectItem>
-                    <SelectItem value="Supervisor">Supervisor</SelectItem>
-                    <SelectItem value="Usuario">Usuario</SelectItem>
-                    </SelectContent>
-                </Select>
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="status">Estado</Label>
-                    <Select value={user.status || 'active'} onValueChange={(value: 'active' | 'inactive') => handleFieldChange('status', value)} disabled={isSaving}>
-                        <SelectTrigger id="status">
-                        <SelectValue placeholder="Seleccionar estado" />
+            <CardContent className="flex flex-col items-center gap-4">
+                <Avatar className="h-32 w-32">
+                <AvatarImage src={user.avatar} data-ai-hint="user avatar" />
+                <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
+                </Avatar>
+                <Button variant="outline">Cambiar Avatar</Button>
+            </CardContent>
+            </Card>
+
+            <form onSubmit={handleUpdateUser} className="md:col-span-2">
+                <Card>
+                <CardHeader>
+                    <CardTitle>Información Personal</CardTitle>
+                    <CardDescription>
+                    Actualiza los datos personales del usuario aquí. Haz clic en guardar cuando hayas terminado.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="space-y-2">
+                    <Label htmlFor="name">Nombre Completo</Label>
+                    <Input id="name" value={user.name} onChange={e => handleFieldChange('name', e.target.value)} disabled={isSaving}/>
+                    </div>
+                    <div className="space-y-2">
+                    <Label htmlFor="email">Correo Electrónico</Label>
+                    <Input id="email" type="email" value={user.email} disabled />
+                    </div>
+                    <div className="space-y-2">
+                    <Label htmlFor="role">Rol</Label>
+                    <Select value={user.role} onValueChange={(value: any) => handleFieldChange('role', value)} disabled={isSaving}>
+                        <SelectTrigger id="role">
+                        <SelectValue placeholder="Seleccionar rol" />
                         </SelectTrigger>
                         <SelectContent>
-                        <SelectItem value="active">Activo</SelectItem>
-                        <SelectItem value="inactive">Inactivo</SelectItem>
+                        <SelectItem value="Administrador">Administrador</SelectItem>
+                        <SelectItem value="Supervisor">Supervisor</SelectItem>
+                        <SelectItem value="Usuario">Usuario</SelectItem>
                         </SelectContent>
                     </Select>
-                </div>
-            </CardContent>
-            <CardFooter>
-                <Button type="submit" disabled={isSaving}>
-                    {isSaving && <LoaderCircle className="animate-spin" />}
-                    Guardar Cambios
-                </Button>
-            </CardFooter>
-            </Card>
-        </form>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="status">Estado</Label>
+                        <Select value={user.status || 'active'} onValueChange={(value: 'active' | 'inactive') => handleFieldChange('status', value)} disabled={isSaving}>
+                            <SelectTrigger id="status">
+                            <SelectValue placeholder="Seleccionar estado" />
+                            </SelectTrigger>
+                            <SelectContent>
+                            <SelectItem value="active">Activo</SelectItem>
+                            <SelectItem value="inactive">Inactivo</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    {user.role === 'Usuario' && (
+                        <div className="space-y-2">
+                            <Label htmlFor="supervisor">Asignar Supervisor</Label>
+                            <Select value={user.supervisorId} onValueChange={(value) => handleFieldChange('supervisorId', value)} disabled={isSaving || supervisors.length === 0}>
+                                <SelectTrigger id="supervisor">
+                                    <Users className="mr-2 h-4 w-4" />
+                                    <SelectValue placeholder="Seleccionar supervisor" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {supervisors.map(s => (
+                                        <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                </CardContent>
+                <CardFooter>
+                    <Button type="submit" disabled={isSaving}>
+                        {isSaving && <LoaderCircle className="animate-spin" />}
+                        Guardar Cambios
+                    </Button>
+                </CardFooter>
+                </Card>
+            </form>
+        </div>
 
-        <Card className="md:col-span-3">
-          <CardHeader>
-            <CardTitle>Contraseña</CardTitle>
-            <CardDescription>
-              Restablece la contraseña del usuario aquí. (Funcionalidad no implementada)
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-             <div className="space-y-2">
-              <Label htmlFor="new-password">Nueva Contraseña</Label>
-              <PasswordInput id="new-password" disabled/>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirmar Nueva Contraseña</Label>
-              <PasswordInput id="confirm-password" disabled/>
-            </div>
-          </CardContent>
-          <CardFooter>
-            <Button disabled>Restablecer Contraseña</Button>
-          </CardFooter>
-        </Card>
+        {user.role === 'Supervisor' && (
+             <Card>
+                <CardHeader>
+                    <CardTitle>Usuarios Asignados</CardTitle>
+                    <CardDescription>Lista de usuarios gestionados por {user.name}.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                     <div className="border rounded-lg">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Nombre</TableHead>
+                                    <TableHead>Email</TableHead>
+                                    <TableHead>Estado</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {loadingAssignedUsers ? (
+                                    Array.from({ length: 3 }).map((_, i) => (
+                                        <TableRow key={i}>
+                                            <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                                            <TableCell><Skeleton className="h-5 w-48" /></TableCell>
+                                            <TableCell><Skeleton className="h-6 w-20 rounded-full" /></TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : assignedUsers.length > 0 ? (
+                                    assignedUsers.map(assigned => (
+                                        <TableRow key={assigned.id}>
+                                            <TableCell>{assigned.name}</TableCell>
+                                            <TableCell>{assigned.email}</TableCell>
+                                            <TableCell>
+                                                <Badge variant={assigned.status === 'active' ? 'success' : 'destructive'}>
+                                                    {assigned.status === 'active' ? 'Activo' : 'Inactivo'}
+                                                </Badge>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={3} className="text-center h-24">
+                                            Este supervisor no tiene usuarios asignados.
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </CardContent>
+             </Card>
+        )}
       </div>
     </>
   );
