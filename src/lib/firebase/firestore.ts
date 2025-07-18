@@ -12,9 +12,11 @@ export const getUsers = async (): Promise<User[]> => {
 };
 
 export const getSupervisors = async (): Promise<User[]> => {
-    const q = query(usersCollection, where('role', '==', 'Supervisor'), orderBy('name'));
+    const q = query(usersCollection, where('role', '==', 'Supervisor'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+    const supervisors = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+    // Sort by name in the client
+    return supervisors.sort((a, b) => a.name.localeCompare(b.name));
 };
 
 export const getUsersBySupervisor = async (supervisorId: string): Promise<User[]> => {
