@@ -7,13 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2 } from 'lucide-react';
+import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getClients } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type RouteClient = Client & {
     valorVenta: string;
@@ -41,6 +42,7 @@ export default function RouteManagementPage() {
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
   const [routeClients, setRouteClients] = useState<RouteClient[]>([]);
   const [loading, setLoading] = useState(true);
+  const [gettingLocation, setGettingLocation] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -75,11 +77,47 @@ export default function RouteManagementPage() {
     setRouteClients(prev => prev.filter((_, i) => i !== index));
   }
   
-  const handleClientValueChange = (index: number, field: keyof Omit<RouteClient, 'id' | 'ejecutivo' | 'ruc' | 'nombre_cliente' | 'nombre_comercial' | 'provincia' | 'canton' | 'direccion' | 'latitud' | 'longitud'>, value: string) => {
+  const handleClientValueChange = (index: number, field: keyof Omit<RouteClient, 'id' | 'ejecutivo' | 'ruc' | 'nombre_cliente' | 'nombre_comercial' | 'provincia' | 'canton' | 'direccion' | 'latitud' | 'longitud' | 'status'>, value: string) => {
       const updatedClients = [...routeClients];
       updatedClients[index][field] = value;
       setRouteClients(updatedClients);
   }
+
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+      toast({
+        title: "Geolocalización no soportada",
+        description: "Tu navegador no soporta la geolocalización.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setGettingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setGettingLocation(false);
+        const { latitude, longitude } = position.coords;
+        toast({
+          title: "Ubicación Obtenida",
+          description: `Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`
+        });
+        // Here you would typically update a state or a form field with these coordinates
+      },
+      (error) => {
+        setGettingLocation(false);
+        let description = "No se pudo obtener la ubicación.";
+        if (error.code === error.PERMISSION_DENIED) {
+            description = "Permiso de ubicación denegado. Actívalo en tu navegador.";
+        }
+        toast({
+          title: "Error de Ubicación",
+          description: description,
+          variant: "destructive"
+        });
+      }
+    );
+  };
 
 
   return (
@@ -141,6 +179,25 @@ export default function RouteManagementPage() {
                                     ))}
                                 </SelectContent>
                             </Select>
+                        </div>
+                    </div>
+                    <div className="space-y-4">
+                        <Button onClick={handleGetLocation} disabled={gettingLocation} className="w-full">
+                            {gettingLocation ? (
+                                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                            ) : (
+                                <MapPin className="mr-2 h-4 w-4" />
+                            )}
+                            {gettingLocation ? 'Buscando...' : 'Mi Ubicación'}
+                        </Button>
+                        <div className="flex items-center space-x-2">
+                            <Checkbox id="phone-call" />
+                            <label
+                                htmlFor="phone-call"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                            >
+                                Llamada telefónica
+                            </label>
                         </div>
                     </div>
                 </CardContent>
