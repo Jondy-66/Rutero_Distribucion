@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock } from 'lucide-react';
-import { getClients, addRoute, getUsers } from '@/lib/firebase/firestore';
-import type { Client, User } from '@/lib/types';
+import { PlusCircle, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, Save } from 'lucide-react';
+import { getClients, addRoutesBatch, getUsers } from '@/lib/firebase/firestore';
+import type { Client, User, RoutePlan } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
@@ -19,6 +19,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Timestamp } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/use-auth';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
     const slots = [];
@@ -35,24 +37,34 @@ const generateTimeSlots = (startHour: number, endHour: number, interval: number,
 const startTimeSlots = generateTimeSlots(8, 18, 30);
 const endTimeSlots = generateTimeSlots(8, 18, 30, 30);
 
+type StagedRoute = Omit<RoutePlan, 'id' | 'createdAt'> & { tempId: number };
 
 export default function NewRoutePage() {
   const { toast } = useToast();
   const { user } = useAuth();
+  
+  // Form State
+  const [routeName, setRouteName] = useState('');
   const [date, setDate] = useState<Date | undefined>(new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>(new Date());
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [startTime, setStartTime] = useState<string | undefined>();
   const [endTime, setEndTime] = useState<string | undefined>();
-  const [open, setOpen] = useState(false);
+  const [selectedClients, setSelectedClients] = useState<string[]>([]);
+  const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
+  
+  // Data State
   const [clients, setClients] = useState<Client[]>([]);
   const [supervisors, setSupervisors] = useState<User[]>([]);
-  const [selectedClients, setSelectedClients] = useState<string[]>([]);
-  const [selectedSupervisor, setSelectedSupervisor] = useState<string | undefined>();
+  
+  // UI State
+  const [open, setOpen] = useState(false);
   const [loadingClients, setLoadingClients] = useState(true);
   const [loadingSupervisors, setLoadingSupervisors] = useState(true);
-  const [isCreating, setIsCreating] = useState(false);
-  const [routeName, setRouteName] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Staging area for routes
+  const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
 
   useEffect(() => {
     const fetchClients = async () => {
@@ -97,9 +109,18 @@ export default function NewRoutePage() {
     );
   };
   
-  const handleCreateRoute = async () => {
-    if (!routeName || !date || selectedClients.length === 0 || !selectedSupervisor || !startTime || !endTime) {
-      toast({ title: 'Faltan datos', description: 'Por favor completa todos los campos para crear la ruta.', variant: 'destructive' });
+  const resetForm = () => {
+    setRouteName('');
+    setSelectedClients([]);
+    setDate(new Date());
+    setStartTime(undefined);
+    setEndTime(undefined);
+    setSelectedSupervisorId(undefined);
+  }
+
+  const handleAddToStage = () => {
+    if (!routeName || !date || selectedClients.length === 0 || !selectedSupervisorId || !startTime || !endTime) {
+      toast({ title: 'Faltan datos', description: 'Por favor completa todos los campos para añadir la ruta.', variant: 'destructive' });
       return;
     }
     if (!user) {
@@ -107,35 +128,60 @@ export default function NewRoutePage() {
         return;
     }
 
-    setIsCreating(true);
+    const clientsForRoute = clients.filter(c => selectedClients.includes(c.ruc));
+    const supervisor = supervisors.find(s => s.id === selectedSupervisorId);
+
+    if (!supervisor) {
+        toast({ title: 'Error', description: 'Supervisor no encontrado.', variant: 'destructive' });
+        return;
+    }
+    
+    const newStagedRoute: StagedRoute = {
+        tempId: Date.now(),
+        routeName,
+        date,
+        clients: clientsForRoute,
+        status: 'Planificada',
+        supervisorId: selectedSupervisorId,
+        supervisorName: supervisor.name,
+        createdBy: user.id,
+        startTime,
+        endTime
+    };
+
+    setStagedRoutes(prev => [...prev, newStagedRoute]);
+    toast({ title: 'Ruta Añadida', description: `La ruta "${routeName}" ha sido añadida a la lista.` });
+    resetForm();
+  }
+  
+  const handleRemoveFromStage = (tempId: number) => {
+    setStagedRoutes(prev => prev.filter(r => r.tempId !== tempId));
+  }
+
+  const handleSaveAllRoutes = async () => {
+    if (stagedRoutes.length === 0) {
+        toast({ title: 'Lista Vacía', description: 'No hay rutas planificadas para guardar.', variant: 'destructive' });
+        return;
+    }
+    setIsSaving(true);
     try {
-        const clientsForRoute = clients.filter(c => selectedClients.includes(c.ruc));
-        await addRoute({
-            routeName,
-            date: Timestamp.fromDate(date),
-            clients: clientsForRoute,
-            status: 'Planificada',
-            supervisorId: selectedSupervisor,
-            createdBy: user.id,
-            startTime,
-            endTime
-        });
-        toast({ title: 'Ruta Creada', description: 'La ruta ha sido planificada exitosamente.' });
-        setRouteName('');
-        setSelectedClients([]);
-        setDate(new Date());
-        setStartTime(undefined);
-        setEndTime(undefined);
-        setSelectedSupervisor(undefined);
+        const routesToSave = stagedRoutes.map(({ tempId, ...rest }) => ({
+            ...rest,
+            date: Timestamp.fromDate(rest.date),
+        }));
+
+        await addRoutesBatch(routesToSave);
+        toast({ title: 'Rutas Guardadas', description: `${stagedRoutes.length} rutas han sido guardadas exitosamente.` });
+        setStagedRoutes([]);
     } catch(error: any) {
         console.error(error);
         if (error.code === 'permission-denied') {
             toast({ title: 'Error de Permisos', description: 'No tienes permiso para crear rutas.', variant: 'destructive' });
         } else {
-            toast({ title: 'Error', description: 'No se pudo crear la ruta.', variant: 'destructive' });
+            toast({ title: 'Error', description: 'No se pudieron guardar las rutas.', variant: 'destructive' });
         }
     } finally {
-        setIsCreating(false);
+        setIsSaving(false);
     }
   }
 
@@ -143,19 +189,14 @@ export default function NewRoutePage() {
 
   return (
     <>
-      <PageHeader title="Planificación de Rutas" description="Crea y gestiona tus rutas de venta.">
-        <Button onClick={handleCreateRoute} disabled={isCreating || isLoading}>
-            {isCreating ? <LoaderCircle className="animate-spin" /> : <PlusCircle className="mr-2 h-4 w-4" />}
-            Crear Ruta
-        </Button>
-      </PageHeader>
-      <div className="grid grid-cols-1 gap-6">
+      <PageHeader title="Planificación de Rutas" description="Crea y añade planes de ruta a la lista para guardarlos." />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <Card>
           <CardHeader>
             <CardTitle>Detalles de la Ruta</CardTitle>
-            <CardDescription>Completa los detalles para tu nuevo plan de ruta.</CardDescription>
+            <CardDescription>Completa los detalles y añade la ruta a la lista de planificación.</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-6">
+          <CardContent className="space-y-4">
              <div className="space-y-2">
               <Label>Seleccionar Clientes</Label>
               <Popover open={open} onOpenChange={setOpen}>
@@ -165,9 +206,9 @@ export default function NewRoutePage() {
                     role="combobox"
                     aria-expanded={open}
                     className="w-full justify-between"
-                    disabled={loadingClients}
+                    disabled={isLoading}
                   >
-                    {loadingClients ? 'Cargando clientes...' : selectedClients.length > 0 ? `${selectedClients.length} clientes seleccionados` : "Seleccionar clientes..."}
+                    {isLoading ? 'Cargando clientes...' : selectedClients.length > 0 ? `${selectedClients.length} clientes seleccionados` : "Seleccionar clientes..."}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
@@ -207,7 +248,7 @@ export default function NewRoutePage() {
               <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isLoading}/>
             </div>
             
-            <div className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                <div className="space-y-2">
                   <Label>Fecha</Label>
                   <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
@@ -231,6 +272,24 @@ export default function NewRoutePage() {
                       </div>
                     </PopoverContent>
                   </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="supervisor">Asignar Supervisor</Label>
+                   <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isLoading}>
+                      <SelectTrigger id="supervisor">
+                          <Users className="mr-2 h-4 w-4" />
+                          <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          {loadingSupervisors ? (
+                              <SelectItem value="loading" disabled>Cargando...</SelectItem>
+                          ) : (
+                              supervisors.map(s => (
+                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                              ))
+                          )}
+                      </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="start-time">Hora de Inicio</Label>
@@ -260,69 +319,66 @@ export default function NewRoutePage() {
                       </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="product">Producto</Label>
-                  <Input id="product" placeholder="ej., Producto A" disabled={isLoading}/>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sale-value">Ingresar valor de venta</Label>
-                  <Input id="sale-value" type="number" placeholder="0.00" disabled={isLoading}/>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="collection-value">Ingresar Valor de Cobro</Label>
-                  <Input id="collection-value" type="number" placeholder="0.00" disabled={isLoading}/>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="returns">Devoluciones</Label>
-                  <Input id="returns" type="number" placeholder="0" disabled={isLoading}/>
-                </div>
-                 <div className="space-y-2">
-                  <Label htmlFor="expired">Expirados</Label>
-                  <Input id="expired" type="number" placeholder="0" disabled={isLoading}/>
-                </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="supervisor">Asignar Supervisor</Label>
-               <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor} disabled={isLoading}>
-                  <SelectTrigger id="supervisor">
-                      <Users className="mr-2 h-4 w-4" />
-                      <SelectValue placeholder="Seleccionar supervisor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                      {loadingSupervisors ? (
-                          <SelectItem value="loading" disabled>Cargando...</SelectItem>
-                      ) : (
-                          supervisors.map(s => (
-                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                          ))
-                      )}
-                  </SelectContent>
-              </Select>
             </div>
           </CardContent>
+           <CardFooter>
+            <Button onClick={handleAddToStage} disabled={isLoading} className="w-full">
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Añadir a la Lista
+            </Button>
+          </CardFooter>
         </Card>
         
         <Card>
           <CardHeader>
-            <CardTitle>Clientes Seleccionados</CardTitle>
-            <CardDescription>{selectedClients.length} clientes seleccionados para esta ruta.</CardDescription>
+            <CardTitle>Rutas Planificadas</CardTitle>
+            <CardDescription>{stagedRoutes.length} rutas en la lista para ser guardadas.</CardDescription>
           </CardHeader>
           <CardContent>
-            {selectedClients.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8">
-                <p>Aún no hay clientes seleccionados.</p>
+            {stagedRoutes.length === 0 ? (
+              <div className="text-center text-muted-foreground py-8 border-2 border-dashed rounded-lg">
+                <p>Aún no has añadido rutas.</p>
+                <p className="text-sm">Completa el formulario y haz clic en "Añadir a la Lista".</p>
               </div>
             ) : (
-              <div className="space-y-4 max-h-96 overflow-y-auto pr-2">
-                {clients.filter(c => selectedClients.includes(c.ruc)).map(client => (
-                  <div key={client.id} className="p-3 border rounded-md shadow-sm">
-                    <p className="font-semibold">{client.nombre_comercial}</p>
-                    <p className="text-sm text-muted-foreground">{client.direccion}</p>
-                  </div>
+              <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                {stagedRoutes.map((route) => (
+                  <Card key={route.tempId} className="p-4 shadow-sm">
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <p className="font-semibold text-lg">{route.routeName}</p>
+                            <p className="text-sm text-muted-foreground">
+                                {format(route.date, 'PPP', { locale: es })} | {route.startTime} - {route.endTime}
+                            </p>
+                        </div>
+                        <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleRemoveFromStage(route.tempId)}>
+                            <Trash2 className="h-4 w-4" />
+                        </Button>
+                    </div>
+                    <Separator className="my-3" />
+                    <div className="space-y-2 text-sm">
+                         <div className="flex justify-between">
+                            <span className="text-muted-foreground">Supervisor:</span>
+                            <span className="font-medium">{route.supervisorName}</span>
+                         </div>
+                         <div className="flex justify-between">
+                            <span className="text-muted-foreground">Clientes:</span>
+                            <Badge variant="secondary">{route.clients.length}</Badge>
+                         </div>
+                    </div>
+                  </Card>
                 ))}
               </div>
             )}
           </CardContent>
+            {stagedRoutes.length > 0 && (
+                <CardFooter className="border-t pt-6">
+                    <Button onClick={handleSaveAllRoutes} disabled={isSaving} className="w-full">
+                        {isSaving ? <LoaderCircle className="animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+                        Guardar Todas las Rutas
+                    </Button>
+                </CardFooter>
+            )}
         </Card>
       </div>
     </>

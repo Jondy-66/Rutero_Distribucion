@@ -12,6 +12,7 @@ export const getUsers = async (): Promise<User[]> => {
 };
 
 export const getSupervisors = async (): Promise<User[]> => {
+    // No orderBy here to avoid needing a composite index
     const q = query(usersCollection, where('role', '==', 'Supervisor'));
     const snapshot = await getDocs(q);
     const supervisors = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
@@ -34,7 +35,7 @@ export const getUser = async (id: string): Promise<User | null> => {
     return null;
 }
 
-export const addUser = (uid: string, userData: Omit<User, 'id' | 'status'>) => {
+export const addUser = (uid: string, userData: Partial<Omit<User, 'id' | 'status'>>) => {
     const userDoc = doc(db, "users", uid);
     return setDoc(userDoc, { ...userData, status: 'active' });
 };
@@ -139,8 +140,17 @@ export const updateClientLocations = async (locations: { ruc: string; provincia:
 // Routes Collection
 const routesCollection = collection(db, 'routes');
 
-export const addRoute = (routeData: Omit<RoutePlan, 'id' | 'date'> & {date: any}) => {
-    return addDoc(routesCollection, {...routeData, createdAt: serverTimestamp()});
+type RouteToSave = Omit<RoutePlan, 'id' | 'date'> & { date: Timestamp };
+
+export const addRoutesBatch = async (routesData: RouteToSave[]) => {
+    const batch = writeBatch(db);
+    
+    for (const route of routesData) {
+        const newRouteRef = doc(routesCollection); // Auto-generate ID
+        batch.set(newRouteRef, {...route, createdAt: serverTimestamp()});
+    }
+
+    return batch.commit();
 }
 
 export const getRoutesBySupervisor = async (supervisorId: string): Promise<RoutePlan[]> => {

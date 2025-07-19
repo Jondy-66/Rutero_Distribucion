@@ -28,4 +28,9 @@ export type RoutePlan = {
   date: Date;
   clients: Client[];
   status: 'Planificada' | 'En Progreso' | 'Completada';
+  supervisorId: string;
+  supervisorName?: string; // Optional: denormalized for easier display
+  createdBy: string;
+  startTime: string;
+  endTime: string;
 };
