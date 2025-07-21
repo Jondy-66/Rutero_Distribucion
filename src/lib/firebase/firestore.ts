@@ -1,3 +1,4 @@
+
 import { db } from './config';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp } from 'firebase/firestore';
 import type { User, Client, RoutePlan } from '@/lib/types';
@@ -139,7 +140,7 @@ export const updateClientLocations = async (locations: { ruc: string; provincia:
 // Routes Collection
 const routesCollection = collection(db, 'routes');
 
-type RouteToSave = Omit<RoutePlan, 'id' | 'date'> & { date: Timestamp };
+type RouteToSave = Omit<RoutePlan, 'id' | 'date' | 'createdAt'> & { date: Timestamp };
 
 export const addRoutesBatch = async (routesData: RouteToSave[]) => {
     const batch = writeBatch(db);
@@ -151,6 +152,39 @@ export const addRoutesBatch = async (routesData: RouteToSave[]) => {
 
     return batch.commit();
 }
+
+export const getRoutes = async (): Promise<RoutePlan[]> => {
+    const q = query(routesCollection, orderBy('date', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            date: (data.date as Timestamp).toDate(),
+        } as RoutePlan;
+    });
+};
+
+export const getRoute = async (id: string): Promise<RoutePlan | null> => {
+    const docRef = doc(db, 'routes', id);
+    const docSnap = await getDoc(docRef);
+    if(docSnap.exists()) {
+        const data = docSnap.data();
+        return {
+            id: docSnap.id,
+            ...data,
+            date: (data.date as Timestamp).toDate(),
+        } as RoutePlan;
+    }
+    return null;
+};
+
+export const updateRoute = (id: string, routeData: Partial<RoutePlan>) => {
+    const routeDoc = doc(db, 'routes', id);
+    return updateDoc(routeDoc, routeData);
+};
+
 
 export const getRoutesBySupervisor = async (supervisorId: string): Promise<RoutePlan[]> => {
     const q = query(routesCollection, where("supervisorId", "==", supervisorId), orderBy('date', 'desc'));

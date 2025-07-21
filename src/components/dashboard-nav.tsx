@@ -14,6 +14,7 @@ import {
   PlusCircle,
   FileText,
   UserCheck,
+  List,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -23,7 +24,6 @@ import {
   SidebarMenuButton,
   SidebarMenuSub,
   SidebarMenuSubButton,
-  SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -133,7 +133,17 @@ export function DashboardNav() {
                       isActive={pathname === '/dashboard/routes/new'}
                     >
                       <PlusCircle />
-                      <span>Planificación de Rutas</span>
+                      <span>Planificación</span>
+                    </SidebarMenuSubButton>
+                  </Link>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <Link href="/dashboard/routes">
+                    <SidebarMenuSubButton
+                      isActive={pathname === '/dashboard/routes'}
+                    >
+                      <List />
+                      <span>Lista de Rutas</span>
                     </SidebarMenuSubButton>
                   </Link>
                 </SidebarMenuSubItem>
