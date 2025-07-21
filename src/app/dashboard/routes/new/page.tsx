@@ -50,6 +50,11 @@ export default function NewRoutePage() {
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [startTime, setStartTime] = useState<string | undefined>();
   const [endTime, setEndTime] = useState<string | undefined>();
+  const [valorVenta, setValorVenta] = useState('');
+  const [valorCobro, setValorCobro] = useState('');
+  const [tipoCobro, setTipoCobro] = useState<'Efectivo' | 'Transferencia' | 'Cheque' | undefined>();
+  const [devoluciones, setDevoluciones] = useState('');
+  const [expirados, setExpirados] = useState('');
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
   
@@ -116,6 +121,11 @@ export default function NewRoutePage() {
     setStartTime(undefined);
     setEndTime(undefined);
     setSelectedSupervisorId(undefined);
+    setValorVenta('');
+    setValorCobro('');
+    setTipoCobro(undefined);
+    setDevoluciones('');
+    setExpirados('');
   }
 
   const handleAddToStage = () => {
@@ -146,7 +156,12 @@ export default function NewRoutePage() {
         supervisorName: supervisor.name,
         createdBy: user.id,
         startTime,
-        endTime
+        endTime,
+        valorVenta: parseFloat(valorVenta) || 0,
+        valorCobro: parseFloat(valorCobro) || 0,
+        tipoCobro,
+        devoluciones: parseFloat(devoluciones) || 0,
+        expirados: parseFloat(expirados) || 0
     };
 
     setStagedRoutes(prev => [...prev, newStagedRoute]);
@@ -319,6 +334,36 @@ export default function NewRoutePage() {
                       </SelectContent>
                   </Select>
                 </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="valor-venta">Valor de Venta ($)</Label>
+                    <Input id="valor-venta" type="number" placeholder="0.00" value={valorVenta} onChange={(e) => setValorVenta(e.target.value)} disabled={isLoading} />
+                </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="valor-cobro">Valor a Cobrar ($)</Label>
+                    <Input id="valor-cobro" type="number" placeholder="0.00" value={valorCobro} onChange={(e) => setValorCobro(e.target.value)} disabled={isLoading} />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label htmlFor="tipo-cobro">Tipo de Cobro</Label>
+                   <Select value={tipoCobro} onValueChange={(v: any) => setTipoCobro(v)}  disabled={isLoading}>
+                      <SelectTrigger id="tipo-cobro">
+                          <SelectValue placeholder="Seleccionar tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="Efectivo">Efectivo</SelectItem>
+                          <SelectItem value="Transferencia">Transferencia</SelectItem>
+                          <SelectItem value="Cheque">Cheque</SelectItem>
+                      </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="devoluciones">Devoluciones ($)</Label>
+                    <Input id="devoluciones" type="number" placeholder="0.00" value={devoluciones} onChange={(e) => setDevoluciones(e.target.value)} disabled={isLoading} />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="expirados">Expirados ($)</Label>
+                    <Input id="expirados" type="number" placeholder="0.00" value={expirados} onChange={(e) => setExpirados(e.target.value)} disabled={isLoading} />
+                </div>
+
             </div>
           </CardContent>
            <CardFooter>

@@ -33,4 +33,9 @@ export type RoutePlan = {
   createdBy: string;
   startTime: string;
   endTime: string;
+  valorVenta?: number;
+  valorCobro?: number;
+  tipoCobro?: 'Efectivo' | 'Transferencia' | 'Cheque';
+  devoluciones?: number;
+  expirados?: number;
 };
