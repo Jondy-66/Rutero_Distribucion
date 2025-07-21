@@ -212,6 +212,10 @@ export default function NewRoutePage() {
             <CardDescription>Completa los detalles y añade la ruta a la lista de planificación.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="routeName">Nombre de la Ruta</Label>
+              <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isLoading}/>
+            </div>
              <div className="space-y-2">
               <Label>Seleccionar Clientes</Label>
               <Popover open={open} onOpenChange={setOpen}>
@@ -256,11 +260,6 @@ export default function NewRoutePage() {
                   </Command>
                 </PopoverContent>
               </Popover>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="routeName">Nombre de la Ruta</Label>
-              <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isLoading}/>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
