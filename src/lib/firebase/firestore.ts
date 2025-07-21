@@ -12,7 +12,6 @@ export const getUsers = async (): Promise<User[]> => {
 };
 
 export const getSupervisors = async (): Promise<User[]> => {
-    // No orderBy here to avoid needing a composite index
     const q = query(usersCollection, where('role', '==', 'Supervisor'));
     const snapshot = await getDocs(q);
     const supervisors = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];

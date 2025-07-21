@@ -57,6 +57,7 @@ export default function NewRoutePage() {
   const [expirados, setExpirados] = useState('');
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
+  const [dayOfWeek, setDayOfWeek] = useState<string | undefined>();
   
   // Data State
   const [clients, setClients] = useState<Client[]>([]);
@@ -118,6 +119,7 @@ export default function NewRoutePage() {
     setRouteName('');
     setSelectedClients([]);
     setDate(new Date());
+    setDayOfWeek(undefined);
     setStartTime(undefined);
     setEndTime(undefined);
     setSelectedSupervisorId(undefined);
@@ -150,6 +152,7 @@ export default function NewRoutePage() {
         tempId: Date.now(),
         routeName,
         date,
+        dayOfWeek,
         clients: clientsForRoute,
         status: 'Planificada',
         supervisorId: selectedSupervisorId,
@@ -260,6 +263,24 @@ export default function NewRoutePage() {
                   </Command>
                 </PopoverContent>
               </Popover>
+            </div>
+            <div className="space-y-2">
+                <Label htmlFor="dayOfWeek">Día</Label>
+                <Select value={dayOfWeek} onValueChange={setDayOfWeek} disabled={isLoading}>
+                    <SelectTrigger id="dayOfWeek">
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        <SelectValue placeholder="Seleccionar día" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Lunes">Lunes</SelectItem>
+                        <SelectItem value="Martes">Martes</SelectItem>
+                        <SelectItem value="Miércoles">Miércoles</SelectItem>
+                        <SelectItem value="Jueves">Jueves</SelectItem>
+                        <SelectItem value="Viernes">Viernes</SelectItem>
+                        <SelectItem value="Sábado">Sábado</SelectItem>
+                        <SelectItem value="Domingo">Domingo</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -409,6 +430,12 @@ export default function NewRoutePage() {
                             <span className="text-muted-foreground">Clientes:</span>
                             <Badge variant="secondary">{route.clients.length}</Badge>
                          </div>
+                         {route.dayOfWeek && (
+                            <div className="flex justify-between">
+                                <span className="text-muted-foreground">Día:</span>
+                                <span className="font-medium">{route.dayOfWeek}</span>
+                            </div>
+                         )}
                     </div>
                   </Card>
                 ))}
@@ -428,5 +455,3 @@ export default function NewRoutePage() {
     </>
   );
 }
-
-    

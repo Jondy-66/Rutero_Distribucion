@@ -26,6 +26,7 @@ export type RoutePlan = {
   id: string;
   routeName: string;
   date: Date;
+  dayOfWeek?: string;
   clients: Client[];
   status: 'Planificada' | 'En Progreso' | 'Completada';
   supervisorId: string;
