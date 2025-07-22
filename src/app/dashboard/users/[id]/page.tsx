@@ -1,3 +1,4 @@
+
 'use client';
 import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -45,16 +46,28 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
             return;
           }
           setUser(userData);
-
+          
+          const promises = [];
           if (userData.role === 'Supervisor') {
             setLoadingAssignedUsers(true);
-            const users = await getUsersBySupervisor(userData.id);
-            setAssignedUsers(users);
-            setLoadingAssignedUsers(false);
+            promises.push(getUsersBySupervisor(userData.id));
+          } else {
+            promises.push(Promise.resolve(null)); // Placeholder
           }
 
           if (userData.role === 'Usuario') {
-            const supervisorList = await getSupervisors();
+            promises.push(getSupervisors());
+          } else {
+            promises.push(Promise.resolve(null)); // Placeholder
+          }
+
+          const [assigned, supervisorList] = await Promise.all(promises);
+
+          if (assigned) {
+            setAssignedUsers(assigned);
+            setLoadingAssignedUsers(false);
+          }
+          if (supervisorList) {
             setSupervisors(supervisorList);
           }
 

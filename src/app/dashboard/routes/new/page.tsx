@@ -65,43 +65,30 @@ export default function NewRoutePage() {
   
   // UI State
   const [open, setOpen] = useState(false);
-  const [loadingClients, setLoadingClients] = useState(true);
-  const [loadingSupervisors, setLoadingSupervisors] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   // Staging area for routes
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
 
   useEffect(() => {
-    const fetchClients = async () => {
-      setLoadingClients(true);
+    const fetchData = async () => {
+      setLoading(true);
       try {
-        const clientsData = await getClients();
+        const [clientsData, allUsers] = await Promise.all([
+          getClients(),
+          getUsers()
+        ]);
         setClients(clientsData);
+        setSupervisors(allUsers.filter(u => u.role === 'Supervisor'));
       } catch (error: any) {
-        console.error("Failed to fetch clients:", error);
-        toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" });
+        console.error("Failed to fetch initial data:", error);
+        toast({ title: "Error", description: "No se pudieron cargar los datos necesarios.", variant: "destructive" });
       } finally {
-        setLoadingClients(false);
+        setLoading(false);
       }
     };
-
-    const fetchSupervisors = async () => {
-        setLoadingSupervisors(true);
-        try {
-            const allUsers = await getUsers();
-            const supervisorUsers = allUsers.filter(u => u.role === 'Supervisor');
-            setSupervisors(supervisorUsers);
-        } catch (error: any) {
-            console.error("Failed to fetch supervisors:", error);
-            toast({ title: "Error", description: "No se pudieron cargar los supervisores.", variant: "destructive" });
-        } finally {
-            setLoadingSupervisors(false);
-        }
-    }
-
-    fetchClients();
-    fetchSupervisors();
+    fetchData();
   }, [toast]);
   
   const handleCalendarSelect = () => {
@@ -203,7 +190,7 @@ export default function NewRoutePage() {
     }
   }
 
-  const isLoading = loadingClients || loadingSupervisors;
+  const isLoading = loading;
 
   return (
     <>
@@ -316,7 +303,7 @@ export default function NewRoutePage() {
                           <SelectValue placeholder="Seleccionar" />
                       </SelectTrigger>
                       <SelectContent>
-                          {loadingSupervisors ? (
+                          {isLoading ? (
                               <SelectItem value="loading" disabled>Cargando...</SelectItem>
                           ) : (
                               supervisors.map(s => (
