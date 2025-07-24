@@ -142,7 +142,7 @@ export default function LoginPage() {
         </Card>
       </main>
       <footer className="text-center text-sm text-muted-foreground mt-8">
-        © 2024 Farmaenlace. Todos los derechos reservados.
+        © 2025 Farmaenlace. Todos los derechos reservados.
       </footer>
     </div>
   );
