@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getClients, addClientsBatch, deleteClient } from '@/lib/firebase/firestore';
+import { addClientsBatch, deleteClient } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
 import { PlusCircle, UploadCloud, File, Search, MoreHorizontal } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -45,6 +45,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { useAuth } from '@/hooks/use-auth';
 
 type ClientCsvData = {
     [key: string]: string;
@@ -53,8 +54,7 @@ type ClientCsvData = {
 const ITEMS_PER_PAGE = 10;
 
 export default function ClientsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { clients, loading, refetchData } = useAuth();
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -63,25 +63,6 @@ export default function ClientsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
-  const fetchClients = async () => {
-    // setLoading(true) is not needed here as it's part of the main loading state
-    try {
-      const clientsData = await getClients();
-      setClients(clientsData);
-    } catch (error: any) {
-      console.error("Failed to fetch clients:", error);
-      if (error.code === 'permission-denied') {
-        toast({ title: "Error de Permisos", description: "No tienes permiso para ver los clientes. Revisa las reglas de seguridad de Firestore.", variant: "destructive" });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchClients();
-  }, []);
-  
   useEffect(() => {
     setCurrentPage(1);
   }, [filter, searchTerm]);
@@ -94,7 +75,7 @@ export default function ClientsPage() {
      try {
       await deleteClient(clientId);
       toast({ title: "Éxito", description: "Cliente eliminado correctamente." });
-      fetchClients(); // Refresh the list
+      await refetchData('clients');
     } catch (error: any) {
       console.error("Failed to delete client:", error);
       toast({ title: "Error", description: "No se pudo eliminar el cliente.", variant: "destructive" });
@@ -164,8 +145,7 @@ export default function ClientsPage() {
         title: 'Carga exitosa',
         description: `${addedCount} de ${validData.length} clientes nuevos han sido añadidos. Se omitieron duplicados por RUC.`,
       });
-      setLoading(true);
-      await fetchClients(); 
+      await refetchData('clients');
     } catch (error: any)
     {
       console.error("Failed to add new clients:", error);
@@ -251,7 +231,6 @@ export default function ClientsPage() {
     return clients
       .filter(client => {
         if (filter === 'all') return true;
-        // Handle old data that might not have the status field, defaulting to 'active'
         return (client.status || 'active') === filter;
       })
       .filter(client => {

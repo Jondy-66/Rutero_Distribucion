@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getUsers, deleteUser } from '@/lib/firebase/firestore';
+import { deleteUser } from '@/lib/firebase/firestore';
 import type { User } from '@/lib/types';
 import { PlusCircle, MoreHorizontal } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -39,33 +39,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function UsersPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [users, setUsers] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { users, loading, refetchData } = useAuth();
 
-  const fetchUsers = async () => {
-    setLoading(true);
-    try {
-      const usersData = await getUsers();
-      setUsers(usersData);
-    } catch (error: any) {
-      console.error("Failed to fetch users:", error);
-      if (error.code === 'permission-denied') {
-        toast({ title: "Error de Permisos", description: "No tienes permiso para ver usuarios. Revisa las reglas de seguridad de Firestore.", variant: "destructive" });
-      } else {
-        toast({ title: "Error", description: "No se pudieron cargar los usuarios.", variant: "destructive" });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchUsers();
-  }, []);
 
   const getBadgeVariantForRole = (role: string) => {
     if (role === 'Administrador') return 'default';
@@ -85,7 +65,7 @@ export default function UsersPage() {
     try {
       await deleteUser(userId);
       toast({ title: "Éxito", description: "Usuario eliminado correctamente." });
-      fetchUsers(); // Refresh the list
+      await refetchData('users');
     } catch (error: any) {
       console.error("Failed to delete user:", error);
       if (error.code === 'permission-denied') {

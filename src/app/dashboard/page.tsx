@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import {
   Card,
@@ -19,9 +19,7 @@ import {
   Tooltip,
   Legend
 } from 'recharts';
-import { getClients, getUsers } from '@/lib/firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
 
 const data = [
@@ -35,43 +33,10 @@ const data = [
 
 
 export default function DashboardPage() {
-  const [clientCount, setClientCount] = useState(0);
-  const [userCount, setUserCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
-  const { user } = useAuth();
-
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const promises: [Promise<any[]>, Promise<any[]>?] = [getClients()];
-        if (user?.role === 'Administrador' || user?.role === 'Supervisor') {
-            promises.push(getUsers());
-        }
-        
-        const [clients, users] = await Promise.all(promises);
-
-        setClientCount(clients.length);
-        if (users) {
-            setUserCount(users.length);
-        }
-
-      } catch (error: any) {
-        console.error("Error fetching dashboard data:", error);
-        if (error.code === 'permission-denied') {
-            toast({ title: "Error de Permisos", description: "No se pudieron cargar los datos del panel. Revisa las reglas de seguridad de Firestore.", variant: "destructive" });
-        } else {
-            toast({ title: "Error", description: "No se pudieron cargar los datos del panel.", variant: "destructive" });
-        }
-      } finally {
-        setLoading(false);
-      }
-    };
-    if (user) {
-        fetchData();
-    }
-  }, [toast, user]);
+  const { user, clients, users, loading } = useAuth();
+  
+  const clientCount = useMemo(() => clients.length, [clients]);
+  const userCount = useMemo(() => users.length, [users]);
 
   const canSeeUserCount = user?.role === 'Administrador' || user?.role === 'Supervisor';
 

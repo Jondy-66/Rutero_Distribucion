@@ -22,10 +22,12 @@ import { useToast } from '@/hooks/use-toast';
 import { handleSignUp } from '@/lib/firebase/auth';
 import { addUser, getSupervisors } from '@/lib/firebase/firestore';
 import type { User } from '@/lib/types';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function NewUserPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { users, loading, refetchData } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<'Administrador' | 'Supervisor' | 'Usuario'>('Usuario');
@@ -34,23 +36,12 @@ export default function NewUserPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [supervisors, setSupervisors] = useState<User[]>([]);
   const [selectedSupervisor, setSelectedSupervisor] = useState<string | undefined>();
-  const [loadingSupervisors, setLoadingSupervisors] = useState(true);
 
   useEffect(() => {
-    const fetchSupervisors = async () => {
-        setLoadingSupervisors(true);
-        try {
-            const supervisorUsers = await getSupervisors();
-            setSupervisors(supervisorUsers);
-        } catch (error: any) {
-            console.error("Failed to fetch supervisors:", error);
-            toast({ title: "Error", description: "No se pudieron cargar los supervisores.", variant: "destructive" });
-        } finally {
-            setLoadingSupervisors(false);
-        }
+    if (users) {
+        setSupervisors(users.filter(u => u.role === 'Supervisor'));
     }
-    fetchSupervisors();
-  }, [toast]);
+  }, [users]);
 
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,11 +56,9 @@ export default function NewUserPage() {
 
     setIsLoading(true);
     try {
-      // 1. Create user in Firebase Auth
       const userCredential = await handleSignUp(email, password);
       const uid = userCredential.user.uid;
 
-      // 2. Create user document in Firestore
       const newUser: Omit<User, 'id' | 'status'> = {
         name,
         email,
@@ -82,6 +71,7 @@ export default function NewUserPage() {
       }
 
       await addUser(uid, newUser);
+      await refetchData('users');
 
       toast({ title: "Éxito", description: "Usuario creado correctamente." });
       router.push('/dashboard/users');
@@ -124,15 +114,15 @@ export default function NewUserPage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="name">Nombre Completo</Label>
-              <Input id="name" placeholder="Ej: Juan Pérez" value={name} onChange={e => setName(e.target.value)} required disabled={isLoading} />
+              <Input id="name" placeholder="Ej: Juan Pérez" value={name} onChange={e => setName(e.target.value)} required disabled={isLoading || loading} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="email">Correo Electrónico</Label>
-              <Input id="email" type="email" placeholder="juan.perez@rutero.com" value={email} onChange={e => setEmail(e.target.value)} required disabled={isLoading}/>
+              <Input id="email" type="email" placeholder="juan.perez@rutero.com" value={email} onChange={e => setEmail(e.target.value)} required disabled={isLoading || loading}/>
             </div>
             <div className="space-y-2">
               <Label htmlFor="role">Rol</Label>
-              <Select onValueChange={(value: any) => setRole(value)} defaultValue={role} required disabled={isLoading}>
+              <Select onValueChange={(value: any) => setRole(value)} defaultValue={role} required disabled={isLoading || loading}>
                 <SelectTrigger id="role">
                   <SelectValue placeholder="Seleccionar rol" />
                 </SelectTrigger>
@@ -146,13 +136,13 @@ export default function NewUserPage() {
             {role === 'Usuario' && (
               <div className="space-y-2">
                 <Label htmlFor="supervisor">Asignar Supervisor</Label>
-                <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor} disabled={isLoading || loadingSupervisors}>
+                <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor} disabled={isLoading || loading}>
                     <SelectTrigger id="supervisor">
                         <Users className="mr-2 h-4 w-4" />
                         <SelectValue placeholder="Seleccionar supervisor" />
                     </SelectTrigger>
                     <SelectContent>
-                        {loadingSupervisors ? (
+                        {loading ? (
                             <SelectItem value="loading" disabled>Cargando...</SelectItem>
                         ) : (
                             supervisors.map(s => (
@@ -165,16 +155,16 @@ export default function NewUserPage() {
             )}
             <div className="space-y-2">
               <Label htmlFor="new-password">Contraseña</Label>
-              <PasswordInput id="new-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={isLoading}/>
+              <PasswordInput id="new-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={isLoading || loading}/>
             </div>
             <div className="space-y-2">
               <Label htmlFor="confirm-password">Confirmar Contraseña</Label>
-              <PasswordInput id="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required disabled={isLoading}/>
+              <PasswordInput id="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required disabled={isLoading || loading}/>
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading && <LoaderCircle className="animate-spin" />}
+            <Button type="submit" disabled={isLoading || loading}>
+              {(isLoading || loading) && <LoaderCircle className="animate-spin" />}
               Crear Usuario
             </Button>
           </CardFooter>

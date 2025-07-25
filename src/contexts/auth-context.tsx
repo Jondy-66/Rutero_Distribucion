@@ -1,17 +1,22 @@
 'use client';
 
-import React, { createContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User as FirebaseAuthUser, onAuthStateChanged } from 'firebase/auth';
 import { app, db, auth } from '@/lib/firebase/config';
-import type { User } from '@/lib/types';
+import type { User, Client } from '@/lib/types';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { Route } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getClients, getUsers } from '@/lib/firebase/firestore';
+
 
 interface AuthContextType {
   user: User | null;
   firebaseUser: FirebaseAuthUser | null;
   loading: boolean;
+  clients: Client[];
+  users: User[];
+  refetchData: (dataType: 'clients' | 'users') => Promise<void>;
 }
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -19,8 +24,44 @@ export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseAuthUser | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [clients, setClients] = useState<Client[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
   const { toast } = useToast();
+
+  const fetchInitialData = useCallback(async () => {
+    setDataLoading(true);
+    try {
+        const [clientsData, usersData] = await Promise.all([
+            getClients(),
+            getUsers()
+        ]);
+        setClients(clientsData);
+        setUsers(usersData);
+    } catch(error) {
+        console.error("Failed to fetch initial data:", error);
+        toast({ title: "Error", description: "No se pudieron cargar los datos iniciales.", variant: "destructive" });
+    } finally {
+        setDataLoading(false);
+    }
+  }, [toast]);
+  
+  const refetchData = useCallback(async (dataType: 'clients' | 'users') => {
+      try {
+          if (dataType === 'clients') {
+              const clientsData = await getClients();
+              setClients(clientsData);
+          }
+          if (dataType === 'users') {
+              const usersData = await getUsers();
+              setUsers(usersData);
+          }
+      } catch (error) {
+          console.error(`Failed to refetch ${dataType}:`, error);
+          toast({ title: "Error", description: `No se pudieron actualizar los ${dataType}.`, variant: "destructive" });
+      }
+  }, [toast]);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
@@ -30,22 +71,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const unsubscribeFirestore = onSnapshot(userDocRef, 
           async (userDoc) => {
             if (userDoc.exists()) {
-              setUser({ id: fbUser.uid, ...userDoc.data() } as User);
+              const userData = { id: fbUser.uid, ...userDoc.data() } as User;
+              setUser(userData);
+              await fetchInitialData();
               setLoading(false);
             } else {
-              // This is a self-healing mechanism.
-              // If user exists in Auth but not Firestore, create the Firestore doc.
-              // This is common with social logins where the profile creation might fail.
               console.log(`User document not found for UID ${fbUser.uid}, creating one...`);
               try {
                 const newUser: Omit<User, 'id'> = {
                     name: fbUser.displayName || 'Usuario',
                     email: fbUser.email!,
-                    role: 'Usuario', // Default role for any new sign-up
+                    role: 'Usuario',
                     avatar: fbUser.photoURL || `https://placehold.co/100x100/011688/FFFFFF/png?text=${(fbUser.displayName || 'U').charAt(0)}`
                 };
                 await setDoc(userDocRef, newUser);
-                // onSnapshot will fire again with the new data, but we set it here to avoid flicker.
                 setUser({ id: fbUser.uid, ...newUser });
               } catch (error) {
                 console.error("Failed to create self-healing user document:", error);
@@ -76,12 +115,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return () => unsubscribeFirestore();
       } else {
         setUser(null);
+        setFirebaseUser(null);
+        setClients([]);
+        setUsers([]);
         setLoading(false);
       }
     });
 
     return () => unsubscribeAuth();
-  }, [toast]);
+  }, [toast, fetchInitialData]);
 
   if (loading) {
       return (
@@ -97,7 +139,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading: loading || dataLoading, clients, users, refetchData }}>
       {children}
     </AuthContext.Provider>
   );

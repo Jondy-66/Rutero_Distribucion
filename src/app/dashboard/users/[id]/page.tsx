@@ -1,6 +1,6 @@
 
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -14,7 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getUser, updateUser, getUsersBySupervisor, getSupervisors } from '@/lib/firebase/firestore';
+import { updateUser, getUsersBySupervisor } from '@/lib/firebase/firestore';
 import type { User } from '@/lib/types';
 import { notFound, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -24,66 +24,38 @@ import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function UserProfilePage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
+  const { users, loading: authLoading, refetchData } = useAuth();
+
   const [user, setUser] = useState<User | null>(null);
   const [assignedUsers, setAssignedUsers] = useState<User[]>([]);
   const [supervisors, setSupervisors] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [loadingAssignedUsers, setLoadingAssignedUsers] = useState(false);
 
   useEffect(() => {
-    if (params.id) {
-      const fetchUserAndRelatedData = async () => {
-        setLoading(true);
-        try {
-          const userData = await getUser(params.id);
-          if (!userData) {
+    if (users.length > 0 && params.id) {
+        const userData = users.find(u => u.id === params.id);
+        if (!userData) {
             notFound();
             return;
-          }
-          setUser(userData);
-          
-          const promises = [];
-          if (userData.role === 'Supervisor') {
-            setLoadingAssignedUsers(true);
-            promises.push(getUsersBySupervisor(userData.id));
-          } else {
-            promises.push(Promise.resolve(null)); // Placeholder
-          }
-
-          if (userData.role === 'Usuario') {
-            promises.push(getSupervisors());
-          } else {
-            promises.push(Promise.resolve(null)); // Placeholder
-          }
-
-          const [assigned, supervisorList] = await Promise.all(promises);
-
-          if (assigned) {
-            setAssignedUsers(assigned);
-            setLoadingAssignedUsers(false);
-          }
-          if (supervisorList) {
-            setSupervisors(supervisorList);
-          }
-
-        } catch (error: any) {
-          console.error("Failed to fetch user:", error);
-          if(error.code === 'permission-denied') {
-            toast({ title: "Error de Permisos", description: "No tienes permiso para ver este usuario.", variant: "destructive" });
-          }
-          notFound();
-        } finally {
-          setLoading(false);
         }
-      };
-      fetchUserAndRelatedData();
+        setUser(userData);
+        setSupervisors(users.filter(u => u.role === 'Supervisor'));
+
+        if(userData.role === 'Supervisor') {
+            setLoadingAssignedUsers(true);
+            getUsersBySupervisor(userData.id).then(data => {
+                setAssignedUsers(data);
+                setLoadingAssignedUsers(false);
+            });
+        }
     }
-  }, [params.id, toast]);
+  }, [params.id, users]);
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,6 +74,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       }
 
       await updateUser(user.id, dataToUpdate);
+      await refetchData('users');
       toast({ title: "Éxito", description: "Usuario actualizado correctamente." });
       router.push('/dashboard/users');
     } catch (error: any) {
@@ -122,7 +95,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     }
   }
 
-  if (loading) {
+  if (authLoading || !user) {
     return (
         <>
         <PageHeader title="Perfil de Usuario" description="Cargando...">
@@ -134,10 +107,6 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
         </div>
         </>
     );
-  }
-
-  if (!user) {
-    notFound();
   }
 
   return (

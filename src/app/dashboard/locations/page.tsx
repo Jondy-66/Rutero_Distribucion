@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { getClients, updateClientLocations } from '@/lib/firebase/firestore';
+import { updateClientLocations } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
 import { UploadCloud, Edit } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ import { ClientMap } from '@/components/client-map';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import Papa from 'papaparse';
+import { useAuth } from '@/hooks/use-auth';
 
 type LocationData = {
   RUC: string;
@@ -35,8 +36,7 @@ type LocationData = {
 const ITEMS_PER_PAGE = 10;
 
 export default function LocationsPage() {
-  const [clients, setClients] = useState<Client[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { clients, loading, refetchData } = useAuth();
   const [filters, setFilters] = useState({ provincia: '', canton: '', direccion: '' });
   const [isUploading, setIsUploading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
@@ -44,26 +44,6 @@ export default function LocationsPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const fetchClients = async () => {
-    setLoading(true);
-    try {
-      const clientsData = await getClients();
-      setClients(clientsData);
-    } catch (error: any) {
-      console.error("Failed to fetch clients:", error);
-      if (error.code === 'permission-denied') {
-        toast({ title: "Error de Permisos", description: "No se pudieron cargar los clientes. Revisa las reglas de seguridad de Firestore.", variant: "destructive" });
-      } else {
-        toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchClients();
-  }, []);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -167,7 +147,7 @@ export default function LocationsPage() {
             title: 'Carga exitosa',
             description: `${validData.length} ubicaciones de clientes han sido actualizadas.`,
           });
-          await fetchClients(); 
+          await refetchData('clients'); 
         } catch (error: any) {
           console.error("Failed to update client locations:", error);
           if (error.code === 'permission-denied') {

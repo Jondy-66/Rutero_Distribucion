@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock } from 'lucide-react';
-import { getClients, getRoute, getUsers, updateRoute } from '@/lib/firebase/firestore';
+import { getRoute, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -21,6 +21,7 @@ import { Timestamp } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
+import { useAuth } from '@/hooks/use-auth';
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
     const slots = [];
@@ -40,10 +41,10 @@ const endTimeSlots = generateTimeSlots(8, 18, 30, 30);
 export default function EditRoutePage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
+  const { clients, users, loading: authLoading } = useAuth();
 
   // Data State
   const [route, setRoute] = useState<RoutePlan | null>(null);
-  const [clients, setClients] = useState<Client[]>([]);
   const [supervisors, setSupervisors] = useState<User[]>([]);
 
   // UI State
@@ -57,11 +58,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     const fetchRouteData = async () => {
       setLoading(true);
       try {
-        const [routeData, clientsData, allUsers] = await Promise.all([
-          getRoute(params.id),
-          getClients(),
-          getUsers()
-        ]);
+        const routeData = await getRoute(params.id);
 
         if (routeData) {
           setRoute(routeData);
@@ -69,9 +66,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         } else {
           notFound();
         }
-
-        setClients(clientsData);
-        setSupervisors(allUsers.filter(u => u.role === 'Supervisor'));
       } catch (error) {
         console.error("Failed to fetch route data:", error);
         toast({ title: "Error", description: "No se pudo cargar la ruta.", variant: "destructive" });
@@ -82,6 +76,13 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     };
     fetchRouteData();
   }, [params.id, toast]);
+  
+  useEffect(() => {
+      if (users) {
+          setSupervisors(users.filter(u => u.role === 'Supervisor'));
+      }
+  }, [users]);
+
 
   const handleInputChange = <K extends keyof RoutePlan>(field: K, value: RoutePlan[K]) => {
     if (!route) return;
@@ -121,7 +122,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       const dataToUpdate: Partial<RoutePlan> = {
         ...route,
         supervisorName: supervisor?.name || '',
-        date: Timestamp.fromDate(route.date), // Convert back to Timestamp for Firestore
+        date: Timestamp.fromDate(route.date),
       };
       
       delete dataToUpdate.id; // Don't try to update the ID
@@ -138,7 +139,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     }
   };
 
-  if (loading) {
+  if (loading || authLoading) {
     return (
       <>
         <PageHeader title="Editar Ruta" description="Cargando datos de la ruta..." />

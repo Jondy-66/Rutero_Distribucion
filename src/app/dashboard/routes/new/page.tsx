@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PlusCircle, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, Save } from 'lucide-react';
-import { getClients, addRoutesBatch, getUsers } from '@/lib/firebase/firestore';
+import { addRoutesBatch } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -41,7 +41,7 @@ type StagedRoute = Omit<RoutePlan, 'id' | 'createdAt'> & { tempId: number };
 
 export default function NewRoutePage() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, users, clients, loading } = useAuth();
   
   // Form State
   const [routeName, setRouteName] = useState('');
@@ -60,36 +60,20 @@ export default function NewRoutePage() {
   const [dayOfWeek, setDayOfWeek] = useState<string | undefined>();
   
   // Data State
-  const [clients, setClients] = useState<Client[]>([]);
   const [supervisors, setSupervisors] = useState<User[]>([]);
   
   // UI State
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   // Staging area for routes
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
-
+  
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [clientsData, allUsers] = await Promise.all([
-          getClients(),
-          getUsers()
-        ]);
-        setClients(clientsData);
-        setSupervisors(allUsers.filter(u => u.role === 'Supervisor'));
-      } catch (error: any) {
-        console.error("Failed to fetch initial data:", error);
-        toast({ title: "Error", description: "No se pudieron cargar los datos necesarios.", variant: "destructive" });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [toast]);
+    if (users) {
+      setSupervisors(users.filter(u => u.role === 'Supervisor'));
+    }
+  }, [users]);
   
   const handleCalendarSelect = () => {
       setDate(selectedCalendarDate);
