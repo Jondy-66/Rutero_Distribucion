@@ -80,6 +80,9 @@ export function DashboardNav() {
   const [isRoutesOpen, setIsRoutesOpen] = useState(
     pathname.startsWith('/dashboard/routes')
   );
+   const [isPlanningOpen, setIsPlanningOpen] = useState(
+    pathname.startsWith('/dashboard/routes')
+  );
   const [isUsersOpen, setIsUsersOpen] = useState(
     pathname.startsWith('/dashboard/users')
   );
@@ -128,27 +131,37 @@ export function DashboardNav() {
             </SidebarMenuItem>
             <CollapsibleContent>
               <SidebarMenuSub>
-                <SidebarMenuSubItem>
-                  <Link href="/dashboard/routes/new">
-                    <SidebarMenuSubButton
-                      isActive={pathname === '/dashboard/routes/new'}
-                    >
-                      <PlusCircle />
-                      <span>Planificación</span>
-                    </SidebarMenuSubButton>
-                  </Link>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                  <Link href="/dashboard/routes">
-                    <SidebarMenuSubButton
-                      isActive={pathname === '/dashboard/routes'}
-                    >
-                      <List />
-                      <span>Lista de Rutas</span>
-                    </SidebarMenuSubButton>
-                  </Link>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
+                  <Collapsible open={isPlanningOpen} onOpenChange={setIsPlanningOpen}>
+                     <SidebarMenuItem>
+                        <CollapsibleTrigger asChild>
+                            <SidebarMenuSubButton>
+                                <PlusCircle />
+                                <span>Planificación</span>
+                             </SidebarMenuSubButton>
+                        </CollapsibleTrigger>
+                     </SidebarMenuItem>
+                      <CollapsibleContent>
+                         <SidebarMenuSub>
+                            <SidebarMenuSubItem>
+                               <Link href="/dashboard/routes/new">
+                                <SidebarMenuSubButton isActive={pathname === '/dashboard/routes/new'}>
+                                    <PlusCircle />
+                                    <span>Nueva Ruta</span>
+                                </SidebarMenuSubButton>
+                               </Link>
+                            </SidebarMenuSubItem>
+                            <SidebarMenuSubItem>
+                               <Link href="/dashboard/routes">
+                                <SidebarMenuSubButton isActive={pathname === '/dashboard/routes'}>
+                                    <List />
+                                    <span>Lista de Rutas</span>
+                                </SidebarMenuSubButton>
+                               </Link>
+                            </SidebarMenuSubItem>
+                         </SidebarMenuSub>
+                      </CollapsibleContent>
+                  </Collapsible>
+                 <SidebarMenuItem>
                   <Link href="/dashboard/routes/management">
                     <SidebarMenuSubButton
                       isActive={pathname === '/dashboard/routes/management'}
@@ -157,7 +170,7 @@ export function DashboardNav() {
                       <span>Gestión Ruta</span>
                     </SidebarMenuSubButton>
                   </Link>
-                </SidebarMenuSubItem>
+                </SidebarMenuItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
