@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -136,7 +135,7 @@ export function DashboardNav() {
                         <CollapsibleTrigger asChild>
                             <SidebarMenuSubButton>
                                 <PlusCircle />
-                                <span>Planificación</span>
+                                <span>Planificación de Ruta</span>
                              </SidebarMenuSubButton>
                         </CollapsibleTrigger>
                      </SidebarMenuItem>
