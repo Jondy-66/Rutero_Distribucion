@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
@@ -27,7 +28,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [clients, setClients] = useState<Client[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
-  const [dataLoading, setDataLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
   const { toast } = useToast();
 
   const fetchInitialData = useCallback(async () => {
@@ -65,6 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
+      setLoading(true);
       setFirebaseUser(fbUser);
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
@@ -74,7 +76,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               const userData = { id: fbUser.uid, ...userDoc.data() } as User;
               setUser(userData);
               await fetchInitialData();
-              setLoading(false);
             } else {
               console.log(`User document not found for UID ${fbUser.uid}, creating one...`);
               try {
@@ -94,10 +95,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     variant: "destructive"
                 });
                 setUser(null);
-              } finally {
-                setLoading(false);
               }
             }
+            setLoading(false);
           },
           (error) => {
             console.error("Firestore user profile subscription error:", error);
@@ -139,7 +139,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading: loading || dataLoading, clients, users, refetchData }}>
+    <AuthContext.Provider value={{ user, firebaseUser, loading: dataLoading, clients, users, refetchData }}>
       {children}
     </AuthContext.Provider>
   );
