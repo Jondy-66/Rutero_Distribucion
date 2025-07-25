@@ -43,8 +43,9 @@ export default function DashboardPage() {
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
-        const promises = [getClients()];
+        const promises: [Promise<any[]>, Promise<any[]>?] = [getClients()];
         if (user?.role === 'Administrador' || user?.role === 'Supervisor') {
             promises.push(getUsers());
         }
