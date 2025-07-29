@@ -5,7 +5,7 @@ import React, { createContext, useState, useEffect, ReactNode, useCallback } fro
 import { User as FirebaseAuthUser, onAuthStateChanged } from 'firebase/auth';
 import { app, db, auth } from '@/lib/firebase/config';
 import type { User, Client } from '@/lib/types';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { Route } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getClients, getUsers } from '@/lib/firebase/firestore';
@@ -34,11 +34,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fetchInitialData = useCallback(async () => {
     setDataLoading(true);
     try {
-        const [clientsData, usersData] = await Promise.all([
-            getClients(),
-            getUsers()
-        ]);
-        setClients(clientsData);
+        const usersData = await getUsers();
         setUsers(usersData);
     } catch(error) {
         console.error("Failed to fetch initial data:", error);
@@ -70,7 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setFirebaseUser(fbUser);
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
-        const unsubscribeFirestore = onSnapshot(userDocRef, 
+        const unsubscribeUser = onSnapshot(userDocRef, 
           async (userDoc) => {
             if (userDoc.exists()) {
               const userData = { id: fbUser.uid, ...userDoc.data() } as User;
@@ -112,7 +108,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setLoading(false);
           }
         );
-        return () => unsubscribeFirestore();
+
+        const clientsCollectionRef = collection(db, 'clients');
+        const unsubscribeClients = onSnapshot(clientsCollectionRef, (snapshot) => {
+            const clientsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
+            setClients(clientsData);
+        }, (error) => {
+            console.error("Error fetching clients in real-time:", error);
+            toast({ title: "Error", description: "No se pudieron cargar los clientes en tiempo real.", variant: "destructive" });
+        });
+
+        return () => {
+            unsubscribeUser();
+            unsubscribeClients();
+        };
+
       } else {
         setUser(null);
         setFirebaseUser(null);
