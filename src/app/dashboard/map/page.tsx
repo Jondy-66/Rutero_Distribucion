@@ -1,11 +1,13 @@
-
 'use client';
 import { PageHeader } from '@/components/page-header';
-import { ClientMap } from '@/components/client-map';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
-import type { Client } from '@/lib/types';
-import { useEffect, useState } from 'react';
+import dynamic from 'next/dynamic';
+
+const ClientMapView = dynamic(() => import('@/components/map-view').then((mod) => mod.MapView), {
+    ssr: false,
+    loading: () => <Skeleton className="h-[600px] w-full" />,
+});
 
 export default function MapPage() {
     const { clients, loading } = useAuth();
@@ -16,7 +18,7 @@ export default function MapPage() {
             title="Visualización de Ubicaciones"
             description="Visualiza todas las ubicaciones de los clientes en el mapa."
         />
-        {loading ? <Skeleton className="h-[600px] w-full" /> : <ClientMap clients={clients} />}
+        {loading ? <Skeleton className="h-[600px] w-full" /> : <ClientMapView clients={clients} />}
         </>
     );
 }
