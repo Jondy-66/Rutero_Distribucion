@@ -155,6 +155,14 @@ export default function RouteManagementPage() {
       }
   }
 
+  const getNumericValueClass = (value: string) => {
+    const numericValue = parseFloat(value);
+    if (isNaN(numericValue) || value === '') return '';
+    if (numericValue < 100) return 'bg-red-100 border-red-300 text-red-900 focus-visible:ring-red-500';
+    if (numericValue >= 100) return 'bg-green-100 border-green-300 text-green-900 focus-visible:ring-green-500';
+    return '';
+  };
+
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
@@ -344,11 +352,11 @@ export default function RouteManagementPage() {
                                                 </div>
                                                 <div className="space-y-1">
                                                     <Label htmlFor={`promociones-${index}`}>Promociones ($)</Label>
-                                                    <Input id={`promociones-${index}`} type="number" value={client.promociones} onChange={(e) => handleClientValueChange(index, 'promociones', e.target.value)} />
+                                                    <Input id={`promociones-${index}`} type="number" value={client.promociones} onChange={(e) => handleClientValueChange(index, 'promociones', e.target.value)} className={getNumericValueClass(client.promociones)} />
                                                 </div>
                                                 <div className="space-y-1">
                                                     <Label htmlFor={`medicacionFrecuente-${index}`}>Medicación Frecuente ($)</Label>
-                                                    <Input id={`medicacionFrecuente-${index}`} type="number" value={client.medicacionFrecuente} onChange={(e) => handleClientValueChange(index, 'medicacionFrecuente', e.target.value)} />
+                                                    <Input id={`medicacionFrecuente-${index}`} type="number" value={client.medicacionFrecuente} onChange={(e) => handleClientValueChange(index, 'medicacionFrecuente', e.target.value)} className={getNumericValueClass(client.medicacionFrecuente)} />
                                                 </div>
                                             </div>
                                         </div>
@@ -363,7 +371,3 @@ export default function RouteManagementPage() {
     </div>
   );
 }
-
-    
-
-    
