@@ -1,20 +1,25 @@
 
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Slider } from '@/components/ui/slider';
 import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { getClients } from '@/lib/firebase/firestore';
-import type { Client } from '@/lib/types';
+import { getClients, getRoutes } from '@/lib/firebase/firestore';
+import type { Client, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+
 
 type RouteClient = Client & {
     valorVenta: string;
@@ -40,26 +45,35 @@ const timeSlots = generateTimeSlots(8, 18, 30);
 
 export default function RouteManagementPage() {
   const [availableClients, setAvailableClients] = useState<Client[]>([]);
+  const [routes, setRoutes] = useState<RoutePlan[]>([]);
+  const [selectedRoute, setSelectedRoute] = useState<RoutePlan | undefined>();
+
   const [routeClients, setRouteClients] = useState<RouteClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [gettingLocation, setGettingLocation] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    const fetchClients = async () => {
+    const fetchData = async () => {
       setLoading(true);
       try {
-        const clientsData = await getClients();
+        const [clientsData, routesData] = await Promise.all([getClients(), getRoutes()]);
         setAvailableClients(clientsData);
+        setRoutes(routesData);
       } catch (error: any) {
-        console.error("Failed to fetch clients:", error);
-        toast({ title: "Error", description: "No se pudieron cargar los clientes.", variant: "destructive" });
+        console.error("Failed to fetch data:", error);
+        toast({ title: "Error", description: "No se pudieron cargar los clientes y rutas.", variant: "destructive" });
       } finally {
         setLoading(false);
       }
     };
-    fetchClients();
+    fetchData();
   }, [toast]);
+  
+  const unassignedClients = useMemo(() => {
+    const assignedRucs = new Set(routeClients.map(c => c.ruc));
+    return availableClients.filter(c => !assignedRucs.has(c.ruc));
+  }, [availableClients, routeClients]);
 
 
   const handleAddClient = (client: Client) => {
@@ -73,13 +87,14 @@ export default function RouteManagementPage() {
     setRouteClients(prev => [...prev, newClient]);
   }
 
-  const handleRemoveClient = (index: number) => {
-    setRouteClients(prev => prev.filter((_, i) => i !== index));
+  const handleRemoveClient = (ruc: string) => {
+    setRouteClients(prev => prev.filter((client) => client.ruc !== ruc));
   }
   
-  const handleClientValueChange = (index: number, field: keyof Omit<RouteClient, 'id' | 'ejecutivo' | 'ruc' | 'nombre_cliente' | 'nombre_comercial' | 'provincia' | 'canton' | 'direccion' | 'latitud' | 'longitud' | 'status'>, value: string) => {
+  const handleClientValueChange = (index: number, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
       const updatedClients = [...routeClients];
-      updatedClients[index][field] = value;
+      const clientToUpdate = { ...updatedClients[index], [field]: value };
+      updatedClients[index] = clientToUpdate;
       setRouteClients(updatedClients);
   }
 
@@ -118,6 +133,21 @@ export default function RouteManagementPage() {
       }
     );
   };
+  
+  const handleRouteSelect = (routeId: string) => {
+      const route = routes.find(r => r.id === routeId);
+      if (route) {
+          setSelectedRoute(route);
+          const clientsWithValues = route.clients.map(client => ({
+            ...client,
+            valorVenta: String(route.valorVenta || '0.00'),
+            valorCobro: String(route.valorCobro || '0.00'),
+            devoluciones: String(route.devoluciones || '0.00'),
+            expirados: String(route.expirados || '0.00'),
+          }));
+          setRouteClients(clientsWithValues);
+      }
+  }
 
 
   return (
@@ -132,29 +162,36 @@ export default function RouteManagementPage() {
                 <CardContent className="space-y-6">
                     <div className="space-y-2">
                         <Label>Seleccionar Ruta</Label>
-                        <Select>
+                        <Select onValueChange={handleRouteSelect} value={selectedRoute?.id} disabled={loading}>
                             <SelectTrigger>
                                 <Route className="mr-2 h-4 w-4" />
-                                <SelectValue placeholder="Elige una ruta predefinida" />
+                                <SelectValue placeholder="Elige una ruta planificada" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="ruta-1">Ruta Quito Norte</SelectItem>
-                                <SelectItem value="ruta-2">Ruta Guayaquil Sur</SelectItem>
+                                {routes.map(route => (
+                                    <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
-                        <Slider defaultValue={[0]} max={100} step={1} className="py-2"/>
                     </div>
                      <div className="space-y-2">
                         <Label>Fecha</Label>
-                        <Button variant="outline" className="w-full justify-start font-normal text-left">
-                           <CalendarIcon className="mr-2 h-4 w-4" />
-                           10 de julio de 2025
-                        </Button>
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className={cn("w-full justify-start font-normal text-left", !selectedRoute?.date && "text-muted-foreground")}>
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {selectedRoute?.date ? format(selectedRoute.date, 'PPP', {locale: es}) : 'Selecciona una fecha'}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0">
+                                <Calendar mode="single" selected={selectedRoute?.date} initialFocus locale={es} />
+                            </PopoverContent>
+                        </Popover>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Hora de Inicio</Label>
-                             <Select defaultValue="08:00">
+                             <Select value={selectedRoute?.startTime} defaultValue="08:00">
                                 <SelectTrigger>
                                      <Clock className="mr-2 h-4 w-4" />
                                     <SelectValue />
@@ -168,7 +205,7 @@ export default function RouteManagementPage() {
                         </div>
                         <div className="space-y-2">
                             <Label>Hora de Fin</Label>
-                             <Select defaultValue="18:00">
+                             <Select value={selectedRoute?.endTime} defaultValue="18:00">
                                 <SelectTrigger>
                                      <Clock className="mr-2 h-4 w-4" />
                                     <SelectValue />
@@ -224,7 +261,7 @@ export default function RouteManagementPage() {
                            </div>
                          ))
                        ) : (
-                         availableClients.map((client) => (
+                         unassignedClients.map((client) => (
                            <div key={client.id} className="flex items-center justify-between">
                               <div>
                                   <p className="font-medium">{client.nombre_comercial}</p>
@@ -246,8 +283,13 @@ export default function RouteManagementPage() {
         <div className="lg:col-span-2">
              <Card>
                 <CardHeader>
-                    <CardTitle>Ruta de Hoy</CardTitle>
-                    <CardDescription>Arrastra para reordenar los clientes en tu ruta.</CardDescription>
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <CardTitle>{selectedRoute ? selectedRoute.routeName : 'Ruta de Hoy'}</CardTitle>
+                            <CardDescription>Arrastra para reordenar los clientes en tu ruta.</CardDescription>
+                        </div>
+                         {selectedRoute && <Badge variant="secondary">{selectedRoute.status}</Badge>}
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {routeClients.length === 0 ? (
@@ -260,7 +302,7 @@ export default function RouteManagementPage() {
                     ) : (
                         <div className="space-y-4">
                             {routeClients.map((client, index) => (
-                                <Card key={index} className="p-4 bg-background">
+                                <Card key={client.id} className="p-4 bg-background">
                                     <div className="flex items-start gap-4">
                                         <div className="flex items-center gap-2 pt-1">
                                             <span className="font-bold text-lg">{index + 1}</span>
@@ -272,7 +314,7 @@ export default function RouteManagementPage() {
                                                     <p className="font-bold text-lg">{client.nombre_comercial}</p>
                                                     <p className="text-sm text-muted-foreground">{client.direccion}</p>
                                                 </div>
-                                                <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleRemoveClient(index)}>
+                                                <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleRemoveClient(client.ruc)}>
                                                     <Trash2 className="h-5 w-5" />
                                                 </Button>
                                             </div>
@@ -307,3 +349,5 @@ export default function RouteManagementPage() {
     </div>
   );
 }
+
+    
