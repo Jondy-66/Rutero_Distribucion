@@ -383,14 +383,18 @@ export default function NewRoutePage() {
                   </Select>
                 </div>
                 <div /> 
-                <div className="space-y-2">
-                    <Label htmlFor="promociones">Promociones ($)</Label>
-                    <Input id="promociones" type="number" placeholder="0.00" value={promociones} onChange={(e) => setPromociones(e.target.value)} disabled={isLoading || !isDiaFarmacia} className={getNumericValueClass(promociones)} />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="medicacionFrecuente">Medicación Frecuente ($)</Label>
-                    <Input id="medicacionFrecuente" type="number" placeholder="0.00" value={medicacionFrecuente} onChange={(e) => setMedicacionFrecuente(e.target.value)} disabled={isLoading || !isDiaFarmacia} className={getNumericValueClass(medicacionFrecuente)}/>
-                </div>
+                {isDiaFarmacia && (
+                  <>
+                    <div className="space-y-2">
+                        <Label htmlFor="promociones">Promociones ($)</Label>
+                        <Input id="promociones" type="number" placeholder="0.00" value={promociones} onChange={(e) => setPromociones(e.target.value)} disabled={isLoading} className={getNumericValueClass(promociones)} />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="medicacionFrecuente">Medicación Frecuente ($)</Label>
+                        <Input id="medicacionFrecuente" type="number" placeholder="0.00" value={medicacionFrecuente} onChange={(e) => setMedicacionFrecuente(e.target.value)} disabled={isLoading} className={getNumericValueClass(medicacionFrecuente)}/>
+                    </div>
+                  </>
+                )}
             </div>
           </CardContent>
            <CardFooter>
@@ -462,5 +466,3 @@ export default function NewRoutePage() {
     </>
   );
 }
-
-    
