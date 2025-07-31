@@ -182,6 +182,14 @@ export default function NewRoutePage() {
 
   const isLoading = loading;
 
+  const getNumericValueClass = (value: string) => {
+    const numericValue = parseFloat(value);
+    if (isNaN(numericValue) || value === '') return '';
+    if (numericValue < 100) return 'text-red-600';
+    if (numericValue >= 100) return 'text-green-600';
+    return '';
+  };
+
   return (
     <>
       <PageHeader title="Planificación de Rutas" description="Crea y añade planes de ruta a la lista para guardarlos." />
@@ -362,11 +370,11 @@ export default function NewRoutePage() {
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="promociones">Promociones ($)</Label>
-                    <Input id="promociones" type="number" placeholder="0.00" value={promociones} onChange={(e) => setPromociones(e.target.value)} disabled={isLoading} />
+                    <Input id="promociones" type="number" placeholder="0.00" value={promociones} onChange={(e) => setPromociones(e.target.value)} disabled={isLoading} className={getNumericValueClass(promociones)} />
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="medicacionFrecuente">Medicación Frecuente ($)</Label>
-                    <Input id="medicacionFrecuente" type="number" placeholder="0.00" value={medicacionFrecuente} onChange={(e) => setMedicacionFrecuente(e.target.value)} disabled={isLoading} />
+                    <Input id="medicacionFrecuente" type="number" placeholder="0.00" value={medicacionFrecuente} onChange={(e) => setMedicacionFrecuente(e.target.value)} disabled={isLoading} className={getNumericValueClass(medicacionFrecuente)}/>
                 </div>
             </div>
           </CardContent>
