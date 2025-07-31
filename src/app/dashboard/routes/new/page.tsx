@@ -60,6 +60,7 @@ export default function NewRoutePage() {
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
   const [dayOfWeek, setDayOfWeek] = useState<string | undefined>();
+  const [isDiaFarmacia, setIsDiaFarmacia] = useState(false);
   
   // Data State
   const [supervisors, setSupervisors] = useState<User[]>([]);
@@ -103,6 +104,7 @@ export default function NewRoutePage() {
     setExpirados('');
     setPromociones('');
     setMedicacionFrecuente('');
+    setIsDiaFarmacia(false);
   }
 
   const handleAddToStage = () => {
@@ -369,12 +371,25 @@ export default function NewRoutePage() {
                     <Input id="expirados" type="number" placeholder="0.00" value={expirados} onChange={(e) => setExpirados(e.target.value)} disabled={isLoading} />
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="dia-farmacia">Día Farmacia</Label>
+                  <Select onValueChange={(value) => setIsDiaFarmacia(value === 'si')} disabled={isLoading} defaultValue="no">
+                      <SelectTrigger id="dia-farmacia">
+                          <SelectValue placeholder="Seleccionar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                          <SelectItem value="si">Sí</SelectItem>
+                          <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                  </Select>
+                </div>
+                <div /> 
+                <div className="space-y-2">
                     <Label htmlFor="promociones">Promociones ($)</Label>
-                    <Input id="promociones" type="number" placeholder="0.00" value={promociones} onChange={(e) => setPromociones(e.target.value)} disabled={isLoading} className={getNumericValueClass(promociones)} />
+                    <Input id="promociones" type="number" placeholder="0.00" value={promociones} onChange={(e) => setPromociones(e.target.value)} disabled={isLoading || !isDiaFarmacia} className={getNumericValueClass(promociones)} />
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="medicacionFrecuente">Medicación Frecuente ($)</Label>
-                    <Input id="medicacionFrecuente" type="number" placeholder="0.00" value={medicacionFrecuente} onChange={(e) => setMedicacionFrecuente(e.target.value)} disabled={isLoading} className={getNumericValueClass(medicacionFrecuente)}/>
+                    <Input id="medicacionFrecuente" type="number" placeholder="0.00" value={medicacionFrecuente} onChange={(e) => setMedicacionFrecuente(e.target.value)} disabled={isLoading || !isDiaFarmacia} className={getNumericValueClass(medicacionFrecuente)}/>
                 </div>
             </div>
           </CardContent>
