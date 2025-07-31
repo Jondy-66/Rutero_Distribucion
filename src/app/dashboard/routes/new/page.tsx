@@ -371,9 +371,9 @@ export default function NewRoutePage() {
                     <Input id="expirados" type="number" placeholder="0.00" value={expirados} onChange={(e) => setExpirados(e.target.value)} disabled={isLoading} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dia-farmacia">Día Farmacia</Label>
+                  <Label htmlFor="farmacia-descuento">Farmacia el Descuento</Label>
                   <Select onValueChange={(value) => setIsDiaFarmacia(value === 'si')} disabled={isLoading} defaultValue="no">
-                      <SelectTrigger id="dia-farmacia">
+                      <SelectTrigger id="farmacia-descuento">
                           <SelectValue placeholder="Seleccionar" />
                       </SelectTrigger>
                       <SelectContent>
@@ -462,3 +462,5 @@ export default function NewRoutePage() {
     </>
   );
 }
+
+    
