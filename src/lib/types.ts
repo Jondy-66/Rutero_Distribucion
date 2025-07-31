@@ -39,4 +39,6 @@ export type RoutePlan = {
   tipoCobro?: 'Efectivo' | 'Transferencia' | 'Cheque';
   devoluciones?: number;
   expirados?: number;
+  promociones?: number;
+  medicacionFrecuente?: number;
 };

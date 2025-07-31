@@ -290,6 +290,14 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                 <Label htmlFor="expirados">Expirados ($)</Label>
                 <Input id="expirados" type="number" placeholder="0.00" value={route.expirados || ''} onChange={(e) => handleInputChange('expirados', parseFloat(e.target.value))} disabled={isSaving} />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="promociones">Promociones ($)</Label>
+                <Input id="promociones" type="number" placeholder="0.00" value={route.promociones || ''} onChange={(e) => handleInputChange('promociones', parseFloat(e.target.value))} disabled={isSaving} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="medicacionFrecuente">Medicación Frecuente ($)</Label>
+                <Input id="medicacionFrecuente" type="number" placeholder="0.00" value={route.medicacionFrecuente || ''} onChange={(e) => handleInputChange('medicacionFrecuente', parseFloat(e.target.value))} disabled={isSaving} />
+              </div>
             </div>
           </CardContent>
           <CardFooter>

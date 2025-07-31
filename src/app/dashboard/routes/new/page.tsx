@@ -55,6 +55,8 @@ export default function NewRoutePage() {
   const [tipoCobro, setTipoCobro] = useState<'Efectivo' | 'Transferencia' | 'Cheque' | undefined>();
   const [devoluciones, setDevoluciones] = useState('');
   const [expirados, setExpirados] = useState('');
+  const [promociones, setPromociones] = useState('');
+  const [medicacionFrecuente, setMedicacionFrecuente] = useState('');
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
   const [dayOfWeek, setDayOfWeek] = useState<string | undefined>();
@@ -99,6 +101,8 @@ export default function NewRoutePage() {
     setTipoCobro(undefined);
     setDevoluciones('');
     setExpirados('');
+    setPromociones('');
+    setMedicacionFrecuente('');
   }
 
   const handleAddToStage = () => {
@@ -135,7 +139,9 @@ export default function NewRoutePage() {
         valorCobro: parseFloat(valorCobro) || 0,
         tipoCobro,
         devoluciones: parseFloat(devoluciones) || 0,
-        expirados: parseFloat(expirados) || 0
+        expirados: parseFloat(expirados) || 0,
+        promociones: parseFloat(promociones) || 0,
+        medicacionFrecuente: parseFloat(medicacionFrecuente) || 0,
     };
 
     setStagedRoutes(prev => [...prev, newStagedRoute]);
@@ -354,7 +360,14 @@ export default function NewRoutePage() {
                     <Label htmlFor="expirados">Expirados ($)</Label>
                     <Input id="expirados" type="number" placeholder="0.00" value={expirados} onChange={(e) => setExpirados(e.target.value)} disabled={isLoading} />
                 </div>
-
+                <div className="space-y-2">
+                    <Label htmlFor="promociones">Promociones ($)</Label>
+                    <Input id="promociones" type="number" placeholder="0.00" value={promociones} onChange={(e) => setPromociones(e.target.value)} disabled={isLoading} />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="medicacionFrecuente">Medicación Frecuente ($)</Label>
+                    <Input id="medicacionFrecuente" type="number" placeholder="0.00" value={medicacionFrecuente} onChange={(e) => setMedicacionFrecuente(e.target.value)} disabled={isLoading} />
+                </div>
             </div>
           </CardContent>
            <CardFooter>
