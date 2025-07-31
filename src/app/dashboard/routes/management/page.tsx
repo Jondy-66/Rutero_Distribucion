@@ -26,6 +26,8 @@ type RouteClient = Client & {
     valorCobro: string;
     devoluciones: string;
     expirados: string;
+    promociones: string;
+    medicacionFrecuente: string;
 }
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
@@ -83,6 +85,8 @@ export default function RouteManagementPage() {
         valorCobro: '0.00',
         devoluciones: '0.00',
         expirados: '0.00',
+        promociones: '0.00',
+        medicacionFrecuente: '0.00',
     };
     setRouteClients(prev => [...prev, newClient]);
   }
@@ -144,6 +148,8 @@ export default function RouteManagementPage() {
             valorCobro: String(route.valorCobro || '0.00'),
             devoluciones: String(route.devoluciones || '0.00'),
             expirados: String(route.expirados || '0.00'),
+            promociones: String(route.promociones || '0.00'),
+            medicacionFrecuente: String(route.medicacionFrecuente || '0.00'),
           }));
           setRouteClients(clientsWithValues);
       }
@@ -336,6 +342,14 @@ export default function RouteManagementPage() {
                                                     <Label htmlFor={`expirados-${index}`}>Expirados ($)</Label>
                                                     <Input id={`expirados-${index}`} type="number" value={client.expirados} onChange={(e) => handleClientValueChange(index, 'expirados', e.target.value)} />
                                                 </div>
+                                                <div className="space-y-1">
+                                                    <Label htmlFor={`promociones-${index}`}>Promociones ($)</Label>
+                                                    <Input id={`promociones-${index}`} type="number" value={client.promociones} onChange={(e) => handleClientValueChange(index, 'promociones', e.target.value)} />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label htmlFor={`medicacionFrecuente-${index}`}>Medicación Frecuente ($)</Label>
+                                                    <Input id={`medicacionFrecuente-${index}`} type="number" value={client.medicacionFrecuente} onChange={(e) => handleClientValueChange(index, 'medicacionFrecuente', e.target.value)} />
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
@@ -349,5 +363,7 @@ export default function RouteManagementPage() {
     </div>
   );
 }
+
+    
 
     
