@@ -185,8 +185,8 @@ export default function NewRoutePage() {
   const getNumericValueClass = (value: string) => {
     const numericValue = parseFloat(value);
     if (isNaN(numericValue) || value === '') return '';
-    if (numericValue < 100) return 'text-red-600';
-    if (numericValue >= 100) return 'text-green-600';
+    if (numericValue < 100) return 'bg-red-100 border-red-300 text-red-900 focus-visible:ring-red-500';
+    if (numericValue >= 100) return 'bg-green-100 border-green-300 text-green-900 focus-visible:ring-green-500';
     return '';
   };
 
