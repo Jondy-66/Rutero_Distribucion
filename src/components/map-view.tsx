@@ -10,6 +10,7 @@ type MapViewProps = {
     clients?: Client[];
     center?: { lat: number; lng: number };
     markerPosition?: { lat: number; lng: number } | null;
+    containerClassName?: string;
 };
 
 
@@ -17,6 +18,7 @@ export function MapView({
     clients, 
     center, 
     markerPosition,
+    containerClassName
 }: MapViewProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const defaultPosition = { lat: -1.8312, lng: -78.1834 }; // Centered on Ecuador
@@ -43,7 +45,7 @@ export function MapView({
 
   return (
     <APIProvider apiKey={apiKey}>
-      <div style={{ height: '100%', width: '100%' }} className="rounded-lg overflow-hidden border shadow-sm relative">
+      <div className={containerClassName || "h-[600px] w-full"}>
         <Map
           key={JSON.stringify(currentCenter)} // Force re-render when center changes
           defaultCenter={currentCenter}
