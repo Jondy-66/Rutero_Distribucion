@@ -19,6 +19,8 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { MapView } from '@/components/map-view';
 
 
 type RouteClient = Client & {
@@ -53,6 +55,9 @@ export default function RouteManagementPage() {
   const [routeClients, setRouteClients] = useState<RouteClient[]>([]);
   const [loading, setLoading] = useState(true);
   const [gettingLocation, setGettingLocation] = useState(false);
+  const [mapCenter, setMapCenter] = useState({ lat: -1.8312, lng: -78.1834 });
+  const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number} | null>(null);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -117,11 +122,13 @@ export default function RouteManagementPage() {
       (position) => {
         setGettingLocation(false);
         const { latitude, longitude } = position.coords;
+        const newPos = { lat: latitude, lng: longitude };
+        setMapCenter(newPos);
+        setMarkerPosition(newPos);
         toast({
           title: "Ubicación Obtenida",
           description: `Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`
         });
-        // Here you would typically update a state or a form field with these coordinates
       },
       (error) => {
         setGettingLocation(false);
@@ -137,6 +144,16 @@ export default function RouteManagementPage() {
       }
     );
   };
+
+  const handleSaveLocation = () => {
+      if(!markerPosition) {
+          toast({ title: "Sin ubicación", description: "No se ha fijado una ubicación para guardar.", variant: "destructive" });
+          return;
+      }
+      // Here you would typically save the location to your state or database
+      toast({ title: "Ubicación Guardada", description: `Lat: ${markerPosition.lat.toFixed(4)}, Lon: ${markerPosition.lng.toFixed(4)}` });
+      setIsMapOpen(false);
+  }
   
   const handleRouteSelect = (routeId: string) => {
       const route = routes.find(r => r.id === routeId);
@@ -233,14 +250,32 @@ export default function RouteManagementPage() {
                         </div>
                     </div>
                     <div className="space-y-4">
-                        <Button onClick={handleGetLocation} disabled={gettingLocation} className="w-full">
-                            {gettingLocation ? (
-                                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                                <MapPin className="mr-2 h-4 w-4" />
-                            )}
-                            {gettingLocation ? 'Buscando...' : 'Mi Ubicación'}
-                        </Button>
+                        <Dialog open={isMapOpen} onOpenChange={setIsMapOpen}>
+                            <DialogTrigger asChild>
+                                <Button className="w-full">
+                                    <MapPin className="mr-2 h-4 w-4" />
+                                    Mi Ubicación
+                                </Button>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-3xl h-[80vh]">
+                                <DialogHeader>
+                                    <DialogTitle>Verificar Ubicación</DialogTitle>
+                                    <DialogDescription>
+                                        Usa el botón para encontrar tu ubicación actual o arrastra el marcador. Haz clic en guardar cuando termines.
+                                    </DialogDescription>
+                                </DialogHeader>
+                                <div className="h-full py-4">
+                                     <MapView 
+                                        center={mapCenter}
+                                        markerPosition={markerPosition}
+                                        onGetLocation={handleGetLocation}
+                                        isGettingLocation={gettingLocation}
+                                        onSaveLocation={handleSaveLocation}
+                                     />
+                                </div>
+                            </DialogContent>
+                        </Dialog>
+
                         <div className="flex items-center space-x-2">
                             <Checkbox id="phone-call" />
                             <label

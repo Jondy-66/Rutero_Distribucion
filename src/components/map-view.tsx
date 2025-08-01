@@ -1,12 +1,40 @@
+
 'use client';
 
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import type { Client } from '@/lib/types';
 import { Card } from './ui/card';
+import { Button } from './ui/button';
+import { LoaderCircle, LocateFixed, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
-export function MapView({ clients }: { clients: Client[] }) {
+type MapViewProps = {
+    clients?: Client[];
+    center?: { lat: number; lng: number };
+    markerPosition?: { lat: number; lng: number } | null;
+    isGettingLocation?: boolean;
+    onGetLocation?: () => void;
+    onSaveLocation?: () => void;
+};
+
+
+export function MapView({ 
+    clients, 
+    center, 
+    markerPosition,
+    isGettingLocation,
+    onGetLocation,
+    onSaveLocation
+}: MapViewProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-  const position = { lat: -1.8312, lng: -78.1834 }; // Centered on Ecuador
+  const defaultPosition = { lat: -1.8312, lng: -78.1834 }; // Centered on Ecuador
+  const [currentCenter, setCurrentCenter] = useState(center || defaultPosition);
+
+  useEffect(() => {
+    if (center) {
+      setCurrentCenter(center);
+    }
+  }, [center]);
 
   if (!apiKey) {
     return (
@@ -23,22 +51,40 @@ export function MapView({ clients }: { clients: Client[] }) {
 
   return (
     <APIProvider apiKey={apiKey}>
-      <div style={{ height: '600px', width: '100%' }} className="rounded-lg overflow-hidden border shadow-sm">
+      <div style={{ height: '100%', width: '100%' }} className="rounded-lg overflow-hidden border shadow-sm relative">
         <Map
-          defaultCenter={position}
-          defaultZoom={7}
+          key={JSON.stringify(currentCenter)} // Force re-render when center changes
+          defaultCenter={currentCenter}
+          defaultZoom={onGetLocation ? 15 : 7}
           mapId="e9a3b4c1a2b3c4d5"
           gestureHandling={'greedy'}
           disableDefaultUI={true}
         >
-          {clients.map((client) => (
+          {clients && clients.map((client) => (
             <AdvancedMarker
               key={client.id}
               position={{ lat: client.latitud, lng: client.longitud }}
               title={client.nombre_comercial}
             />
           ))}
+          {markerPosition && (
+              <AdvancedMarker position={markerPosition} />
+          )}
         </Map>
+        {onGetLocation && (
+             <div className="absolute top-2 left-2 z-10 flex gap-2">
+                <Button onClick={onGetLocation} disabled={isGettingLocation}>
+                    {isGettingLocation ? <LoaderCircle className="animate-spin" /> : <LocateFixed />}
+                    {isGettingLocation ? 'Buscando...' : 'Obtener Mi Ubicación Actual'}
+                </Button>
+                 {onSaveLocation && (
+                    <Button onClick={onSaveLocation} variant="secondary">
+                        <Save />
+                        Guardar Ubicación
+                    </Button>
+                )}
+            </div>
+        )}
       </div>
     </APIProvider>
   );
