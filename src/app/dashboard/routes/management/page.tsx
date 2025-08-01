@@ -19,7 +19,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { MapView } from '@/components/map-view';
 
 
@@ -257,22 +257,28 @@ export default function RouteManagementPage() {
                                     Mi Ubicación
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-3xl h-[80vh]">
+                            <DialogContent className="max-w-3xl h-[80vh] flex flex-col">
                                 <DialogHeader>
                                     <DialogTitle>Verificar Ubicación</DialogTitle>
                                     <DialogDescription>
                                         Usa el botón para encontrar tu ubicación actual o arrastra el marcador. Haz clic en guardar cuando termines.
                                     </DialogDescription>
                                 </DialogHeader>
-                                <div className="h-full py-4">
+                                <div className="flex-grow">
                                      <MapView 
                                         center={mapCenter}
                                         markerPosition={markerPosition}
-                                        onGetLocation={handleGetLocation}
-                                        isGettingLocation={gettingLocation}
-                                        onSaveLocation={handleSaveLocation}
                                      />
                                 </div>
+                                <DialogFooter>
+                                    <Button onClick={handleGetLocation} disabled={gettingLocation}>
+                                        {gettingLocation && <LoaderCircle className="animate-spin" />}
+                                        {gettingLocation ? 'Buscando...' : 'Obtener Mi Ubicación Actual'}
+                                    </Button>
+                                    <Button onClick={handleSaveLocation} variant="default">
+                                        Guardar Ubicación
+                                    </Button>
+                                </DialogFooter>
                             </DialogContent>
                         </Dialog>
 

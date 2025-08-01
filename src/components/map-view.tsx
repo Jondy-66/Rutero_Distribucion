@@ -4,17 +4,12 @@
 import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
 import type { Client } from '@/lib/types';
 import { Card } from './ui/card';
-import { Button } from './ui/button';
-import { LoaderCircle, LocateFixed, Save } from 'lucide-react';
 import { useState, useEffect } from 'react';
 
 type MapViewProps = {
     clients?: Client[];
     center?: { lat: number; lng: number };
     markerPosition?: { lat: number; lng: number } | null;
-    isGettingLocation?: boolean;
-    onGetLocation?: () => void;
-    onSaveLocation?: () => void;
 };
 
 
@@ -22,9 +17,6 @@ export function MapView({
     clients, 
     center, 
     markerPosition,
-    isGettingLocation,
-    onGetLocation,
-    onSaveLocation
 }: MapViewProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const defaultPosition = { lat: -1.8312, lng: -78.1834 }; // Centered on Ecuador
@@ -38,7 +30,7 @@ export function MapView({
 
   if (!apiKey) {
     return (
-      <Card className="h-[600px] w-full flex items-center justify-center bg-muted">
+      <Card className="h-full w-full flex items-center justify-center bg-muted">
         <div className="text-center">
           <p className="font-semibold">Falta la clave de API de Google Maps.</p>
           <p className="text-sm text-muted-foreground">
@@ -55,7 +47,7 @@ export function MapView({
         <Map
           key={JSON.stringify(currentCenter)} // Force re-render when center changes
           defaultCenter={currentCenter}
-          defaultZoom={onGetLocation ? 15 : 7}
+          defaultZoom={markerPosition ? 15 : 7}
           mapId="e9a3b4c1a2b3c4d5"
           gestureHandling={'greedy'}
           disableDefaultUI={true}
@@ -71,20 +63,6 @@ export function MapView({
               <AdvancedMarker position={markerPosition} />
           )}
         </Map>
-        {onGetLocation && (
-             <div className="absolute top-2 left-2 z-10 flex gap-2">
-                <Button onClick={onGetLocation} disabled={isGettingLocation}>
-                    {isGettingLocation ? <LoaderCircle className="animate-spin" /> : <LocateFixed />}
-                    {isGettingLocation ? 'Buscando...' : 'Obtener Mi Ubicación Actual'}
-                </Button>
-                 {onSaveLocation && (
-                    <Button onClick={onSaveLocation} variant="secondary">
-                        <Save />
-                        Guardar Ubicación
-                    </Button>
-                )}
-            </div>
-        )}
       </div>
     </APIProvider>
   );
