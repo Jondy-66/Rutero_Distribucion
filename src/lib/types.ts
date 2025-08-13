@@ -56,3 +56,16 @@ export type RoutePlan = {
   promociones?: number; // Monto total de promociones aplicadas.
   medicacionFrecuente?: number; // Monto total de medicación frecuente vendida.
 };
+
+
+/**
+ * Representa la estructura de un objeto de Predicción de la API externa.
+ */
+export type Prediction = {
+  Ejecutivo: string;
+  RUC: string;
+  fecha_predicha: string;
+  probabilidad_visita: number;
+  LatitudTrz: number;
+  LongitudTrz: number;
+};

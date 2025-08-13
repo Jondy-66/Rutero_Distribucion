@@ -14,6 +14,7 @@ import {
   FileText,
   UserCheck,
   List,
+  Wand2,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -167,6 +168,16 @@ export function DashboardNav() {
                     >
                       <ClipboardList />
                       <span>Gestión Ruta</span>
+                    </SidebarMenuSubButton>
+                  </Link>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <Link href="/dashboard/routes/prediction">
+                    <SidebarMenuSubButton
+                      isActive={pathname === '/dashboard/routes/prediction'}
+                    >
+                      <Wand2 />
+                      <span>Predicción Ruta</span>
                     </SidebarMenuSubButton>
                   </Link>
                 </SidebarMenuItem>
