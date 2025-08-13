@@ -32,6 +32,7 @@ export default function PrediccionesPage() {
    */
   const obtenerPredicciones = async () => {
     setLoading(true);
+    setPredicciones([]); // Limpiar predicciones anteriores
     try {
       const data = await getPredicciones({ fecha_inicio: fechaInicio, dias });
       setPredicciones(data);
@@ -45,7 +46,7 @@ export default function PrediccionesPage() {
       console.error(error);
        toast({
         title: "Error de API",
-        description: error.message || "No se pudieron obtener las predicciones.",
+        description: error.message || "No se pudieron obtener las predicciones. Inténtalo de nuevo más tarde.",
         variant: "destructive",
       });
     }
