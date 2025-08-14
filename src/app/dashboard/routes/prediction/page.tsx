@@ -2,18 +2,22 @@
 'use client';
 import React, { useState, useMemo } from "react";
 import { getPredicciones } from "@/services/api";
-import type { Prediction } from "@/lib/types";
+import type { Prediction, RoutePlan, Client } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Search } from "lucide-react";
+import { LoaderCircle, Search, Save } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/hooks/use-auth";
+import { addRoute } from "@/lib/firebase/firestore";
+import { useRouter } from "next/navigation";
+import { Timestamp } from "firebase/firestore";
 
 /**
  * Componente de la página de predicciones.
@@ -25,9 +29,13 @@ export default function PrediccionesPage() {
   const [dias, setDias] = useState(7);
   const [predicciones, setPredicciones] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEjecutivo, setSelectedEjecutivo] = useState('todos');
   const { toast } = useToast();
+  const { users, clients, user: currentUser } = useAuth();
+  const router = useRouter();
+
 
   /**
    * Maneja la solicitud de predicciones a la API.
@@ -68,6 +76,61 @@ export default function PrediccionesPage() {
       return matchesEjecutivo && matchesSearch;
     });
   }, [predicciones, selectedEjecutivo, searchTerm]);
+
+  const handleSavePredictionRoute = async () => {
+    if (selectedEjecutivo === 'todos' || !currentUser) {
+      toast({ title: 'Error', description: 'Por favor, selecciona un ejecutivo para guardar la ruta.', variant: 'destructive' });
+      return;
+    }
+    if (filteredPredicciones.length === 0) {
+        toast({ title: 'Error', description: 'No hay predicciones para guardar para este ejecutivo.', variant: 'destructive' });
+        return;
+    }
+
+    setIsSaving(true);
+    try {
+        const executiveUser = users.find(u => u.name === selectedEjecutivo);
+        if (!executiveUser) {
+            throw new Error(`No se pudo encontrar al usuario ejecutivo: ${selectedEjecutivo}`);
+        }
+
+        const supervisor = users.find(u => u.id === executiveUser.supervisorId);
+        if (!supervisor) {
+            throw new Error(`El ejecutivo ${selectedEjecutivo} no tiene un supervisor asignado.`);
+        }
+
+        const predictedClientsRucs = new Set(filteredPredicciones.map(p => p.RUC));
+        const routeClients: Client[] = clients.filter(c => predictedClientsRucs.has(c.ruc));
+
+        const routeDate = parseISO(filteredPredicciones[0].fecha_predicha);
+
+        const newRoute: Omit<RoutePlan, 'id' | 'createdAt'> = {
+            routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`,
+            date: Timestamp.fromDate(routeDate),
+            clients: routeClients,
+            status: 'Planificada',
+            supervisorId: supervisor.id,
+            supervisorName: supervisor.name,
+            createdBy: currentUser.id,
+            startTime: '08:00', // Valor predeterminado
+            endTime: '17:00', // Valor predeterminado
+        };
+
+        await addRoute(newRoute);
+        toast({ title: 'Ruta Guardada', description: `Se ha creado una nueva ruta para ${selectedEjecutivo}.`});
+        router.push('/dashboard/routes');
+
+    } catch (error: any) {
+        console.error("Error saving prediction route:", error);
+        toast({
+            title: "Error al Guardar",
+            description: error.message || "No se pudo guardar la ruta de predicción.",
+            variant: "destructive"
+        });
+    } finally {
+        setIsSaving(false);
+    }
+  }
 
   return (
     <>
@@ -177,6 +240,13 @@ export default function PrediccionesPage() {
                     </Table>
                 </div>
             </CardContent>
+            <CardFooter>
+                 <Button onClick={handleSavePredictionRoute} disabled={loading || isSaving || selectedEjecutivo === 'todos'}>
+                    {(loading || isSaving) && <LoaderCircle className="animate-spin mr-2" />}
+                    <Save className="mr-2 h-4 w-4" />
+                    Guardar Ruta de Predicción
+                </Button>
+            </CardFooter>
         </Card>
       </div>
     </>

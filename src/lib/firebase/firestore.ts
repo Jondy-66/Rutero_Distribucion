@@ -235,7 +235,7 @@ const routesCollection = collection(db, 'routes');
 /**
  * Tipo auxiliar para guardar rutas, convirtiendo la fecha a Timestamp de Firestore.
  */
-type RouteToSave = Omit<RoutePlan, 'id' | 'date' | 'createdAt'> & { date: Timestamp };
+type RouteToSave = Omit<RoutePlan, 'id' | 'createdAt' | 'date'> & { date: Timestamp };
 
 /**
  * Añade múltiples planes de ruta en un lote.
@@ -252,6 +252,18 @@ export const addRoutesBatch = async (routesData: RouteToSave[]) => {
 
     return batch.commit();
 }
+
+/**
+ * Añade un único plan de ruta a Firestore.
+ * @param {Omit<RoutePlan, 'id' | 'createdAt'>} routeData - El objeto de ruta a guardar. La fecha debe ser un Timestamp.
+ * @returns {Promise<DocumentReference>} Una promesa que se resuelve con la referencia al documento creado.
+ */
+export const addRoute = (routeData: Omit<RoutePlan, 'id' | 'createdAt'>) => {
+    return addDoc(routesCollection, {
+        ...routeData,
+        createdAt: serverTimestamp()
+    });
+};
 
 /**
  * Obtiene todas las rutas planificadas, ordenadas por fecha descendente.
