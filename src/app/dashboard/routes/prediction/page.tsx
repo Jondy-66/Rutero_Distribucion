@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
  * @returns {React.ReactElement} El componente de la página de predicciones.
  */
 export default function PrediccionesPage() {
-  const [fechaInicio, setFechaInicio] = useState("2025-06-26");
+  const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dias, setDias] = useState(7);
   const [predicciones, setPredicciones] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
