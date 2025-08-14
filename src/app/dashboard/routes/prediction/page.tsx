@@ -1,6 +1,6 @@
 
 'use client';
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { getPredicciones } from "@/services/api";
 import type { Prediction } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
@@ -8,11 +8,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, Search } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 /**
  * Componente de la página de predicciones.
@@ -24,6 +25,8 @@ export default function PrediccionesPage() {
   const [dias, setDias] = useState(7);
   const [predicciones, setPredicciones] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEjecutivo, setSelectedEjecutivo] = useState('todos');
   const { toast } = useToast();
 
   /**
@@ -53,6 +56,19 @@ export default function PrediccionesPage() {
     setLoading(false);
   };
  
+  const ejecutivos = useMemo(() => {
+    const ejecutivoSet = new Set(predicciones.map(p => p.Ejecutivo));
+    return ['todos', ...Array.from(ejecutivoSet)];
+  }, [predicciones]);
+
+  const filteredPredicciones = useMemo(() => {
+    return predicciones.filter(p => {
+      const matchesEjecutivo = selectedEjecutivo === 'todos' || p.Ejecutivo === selectedEjecutivo;
+      const matchesSearch = p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase());
+      return matchesEjecutivo && matchesSearch;
+    });
+  }, [predicciones, selectedEjecutivo, searchTerm]);
+
   return (
     <>
       <PageHeader title="Predicciones de Visitas" description="Usa el modelo de IA para predecir las próximas visitas a clientes." />
@@ -99,6 +115,29 @@ export default function PrediccionesPage() {
                 <CardDescription>Listado de visitas predichas y su probabilidad.</CardDescription>
             </CardHeader>
             <CardContent>
+                <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                    <div className="relative w-full sm:max-w-xs">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Buscar por ejecutivo..." 
+                            className="w-full pl-8" 
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo}>
+                        <SelectTrigger className="w-full sm:max-w-xs">
+                            <SelectValue placeholder="Filtrar por ejecutivo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {ejecutivos.map(ejecutivo => (
+                                <SelectItem key={ejecutivo} value={ejecutivo}>
+                                    {ejecutivo === 'todos' ? 'Todos los Ejecutivos' : ejecutivo}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
                  <div className="border rounded-lg">
                     <Table>
                         <TableHeader>
@@ -117,8 +156,8 @@ export default function PrediccionesPage() {
                                         <LoaderCircle className="mx-auto animate-spin text-primary" />
                                     </TableCell>
                                 </TableRow>
-                            ) : predicciones.length > 0 ? (
-                                predicciones.map((pred, i) => (
+                            ) : filteredPredicciones.length > 0 ? (
+                                filteredPredicciones.map((pred, i) => (
                                     <TableRow key={i}>
                                         <TableCell>{pred.Ejecutivo}</TableCell>
                                         <TableCell>{pred.RUC}</TableCell>
