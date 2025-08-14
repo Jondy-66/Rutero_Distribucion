@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Search, Save } from "lucide-react";
+import { LoaderCircle, Search, Save, MapPin } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from 'date-fns';
@@ -18,6 +18,8 @@ import { useAuth } from "@/hooks/use-auth";
 import { addRoute } from "@/lib/firebase/firestore";
 import { useRouter } from "next/navigation";
 import { Timestamp } from "firebase/firestore";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { MapView } from "@/components/map-view";
 
 /**
  * Componente de la página de predicciones.
@@ -32,6 +34,8 @@ export default function PrediccionesPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEjecutivo, setSelectedEjecutivo] = useState('todos');
+  const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [isMapOpen, setIsMapOpen] = useState(false);
   const { toast } = useToast();
   const { users, clients, user: currentUser } = useAuth();
   const router = useRouter();
@@ -132,6 +136,11 @@ export default function PrediccionesPage() {
     }
   }
 
+  const handleViewOnMap = (prediction: Prediction) => {
+    setSelectedLocation({ lat: prediction.LatitudTrz, lng: prediction.LongitudTrz });
+    setIsMapOpen(true);
+  };
+
   return (
     <>
       <PageHeader title="Predicciones de Visitas" description="Usa el modelo de IA para predecir las próximas visitas a clientes." />
@@ -209,7 +218,7 @@ export default function PrediccionesPage() {
                                 <TableHead>RUC</TableHead>
                                 <TableHead>Fecha Predicha</TableHead>
                                 <TableHead className="text-right">Probabilidad</TableHead>
-                                <TableHead className="hidden sm:table-cell">Ubicación (Lat, Lng)</TableHead>
+                                <TableHead>Mapa</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -224,9 +233,13 @@ export default function PrediccionesPage() {
                                     <TableRow key={i}>
                                         <TableCell>{pred.Ejecutivo}</TableCell>
                                         <TableCell>{pred.RUC}</TableCell>
-                                        <TableCell>{format(new Date(pred.fecha_predicha), 'PPP', { locale: es })}</TableCell>
+                                        <TableCell>{format(parseISO(pred.fecha_predicha), 'PPP', { locale: es })}</TableCell>
                                         <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
-                                        <TableCell className="hidden sm:table-cell">{pred.LatitudTrz}, {pred.LongitudTrz}</TableCell>
+                                        <TableCell>
+                                            <Button variant="ghost" size="icon" onClick={() => handleViewOnMap(pred)} title="Ver en Mapa">
+                                                <MapPin className="h-4 w-4" />
+                                            </Button>
+                                        </TableCell>
                                     </TableRow>
                                 ))
                             ) : (
@@ -249,6 +262,26 @@ export default function PrediccionesPage() {
             </CardFooter>
         </Card>
       </div>
+      <Dialog open={isMapOpen} onOpenChange={setIsMapOpen}>
+            <DialogContent className="max-w-3xl h-[60vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Ubicación de la Predicción</DialogTitle>
+                     <DialogDescription>
+                        Esta es la ubicación (Lat: {selectedLocation?.lat.toFixed(4)}, Lon: {selectedLocation?.lng.toFixed(4)}) para la visita predicha.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex-grow">
+                    {selectedLocation && (
+                        <MapView 
+                            key={Date.now()} // Force re-render
+                            center={selectedLocation}
+                            markerPosition={selectedLocation}
+                            containerClassName="h-full w-full"
+                        />
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
     </>
   );
 }

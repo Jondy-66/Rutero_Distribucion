@@ -12,7 +12,7 @@ import { getClients, getRoutes } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -268,6 +268,7 @@ export default function RouteManagementPage() {
                                      <MapView 
                                         center={mapCenter}
                                         markerPosition={markerPosition}
+                                        containerClassName="h-full w-full"
                                      />
                                 </div>
                                 <DialogFooter>

@@ -49,7 +49,7 @@ export function MapView({
         <Map
           key={JSON.stringify(currentCenter)} // Force re-render when center changes
           defaultCenter={currentCenter}
-          defaultZoom={markerPosition ? 15 : 7}
+          defaultZoom={markerPosition ? 15 : clients && clients.length > 0 ? 7 : 7}
           mapId="e9a3b4c1a2b3c4d5"
           gestureHandling={'greedy'}
           disableDefaultUI={true}
