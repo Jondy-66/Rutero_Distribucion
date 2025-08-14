@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -143,7 +144,7 @@ export function DashboardNav() {
                       <CollapsibleContent>
                          <SidebarMenuSub>
                             <SidebarMenuSubItem>
-                               <Link href="/dashboard/routes/new">
+                               <Link href="/dashboard/routes/new" asChild>
                                 <SidebarMenuSubButton isActive={pathname === '/dashboard/routes/new'}>
                                     <PlusCircle />
                                     <span>Nueva Ruta</span>
@@ -151,7 +152,7 @@ export function DashboardNav() {
                                </Link>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
-                               <Link href="/dashboard/routes">
+                               <Link href="/dashboard/routes" asChild>
                                 <SidebarMenuSubButton isActive={pathname === '/dashboard/routes'}>
                                     <List />
                                     <span>Lista de Rutas</span>
@@ -162,7 +163,7 @@ export function DashboardNav() {
                       </CollapsibleContent>
                   </Collapsible>
                  <SidebarMenuItem>
-                  <Link href="/dashboard/routes/management">
+                  <Link href="/dashboard/routes/management" asChild>
                     <SidebarMenuSubButton
                       isActive={pathname === '/dashboard/routes/management'}
                     >
@@ -172,7 +173,7 @@ export function DashboardNav() {
                   </Link>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <Link href="/dashboard/routes/prediction">
+                  <Link href="/dashboard/routes/prediction" asChild>
                     <SidebarMenuSubButton
                       isActive={pathname === '/dashboard/routes/prediction'}
                     >
@@ -198,7 +199,7 @@ export function DashboardNav() {
             <CollapsibleContent>
               <SidebarMenuSub>
                 <SidebarMenuSubItem>
-                  <Link href="/dashboard/users">
+                  <Link href="/dashboard/users" asChild>
                     <SidebarMenuSubButton
                       isActive={pathname === '/dashboard/users' || pathname.startsWith('/dashboard/users/[id]')}
                     >
@@ -208,7 +209,7 @@ export function DashboardNav() {
                   </Link>
                 </SidebarMenuSubItem>
                 <SidebarMenuSubItem>
-                  <Link href="/dashboard/users/supervisors">
+                  <Link href="/dashboard/users/supervisors" asChild>
                     <SidebarMenuSubButton
                       isActive={pathname === '/dashboard/users/supervisors'}
                     >
