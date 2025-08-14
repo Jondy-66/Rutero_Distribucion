@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Search, Save, MapPin } from "lucide-react";
+import { LoaderCircle, Search, Save, MapPin, Download } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from 'date-fns';
@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { Timestamp } from "firebase/firestore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { MapView } from "@/components/map-view";
+import * as XLSX from 'xlsx';
 
 /**
  * Componente de la página de predicciones.
@@ -141,6 +142,32 @@ export default function PrediccionesPage() {
     setIsMapOpen(true);
   };
 
+  const handleDownloadExcel = () => {
+    if (filteredPredicciones.length === 0) {
+      toast({
+        title: "Sin Datos",
+        description: "No hay predicciones para descargar.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const dataToExport = filteredPredicciones.map(p => ({
+      'Ejecutivo': p.Ejecutivo,
+      'RUC': p.RUC,
+      'Fecha Predicha': format(parseISO(p.fecha_predicha), 'PPP', { locale: es }),
+      'Probabilidad de Visita (%)': (p.probabilidad_visita * 100).toFixed(2),
+      'Latitud': p.LatitudTrz,
+      'Longitud': p.LongitudTrz,
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Predicciones");
+    XLSX.writeFile(workbook, "predicciones_de_visitas.xlsx");
+    toast({ title: "Descarga Iniciada", description: "Tu reporte en Excel se está descargando." });
+  };
+
   return (
     <>
       <PageHeader title="Predicciones de Visitas" description="Usa el modelo de IA para predecir las próximas visitas a clientes." />
@@ -253,11 +280,15 @@ export default function PrediccionesPage() {
                     </Table>
                 </div>
             </CardContent>
-            <CardFooter>
+            <CardFooter className="flex-col sm:flex-row gap-2 items-start sm:items-center">
                  <Button onClick={handleSavePredictionRoute} disabled={loading || isSaving || selectedEjecutivo === 'todos'}>
                     {(loading || isSaving) && <LoaderCircle className="animate-spin mr-2" />}
                     <Save className="mr-2 h-4 w-4" />
                     Guardar Ruta de Predicción
+                </Button>
+                <Button onClick={handleDownloadExcel} variant="outline" disabled={loading || filteredPredicciones.length === 0}>
+                    <Download className="mr-2 h-4 w-4" />
+                    Descargar Excel
                 </Button>
             </CardFooter>
         </Card>
