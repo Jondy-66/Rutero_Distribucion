@@ -75,6 +75,11 @@ const usersNavItem = {
   roles: ['Administrador'],
 };
 
+/**
+ * Componente de navegación principal para el panel de control.
+ * Muestra los enlaces de navegación en la barra lateral según el rol del usuario.
+ * @returns {React.ReactElement} El componente de navegación.
+ */
 export function DashboardNav() {
   const pathname = usePathname();
   const { user } = useAuth();
@@ -144,7 +149,7 @@ export function DashboardNav() {
                       <CollapsibleContent>
                          <SidebarMenuSub>
                             <SidebarMenuSubItem>
-                               <Link href="/dashboard/routes/new" asChild>
+                               <Link href="/dashboard/routes/new" passHref asChild>
                                 <SidebarMenuSubButton isActive={pathname === '/dashboard/routes/new'}>
                                     <PlusCircle />
                                     <span>Nueva Ruta</span>
@@ -152,7 +157,7 @@ export function DashboardNav() {
                                </Link>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
-                               <Link href="/dashboard/routes" asChild>
+                               <Link href="/dashboard/routes" passHref asChild>
                                 <SidebarMenuSubButton isActive={pathname === '/dashboard/routes'}>
                                     <List />
                                     <span>Lista de Rutas</span>
@@ -163,7 +168,7 @@ export function DashboardNav() {
                       </CollapsibleContent>
                   </Collapsible>
                  <SidebarMenuItem>
-                  <Link href="/dashboard/routes/management" asChild>
+                  <Link href="/dashboard/routes/management" passHref asChild>
                     <SidebarMenuSubButton
                       isActive={pathname === '/dashboard/routes/management'}
                     >
@@ -173,7 +178,7 @@ export function DashboardNav() {
                   </Link>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <Link href="/dashboard/routes/prediction" asChild>
+                  <Link href="/dashboard/routes/prediction" passHref asChild>
                     <SidebarMenuSubButton
                       isActive={pathname === '/dashboard/routes/prediction'}
                     >
@@ -199,7 +204,7 @@ export function DashboardNav() {
             <CollapsibleContent>
               <SidebarMenuSub>
                 <SidebarMenuSubItem>
-                  <Link href="/dashboard/users" asChild>
+                  <Link href="/dashboard/users" passHref asChild>
                     <SidebarMenuSubButton
                       isActive={pathname === '/dashboard/users' || pathname.startsWith('/dashboard/users/[id]')}
                     >
@@ -209,7 +214,7 @@ export function DashboardNav() {
                   </Link>
                 </SidebarMenuSubItem>
                 <SidebarMenuSubItem>
-                  <Link href="/dashboard/users/supervisors" asChild>
+                  <Link href="/dashboard/users/supervisors" passHref asChild>
                     <SidebarMenuSubButton
                       isActive={pathname === '/dashboard/users/supervisors'}
                     >
