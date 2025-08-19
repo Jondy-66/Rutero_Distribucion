@@ -1,6 +1,6 @@
 
 'use client';
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { getPredicciones } from "@/services/api";
 import type { Prediction, RoutePlan, Client } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
@@ -41,6 +41,15 @@ export default function PrediccionesPage() {
   const { users, clients, user: currentUser } = useAuth();
   const router = useRouter();
 
+  const isSupervisorOrAdmin = currentUser?.role === 'Administrador' || currentUser?.role === 'Supervisor';
+
+  useEffect(() => {
+    if (!isSupervisorOrAdmin && currentUser) {
+      setSelectedEjecutivo(currentUser.name);
+    } else {
+      setSelectedEjecutivo('todos');
+    }
+  }, [isSupervisorOrAdmin, currentUser]);
 
   /**
    * Maneja la solicitud de predicciones a la API.
@@ -77,10 +86,10 @@ export default function PrediccionesPage() {
   const filteredPredicciones = useMemo(() => {
     return predicciones.filter(p => {
       const matchesEjecutivo = selectedEjecutivo === 'todos' || p.Ejecutivo === selectedEjecutivo;
-      const matchesSearch = p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesSearch = isSupervisorOrAdmin ? p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase()) : true;
       return matchesEjecutivo && matchesSearch;
     });
-  }, [predicciones, selectedEjecutivo, searchTerm]);
+  }, [predicciones, selectedEjecutivo, searchTerm, isSupervisorOrAdmin]);
 
   const handleSavePredictionRoute = async () => {
     if (selectedEjecutivo === 'todos' || !currentUser) {
@@ -98,8 +107,14 @@ export default function PrediccionesPage() {
         if (!executiveUser) {
             throw new Error(`No se pudo encontrar al usuario ejecutivo: ${selectedEjecutivo}`);
         }
+        
+        let supervisor: typeof users[0] | undefined;
+        if(executiveUser.role === 'Supervisor') {
+            supervisor = executiveUser;
+        } else if (executiveUser.supervisorId) {
+            supervisor = users.find(u => u.id === executiveUser.supervisorId);
+        }
 
-        const supervisor = users.find(u => u.id === executiveUser.supervisorId);
         if (!supervisor) {
             throw new Error(`El ejecutivo ${selectedEjecutivo} no tiene un supervisor asignado.`);
         }
@@ -211,32 +226,39 @@ export default function PrediccionesPage() {
         <Card>
             <CardHeader>
                 <CardTitle>Resultados de la Predicción</CardTitle>
-                <CardDescription>Listado de visitas predichas y su probabilidad.</CardDescription>
+                 <CardDescription>
+                    {isSupervisorOrAdmin 
+                        ? 'Listado de visitas predichas y su probabilidad.' 
+                        : 'Este es el listado de tus visitas predichas y su probabilidad.'
+                    }
+                </CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="flex flex-col sm:flex-row gap-4 mb-4">
-                    <div className="relative w-full sm:max-w-xs">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Buscar por ejecutivo..." 
-                            className="w-full pl-8" 
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                {isSupervisorOrAdmin && (
+                    <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                        <div className="relative w-full sm:max-w-xs">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                placeholder="Buscar por ejecutivo..." 
+                                className="w-full pl-8" 
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo}>
+                            <SelectTrigger className="w-full sm:max-w-xs">
+                                <SelectValue placeholder="Filtrar por ejecutivo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {ejecutivos.map(ejecutivo => (
+                                    <SelectItem key={ejecutivo} value={ejecutivo}>
+                                        {ejecutivo === 'todos' ? 'Todos los Ejecutivos' : ejecutivo}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
-                    <Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo}>
-                        <SelectTrigger className="w-full sm:max-w-xs">
-                            <SelectValue placeholder="Filtrar por ejecutivo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {ejecutivos.map(ejecutivo => (
-                                <SelectItem key={ejecutivo} value={ejecutivo}>
-                                    {ejecutivo === 'todos' ? 'Todos los Ejecutivos' : ejecutivo}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
+                )}
                  <div className="border rounded-lg">
                     <Table>
                         <TableHeader>
