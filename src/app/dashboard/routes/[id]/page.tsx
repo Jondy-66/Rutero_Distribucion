@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2 } from 'lucide-react';
 import { getRoute, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
     const slots = [];
@@ -167,6 +168,8 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   if (!route) {
     return notFound();
   }
+  
+  const clientsInRoute = clients.filter(client => route.clients.some(rc => rc.ruc === client.ruc));
 
   return (
     <>
@@ -219,6 +222,29 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                 </PopoverContent>
               </Popover>
             </div>
+             {clientsInRoute.length > 0 && (
+                <Collapsible className="space-y-2">
+                    <CollapsibleTrigger asChild>
+                        <Button variant="ghost" className="w-full justify-between">
+                            Clientes Seleccionados ({clientsInRoute.length})
+                            <ChevronsUpDown className="h-4 w-4" />
+                        </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 p-2 max-h-60 overflow-y-auto border rounded-md">
+                        {clientsInRoute.map(client => (
+                            <div key={client.id} className="flex justify-between items-center p-2 rounded-md hover:bg-muted">
+                                <div>
+                                    <p className="font-medium text-sm">{client.nombre_comercial}</p>
+                                    <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSelectClient(client.ruc)}>
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                            </div>
+                        ))}
+                    </CollapsibleContent>
+                </Collapsible>
+            )}
             <div className="space-y-2">
                 <Label htmlFor="dayOfWeek">Día</Label>
                 <Select value={route.dayOfWeek} onValueChange={(value) => handleInputChange('dayOfWeek', value)} disabled={isSaving}>
@@ -307,3 +333,5 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     </>
   );
 }
+
+    
