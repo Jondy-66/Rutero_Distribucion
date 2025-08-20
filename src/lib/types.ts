@@ -52,7 +52,6 @@ export type RoutePlan = {
   valorCobro?: number; // Monto total a cobrar en la ruta.
   tipoCobro?: 'Efectivo' | 'Transferencia' | 'Cheque'; // Método de cobro principal.
   devoluciones?: number; // Monto total de devoluciones.
-  expirados?: number; // Monto total de productos expirados.
   promociones?: number; // Monto total de promociones aplicadas.
   medicacionFrecuente?: number; // Monto total de medicación frecuente vendida.
 };

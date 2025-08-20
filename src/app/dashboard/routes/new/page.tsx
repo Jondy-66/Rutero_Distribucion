@@ -54,7 +54,6 @@ export default function NewRoutePage() {
   const [valorCobro, setValorCobro] = useState('');
   const [tipoCobro, setTipoCobro] = useState<'Efectivo' | 'Transferencia' | 'Cheque' | undefined>();
   const [devoluciones, setDevoluciones] = useState('');
-  const [expirados, setExpirados] = useState('');
   const [promociones, setPromociones] = useState('');
   const [medicacionFrecuente, setMedicacionFrecuente] = useState('');
   const [selectedClients, setSelectedClients] = useState<string[]>([]);
@@ -101,7 +100,6 @@ export default function NewRoutePage() {
     setValorCobro('');
     setTipoCobro(undefined);
     setDevoluciones('');
-    setExpirados('');
     setPromociones('');
     setMedicacionFrecuente('');
     setIsDiaFarmacia(false);
@@ -141,7 +139,6 @@ export default function NewRoutePage() {
         valorCobro: parseFloat(valorCobro) || 0,
         tipoCobro,
         devoluciones: parseFloat(devoluciones) || 0,
-        expirados: parseFloat(expirados) || 0,
         promociones: parseFloat(promociones) || 0,
         medicacionFrecuente: parseFloat(medicacionFrecuente) || 0,
     };
@@ -365,10 +362,6 @@ export default function NewRoutePage() {
                 <div className="space-y-2">
                     <Label htmlFor="devoluciones">Devoluciones ($)</Label>
                     <Input id="devoluciones" type="number" placeholder="0.00" value={devoluciones} onChange={(e) => setDevoluciones(e.target.value)} disabled={isLoading} />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="expirados">Expirados ($)</Label>
-                    <Input id="expirados" type="number" placeholder="0.00" value={expirados} onChange={(e) => setExpirados(e.target.value)} disabled={isLoading} />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="farmacia-descuento">Farmacia el Descuento</Label>

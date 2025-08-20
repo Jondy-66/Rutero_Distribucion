@@ -27,7 +27,6 @@ type RouteClient = Client & {
     valorVenta: string;
     valorCobro: string;
     devoluciones: string;
-    expirados: string;
     promociones: string;
     medicacionFrecuente: string;
 }
@@ -89,7 +88,6 @@ export default function RouteManagementPage() {
         valorVenta: '0.00',
         valorCobro: '0.00',
         devoluciones: '0.00',
-        expirados: '0.00',
         promociones: '0.00',
         medicacionFrecuente: '0.00',
     };
@@ -164,7 +162,6 @@ export default function RouteManagementPage() {
             valorVenta: String(route.valorVenta || '0.00'),
             valorCobro: String(route.valorCobro || '0.00'),
             devoluciones: String(route.devoluciones || '0.00'),
-            expirados: String(route.expirados || '0.00'),
             promociones: String(route.promociones || '0.00'),
             medicacionFrecuente: String(route.medicacionFrecuente || '0.00'),
           }));
@@ -375,7 +372,7 @@ export default function RouteManagementPage() {
                                                 </Button>
                                             </div>
                                             <Separator className="my-4" />
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                                 <div className="space-y-1">
                                                     <Label htmlFor={`venta-${index}`}>Valor de Venta ($)</Label>
                                                     <Input id={`venta-${index}`} type="number" value={client.valorVenta} onChange={(e) => handleClientValueChange(index, 'valorVenta', e.target.value)} />
@@ -387,10 +384,6 @@ export default function RouteManagementPage() {
                                                 <div className="space-y-1">
                                                     <Label htmlFor={`devoluciones-${index}`}>Devoluciones ($)</Label>
                                                     <Input id={`devoluciones-${index}`} type="number" value={client.devoluciones} onChange={(e) => handleClientValueChange(index, 'devoluciones', e.target.value)} />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label htmlFor={`expirados-${index}`}>Expirados ($)</Label>
-                                                    <Input id={`expirados-${index}`} type="number" value={client.expirados} onChange={(e) => handleClientValueChange(index, 'expirados', e.target.value)} />
                                                 </div>
                                                 <div className="space-y-1">
                                                     <Label htmlFor={`promociones-${index}`}>Promociones ($)</Label>
