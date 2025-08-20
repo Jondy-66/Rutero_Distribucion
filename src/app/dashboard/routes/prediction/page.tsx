@@ -2,7 +2,7 @@
 'use client';
 import React, { useState, useMemo, useEffect } from "react";
 import { getPredicciones } from "@/services/api";
-import type { Prediction, RoutePlan, Client } from "@/lib/types";
+import type { Prediction, RoutePlan, Client, ClientInRoute } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -17,7 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/use-auth";
 import { addRoute } from "@/lib/firebase/firestore";
 import { useRouter } from "next/navigation";
-import { Timestamp } from "firebase/firestore";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { MapView } from "@/components/map-view";
 import * as XLSX from 'xlsx';
@@ -120,20 +119,27 @@ export default function PrediccionesPage() {
         }
 
         const predictedClientsRucs = new Set(filteredPredicciones.map(p => p.RUC));
-        const routeClients: Client[] = clients.filter(c => predictedClientsRucs.has(c.ruc));
+        const routeClientsData = clients.filter(c => predictedClientsRucs.has(c.ruc));
+
+        const routeClients: ClientInRoute[] = routeClientsData.map(client => {
+            const prediction = filteredPredicciones.find(p => p.RUC === client.ruc);
+            return {
+                ruc: client.ruc,
+                nombre_comercial: client.nombre_comercial,
+                date: prediction ? parseISO(prediction.fecha_predicha) : new Date(),
+            }
+        });
+
 
         const routeDate = parseISO(filteredPredicciones[0].fecha_predicha);
 
         const newRoute: Omit<RoutePlan, 'id' | 'createdAt'> = {
             routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`,
-            date: Timestamp.fromDate(routeDate),
             clients: routeClients,
             status: 'Planificada',
             supervisorId: supervisor.id,
             supervisorName: supervisor.name,
             createdBy: currentUser.id,
-            startTime: '08:00', // Valor predeterminado
-            endTime: '17:00', // Valor predeterminado
         };
 
         await addRoute(newRoute);

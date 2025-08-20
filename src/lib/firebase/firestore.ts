@@ -246,8 +246,21 @@ export const addRoutesBatch = async (routesData: RouteToSave[]) => {
     const batch = writeBatch(db);
     
     for (const route of routesData) {
-        const newRouteRef = doc(routesCollection); // Firestore genera un ID automático.
-        batch.set(newRouteRef, {...route, createdAt: serverTimestamp()}); // Añade una marca de tiempo de creación.
+        const newRouteRef = doc(routesCollection);
+        
+        const clientsWithTimestamps = route.clients.map(client => ({
+            ...client,
+            date: client.date ? Timestamp.fromDate(client.date) : null,
+            dayOfWeek: client.dayOfWeek || null,
+            startTime: client.startTime || null,
+            endTime: client.endTime || null,
+        }));
+        
+        batch.set(newRouteRef, {
+            ...route, 
+            clients: clientsWithTimestamps,
+            createdAt: serverTimestamp()
+        });
     }
 
     return batch.commit();
@@ -260,9 +273,12 @@ export const addRoutesBatch = async (routesData: RouteToSave[]) => {
  */
 export const addRoute = (routeData: Omit<RoutePlan, 'id' | 'createdAt'>) => {
     // Convert client dates to Timestamps
-    const clientsWithTimestamps = routeData.clients.map(client => ({
+    const clientsWithTimestamps = (routeData.clients as ClientInRoute[]).map(client => ({
         ...client,
-        date: client.date ? Timestamp.fromDate(client.date) : undefined
+        date: client.date ? Timestamp.fromDate(client.date) : null,
+        dayOfWeek: client.dayOfWeek || null,
+        startTime: client.startTime || null,
+        endTime: client.endTime || null,
     }));
 
     return addDoc(routesCollection, {
