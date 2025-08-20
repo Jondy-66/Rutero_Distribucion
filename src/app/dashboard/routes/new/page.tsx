@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/hooks/use-auth';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
     const slots = [];
@@ -188,6 +189,8 @@ export default function NewRoutePage() {
     if (numericValue >= 100) return 'bg-green-100 border-green-300 text-green-900 focus-visible:ring-green-500';
     return '';
   };
+  
+  const clientsInSelection = clients.filter(c => selectedClients.includes(c.ruc));
 
   return (
     <>
@@ -248,6 +251,31 @@ export default function NewRoutePage() {
                 </PopoverContent>
               </Popover>
             </div>
+
+            {selectedClients.length > 0 && (
+                <Collapsible className="space-y-2">
+                    <CollapsibleTrigger asChild>
+                        <Button variant="ghost" className="w-full justify-between">
+                            Clientes Seleccionados ({selectedClients.length})
+                            <ChevronsUpDown className="h-4 w-4" />
+                        </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 p-2 max-h-60 overflow-y-auto border rounded-md">
+                        {clientsInSelection.map(client => (
+                            <div key={client.id} className="flex justify-between items-center p-2 rounded-md hover:bg-muted">
+                                <div>
+                                    <p className="font-medium text-sm">{client.nombre_comercial}</p>
+                                    <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                                </div>
+                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSelectClient(client.ruc)}>
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                            </div>
+                        ))}
+                    </CollapsibleContent>
+                </Collapsible>
+            )}
+            
             <div className="space-y-2">
                 <Label htmlFor="dayOfWeek">Día</Label>
                 <Select value={dayOfWeek} onValueChange={setDayOfWeek} disabled={isLoading}>
