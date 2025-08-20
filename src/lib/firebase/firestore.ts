@@ -6,7 +6,7 @@
 
 import { db } from './config';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp } from 'firebase/firestore';
-import type { User, Client, RoutePlan } from '@/lib/types';
+import type { User, Client, RoutePlan, ClientInRoute } from '@/lib/types';
 
 // --- COLECCIÓN DE USUARIOS ---
 
@@ -235,7 +235,7 @@ const routesCollection = collection(db, 'routes');
 /**
  * Tipo auxiliar para guardar rutas, convirtiendo la fecha a Timestamp de Firestore.
  */
-type RouteToSave = Omit<RoutePlan, 'id' | 'createdAt' | 'date'> & { date: Timestamp };
+type RouteToSave = Omit<RoutePlan, 'id' | 'createdAt'>;
 
 /**
  * Añade múltiples planes de ruta en un lote.
@@ -259,27 +259,50 @@ export const addRoutesBatch = async (routesData: RouteToSave[]) => {
  * @returns {Promise<DocumentReference>} Una promesa que se resuelve con la referencia al documento creado.
  */
 export const addRoute = (routeData: Omit<RoutePlan, 'id' | 'createdAt'>) => {
+    // Convert client dates to Timestamps
+    const clientsWithTimestamps = routeData.clients.map(client => ({
+        ...client,
+        date: client.date ? Timestamp.fromDate(client.date) : undefined
+    }));
+
     return addDoc(routesCollection, {
         ...routeData,
+        clients: clientsWithTimestamps,
         createdAt: serverTimestamp()
     });
 };
 
 /**
- * Obtiene todas las rutas planificadas, ordenadas por fecha descendente.
+ * Obtiene todas las rutas planificadas, ordenadas por la fecha del primer cliente.
  * @returns {Promise<RoutePlan[]>} Una promesa que se resuelve con un array de objetos RoutePlan.
  */
 export const getRoutes = async (): Promise<RoutePlan[]> => {
-    const q = query(routesCollection, orderBy('date', 'desc'));
+    // No se puede ordenar directamente por una fecha dentro de un array en Firestore.
+    // La ordenación se hará en el lado del cliente.
+    const q = query(routesCollection, orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => {
+    const routes = snapshot.docs.map(doc => {
         const data = doc.data();
-        // Convierte el Timestamp de Firestore a un objeto Date de JavaScript.
+        // Convierte los Timestamps de cliente a objetos Date de JavaScript.
+        const clients = (data.clients as any[]).map(client => ({
+            ...client,
+            date: client.date ? (client.date as Timestamp).toDate() : undefined
+        }));
         return {
             id: doc.id,
             ...data,
-            date: (data.date as Timestamp).toDate(),
+            clients,
         } as RoutePlan;
+    });
+
+    // Ordenar por la fecha del primer cliente si existe.
+    return routes.sort((a, b) => {
+        const dateA = a.clients?.[0]?.date;
+        const dateB = b.clients?.[0]?.date;
+        if (dateA && dateB) return dateB.getTime() - dateA.getTime();
+        if (dateA) return -1;
+        if (dateB) return 1;
+        return 0;
     });
 };
 
@@ -293,11 +316,15 @@ export const getRoute = async (id: string): Promise<RoutePlan | null> => {
     const docSnap = await getDoc(docRef);
     if(docSnap.exists()) {
         const data = docSnap.data();
-        // Convierte el Timestamp de Firestore a un objeto Date de JavaScript.
+        // Convierte los Timestamps de cliente a objetos Date de JavaScript.
+        const clients = (data.clients as any[]).map(client => ({
+            ...client,
+            date: client.date ? (client.date as Timestamp).toDate() : undefined
+        }));
         return {
             id: docSnap.id,
             ...data,
-            date: (data.date as Timestamp).toDate(),
+            clients,
         } as RoutePlan;
     }
     return null;
@@ -321,14 +348,30 @@ export const updateRoute = (id: string, routeData: Partial<Omit<RoutePlan, 'id'>
  * @returns {Promise<RoutePlan[]>} Una promesa que se resuelve con un array de objetos RoutePlan.
  */
 export const getRoutesBySupervisor = async (supervisorId: string): Promise<RoutePlan[]> => {
-    const q = query(routesCollection, where("supervisorId", "==", supervisorId), orderBy('date', 'desc'));
+    const q = query(routesCollection, where("supervisorId", "==", supervisorId));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => {
+    const routes = snapshot.docs.map(doc => {
         const data = doc.data();
+         const clients = (data.clients as any[]).map(client => ({
+            ...client,
+            date: client.date ? (client.date as Timestamp).toDate() : undefined
+        }));
         return {
             id: doc.id,
             ...data,
-            date: (data.date as Timestamp).toDate(), // Convierte el Timestamp de Firestore a un objeto Date de JavaScript.
+            clients,
         } as RoutePlan;
     });
+
+     // Ordenar por la fecha del primer cliente si existe.
+    return routes.sort((a, b) => {
+        const dateA = a.clients?.[0]?.date;
+        const dateB = b.clients?.[0]?.date;
+        if (dateA && dateB) return dateB.getTime() - dateA.getTime();
+        if (dateA) return -1;
+        if (dateB) return 1;
+        return 0;
+    });
 };
+
+    

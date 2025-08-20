@@ -52,8 +52,11 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [open, setOpen] = useState(false);
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>();
+  
+  // State to manage individual calendar popovers
+  const [calendarOpen, setCalendarOpen] = useState<{[key: string]: boolean}>({});
+  const [calendarDate, setCalendarDate] = useState<{[key: string]: Date | undefined}>({});
+
 
   useEffect(() => {
     const fetchRouteData = async () => {
@@ -63,7 +66,15 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         if (routeData) {
           setRoute(routeData);
           setClientsInRoute(routeData.clients || []);
-          setSelectedCalendarDate(routeData.date);
+          
+          const initialDates: {[key: string]: Date} = {};
+          (routeData.clients || []).forEach(client => {
+              if (client.date) {
+                  initialDates[client.ruc] = client.date;
+              }
+          });
+          setCalendarDate(initialDates);
+
         } else {
           notFound();
         }
@@ -106,14 +117,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     });
   };
   
-  const handleCalendarSelect = () => {
-      if(selectedCalendarDate){
-          handleInputChange('date', selectedCalendarDate);
-      }
-      setIsCalendarOpen(false);
-  };
-  
-  const handleClientValueChange = useCallback((ruc: string, field: keyof Omit<ClientInRoute, 'ruc' | 'nombre_comercial'>, value: string) => {
+  const handleClientValueChange = useCallback((ruc: string, field: keyof Omit<ClientInRoute, 'ruc' | 'nombre_comercial'>, value: any) => {
       setClientsInRoute(prev => 
           prev.map(client => 
               client.ruc === ruc 
@@ -123,12 +127,17 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       );
   }, []);
 
+  const handleCalendarSelect = (ruc: string) => {
+      handleClientValueChange(ruc, 'date', calendarDate[ruc]);
+      setCalendarOpen(prev => ({...prev, [ruc]: false}));
+  };
+
   const handleUpdateRoute = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!route) return;
 
-    if (!route.routeName || !route.date || clientsInRoute.length === 0 || !route.supervisorId || !route.startTime || !route.endTime) {
-      toast({ title: 'Faltan datos', description: 'Por favor completa todos los campos requeridos.', variant: 'destructive' });
+    if (!route.routeName || clientsInRoute.length === 0 || !route.supervisorId) {
+      toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente.', variant: 'destructive' });
       return;
     }
 
@@ -138,7 +147,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       const dataToUpdate: Partial<RoutePlan> = {
         ...route,
         supervisorName: supervisor?.name || '',
-        date: Timestamp.fromDate(route.date),
         clients: clientsInRoute.map(c => ({
           ...c,
           valorVenta: parseFloat(String(c.valorVenta)) || 0,
@@ -146,7 +154,9 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
           devoluciones: parseFloat(String(c.devoluciones)) || 0,
           promociones: parseFloat(String(c.promociones)) || 0,
           medicacionFrecuente: parseFloat(String(c.medicacionFrecuente)) || 0,
-        })),
+          // Ensure date is a Timestamp if it exists
+          date: c.date ? Timestamp.fromDate(c.date) : undefined
+        } as any)), // Using any to bypass strict type checking for Timestamp
       };
       
       delete dataToUpdate.id;
@@ -207,58 +217,29 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
           <CardHeader>
             <CardTitle>Detalles Generales de la Ruta</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
+          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="routeName">Nombre de la Ruta</Label>
               <Input id="routeName" value={route.routeName} onChange={(e) => handleInputChange('routeName', e.target.value)} disabled={isSaving} />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-               <div className="space-y-2">
-                <Label htmlFor="dayOfWeek">Día</Label>
-                <Select value={route.dayOfWeek} onValueChange={(value) => handleInputChange('dayOfWeek', value)} disabled={isSaving}>
-                    <SelectTrigger id="dayOfWeek"><CalendarIcon className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar día" /></SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="Lunes">Lunes</SelectItem><SelectItem value="Martes">Martes</SelectItem><SelectItem value="Miércoles">Miércoles</SelectItem><SelectItem value="Jueves">Jueves</SelectItem><SelectItem value="Viernes">Viernes</SelectItem><SelectItem value="Sábado">Sábado</SelectItem><SelectItem value="Domingo">Domingo</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-              <div className="space-y-2">
-                <Label>Fecha</Label>
-                <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                  <PopoverTrigger asChild>
-                    <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !route.date && 'text-muted-foreground')} disabled={isSaving}>
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {route.date ? format(route.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={selectedCalendarDate} onSelect={setSelectedCalendarDate} initialFocus locale={es} />
-                    <div className="p-2 border-t border-border"><Button onClick={handleCalendarSelect} className="w-full">Seleccionar</Button></div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              <div className="space-y-2">
+            <div className="space-y-2">
                 <Label htmlFor="supervisor">Asignar Supervisor</Label>
                 <Select value={route.supervisorId} onValueChange={(value) => handleInputChange('supervisorId', value)} disabled={isSaving}>
                   <SelectTrigger id="supervisor"><Users className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                   <SelectContent>{supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="start-time">Hora de Inicio</Label>
-                <Select value={route.startTime} onValueChange={(value) => handleInputChange('startTime', value)} disabled={isSaving}>
-                  <SelectTrigger id="start-time"><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                  <SelectContent>{startTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="end-time">Hora de Fin</Label>
-                <Select value={route.endTime} onValueChange={(value) => handleInputChange('endTime', value)} disabled={isSaving}>
-                  <SelectTrigger id="end-time"><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                  <SelectContent>{endTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
-                </Select>
-              </div>
             </div>
+            <div className="space-y-2">
+                <Label htmlFor="status">Estado</Label>
+                <Select value={route.status} onValueChange={(value: any) => handleInputChange('status', value)} disabled={isSaving}>
+                  <SelectTrigger id="status"><SelectValue placeholder="Seleccionar estado" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Planificada">Planificada</SelectItem>
+                    <SelectItem value="En Progreso">En Progreso</SelectItem>
+                    <SelectItem value="Completada">Completada</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
           </CardContent>
         </Card>
 
@@ -319,7 +300,48 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                                         </Button>
                                     </div>
                                     <Separator className="my-2" />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+                                        <div className="space-y-2">
+                                            <Label htmlFor={`dayOfWeek-${client.ruc}`}>Día</Label>
+                                            <Select value={client.dayOfWeek} onValueChange={(value) => handleClientValueChange(client.ruc, 'dayOfWeek', value)} disabled={isSaving}>
+                                                <SelectTrigger id={`dayOfWeek-${client.ruc}`}><CalendarIcon className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar día" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Lunes">Lunes</SelectItem><SelectItem value="Martes">Martes</SelectItem><SelectItem value="Miércoles">Miércoles</SelectItem><SelectItem value="Jueves">Jueves</SelectItem><SelectItem value="Viernes">Viernes</SelectItem><SelectItem value="Sábado">Sábado</SelectItem><SelectItem value="Domingo">Domingo</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Fecha</Label>
+                                            <Popover open={calendarOpen[client.ruc] || false} onOpenChange={(isOpen) => setCalendarOpen(prev => ({ ...prev, [client.ruc]: isOpen }))}>
+                                            <PopoverTrigger asChild>
+                                                <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !client.date && 'text-muted-foreground')} disabled={isSaving}>
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {client.date ? format(client.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0">
+                                                <Calendar mode="single" selected={calendarDate[client.ruc]} onSelect={(date) => setCalendarDate(prev => ({ ...prev, [client.ruc]: date }))} initialFocus locale={es} />
+                                                <div className="p-2 border-t border-border"><Button onClick={() => handleCalendarSelect(client.ruc)} className="w-full">Seleccionar</Button></div>
+                                            </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor={`start-time-${client.ruc}`}>Hora de Inicio</Label>
+                                            <Select value={client.startTime} onValueChange={(value) => handleClientValueChange(client.ruc, 'startTime', value)} disabled={isSaving}>
+                                            <SelectTrigger id={`start-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                                            <SelectContent>{startTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor={`end-time-${client.ruc}`}>Hora de Fin</Label>
+                                            <Select value={client.endTime} onValueChange={(value) => handleClientValueChange(client.ruc, 'endTime', value)} disabled={isSaving}>
+                                            <SelectTrigger id={`end-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                                            <SelectContent>{endTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                    <Separator className="my-4" />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
                                         <div className="space-y-2">
                                             <Label htmlFor={`valor-venta-${client.ruc}`}>Valor de Venta ($)</Label>
                                             <Input id={`valor-venta-${client.ruc}`} type="text" placeholder="0.00" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorVenta', e.target.value)} disabled={isSaving} />
@@ -367,3 +389,5 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     </>
   );
 }
+
+    

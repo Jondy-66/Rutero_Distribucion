@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PlusCircle, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, Save } from 'lucide-react';
 import { addRoutesBatch } from '@/lib/firebase/firestore';
-import type { Client, User, RoutePlan } from '@/lib/types';
+import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
@@ -46,27 +46,16 @@ export default function NewRoutePage() {
   
   // Form State
   const [routeName, setRouteName] = useState('');
-  const [date, setDate] = useState<Date | undefined>(new Date());
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>(new Date());
-  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
-  const [startTime, setStartTime] = useState<string | undefined>();
-  const [endTime, setEndTime] = useState<string | undefined>();
-  const [valorVenta, setValorVenta] = useState('');
-  const [valorCobro, setValorCobro] = useState('');
-  const [tipoCobro, setTipoCobro] = useState<'Efectivo' | 'Transferencia' | 'Cheque' | undefined>();
-  const [devoluciones, setDevoluciones] = useState('');
-  const [promociones, setPromociones] = useState('');
-  const [medicacionFrecuente, setMedicacionFrecuente] = useState('');
-  const [selectedClients, setSelectedClients] = useState<string[]>([]);
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
-  const [dayOfWeek, setDayOfWeek] = useState<string | undefined>();
-  const [isDiaFarmacia, setIsDiaFarmacia] = useState(false);
+  
+  // Client selection and details
+  const [selectedClients, setSelectedClients] = useState<ClientInRoute[]>([]);
   
   // Data State
   const [supervisors, setSupervisors] = useState<User[]>([]);
   
   // UI State
-  const [open, setOpen] = useState(false);
+  const [openClientSelector, setOpenClientSelector] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Staging area for routes
@@ -77,38 +66,40 @@ export default function NewRoutePage() {
       setSupervisors(users.filter(u => u.role === 'Supervisor'));
     }
   }, [users]);
-  
-  const handleCalendarSelect = () => {
-      setDate(selectedCalendarDate);
-      setIsCalendarOpen(false);
-  };
 
   const handleSelectClient = (ruc: string) => {
-    setSelectedClients(prev => 
-      prev.includes(ruc) ? prev.filter(c => c !== ruc) : [...prev, ruc]
-    );
+    const client = clients.find(c => c.ruc === ruc);
+    if (!client) return;
+    
+    setSelectedClients(prev => {
+        const isAlreadyInRoute = prev.some(c => c.ruc === ruc);
+        if (isAlreadyInRoute) {
+            return prev.filter(c => c.ruc !== ruc);
+        } else {
+            return [...prev, { 
+                ruc: client.ruc, 
+                nombre_comercial: client.nombre_comercial,
+                date: new Date(),
+            }];
+        }
+    });
+  };
+
+  const handleClientDetailChange = (ruc: string, field: keyof Omit<ClientInRoute, 'ruc' | 'nombre_comercial'>, value: any) => {
+    setSelectedClients(prev => prev.map(client => 
+      client.ruc === ruc ? { ...client, [field]: value } : client
+    ));
   };
   
   const resetForm = () => {
     setRouteName('');
     setSelectedClients([]);
-    setDate(new Date());
-    setDayOfWeek(undefined);
-    setStartTime(undefined);
-    setEndTime(undefined);
     setSelectedSupervisorId(undefined);
-    setValorVenta('');
-    setValorCobro('');
-    setTipoCobro(undefined);
-    setDevoluciones('');
-    setPromociones('');
-    setMedicacionFrecuente('');
-    setIsDiaFarmacia(false);
   }
 
   const handleAddToStage = () => {
-    if (!routeName || !date || selectedClients.length === 0 || !selectedSupervisorId || !startTime || !endTime) {
-      toast({ title: 'Faltan datos', description: 'Por favor completa todos los campos para añadir la ruta.', variant: 'destructive' });
+    if (!routeName || selectedClients.length === 0 || !selectedSupervisorId) {
+      toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente.', variant: 'destructive' });
       return;
     }
     if (!user) {
@@ -116,7 +107,6 @@ export default function NewRoutePage() {
         return;
     }
 
-    const clientsForRoute = clients.filter(c => selectedClients.includes(c.ruc));
     const supervisor = supervisors.find(s => s.id === selectedSupervisorId);
 
     if (!supervisor) {
@@ -127,21 +117,11 @@ export default function NewRoutePage() {
     const newStagedRoute: StagedRoute = {
         tempId: Date.now(),
         routeName,
-        date,
-        dayOfWeek,
-        clients: clientsForRoute,
+        clients: selectedClients,
         status: 'Planificada',
         supervisorId: selectedSupervisorId,
         supervisorName: supervisor.name,
         createdBy: user.id,
-        startTime,
-        endTime,
-        valorVenta: parseFloat(valorVenta) || 0,
-        valorCobro: parseFloat(valorCobro) || 0,
-        tipoCobro,
-        devoluciones: parseFloat(devoluciones) || 0,
-        promociones: parseFloat(promociones) || 0,
-        medicacionFrecuente: parseFloat(medicacionFrecuente) || 0,
     };
 
     setStagedRoutes(prev => [...prev, newStagedRoute]);
@@ -162,10 +142,13 @@ export default function NewRoutePage() {
     try {
         const routesToSave = stagedRoutes.map(({ tempId, ...rest }) => ({
             ...rest,
-            date: Timestamp.fromDate(rest.date),
+            clients: rest.clients.map(c => ({
+              ...c,
+              date: c.date ? Timestamp.fromDate(c.date) : undefined
+            })),
         }));
 
-        await addRoutesBatch(routesToSave);
+        await addRoutesBatch(routesToSave as any);
         toast({ title: 'Rutas Guardadas', description: `${stagedRoutes.length} rutas han sido guardadas exitosamente.` });
         setStagedRoutes([]);
     } catch(error: any) {
@@ -182,15 +165,7 @@ export default function NewRoutePage() {
 
   const isLoading = loading;
 
-  const getNumericValueClass = (value: string) => {
-    const numericValue = parseFloat(value);
-    if (isNaN(numericValue) || value === '') return '';
-    if (numericValue < 100) return 'bg-red-100 border-red-300 text-red-900 focus-visible:ring-red-500';
-    if (numericValue >= 100) return 'bg-green-100 border-green-300 text-green-900 focus-visible:ring-green-500';
-    return '';
-  };
-  
-  const clientsInSelection = clients.filter(c => selectedClients.includes(c.ruc));
+  const clientsForSelection = clients.filter(c => !selectedClients.some(sc => sc.ruc === c.ruc));
 
   return (
     <>
@@ -206,18 +181,39 @@ export default function NewRoutePage() {
               <Label htmlFor="routeName">Nombre de la Ruta</Label>
               <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isLoading}/>
             </div>
-             <div className="space-y-2">
-              <Label>Seleccionar Clientes</Label>
-              <Popover open={open} onOpenChange={setOpen}>
+            <div className="space-y-2">
+              <Label htmlFor="supervisor">Asignar Supervisor</Label>
+               <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isLoading}>
+                  <SelectTrigger id="supervisor">
+                      <Users className="mr-2 h-4 w-4" />
+                      <SelectValue placeholder="Seleccionar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                      {isLoading ? (
+                          <SelectItem value="loading" disabled>Cargando...</SelectItem>
+                      ) : (
+                          supervisors.map(s => (
+                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                          ))
+                      )}
+                  </SelectContent>
+              </Select>
+            </div>
+            
+            <Separator />
+
+            <div className="space-y-2">
+              <Label>Añadir Clientes a la Ruta</Label>
+              <Popover open={openClientSelector} onOpenChange={setOpenClientSelector}>
                 <PopoverTrigger asChild>
                   <Button
                     variant="outline"
                     role="combobox"
-                    aria-expanded={open}
+                    aria-expanded={openClientSelector}
                     className="w-full justify-between"
                     disabled={isLoading}
                   >
-                    {isLoading ? 'Cargando clientes...' : selectedClients.length > 0 ? `${selectedClients.length} clientes seleccionados` : "Seleccionar clientes..."}
+                    {isLoading ? 'Cargando clientes...' : 'Seleccionar clientes...'}
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 </PopoverTrigger>
@@ -227,18 +223,13 @@ export default function NewRoutePage() {
                     <CommandList>
                       <CommandEmpty>No se encontraron clientes.</CommandEmpty>
                       <CommandGroup>
-                        {clients.map((client) => (
+                        {clientsForSelection.map((client) => (
                           <CommandItem
                             key={client.ruc}
                             onSelect={() => handleSelectClient(client.ruc)}
                             value={`${client.nombre_comercial} ${client.nombre_cliente} ${client.ruc}`}
                           >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedClients.includes(client.ruc) ? "opacity-100" : "opacity-0"
-                              )}
-                            />
+                            <Check className="mr-2 h-4 w-4 opacity-0" />
                               <div>
                                   <p>{client.nombre_comercial}</p>
                                   <p className="text-xs text-muted-foreground">{client.ruc}</p>
@@ -253,175 +244,75 @@ export default function NewRoutePage() {
             </div>
 
             {selectedClients.length > 0 && (
-                <Collapsible className="space-y-2">
+                <Collapsible defaultOpen className="space-y-4">
                     <CollapsibleTrigger asChild>
-                        <Button variant="ghost" className="w-full justify-between">
-                            Clientes Seleccionados ({selectedClients.length})
+                        <Button variant="ghost" className="w-full justify-between p-2">
+                            <span>Clientes Seleccionados ({selectedClients.length})</span>
                             <ChevronsUpDown className="h-4 w-4" />
                         </Button>
                     </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-2 p-2 max-h-60 overflow-y-auto border rounded-md">
-                        {clientsInSelection.map(client => (
-                            <div key={client.id} className="flex justify-between items-center p-2 rounded-md hover:bg-muted">
-                                <div>
-                                    <p className="font-medium text-sm">{client.nombre_comercial}</p>
-                                    <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                    <CollapsibleContent className="space-y-4 p-2 pt-0 max-h-[60vh] overflow-y-auto">
+                        {selectedClients.map((client, index) => (
+                            <Card key={client.ruc} className="p-4 bg-muted/50">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
+                                        <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                                    </div>
+                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSelectClient(client.ruc)}>
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                    </Button>
                                 </div>
-                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSelectClient(client.ruc)}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                            </div>
+                                <Separator className="my-2" />
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+                                    <div className="space-y-2">
+                                        <Label htmlFor={`dayOfWeek-${client.ruc}`}>Día</Label>
+                                        <Select value={client.dayOfWeek} onValueChange={(value) => handleClientDetailChange(client.ruc, 'dayOfWeek', value)} >
+                                            <SelectTrigger id={`dayOfWeek-${client.ruc}`}><CalendarIcon className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar día" /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Lunes">Lunes</SelectItem><SelectItem value="Martes">Martes</SelectItem><SelectItem value="Miércoles">Miércoles</SelectItem><SelectItem value="Jueves">Jueves</SelectItem><SelectItem value="Viernes">Viernes</SelectItem><SelectItem value="Sábado">Sábado</SelectItem><SelectItem value="Domingo">Domingo</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label>Fecha</Label>
+                                        <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !client.date && 'text-muted-foreground')}>
+                                            <CalendarIcon className="mr-2 h-4 w-4" />
+                                            {client.date ? format(client.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-auto p-0">
+                                            <Calendar mode="single" selected={client.date} onSelect={(date) => handleClientDetailChange(client.ruc, 'date', date)} initialFocus locale={es} />
+                                        </PopoverContent>
+                                        </Popover>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor={`start-time-${client.ruc}`}>Hora de Inicio</Label>
+                                        <Select value={client.startTime} onValueChange={(value) => handleClientDetailChange(client.ruc, 'startTime', value)}>
+                                        <SelectTrigger id={`start-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                                        <SelectContent>{startTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="space-y-2">
+                                        <Label htmlFor={`end-time-${client.ruc}`}>Hora de Fin</Label>
+                                        <Select value={client.endTime} onValueChange={(value) => handleClientDetailChange(client.ruc, 'endTime', value)}>
+                                        <SelectTrigger id={`end-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                                        <SelectContent>{endTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            </Card>
                         ))}
                     </CollapsibleContent>
                 </Collapsible>
             )}
-            
-            <div className="space-y-2">
-                <Label htmlFor="dayOfWeek">Día</Label>
-                <Select value={dayOfWeek} onValueChange={setDayOfWeek} disabled={isLoading}>
-                    <SelectTrigger id="dayOfWeek">
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        <SelectValue placeholder="Seleccionar día" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="Lunes">Lunes</SelectItem>
-                        <SelectItem value="Martes">Martes</SelectItem>
-                        <SelectItem value="Miércoles">Miércoles</SelectItem>
-                        <SelectItem value="Jueves">Jueves</SelectItem>
-                        <SelectItem value="Viernes">Viernes</SelectItem>
-                        <SelectItem value="Sábado">Sábado</SelectItem>
-                        <SelectItem value="Domingo">Domingo</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-               <div className="space-y-2">
-                  <Label>Fecha</Label>
-                  <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant={'outline'}
-                        className={cn(
-                          'w-full justify-start text-left font-normal',
-                          !date && 'text-muted-foreground'
-                        )}
-                         disabled={isLoading}
-                      >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
-                        {date ? format(date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0">
-                      <Calendar mode="single" selected={selectedCalendarDate} onSelect={setSelectedCalendarDate} initialFocus locale={es} />
-                      <div className="p-2 border-t border-border">
-                          <Button onClick={handleCalendarSelect} className="w-full">Seleccionar</Button>
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="supervisor">Asignar Supervisor</Label>
-                   <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isLoading}>
-                      <SelectTrigger id="supervisor">
-                          <Users className="mr-2 h-4 w-4" />
-                          <SelectValue placeholder="Seleccionar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                          {isLoading ? (
-                              <SelectItem value="loading" disabled>Cargando...</SelectItem>
-                          ) : (
-                              supervisors.map(s => (
-                                  <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                              ))
-                          )}
-                      </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="start-time">Hora de Inicio</Label>
-                  <Select value={startTime} onValueChange={setStartTime}  disabled={isLoading}>
-                      <SelectTrigger id="start-time">
-                          <Clock className="mr-2 h-4 w-4" />
-                          <SelectValue placeholder="Seleccionar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                          {startTimeSlots.map(time => (
-                              <SelectItem key={time} value={time}>{time}</SelectItem>
-                          ))}
-                      </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="end-time">Hora de Fin</Label>
-                   <Select value={endTime} onValueChange={setEndTime}  disabled={isLoading}>
-                      <SelectTrigger id="end-time">
-                           <Clock className="mr-2 h-4 w-4" />
-                          <SelectValue placeholder="Seleccionar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                          {endTimeSlots.map(time => (
-                              <SelectItem key={time} value={time}>{time}</SelectItem>
-                          ))}
-                      </SelectContent>
-                  </Select>
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="valor-venta">Valor de Venta ($)</Label>
-                    <Input id="valor-venta" type="number" placeholder="0.00" value={valorVenta} onChange={(e) => setValorVenta(e.target.value)} disabled={isLoading} />
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="valor-cobro">Valor a Cobrar ($)</Label>
-                    <Input id="valor-cobro" type="number" placeholder="0.00" value={valorCobro} onChange={(e) => setValorCobro(e.target.value)} disabled={isLoading} />
-                </div>
-                <div className="space-y-2 sm:col-span-2">
-                  <Label htmlFor="tipo-cobro">Tipo de Cobro</Label>
-                   <Select value={tipoCobro} onValueChange={(v: any) => setTipoCobro(v)}  disabled={isLoading}>
-                      <SelectTrigger id="tipo-cobro">
-                          <SelectValue placeholder="Seleccionar tipo" />
-                      </SelectTrigger>
-                      <SelectContent>
-                          <SelectItem value="Efectivo">Efectivo</SelectItem>
-                          <SelectItem value="Transferencia">Transferencia</SelectItem>
-                          <SelectItem value="Cheque">Cheque</SelectItem>
-                      </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="devoluciones">Devoluciones ($)</Label>
-                    <Input id="devoluciones" type="number" placeholder="0.00" value={devoluciones} onChange={(e) => setDevoluciones(e.target.value)} disabled={isLoading} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="farmacia-descuento">Farmacia el Descuento</Label>
-                  <Select onValueChange={(value) => setIsDiaFarmacia(value === 'si')} disabled={isLoading} defaultValue="no">
-                      <SelectTrigger id="farmacia-descuento">
-                          <SelectValue placeholder="Seleccionar" />
-                      </SelectTrigger>
-                      <SelectContent>
-                          <SelectItem value="si">Sí</SelectItem>
-                          <SelectItem value="no">No</SelectItem>
-                      </SelectContent>
-                  </Select>
-                </div>
-                <div /> 
-                {isDiaFarmacia && (
-                  <>
-                    <div className="space-y-2">
-                        <Label htmlFor="promociones">Promociones ($)</Label>
-                        <Input id="promociones" type="number" placeholder="0.00" value={promociones} onChange={(e) => setPromociones(e.target.value)} disabled={isLoading} className={getNumericValueClass(promociones)} />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="medicacionFrecuente">Medicación Frecuente ($)</Label>
-                        <Input id="medicacionFrecuente" type="number" placeholder="0.00" value={medicacionFrecuente} onChange={(e) => setMedicacionFrecuente(e.target.value)} disabled={isLoading} className={getNumericValueClass(medicacionFrecuente)}/>
-                    </div>
-                  </>
-                )}
-            </div>
           </CardContent>
            <CardFooter>
             <Button onClick={handleAddToStage} disabled={isLoading} className="w-full">
                 <PlusCircle className="mr-2 h-4 w-4" />
-                Añadir a la Lista
+                Añadir a la Lista de Planificación
             </Button>
           </CardFooter>
         </Card>
@@ -445,7 +336,7 @@ export default function NewRoutePage() {
                         <div>
                             <p className="font-semibold text-lg">{route.routeName}</p>
                             <p className="text-sm text-muted-foreground">
-                                {format(route.date, 'PPP', { locale: es })} | {route.startTime} - {route.endTime}
+                                {route.clients.length} cliente(s)
                             </p>
                         </div>
                         <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleRemoveFromStage(route.tempId)}>
@@ -458,16 +349,6 @@ export default function NewRoutePage() {
                             <span className="text-muted-foreground">Supervisor:</span>
                             <span className="font-medium">{route.supervisorName}</span>
                          </div>
-                         <div className="flex justify-between">
-                            <span className="text-muted-foreground">Clientes:</span>
-                            <Badge variant="secondary">{route.clients.length}</Badge>
-                         </div>
-                         {route.dayOfWeek && (
-                            <div className="flex justify-between">
-                                <span className="text-muted-foreground">Día:</span>
-                                <span className="font-medium">{route.dayOfWeek}</span>
-                            </div>
-                         )}
                     </div>
                   </Card>
                 ))}
@@ -487,3 +368,5 @@ export default function NewRoutePage() {
     </>
   );
 }
+
+    

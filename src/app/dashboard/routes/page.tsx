@@ -73,6 +73,13 @@ export default function RoutesListPage() {
     }
   }
 
+  const getRouteDate = (route: RoutePlan) => {
+    if (route.clients && route.clients.length > 0 && route.clients[0].date) {
+      return format(route.clients[0].date, 'PPP', { locale: es });
+    }
+    return 'N/A';
+  };
+
   return (
     <>
       <PageHeader
@@ -123,7 +130,7 @@ export default function RoutesListPage() {
                             routes.map((route) => (
                                 <TableRow key={route.id}>
                                     <TableCell className="font-medium">{route.routeName}</TableCell>
-                                    <TableCell>{format(route.date, 'PPP', { locale: es })}</TableCell>
+                                    <TableCell>{getRouteDate(route)}</TableCell>
                                     <TableCell>{route.supervisorName}</TableCell>
                                     <TableCell>
                                         <Badge variant={getBadgeVariantForStatus(route.status)}>
@@ -162,3 +169,5 @@ export default function RoutesListPage() {
     </>
   );
 }
+
+    
