@@ -309,7 +309,7 @@ export const getRoute = async (id: string): Promise<RoutePlan | null> => {
  * @param {Partial<RoutePlan>} routeData - Los campos de la ruta a actualizar.
  * @returns {Promise<void>} Una promesa que se resuelve cuando la ruta ha sido actualizada.
  */
-export const updateRoute = (id: string, routeData: Partial<RoutePlan>) => {
+export const updateRoute = (id: string, routeData: Partial<Omit<RoutePlan, 'id'>>) => {
     const routeDoc = doc(db, 'routes', id);
     return updateDoc(routeDoc, routeData);
 };
