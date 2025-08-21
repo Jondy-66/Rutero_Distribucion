@@ -274,7 +274,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                         </CollapsibleTrigger>
                         <CollapsibleContent className="space-y-4 p-2 pt-0 max-h-[60vh] overflow-y-auto">
                             {clientsInRoute.map((client, index) => {
-                                const isPharmacy = client.nombre_comercial.toLowerCase().includes('farmacia');
+                                const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
                                 return (
                                 <Card key={client.ruc} className="p-4 bg-muted/50">
                                     <div className="flex justify-between items-start">
@@ -350,7 +350,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                                             <Label htmlFor={`devoluciones-${client.ruc}`}>Devoluciones ($)</Label>
                                             <Input id={`devoluciones-${client.ruc}`} type="text" placeholder="0.00" value={client.devoluciones ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'devoluciones', e.target.value)} disabled={isSaving} />
                                         </div>
-                                        {isPharmacy && (
+                                        {hasDescuento && (
                                             <>
                                                 <div className="space-y-2">
                                                     <Label htmlFor={`promociones-${client.ruc}`}>Promociones ($)</Label>
