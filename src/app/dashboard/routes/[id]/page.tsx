@@ -55,7 +55,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   
   // State to manage individual calendar popovers
   const [calendarOpen, setCalendarOpen] = useState<{[key: string]: boolean}>({});
-  const [calendarDate, setCalendarDate] = useState<{[key: string]: Date | undefined}>({});
 
 
   useEffect(() => {
@@ -66,15 +65,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         if (routeData) {
           setRoute(routeData);
           setClientsInRoute(routeData.clients || []);
-          
-          const initialDates: {[key: string]: Date} = {};
-          (routeData.clients || []).forEach(client => {
-              if (client.date) {
-                  initialDates[client.ruc] = client.date;
-              }
-          });
-          setCalendarDate(initialDates);
-
         } else {
           notFound();
         }
@@ -126,11 +116,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
           )
       );
   }, []);
-
-  const handleCalendarSelect = (ruc: string) => {
-      handleClientValueChange(ruc, 'date', calendarDate[ruc]);
-      setCalendarOpen(prev => ({...prev, [ruc]: false}));
-  };
 
   const handleUpdateRoute = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -322,8 +307,8 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                                                 </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="p-0">
-                                                <Calendar mode="single" selected={calendarDate[client.ruc]} onSelect={(date) => setCalendarDate(prev => ({ ...prev, [client.ruc]: date }))} initialFocus locale={es} />
-                                                <div className="p-2 border-t border-border"><Button onClick={() => handleCalendarSelect(client.ruc)} className="w-full">Seleccionar</Button></div>
+                                                <Calendar mode="single" selected={client.date} onSelect={(date) => handleClientValueChange(client.ruc, 'date', date)} initialFocus locale={es} />
+                                                <div className="p-2 border-t border-border"><Button onClick={() => setCalendarOpen(prev => ({ ...prev, [client.ruc]: false }))} className="w-full">Seleccionar</Button></div>
                                             </PopoverContent>
                                             </Popover>
                                         </div>
@@ -396,7 +381,3 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     </>
   );
 }
-
-    
-
-    
