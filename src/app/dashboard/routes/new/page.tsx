@@ -252,59 +252,98 @@ export default function NewRoutePage() {
                         </Button>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="space-y-4 p-2 pt-0 max-h-[60vh] overflow-y-auto">
-                        {selectedClients.map((client, index) => (
-                            <Card key={client.ruc} className="p-4 bg-muted/50">
-                                <div className="flex justify-between items-start">
-                                    <div>
-                                        <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
-                                        <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                        {selectedClients.map((client, index) => {
+                            const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
+                            return (
+                                <Card key={client.ruc} className="p-4 bg-muted/50">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
+                                            <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                                        </div>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSelectClient(client.ruc)}>
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
                                     </div>
-                                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSelectClient(client.ruc)}>
-                                        <Trash2 className="h-4 w-4 text-destructive" />
-                                    </Button>
-                                </div>
-                                <Separator className="my-2" />
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
-                                    <div className="space-y-2">
-                                        <Label htmlFor={`dayOfWeek-${client.ruc}`}>Día</Label>
-                                        <Select value={client.dayOfWeek} onValueChange={(value) => handleClientDetailChange(client.ruc, 'dayOfWeek', value)} >
-                                            <SelectTrigger id={`dayOfWeek-${client.ruc}`}><CalendarIcon className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar día" /></SelectTrigger>
+                                    <Separator className="my-2" />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+                                        <div className="space-y-2">
+                                            <Label htmlFor={`dayOfWeek-${client.ruc}`}>Día</Label>
+                                            <Select value={client.dayOfWeek} onValueChange={(value) => handleClientDetailChange(client.ruc, 'dayOfWeek', value)} >
+                                                <SelectTrigger id={`dayOfWeek-${client.ruc}`}><CalendarIcon className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar día" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Lunes">Lunes</SelectItem><SelectItem value="Martes">Martes</SelectItem><SelectItem value="Miércoles">Miércoles</SelectItem><SelectItem value="Jueves">Jueves</SelectItem><SelectItem value="Viernes">Viernes</SelectItem><SelectItem value="Sábado">Sábado</SelectItem><SelectItem value="Domingo">Domingo</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Fecha</Label>
+                                            <Popover>
+                                            <PopoverTrigger asChild>
+                                                <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !client.date && 'text-muted-foreground')}>
+                                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                                {client.date ? format(client.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
+                                                </Button>
+                                            </PopoverTrigger>
+                                            <PopoverContent className="w-auto p-0">
+                                                <Calendar mode="single" selected={client.date} onSelect={(date) => handleClientDetailChange(client.ruc, 'date', date)} initialFocus locale={es} />
+                                            </PopoverContent>
+                                            </Popover>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor={`start-time-${client.ruc}`}>Hora de Inicio</Label>
+                                            <Select value={client.startTime} onValueChange={(value) => handleClientDetailChange(client.ruc, 'startTime', value)}>
+                                            <SelectTrigger id={`start-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                                            <SelectContent>{startTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor={`end-time-${client.ruc}`}>Hora de Fin</Label>
+                                            <Select value={client.endTime} onValueChange={(value) => handleClientDetailChange(client.ruc, 'endTime', value)}>
+                                            <SelectTrigger id={`end-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                                            <SelectContent>{endTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
+                                            </Select>
+                                        </div>
+                                    </div>
+                                    <Separator className="my-4" />
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
+                                        <div className="space-y-2">
+                                            <Label htmlFor={`valor-venta-${client.ruc}`}>Valor de Venta ($)</Label>
+                                            <Input id={`valor-venta-${client.ruc}`} type="text" placeholder="0.00" value={client.valorVenta ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'valorVenta', e.target.value)} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor={`valor-cobro-${client.ruc}`}>Valor a Cobrar ($)</Label>
+                                            <Input id={`valor-cobro-${client.ruc}`} type="text" placeholder="0.00" value={client.valorCobro ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'valorCobro', e.target.value)} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor={`tipo-cobro-${client.ruc}`}>Tipo de Cobro</Label>
+                                            <Select value={client.tipoCobro} onValueChange={(value: any) => handleClientDetailChange(client.ruc, 'tipoCobro', value)}>
+                                            <SelectTrigger id={`tipo-cobro-${client.ruc}`}><SelectValue placeholder="Seleccionar tipo" /></SelectTrigger>
                                             <SelectContent>
-                                                <SelectItem value="Lunes">Lunes</SelectItem><SelectItem value="Martes">Martes</SelectItem><SelectItem value="Miércoles">Miércoles</SelectItem><SelectItem value="Jueves">Jueves</SelectItem><SelectItem value="Viernes">Viernes</SelectItem><SelectItem value="Sábado">Sábado</SelectItem><SelectItem value="Domingo">Domingo</SelectItem>
+                                                <SelectItem value="Efectivo">Efectivo</SelectItem><SelectItem value="Transferencia">Transferencia</SelectItem><SelectItem value="Cheque">Cheque</SelectItem>
                                             </SelectContent>
-                                        </Select>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor={`devoluciones-${client.ruc}`}>Devoluciones ($)</Label>
+                                            <Input id={`devoluciones-${client.ruc}`} type="text" placeholder="0.00" value={client.devoluciones ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'devoluciones', e.target.value)} />
+                                        </div>
+                                        {hasDescuento && (
+                                            <>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor={`promociones-${client.ruc}`}>Promociones ($)</Label>
+                                                    <Input id={`promociones-${client.ruc}`} type="text" placeholder="0.00" value={client.promociones ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'promociones', e.target.value)} />
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label htmlFor={`medicacionFrecuente-${client.ruc}`}>Medicación Frecuente ($)</Label>
+                                                    <Input id={`medicacionFrecuente-${client.ruc}`} type="text" placeholder="0.00" value={client.medicacionFrecuente ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'medicacionFrecuente', e.target.value)} />
+                                                </div>
+                                            </>
+                                        )}
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label>Fecha</Label>
-                                        <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !client.date && 'text-muted-foreground')}>
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {client.date ? format(client.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-auto p-0">
-                                            <Calendar mode="single" selected={client.date} onSelect={(date) => handleClientDetailChange(client.ruc, 'date', date)} initialFocus locale={es} />
-                                        </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor={`start-time-${client.ruc}`}>Hora de Inicio</Label>
-                                        <Select value={client.startTime} onValueChange={(value) => handleClientDetailChange(client.ruc, 'startTime', value)}>
-                                        <SelectTrigger id={`start-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                                        <SelectContent>{startTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor={`end-time-${client.ruc}`}>Hora de Fin</Label>
-                                        <Select value={client.endTime} onValueChange={(value) => handleClientDetailChange(client.ruc, 'endTime', value)}>
-                                        <SelectTrigger id={`end-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                                        <SelectContent>{endTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            </Card>
-                        ))}
+                                </Card>
+                            )
+                        })}
                     </CollapsibleContent>
                 </Collapsible>
             )}
@@ -368,5 +407,7 @@ export default function NewRoutePage() {
     </>
   );
 }
+
+    
 
     
