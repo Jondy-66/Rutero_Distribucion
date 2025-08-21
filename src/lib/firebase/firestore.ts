@@ -390,4 +390,14 @@ export const getRoutesBySupervisor = async (supervisorId: string): Promise<Route
     });
 };
 
+/**
+ * Elimina una ruta de la colección 'routes'.
+ * @param {string} id - El ID del documento de la ruta a eliminar.
+ * @returns {Promise<void>} Una promesa que se resuelve cuando la ruta ha sido eliminada.
+ */
+export const deleteRoute = (id: string) => {
+  const routeDoc = doc(db, 'routes', id);
+  return deleteDoc(routeDoc);
+};
+
     

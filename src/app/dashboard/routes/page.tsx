@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
-import { getRoutes } from '@/lib/firebase/firestore';
+import { getRoutes, deleteRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
 import { MoreHorizontal, PlusCircle } from 'lucide-react';
@@ -27,7 +27,19 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 
@@ -38,23 +50,24 @@ export default function RoutesListPage() {
   const [routes, setRoutes] = useState<RoutePlan[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const fetchRoutes = async () => {
+    setLoading(true);
+    try {
+      const routesData = await getRoutes();
+      setRoutes(routesData);
+    } catch (error: any) {
+      console.error("Failed to fetch routes:", error);
+      toast({
+        title: "Error al Cargar Rutas",
+        description: "No se pudieron cargar las rutas planificadas.",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchRoutes = async () => {
-      setLoading(true);
-      try {
-        const routesData = await getRoutes();
-        setRoutes(routesData);
-      } catch (error: any) {
-        console.error("Failed to fetch routes:", error);
-        toast({
-          title: "Error al Cargar Rutas",
-          description: "No se pudieron cargar las rutas planificadas.",
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
     if (user) {
         fetchRoutes();
     }
@@ -62,6 +75,17 @@ export default function RoutesListPage() {
 
   const handleEdit = (routeId: string) => {
     router.push(`/dashboard/routes/${routeId}`);
+  };
+
+  const handleDelete = async (routeId: string) => {
+    try {
+      await deleteRoute(routeId);
+      toast({ title: "Éxito", description: "Ruta eliminada correctamente." });
+      fetchRoutes(); // Refresh the list
+    } catch (error: any) {
+      console.error("Failed to delete route:", error);
+      toast({ title: "Error", description: "No se pudo eliminar la ruta.", variant: "destructive" });
+    }
   };
 
   const getBadgeVariantForStatus = (status: RoutePlan['status']) => {
@@ -139,18 +163,36 @@ export default function RoutesListPage() {
                                     </TableCell>
                                     <TableCell className="text-center">{route.clients.length}</TableCell>
                                     <TableCell className="text-right">
-                                      <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                          <Button aria-haspopup="true" size="icon" variant="ghost">
-                                            <MoreHorizontal className="h-4 w-4" />
-                                            <span className="sr-only">Alternar menú</span>
-                                          </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                          <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                          <DropdownMenuItem onClick={() => handleEdit(route.id)}>Editar</DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                      </DropdownMenu>
+                                      <AlertDialog>
+                                        <DropdownMenu>
+                                          <DropdownMenuTrigger asChild>
+                                            <Button aria-haspopup="true" size="icon" variant="ghost">
+                                              <MoreHorizontal className="h-4 w-4" />
+                                              <span className="sr-only">Alternar menú</span>
+                                            </Button>
+                                          </DropdownMenuTrigger>
+                                          <DropdownMenuContent align="end">
+                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                            <DropdownMenuItem onClick={() => handleEdit(route.id)}>Editar</DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <AlertDialogTrigger asChild>
+                                              <DropdownMenuItem className="text-red-600">Eliminar</DropdownMenuItem>
+                                            </AlertDialogTrigger>
+                                          </DropdownMenuContent>
+                                        </DropdownMenu>
+                                        <AlertDialogContent>
+                                          <AlertDialogHeader>
+                                            <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                              Esta acción no se puede deshacer. Esto eliminará permanentemente la ruta.
+                                            </AlertDialogDescription>
+                                          </AlertDialogHeader>
+                                          <AlertDialogFooter>
+                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                            <AlertDialogAction onClick={() => handleDelete(route.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                                          </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                      </AlertDialog>
                                     </TableCell>
                                 </TableRow>
                             ))
