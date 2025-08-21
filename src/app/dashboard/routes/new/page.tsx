@@ -144,7 +144,10 @@ export default function NewRoutePage() {
             ...rest,
             clients: rest.clients.map(c => ({
               ...c,
-              date: c.date ? Timestamp.fromDate(c.date) : undefined
+              date: c.date ? Timestamp.fromDate(c.date) : null,
+              dayOfWeek: c.dayOfWeek || null,
+              startTime: c.startTime || null,
+              endTime: c.endTime || null,
             })),
         }));
 
@@ -285,7 +288,7 @@ export default function NewRoutePage() {
                                                 {client.date ? format(client.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0">
+                                            <PopoverContent className="p-0">
                                                 <Calendar mode="single" selected={client.date} onSelect={(date) => handleClientDetailChange(client.ruc, 'date', date)} initialFocus locale={es} />
                                             </PopoverContent>
                                             </Popover>
@@ -407,6 +410,8 @@ export default function NewRoutePage() {
     </>
   );
 }
+
+    
 
     
 
