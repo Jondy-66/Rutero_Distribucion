@@ -57,6 +57,8 @@ export default function NewRoutePage() {
   // UI State
   const [openClientSelector, setOpenClientSelector] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState<{ [key: string]: boolean }>({});
+
 
   // Staging area for routes
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
@@ -281,7 +283,7 @@ export default function NewRoutePage() {
                                         </div>
                                         <div className="space-y-2">
                                             <Label>Fecha</Label>
-                                            <Popover>
+                                            <Popover open={calendarOpen[client.ruc] || false} onOpenChange={(isOpen) => setCalendarOpen(prev => ({ ...prev, [client.ruc]: isOpen }))}>
                                             <PopoverTrigger asChild>
                                                 <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !client.date && 'text-muted-foreground')}>
                                                 <CalendarIcon className="mr-2 h-4 w-4" />
@@ -290,6 +292,7 @@ export default function NewRoutePage() {
                                             </PopoverTrigger>
                                             <PopoverContent className="p-0">
                                                 <Calendar mode="single" selected={client.date} onSelect={(date) => handleClientDetailChange(client.ruc, 'date', date)} initialFocus locale={es} />
+                                                <div className="p-2 border-t border-border"><Button onClick={() => setCalendarOpen(prev => ({ ...prev, [client.ruc]: false }))} className="w-full">Seleccionar</Button></div>
                                             </PopoverContent>
                                             </Popover>
                                         </div>
