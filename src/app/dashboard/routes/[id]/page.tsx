@@ -319,7 +319,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                                                 {client.date ? format(client.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
                                                 </Button>
                                             </PopoverTrigger>
-                                            <PopoverContent className="w-auto p-0">
+                                            <PopoverContent className="p-0">
                                                 <Calendar mode="single" selected={calendarDate[client.ruc]} onSelect={(date) => setCalendarDate(prev => ({ ...prev, [client.ruc]: date }))} initialFocus locale={es} />
                                                 <div className="p-2 border-t border-border"><Button onClick={() => handleCalendarSelect(client.ruc)} className="w-full">Seleccionar</Button></div>
                                             </PopoverContent>
