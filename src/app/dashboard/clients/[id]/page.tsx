@@ -1,3 +1,4 @@
+
 'use client';
 import { useEffect, useState } from 'react';
 import { notFound, useRouter } from 'next/navigation';
@@ -27,11 +28,12 @@ export default function EditClientPage({ params }: { params: { id: string } }) {
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const clientId = params.id;
 
   useEffect(() => {
     const fetchClient = async () => {
       try {
-        const clientData = await getClient(params.id);
+        const clientData = await getClient(clientId);
         if (clientData) {
           setClient(clientData);
         } else {
@@ -45,8 +47,10 @@ export default function EditClientPage({ params }: { params: { id: string } }) {
         setLoading(false);
       }
     };
-    fetchClient();
-  }, [params.id, toast]);
+    if (clientId) {
+      fetchClient();
+    }
+  }, [clientId, toast]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!client) return;

@@ -63,12 +63,14 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
   const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
 
+  const routeId = params.id;
+
 
   useEffect(() => {
     const fetchRouteData = async () => {
       setLoading(true);
       try {
-        const routeData = await getRoute(params.id);
+        const routeData = await getRoute(routeId);
         if (routeData) {
           setRoute(routeData);
           setClientsInRoute(routeData.clients || []);
@@ -83,8 +85,10 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         setLoading(false);
       }
     };
-    fetchRouteData();
-  }, [params.id, toast]);
+    if (routeId) {
+        fetchRouteData();
+    }
+  }, [routeId, toast]);
   
   useEffect(() => {
       if (users) {
@@ -142,7 +146,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       
       delete dataToUpdate.id;
 
-      await updateRoute(params.id, dataToUpdate);
+      await updateRoute(routeId, dataToUpdate);
 
       toast({ title: 'Éxito', description: 'Ruta actualizada correctamente.' });
       router.push('/dashboard/routes');

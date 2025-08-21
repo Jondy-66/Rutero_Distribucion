@@ -37,9 +37,11 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
   const [isSaving, setIsSaving] = useState(false);
   const [loadingAssignedUsers, setLoadingAssignedUsers] = useState(false);
 
+  const userId = params.id;
+
   useEffect(() => {
-    if (users.length > 0 && params.id) {
-        const userData = users.find(u => u.id === params.id);
+    if (users.length > 0 && userId) {
+        const userData = users.find(u => u.id === userId);
         if (!userData) {
             notFound();
             return;
@@ -55,7 +57,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
             });
         }
     }
-  }, [params.id, users]);
+  }, [userId, users]);
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
