@@ -1,13 +1,13 @@
 
 'use client';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, notFound } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2 } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, PlusCircle, Search } from 'lucide-react';
 import { getRoute, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -15,7 +15,6 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
 import { Timestamp } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,6 +23,10 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
     const slots = [];
@@ -51,10 +54,14 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
 
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [open, setOpen] = useState(false);
   
   // State to manage individual calendar popovers
   const [calendarOpen, setCalendarOpen] = useState<{[key: string]: boolean}>({});
+
+  // Client Selection Dialog State
+  const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
+  const [dialogSearchTerm, setDialogSearchTerm] = useState('');
+  const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
 
 
   useEffect(() => {
@@ -84,27 +91,17 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
           setSupervisors(users.filter(u => u.role === 'Supervisor'));
       }
   }, [users]);
-
+  
+  useEffect(() => {
+    // Sync dialog selection with the main form selection when opening
+    if (isClientDialogOpen) {
+      const currentSelectedClientsFromMainList = clients.filter(c => clientsInRoute.some(sc => sc.ruc === c.ruc));
+      setDialogSelectedClients(currentSelectedClientsFromMainList);
+    }
+  }, [isClientDialogOpen, clients, clientsInRoute]);
 
   const handleInputChange = <K extends keyof RoutePlan>(field: K, value: RoutePlan[K]) => {
     setRoute(prev => (prev ? { ...prev, [field]: value } : null));
-  };
-
-  const handleSelectClient = (ruc: string) => {
-    const client = clients.find(c => c.ruc === ruc);
-    if (!client) return;
-    
-    setClientsInRoute(prev => {
-        const isAlreadyInRoute = prev.some(c => c.ruc === ruc);
-        if (isAlreadyInRoute) {
-            return prev.filter(c => c.ruc !== ruc);
-        } else {
-            return [...prev, { 
-                ruc: client.ruc, 
-                nombre_comercial: client.nombre_comercial 
-            }];
-        }
-    });
   };
   
   const handleClientValueChange = useCallback((ruc: string, field: keyof Omit<ClientInRoute, 'ruc' | 'nombre_comercial'>, value: any) => {
@@ -139,9 +136,8 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
           devoluciones: parseFloat(String(c.devoluciones)) || 0,
           promociones: parseFloat(String(c.promociones)) || 0,
           medicacionFrecuente: parseFloat(String(c.medicacionFrecuente)) || 0,
-          // Ensure date is a Timestamp if it exists
-          date: c.date ? Timestamp.fromDate(c.date) : undefined
-        } as any)), // Using any to bypass strict type checking for Timestamp
+          date: c.date ? Timestamp.fromDate(c.date) : null
+        })),
       };
       
       delete dataToUpdate.id;
@@ -157,6 +153,38 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       setIsSaving(false);
     }
   };
+
+  const handleDialogClientToggle = (client: Client) => {
+    setDialogSelectedClients(prev => {
+        const isSelected = prev.some(c => c.ruc === client.ruc);
+        if (isSelected) {
+            return prev.filter(c => c.ruc !== client.ruc);
+        } else {
+            return [...prev, client];
+        }
+    });
+  };
+
+  const handleConfirmClientSelection = () => {
+    const newClientsInRoute: ClientInRoute[] = dialogSelectedClients.map(client => {
+        const existingClient = clientsInRoute.find(c => c.ruc === client.ruc);
+        return existingClient || {
+            ruc: client.ruc,
+            nombre_comercial: client.nombre_comercial,
+            date: new Date(),
+        };
+    });
+    setClientsInRoute(newClientsInRoute);
+    setIsClientDialogOpen(false);
+  };
+  
+  const filteredAvailableClients = useMemo(() => {
+    return clients.filter(c => 
+        c.nombre_cliente.toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
+        c.nombre_comercial.toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
+        c.ruc.includes(dialogSearchTerm)
+    );
+  }, [clients, dialogSearchTerm]);
 
   if (loading || authLoading) {
     return (
@@ -236,33 +264,55 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
             <CardContent>
                 <div className="space-y-2">
                     <Label>Añadir o Quitar Clientes</Label>
-                    <Popover open={open} onOpenChange={setOpen}>
-                        <PopoverTrigger asChild>
-                        <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between" disabled={isSaving}>
-                            {clientsInRoute.length > 0 ? `${clientsInRoute.length} clientes seleccionados` : "Seleccionar clientes..."}
-                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
+                      <DialogTrigger asChild>
+                        <Button variant="outline" className="w-full justify-start" disabled={isSaving}>
+                            <PlusCircle className="mr-2 h-4 w-4"/>
+                            Añadir o Quitar Clientes ({clientsInRoute.length} seleccionados)
                         </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                        <Command>
-                            <CommandInput placeholder="Buscar por RUC, nombre..." />
-                            <CommandList>
-                            <CommandEmpty>No se encontraron clientes.</CommandEmpty>
-                            <CommandGroup>
-                                {clients.map((client) => (
-                                <CommandItem key={client.ruc} onSelect={() => handleSelectClient(client.ruc)} value={`${client.nombre_comercial} ${client.nombre_cliente} ${client.ruc}`}>
-                                    <Check className={cn("mr-2 h-4 w-4", clientsInRoute.some(c => c.ruc === client.ruc) ? "opacity-100" : "opacity-0")} />
-                                    <div>
-                                    <p>{client.nombre_comercial}</p>
-                                    <p className="text-xs text-muted-foreground">{client.ruc}</p>
-                                    </div>
-                                </CommandItem>
-                                ))}
-                            </CommandGroup>
-                            </CommandList>
-                        </Command>
-                        </PopoverContent>
-                    </Popover>
+                      </DialogTrigger>
+                      <DialogContent className="max-w-2xl">
+                          <DialogHeader>
+                              <DialogTitle>Seleccionar Clientes</DialogTitle>
+                              <DialogDescription>
+                                  Elige los clientes que formarán parte de esta ruta.
+                              </DialogDescription>
+                          </DialogHeader>
+                          <div className="relative">
+                              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                              <Input 
+                                  placeholder="Buscar por nombre, RUC..." 
+                                  className="pl-8" 
+                                  value={dialogSearchTerm}
+                                  onChange={(e) => setDialogSearchTerm(e.target.value)}
+                              />
+                          </div>
+                          <ScrollArea className="h-72">
+                            <div className="space-y-2 p-1">
+                              {filteredAvailableClients.map(client => (
+                                <div key={client.ruc} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                  <div className="flex items-center space-x-3">
+                                    <Checkbox 
+                                      id={`client-${client.ruc}`}
+                                      checked={dialogSelectedClients.some(c => c.ruc === client.ruc)}
+                                      onCheckedChange={() => handleDialogClientToggle(client)}
+                                    />
+                                    <Label htmlFor={`client-${client.ruc}`} className="font-normal cursor-pointer">
+                                      <p className="font-medium">{client.nombre_comercial}</p>
+                                      <p className="text-xs text-muted-foreground">{client.ruc} - {client.nombre_cliente}</p>
+                                    </Label>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </ScrollArea>
+                          <DialogFooter>
+                              <span className="text-sm text-muted-foreground mr-auto">{dialogSelectedClients.length} cliente(s) seleccionados</span>
+                              <Button variant="ghost" onClick={() => setIsClientDialogOpen(false)}>Cancelar</Button>
+                              <Button onClick={handleConfirmClientSelection}>Actualizar Clientes</Button>
+                          </DialogFooter>
+                      </DialogContent>
+                    </Dialog>
                 </div>
                  {clientsInRoute.length > 0 && (
                     <Collapsible defaultOpen className="space-y-4 mt-4">
@@ -282,7 +332,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                                             <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
                                             <p className="text-xs text-muted-foreground">{client.ruc}</p>
                                         </div>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSelectClient(client.ruc)}>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientsInRoute(prev => prev.filter(c => c.ruc !== client.ruc))}>
                                             <Trash2 className="h-4 w-4 text-destructive" />
                                         </Button>
                                     </div>
