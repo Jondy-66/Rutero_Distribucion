@@ -267,7 +267,7 @@ export default function NewRoutePage() {
                     <ScrollArea className="h-72">
                       <div className="space-y-2 p-1">
                         {filteredAvailableClients.map(client => (
-                          <div key={client.ruc} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                          <div key={client.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
                             <div className="flex items-center space-x-3">
                               <Checkbox 
                                 id={`client-${client.ruc}`}
