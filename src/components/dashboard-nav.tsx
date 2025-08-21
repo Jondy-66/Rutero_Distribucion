@@ -111,9 +111,8 @@ export function DashboardNav() {
       <SidebarMenu>
         {filteredNavItems.map((item) => (
           <SidebarMenuItem key={item.href}>
-            <Link href={item.href} passHref legacyBehavior>
+            <Link href={item.href} asChild>
               <SidebarMenuButton
-                asChild
                 isActive={
                   pathname === item.href ||
                   (item.href !== '/dashboard' && pathname.startsWith(item.href))
@@ -150,16 +149,16 @@ export function DashboardNav() {
                       <CollapsibleContent>
                          <SidebarMenuSub>
                             <SidebarMenuSubItem>
-                               <Link href="/dashboard/routes/new" passHref legacyBehavior>
-                                <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/new'}>
+                               <Link href="/dashboard/routes/new" asChild>
+                                <SidebarMenuSubButton isActive={pathname === '/dashboard/routes/new'}>
                                     <PlusCircle />
                                     <span>Nueva Ruta</span>
                                 </SidebarMenuSubButton>
                                </Link>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
-                               <Link href="/dashboard/routes" passHref legacyBehavior>
-                                <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes'}>
+                               <Link href="/dashboard/routes" asChild>
+                                <SidebarMenuSubButton isActive={pathname === '/dashboard/routes'}>
                                     <List />
                                     <span>Lista de Rutas</span>
                                 </SidebarMenuSubButton>
@@ -169,9 +168,8 @@ export function DashboardNav() {
                       </CollapsibleContent>
                   </Collapsible>
                  <SidebarMenuItem>
-                  <Link href="/dashboard/routes/management" passHref legacyBehavior>
+                  <Link href="/dashboard/routes/management" asChild>
                     <SidebarMenuSubButton
-                      asChild
                       isActive={pathname === '/dashboard/routes/management'}
                     >
                       <ClipboardList />
@@ -180,9 +178,8 @@ export function DashboardNav() {
                   </Link>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <Link href="/dashboard/routes/prediction" passHref legacyBehavior>
+                  <Link href="/dashboard/routes/prediction" asChild>
                     <SidebarMenuSubButton
-                      asChild
                       isActive={pathname === '/dashboard/routes/prediction'}
                     >
                       <Wand2 />
@@ -207,9 +204,8 @@ export function DashboardNav() {
             <CollapsibleContent>
               <SidebarMenuSub>
                 <SidebarMenuSubItem>
-                  <Link href="/dashboard/users" passHref legacyBehavior>
+                  <Link href="/dashboard/users" asChild>
                     <SidebarMenuSubButton
-                      asChild
                       isActive={pathname === '/dashboard/users' || pathname.startsWith('/dashboard/users/[id]')}
                     >
                       <Users />
@@ -218,9 +214,8 @@ export function DashboardNav() {
                   </Link>
                 </SidebarMenuSubItem>
                 <SidebarMenuSubItem>
-                  <Link href="/dashboard/users/supervisors" passHref legacyBehavior>
+                  <Link href="/dashboard/users/supervisors" asChild>
                     <SidebarMenuSubButton
-                      asChild
                       isActive={pathname === '/dashboard/users/supervisors'}
                     >
                       <UserCheck />
