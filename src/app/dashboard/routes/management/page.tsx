@@ -157,15 +157,19 @@ export default function RouteManagementPage() {
       const route = routes.find(r => r.id === routeId);
       if (route) {
           setSelectedRoute(route);
-          const clientsWithValues = route.clients.map(client => ({
-            ...client,
-            valorVenta: String(route.valorVenta || '0.00'),
-            valorCobro: String(route.valorCobro || '0.00'),
-            devoluciones: String(route.devoluciones || '0.00'),
-            promociones: String(route.promociones || '0.00'),
-            medicacionFrecuente: String(route.medicacionFrecuente || '0.00'),
-          }));
-          setRouteClients(clientsWithValues);
+          const clientsData = route.clients.map(clientInRoute => {
+              const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
+              return {
+                  ...(clientDetails || {}), // Detalle completo del cliente
+                  ...clientInRoute, // Datos específicos de la ruta
+                  valorVenta: String(clientInRoute.valorVenta || '0.00'),
+                  valorCobro: String(clientInRoute.valorCobro || '0.00'),
+                  devoluciones: String(clientInRoute.devoluciones || '0.00'),
+                  promociones: String(clientInRoute.promociones || '0.00'),
+                  medicacionFrecuente: String(clientInRoute.medicacionFrecuente || '0.00'),
+              } as RouteClient;
+          });
+          setRouteClients(clientsData);
       }
   }
 
@@ -176,6 +180,13 @@ export default function RouteManagementPage() {
     if (numericValue >= 100) return 'bg-green-100 border-green-300 text-green-900 focus-visible:ring-green-500';
     return '';
   };
+  
+  const routeDate = useMemo(() => {
+    if (selectedRoute && selectedRoute.clients.length > 0 && selectedRoute.clients[0].date) {
+        return selectedRoute.clients[0].date;
+    }
+    return null;
+  }, [selectedRoute]);
 
 
   return (
@@ -206,13 +217,13 @@ export default function RouteManagementPage() {
                         <Label>Fecha</Label>
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("w-full justify-start font-normal text-left", !selectedRoute?.date && "text-muted-foreground")}>
+                                <Button variant="outline" className={cn("w-full justify-start font-normal text-left", !routeDate && "text-muted-foreground")}>
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {selectedRoute?.date ? format(selectedRoute.date, 'PPP', {locale: es}) : 'Selecciona una fecha'}
+                                {routeDate ? format(routeDate, 'PPP', {locale: es}) : 'Selecciona una fecha'}
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" selected={selectedRoute?.date} initialFocus locale={es} />
+                                <Calendar mode="single" selected={routeDate || undefined} initialFocus locale={es} />
                             </PopoverContent>
                         </Popover>
                     </div>
@@ -406,3 +417,5 @@ export default function RouteManagementPage() {
     </div>
   );
 }
+
+    

@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Define los tipos de datos principales utilizados en la aplicación.
  * Estos tipos aseguran la consistencia de los datos entre los componentes y la base de datos de Firestore.
@@ -64,6 +65,8 @@ export type RoutePlan = {
   supervisorId: string; // ID del supervisor responsable de la ruta.
   supervisorName?: string; // Nombre del supervisor (desnormalizado para fácil visualización).
   createdBy: string; // ID del usuario que creó la ruta.
+  startTime?: string;
+  endTime?: string;
 };
 
 
