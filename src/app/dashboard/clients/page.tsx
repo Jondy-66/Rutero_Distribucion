@@ -139,8 +139,8 @@ export default function ClientsPage() {
           provincia: item.provincia || '',
           canton: item.canton || '',
           direccion: item.direccion || '',
-          latitud: parseFloat(String(item.latitudtrz || item.latitud).replace(',', '.')) || 0,
-          longitud: parseFloat(String(item.longitudtrz || item.longitud).replace(',', '.')) || 0,
+          latitud: parseFloat(String(item.latitudtrz || item.latitud || '0').replace(',', '.')) || 0,
+          longitud: parseFloat(String(item.longitudtrz || item.longitud || '0').replace(',', '.')) || 0,
       }));
       
       const clientsToAdd: any[] = [];
@@ -259,11 +259,11 @@ export default function ClientsPage() {
       .filter(client => {
         const search = searchTerm.toLowerCase();
         return (
-          client.nombre_cliente.toLowerCase().includes(search) ||
-          client.nombre_comercial.toLowerCase().includes(search) ||
-          client.ruc.toLowerCase().includes(search) ||
-          client.ejecutivo.toLowerCase().includes(search) ||
-          client.provincia.toLowerCase().includes(search)
+          String(client.nombre_cliente).toLowerCase().includes(search) ||
+          String(client.nombre_comercial).toLowerCase().includes(search) ||
+          String(client.ruc).toLowerCase().includes(search) ||
+          String(client.ejecutivo).toLowerCase().includes(search) ||
+          String(client.provincia).toLowerCase().includes(search)
         );
       });
   }, [clients, filter, searchTerm]);
