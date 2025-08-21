@@ -111,18 +111,19 @@ export function DashboardNav() {
       <SidebarMenu>
         {filteredNavItems.map((item) => (
           <SidebarMenuItem key={item.href}>
-            <Link href={item.href} asChild>
-              <SidebarMenuButton
-                isActive={
-                  pathname === item.href ||
-                  (item.href !== '/dashboard' && pathname.startsWith(item.href))
-                }
-                tooltip={item.label}
-              >
+            <SidebarMenuButton
+              asChild
+              isActive={
+                pathname === item.href ||
+                (item.href !== '/dashboard' && pathname.startsWith(item.href))
+              }
+              tooltip={item.label}
+            >
+              <Link href={item.href}>
                 <item.icon className="h-5 w-5" />
                 <span>{item.label}</span>
-              </SidebarMenuButton>
-            </Link>
+              </Link>
+            </SidebarMenuButton>
           </SidebarMenuItem>
         ))}
         {canSeeRoutes && (
@@ -149,43 +150,39 @@ export function DashboardNav() {
                       <CollapsibleContent>
                          <SidebarMenuSub>
                             <SidebarMenuSubItem>
-                               <Link href="/dashboard/routes/new" asChild>
-                                <SidebarMenuSubButton isActive={pathname === '/dashboard/routes/new'}>
+                               <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/new'}>
+                                <Link href="/dashboard/routes/new">
                                     <PlusCircle />
                                     <span>Nueva Ruta</span>
-                                </SidebarMenuSubButton>
-                               </Link>
+                                </Link>
+                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
-                               <Link href="/dashboard/routes" asChild>
-                                <SidebarMenuSubButton isActive={pathname === '/dashboard/routes'}>
+                               <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes'}>
+                                 <Link href="/dashboard/routes">
                                     <List />
                                     <span>Lista de Rutas</span>
-                                </SidebarMenuSubButton>
-                               </Link>
+                                 </Link>
+                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                          </SidebarMenuSub>
                       </CollapsibleContent>
                   </Collapsible>
                  <SidebarMenuItem>
-                  <Link href="/dashboard/routes/management" asChild>
-                    <SidebarMenuSubButton
-                      isActive={pathname === '/dashboard/routes/management'}
-                    >
-                      <ClipboardList />
-                      <span>Gestión Ruta</span>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/management'}>
+                      <Link href="/dashboard/routes/management">
+                        <ClipboardList />
+                        <span>Gestión Ruta</span>
+                      </Link>
                     </SidebarMenuSubButton>
-                  </Link>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
-                  <Link href="/dashboard/routes/prediction" asChild>
-                    <SidebarMenuSubButton
-                      isActive={pathname === '/dashboard/routes/prediction'}
-                    >
-                      <Wand2 />
-                      <span>Predicción Ruta</span>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/prediction'}>
+                      <Link href="/dashboard/routes/prediction">
+                        <Wand2 />
+                        <span>Predicción Ruta</span>
+                      </Link>
                     </SidebarMenuSubButton>
-                  </Link>
                 </SidebarMenuItem>
               </SidebarMenuSub>
             </CollapsibleContent>
@@ -204,24 +201,20 @@ export function DashboardNav() {
             <CollapsibleContent>
               <SidebarMenuSub>
                 <SidebarMenuSubItem>
-                  <Link href="/dashboard/users" asChild>
-                    <SidebarMenuSubButton
-                      isActive={pathname === '/dashboard/users' || pathname.startsWith('/dashboard/users/[id]')}
-                    >
-                      <Users />
-                      <span>Todos los Usuarios</span>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/users' || pathname.startsWith('/dashboard/users/[id]')}>
+                      <Link href="/dashboard/users">
+                        <Users />
+                        <span>Todos los Usuarios</span>
+                      </Link>
                     </SidebarMenuSubButton>
-                  </Link>
                 </SidebarMenuSubItem>
                 <SidebarMenuSubItem>
-                  <Link href="/dashboard/users/supervisors" asChild>
-                    <SidebarMenuSubButton
-                      isActive={pathname === '/dashboard/users/supervisors'}
-                    >
-                      <UserCheck />
-                      <span>Supervisores</span>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/users/supervisors'}>
+                      <Link href="/dashboard/users/supervisors">
+                        <UserCheck />
+                        <span>Supervisores</span>
+                      </Link>
                     </SidebarMenuSubButton>
-                  </Link>
                 </SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
