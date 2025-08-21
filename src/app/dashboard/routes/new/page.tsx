@@ -196,9 +196,9 @@ export default function NewRoutePage() {
   
   const filteredAvailableClients = useMemo(() => {
     return clients.filter(c => 
-        c.nombre_cliente.toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
-        c.nombre_comercial.toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
-        c.ruc.includes(dialogSearchTerm)
+        String(c.nombre_cliente).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
+        String(c.nombre_comercial).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
+        String(c.ruc).includes(dialogSearchTerm)
     );
   }, [clients, dialogSearchTerm]);
 
