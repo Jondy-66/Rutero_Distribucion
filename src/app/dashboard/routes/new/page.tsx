@@ -1,12 +1,12 @@
 
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, Save } from 'lucide-react';
+import { PlusCircle, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, Save, Search } from 'lucide-react';
 import { addRoutesBatch } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -22,6 +22,9 @@ import { useAuth } from '@/hooks/use-auth';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
     const slots = [];
@@ -55,9 +58,13 @@ export default function NewRoutePage() {
   const [supervisors, setSupervisors] = useState<User[]>([]);
   
   // UI State
-  const [openClientSelector, setOpenClientSelector] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState<{ [key: string]: boolean }>({});
+
+  // Client Selection Dialog State
+  const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
+  const [dialogSearchTerm, setDialogSearchTerm] = useState('');
+  const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
 
 
   // Staging area for routes
@@ -69,23 +76,14 @@ export default function NewRoutePage() {
     }
   }, [users]);
 
-  const handleSelectClient = (ruc: string) => {
-    const client = clients.find(c => c.ruc === ruc);
-    if (!client) return;
-    
-    setSelectedClients(prev => {
-        const isAlreadyInRoute = prev.some(c => c.ruc === ruc);
-        if (isAlreadyInRoute) {
-            return prev.filter(c => c.ruc !== ruc);
-        } else {
-            return [...prev, { 
-                ruc: client.ruc, 
-                nombre_comercial: client.nombre_comercial,
-                date: new Date(),
-            }];
-        }
-    });
-  };
+  useEffect(() => {
+    // Sync dialog selection with the main form selection when opening
+    if (isClientDialogOpen) {
+      const currentSelectedClientsFromMainList = clients.filter(c => selectedClients.some(sc => sc.ruc === c.ruc));
+      setDialogSelectedClients(currentSelectedClientsFromMainList);
+    }
+  }, [isClientDialogOpen, clients, selectedClients]);
+
 
   const handleClientDetailChange = (ruc: string, field: keyof Omit<ClientInRoute, 'ruc' | 'nombre_comercial'>, value: any) => {
     setSelectedClients(prev => prev.map(client => 
@@ -134,6 +132,10 @@ export default function NewRoutePage() {
   const handleRemoveFromStage = (tempId: number) => {
     setStagedRoutes(prev => prev.filter(r => r.tempId !== tempId));
   }
+  
+  const handleRemoveClient = (ruc: string) => {
+    setSelectedClients(prev => prev.filter(c => c.ruc !== ruc));
+  };
 
   const handleSaveAllRoutes = async () => {
     if (stagedRoutes.length === 0) {
@@ -168,9 +170,39 @@ export default function NewRoutePage() {
     }
   }
 
-  const isLoading = loading;
+  const handleDialogClientToggle = (client: Client) => {
+    setDialogSelectedClients(prev => {
+        const isSelected = prev.some(c => c.ruc === client.ruc);
+        if (isSelected) {
+            return prev.filter(c => c.ruc !== client.ruc);
+        } else {
+            return [...prev, client];
+        }
+    });
+  };
 
-  const clientsForSelection = clients.filter(c => !selectedClients.some(sc => sc.ruc === c.ruc));
+  const handleConfirmClientSelection = () => {
+    const newClientsInRoute: ClientInRoute[] = dialogSelectedClients.map(client => {
+        const existingClient = selectedClients.find(c => c.ruc === client.ruc);
+        return existingClient || {
+            ruc: client.ruc,
+            nombre_comercial: client.nombre_comercial,
+            date: new Date(),
+        };
+    });
+    setSelectedClients(newClientsInRoute);
+    setIsClientDialogOpen(false);
+  };
+  
+  const filteredAvailableClients = useMemo(() => {
+    return clients.filter(c => 
+        c.nombre_cliente.toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
+        c.nombre_comercial.toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
+        c.ruc.includes(dialogSearchTerm)
+    );
+  }, [clients, dialogSearchTerm]);
+
+  const isLoading = loading;
 
   return (
     <>
@@ -209,43 +241,55 @@ export default function NewRoutePage() {
 
             <div className="space-y-2">
               <Label>Añadir Clientes a la Ruta</Label>
-              <Popover open={openClientSelector} onOpenChange={setOpenClientSelector}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={openClientSelector}
-                    className="w-full justify-between"
-                    disabled={isLoading}
-                  >
-                    {isLoading ? 'Cargando clientes...' : 'Seleccionar clientes...'}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+               <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" className="w-full justify-start">
+                      <PlusCircle className="mr-2 h-4 w-4"/>
+                      Seleccionar Clientes ({selectedClients.length} seleccionados)
                   </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-                  <Command>
-                    <CommandInput placeholder="Buscar por RUC, nombre..." />
-                    <CommandList>
-                      <CommandEmpty>No se encontraron clientes.</CommandEmpty>
-                      <CommandGroup>
-                        {clientsForSelection.map((client) => (
-                          <CommandItem
-                            key={client.ruc}
-                            onSelect={() => handleSelectClient(client.ruc)}
-                            value={`${client.nombre_comercial} ${client.nombre_cliente} ${client.ruc}`}
-                          >
-                            <Check className="mr-2 h-4 w-4 opacity-0" />
-                              <div>
-                                  <p>{client.nombre_comercial}</p>
-                                  <p className="text-xs text-muted-foreground">{client.ruc}</p>
-                              </div>
-                          </CommandItem>
+                </DialogTrigger>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Seleccionar Clientes</DialogTitle>
+                        <DialogDescription>
+                            Elige los clientes que formarán parte de esta ruta.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                        <Input 
+                            placeholder="Buscar por nombre, RUC..." 
+                            className="pl-8" 
+                            value={dialogSearchTerm}
+                            onChange={(e) => setDialogSearchTerm(e.target.value)}
+                        />
+                    </div>
+                    <ScrollArea className="h-72">
+                      <div className="space-y-2 p-1">
+                        {filteredAvailableClients.map(client => (
+                          <div key={client.ruc} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                            <div className="flex items-center space-x-3">
+                              <Checkbox 
+                                id={`client-${client.ruc}`}
+                                checked={dialogSelectedClients.some(c => c.ruc === client.ruc)}
+                                onCheckedChange={() => handleDialogClientToggle(client)}
+                              />
+                              <Label htmlFor={`client-${client.ruc}`} className="font-normal cursor-pointer">
+                                <p className="font-medium">{client.nombre_comercial}</p>
+                                <p className="text-xs text-muted-foreground">{client.ruc} - {client.nombre_cliente}</p>
+                              </Label>
+                            </div>
+                          </div>
                         ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+                      </div>
+                    </ScrollArea>
+                    <DialogFooter>
+                        <span className="text-sm text-muted-foreground mr-auto">{dialogSelectedClients.length} cliente(s) seleccionados</span>
+                        <Button variant="ghost" onClick={() => setIsClientDialogOpen(false)}>Cancelar</Button>
+                        <Button onClick={handleConfirmClientSelection}>Añadir Clientes</Button>
+                    </DialogFooter>
+                </DialogContent>
+               </Dialog>
             </div>
 
             {selectedClients.length > 0 && (
@@ -266,7 +310,7 @@ export default function NewRoutePage() {
                                             <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
                                             <p className="text-xs text-muted-foreground">{client.ruc}</p>
                                         </div>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleSelectClient(client.ruc)}>
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveClient(client.ruc)}>
                                             <Trash2 className="h-4 w-4 text-destructive" />
                                         </Button>
                                     </div>
@@ -413,9 +457,3 @@ export default function NewRoutePage() {
     </>
   );
 }
-
-    
-
-    
-
-    
