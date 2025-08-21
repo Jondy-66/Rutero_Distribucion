@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { addClientsBatch, deleteClient } from '@/lib/firebase/firestore';
+import { addClientsBatch, deleteClient, getClients, updateClient } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
 import { PlusCircle, UploadCloud, File, Search, MoreHorizontal } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -127,7 +127,12 @@ export default function ClientsPage() {
     }
 
     try {
-      const clientsToAdd = validData.map(item => ({
+      const existingClients = await getClients();
+      const rucToIdMap = new Map(existingClients.map(c => [c.ruc, c.id]));
+      let addedCount = 0;
+      let updatedCount = 0;
+
+      const clientsToProcess = validData.map(item => ({
           ejecutivo: item.ejecutivo || '',
           ruc: item.ruc,
           nombre_cliente: item.nombrecliente || item.nombre_cliente || '',
@@ -135,30 +140,39 @@ export default function ClientsPage() {
           provincia: item.provincia || '',
           canton: item.canton || '',
           direccion: item.direccion || '',
-          latitud: 0,
-          longitud: 0,
+          latitud: parseFloat(String(item.latitud).replace(',', '.')) || 0,
+          longitud: parseFloat(String(item.longitud).replace(',', '.')) || 0,
       }));
 
-      const addedCount = await addClientsBatch(clientsToAdd);
+      for (const clientData of clientsToProcess) {
+        if(rucsInDb.has(clientData.ruc)) {
+            const clientId = rucsInDb.get(clientData.ruc)!;
+            await updateClient(clientId, clientData);
+            updatedCount++;
+        } else {
+            await addClientsBatch([clientData]);
+            addedCount++;
+        }
+      }
 
       toast({
         title: 'Carga exitosa',
-        description: `${addedCount} de ${validData.length} clientes nuevos han sido añadidos. Se omitieron duplicados por RUC.`,
+        description: `${addedCount} clientes añadidos y ${updatedCount} clientes actualizados.`,
       });
       await refetchData('clients');
     } catch (error: any)
     {
-      console.error("Failed to add new clients:", error);
+      console.error("Failed to add or update clients:", error);
       if (error.code === 'permission-denied') {
         toast({
           title: 'Error de Permisos',
-          description: 'No tienes permiso para añadir clientes.',
+          description: 'No tienes permiso para añadir o actualizar clientes.',
           variant: 'destructive',
         });
       } else {
         toast({
           title: 'Error en la carga',
-          description: 'Ocurrió un error al añadir los clientes.',
+          description: 'Ocurrió un error al procesar los clientes.',
           variant: 'destructive',
         });
       }
@@ -273,7 +287,7 @@ export default function ClientsPage() {
                 <DialogHeader>
                     <DialogTitle>Importar Clientes desde CSV o Excel</DialogTitle>
                     <DialogDescription>
-                        Sube un archivo para añadir clientes nuevos. Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia.
+                        Sube un archivo para añadir o actualizar clientes. Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia. Opcionales: latitud, longitud.
                     </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
@@ -431,3 +445,5 @@ export default function ClientsPage() {
     </>
   );
 }
+
+    
