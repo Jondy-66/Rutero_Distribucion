@@ -101,7 +101,7 @@ export default function ClientsPage() {
     const normalizedData = data.map(row => {
         const newRow: ClientCsvData = {};
         for(const key in row) {
-            newRow[key.trim().toLowerCase().replace(/_/g, '')] = row[key];
+            newRow[key.trim().toLowerCase().replace(/ /g, '').replace(/_/g, '')] = row[key];
         }
         return newRow;
     });
@@ -127,8 +127,7 @@ export default function ClientsPage() {
     }
 
     try {
-      const existingClients = await getClients();
-      const rucToIdMap = new Map(existingClients.map(c => [c.ruc, c.id]));
+      const rucsInDb = new Map(clients.map(c => [c.ruc, c.id]));
       let addedCount = 0;
       let updatedCount = 0;
 
@@ -140,19 +139,29 @@ export default function ClientsPage() {
           provincia: item.provincia || '',
           canton: item.canton || '',
           direccion: item.direccion || '',
-          latitud: parseFloat(String(item.latitud).replace(',', '.')) || 0,
-          longitud: parseFloat(String(item.longitud).replace(',', '.')) || 0,
+          latitud: parseFloat(String(item.latitudtrz || item.latitud).replace(',', '.')) || 0,
+          longitud: parseFloat(String(item.longitudtrz || item.longitud).replace(',', '.')) || 0,
       }));
+      
+      const clientsToAdd: any[] = [];
+      const clientsToUpdate: { id: string, data: any }[] = [];
 
       for (const clientData of clientsToProcess) {
         if(rucsInDb.has(clientData.ruc)) {
             const clientId = rucsInDb.get(clientData.ruc)!;
-            await updateClient(clientId, clientData);
+            clientsToUpdate.push({ id: clientId, data: clientData });
             updatedCount++;
         } else {
-            await addClientsBatch([clientData]);
+            clientsToAdd.push(clientData);
             addedCount++;
         }
+      }
+
+      if (clientsToAdd.length > 0) {
+        await addClientsBatch(clientsToAdd);
+      }
+      for (const client of clientsToUpdate) {
+        await updateClient(client.id, client.data);
       }
 
       toast({
