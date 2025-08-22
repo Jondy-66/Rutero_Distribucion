@@ -16,6 +16,7 @@ import {
   UserCheck,
   List,
   Wand2,
+  Users2,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -105,6 +106,8 @@ export function DashboardNav() {
     
   const canSeeUsers =
     user?.role && usersNavItem.roles.includes(user.role);
+  
+  const canSeeTeamRoutes = user?.role === 'Administrador' || user?.role === 'Supervisor';
 
   return (
     <nav>
@@ -161,7 +164,7 @@ export function DashboardNav() {
                                <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes'}>
                                  <Link href="/dashboard/routes">
                                     <List />
-                                    <span>Lista de Rutas</span>
+                                    <span>Mis Rutas</span>
                                  </Link>
                                </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
@@ -184,6 +187,16 @@ export function DashboardNav() {
                       </Link>
                     </SidebarMenuSubButton>
                 </SidebarMenuItem>
+                 {canSeeTeamRoutes && (
+                    <SidebarMenuItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/team-routes'}>
+                            <Link href="/dashboard/routes/team-routes">
+                                <Users2 />
+                                <span>Rutas de Equipo</span>
+                            </Link>
+                        </SidebarMenuSubButton>
+                    </SidebarMenuItem>
+                 )}
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>

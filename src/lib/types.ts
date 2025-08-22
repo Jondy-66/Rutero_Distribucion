@@ -63,7 +63,7 @@ export type RoutePlan = {
   clients: ClientInRoute[]; // Array de clientes con sus valores específicos para la ruta.
   status: 'Pendiente de Aprobación' | 'Planificada' | 'En Progreso' | 'Completada' | 'Rechazada'; // Estado actual de la ruta.
   supervisorId: string; // ID del supervisor responsable de la ruta.
-  supervisorName?: string; // Nombre del supervisor (desnormalizado para fácil visualización).
+  supervisorName: string; // Nombre del supervisor (desnormalizado para fácil visualización).
   supervisorObservation?: string; // Observaciones del supervisor al aprobar/rechazar.
   createdBy: string; // ID del usuario que creó la ruta.
   startTime?: string;

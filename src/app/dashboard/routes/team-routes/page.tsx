@@ -16,7 +16,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { getRoutes, deleteRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import type { RoutePlan } from '@/lib/types';
+import type { RoutePlan, User } from '@/lib/types';
 import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -42,14 +42,16 @@ import {
 } from "@/components/ui/alert-dialog"
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-export default function RoutesListPage() {
+export default function TeamRoutesPage() {
   const { user, users } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [allRoutes, setAllRoutes] = useState<RoutePlan[]>([]);
   const [loading, setLoading] = useState(true);
-
+  const [selectedUser, setSelectedUser] = useState<string>('all');
+  
   const fetchRoutes = async () => {
     setLoading(true);
     try {
@@ -68,32 +70,53 @@ export default function RoutesListPage() {
   };
 
   useEffect(() => {
-    if (user) {
+    if (user && (user.role === 'Administrador' || user.role === 'Supervisor')) {
         fetchRoutes();
+    } else {
+        setLoading(false);
     }
   }, [user]);
 
+  const managedUsers = useMemo(() => {
+    if (!user) return [];
+    if (user.role === 'Administrador') {
+      return users.filter(u => u.role === 'Usuario');
+    }
+    if (user.role === 'Supervisor') {
+      return users.filter(u => u.supervisorId === user.id);
+    }
+    return [];
+  }, [users, user]);
+
   const filteredRoutes = useMemo(() => {
     if (!user) return [];
-    // Esta página ahora solo muestra las rutas creadas por el usuario actual.
-    return allRoutes.filter(route => route.createdBy === user.id);
-  }, [allRoutes, user]);
+    
+    let routesToFilter: RoutePlan[] = [];
 
-  const handleAction = (routeId: string, action: 'review' | 'edit') => {
+    if (user.role === 'Administrador') {
+        routesToFilter = allRoutes.filter(route => route.createdBy !== user.id);
+    } else if (user.role === 'Supervisor') {
+        const managedUserIds = managedUsers.map(u => u.id);
+        routesToFilter = allRoutes.filter(route => managedUserIds.includes(route.createdBy));
+    }
+    
+    if (selectedUser !== 'all') {
+        routesToFilter = routesToFilter.filter(route => route.createdBy === selectedUser);
+    }
+
+    return routesToFilter;
+
+  }, [allRoutes, user, managedUsers, selectedUser]);
+  
+  const getCreatorName = (creatorId: string) => {
+      const creator = users.find(u => u.id === creatorId);
+      return creator?.name || 'Desconocido';
+  }
+
+  const handleAction = (routeId: string) => {
     router.push(`/dashboard/routes/${routeId}`);
   };
-
-  const handleDelete = async (routeId: string) => {
-    try {
-      await deleteRoute(routeId);
-      toast({ title: "Éxito", description: "Ruta eliminada correctamente." });
-      fetchRoutes(); // Refresh the list
-    } catch (error: any) {
-      console.error("Failed to delete route:", error);
-      toast({ title: "Error", description: "No se pudo eliminar la ruta.", variant: "destructive" });
-    }
-  };
-
+  
   const getBadgeForStatus = (status: RoutePlan['status']) => {
     switch (status) {
         case 'Planificada': return <Badge variant="secondary"><CheckCircle2 className="mr-1 h-3 w-3"/>{status}</Badge>;
@@ -112,35 +135,49 @@ export default function RoutesListPage() {
     return 'N/A';
   };
 
+  if (user?.role !== 'Administrador' && user?.role !== 'Supervisor') {
+      return (
+          <PageHeader title="Acceso Denegado" description="Esta página solo está disponible para supervisores y administradores." />
+      );
+  }
+
+
   return (
     <>
       <PageHeader
-        title="Mis Rutas"
-        description="Visualiza y gestiona las rutas que has planificado."
+        title="Rutas de Equipo"
+        description="Revisa, aprueba o rechaza las rutas planificadas por tu equipo."
       >
-        <Link href="/dashboard/routes/new">
-          <Button>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Planificar Nueva Ruta
-          </Button>
-        </Link>
       </PageHeader>
       
       <Card>
         <CardHeader>
-            <CardTitle>Rutas Planificadas por Mí</CardTitle>
+            <CardTitle>Rutas Enviadas para Aprobación</CardTitle>
             <CardDescription>
-                Un listado de todas las rutas que has creado.
+                Un listado de todas las rutas enviadas por los usuarios que gestionas.
             </CardDescription>
         </CardHeader>
         <CardContent>
+            <div className="mb-4">
+                <Select value={selectedUser} onValueChange={setSelectedUser}>
+                    <SelectTrigger className="w-full sm:max-w-xs">
+                        <SelectValue placeholder="Filtrar por usuario" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">Todos los Usuarios</SelectItem>
+                        {managedUsers.map(u => (
+                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
              <div className="border rounded-lg">
                 <Table>
                     <TableHeader>
                         <TableRow>
                         <TableHead>Nombre de Ruta</TableHead>
+                        <TableHead>Creado por</TableHead>
                         <TableHead>Fecha</TableHead>
-                        <TableHead>Supervisor</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead>Clientes</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
@@ -152,7 +189,7 @@ export default function RoutesListPage() {
                                 <TableRow key={i}>
                                     <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
                                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-32" /></TableCell>
+                                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                                     <TableCell><Skeleton className="h-6 w-24" /></TableCell>
                                     <TableCell><Skeleton className="h-5 w-8" /></TableCell>
                                     <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
@@ -161,52 +198,24 @@ export default function RoutesListPage() {
                         ) : filteredRoutes.length > 0 ? (
                             filteredRoutes.map((route) => {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
-                                const canEdit = user?.id === route.createdBy && route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada';
-                                const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada';
-
-
+                               
                                 return (
                                 <TableRow key={route.id}>
                                     <TableCell className="font-medium">{route.routeName}</TableCell>
+                                    <TableCell>{getCreatorName(route.createdBy)}</TableCell>
                                     <TableCell>{getRouteDate(route)}</TableCell>
-                                    <TableCell>{route.supervisorName}</TableCell>
                                     <TableCell>
                                         {getBadgeForStatus(route.status)}
                                     </TableCell>
                                     <TableCell className="text-center">{route.clients.length}</TableCell>
                                     <TableCell className="text-right">
-                                      <AlertDialog>
-                                        <DropdownMenu>
-                                          <DropdownMenuTrigger asChild>
-                                            <Button aria-haspopup="true" size="icon" variant="ghost">
-                                              <MoreHorizontal className="h-4 w-4" />
-                                              <span className="sr-only">Alternar menú</span>
-                                            </Button>
-                                          </DropdownMenuTrigger>
-                                          <DropdownMenuContent align="end">
-                                            <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                            {canReview && <DropdownMenuItem onClick={() => handleAction(route.id, 'review')}>Revisar</DropdownMenuItem>}
-                                            {(canEdit || canAdminEdit) && <DropdownMenuItem onClick={() => handleAction(route.id, 'edit')}>Editar</DropdownMenuItem>}
-                                            {!canReview && !canEdit && !canAdminEdit && <DropdownMenuItem disabled>No hay acciones</DropdownMenuItem>}
-                                            <DropdownMenuSeparator />
-                                            <AlertDialogTrigger asChild>
-                                              <DropdownMenuItem className="text-red-600" disabled={route.status === 'Pendiente de Aprobación'}>Eliminar</DropdownMenuItem>
-                                            </AlertDialogTrigger>
-                                          </DropdownMenuContent>
-                                        </DropdownMenu>
-                                        <AlertDialogContent>
-                                          <AlertDialogHeader>
-                                            <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              Esta acción no se puede deshacer. Esto eliminará permanentemente la ruta.
-                                            </AlertDialogDescription>
-                                          </AlertDialogHeader>
-                                          <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => handleDelete(route.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
-                                          </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                      </AlertDialog>
+                                        <Button 
+                                            variant={canReview ? "default" : "outline"} 
+                                            size="sm"
+                                            onClick={() => handleAction(route.id)}
+                                        >
+                                            {canReview ? "Revisar" : "Ver Detalles"}
+                                        </Button>
                                     </TableCell>
                                 </TableRow>
                                 )
@@ -214,7 +223,7 @@ export default function RoutesListPage() {
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={6} className="text-center h-24">
-                                    No has creado ninguna ruta.
+                                    No hay rutas de equipo para mostrar.
                                 </TableCell>
                             </TableRow>
                         )}
