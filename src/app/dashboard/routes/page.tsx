@@ -1,6 +1,6 @@
 
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -44,17 +44,17 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 
 export default function RoutesListPage() {
-  const { user } = useAuth();
+  const { user, users } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
-  const [routes, setRoutes] = useState<RoutePlan[]>([]);
+  const [allRoutes, setAllRoutes] = useState<RoutePlan[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchRoutes = async () => {
     setLoading(true);
     try {
       const routesData = await getRoutes();
-      setRoutes(routesData);
+      setAllRoutes(routesData);
     } catch (error: any) {
       console.error("Failed to fetch routes:", error);
       toast({
@@ -72,6 +72,24 @@ export default function RoutesListPage() {
         fetchRoutes();
     }
   }, [user]);
+
+  const filteredRoutes = useMemo(() => {
+    if (!user) return [];
+
+    switch (user.role) {
+      case 'Administrador':
+        return allRoutes;
+      case 'Supervisor': {
+        const supervisedUserIds = users.filter(u => u.supervisorId === user.id).map(u => u.id);
+        const supervisorAndTeamIds = new Set([user.id, ...supervisedUserIds]);
+        return allRoutes.filter(route => supervisorAndTeamIds.has(route.createdBy));
+      }
+      case 'Usuario':
+        return allRoutes.filter(route => route.createdBy === user.id);
+      default:
+        return [];
+    }
+  }, [allRoutes, user, users]);
 
   const handleAction = (routeId: string, action: 'review' | 'edit') => {
     router.push(`/dashboard/routes/${routeId}`);
@@ -152,10 +170,12 @@ export default function RoutesListPage() {
                                     <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                                 </TableRow>
                             ))
-                        ) : routes.length > 0 ? (
-                            routes.map((route) => {
+                        ) : filteredRoutes.length > 0 ? (
+                            filteredRoutes.map((route) => {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
-                                const canEdit = route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada';
+                                const canEdit = user?.id === route.createdBy && route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada';
+                                const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada';
+
 
                                 return (
                                 <TableRow key={route.id}>
@@ -178,8 +198,8 @@ export default function RoutesListPage() {
                                           <DropdownMenuContent align="end">
                                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                                             {canReview && <DropdownMenuItem onClick={() => handleAction(route.id, 'review')}>Revisar</DropdownMenuItem>}
-                                            {canEdit && <DropdownMenuItem onClick={() => handleAction(route.id, 'edit')}>Editar</DropdownMenuItem>}
-                                            {!canReview && !canEdit && <DropdownMenuItem disabled>No hay acciones</DropdownMenuItem>}
+                                            {(canEdit || canAdminEdit) && <DropdownMenuItem onClick={() => handleAction(route.id, 'edit')}>Editar</DropdownMenuItem>}
+                                            {!canReview && !canEdit && !canAdminEdit && <DropdownMenuItem disabled>No hay acciones</DropdownMenuItem>}
                                             <DropdownMenuSeparator />
                                             <AlertDialogTrigger asChild>
                                               <DropdownMenuItem className="text-red-600" disabled={route.status === 'Pendiente de Aprobación'}>Eliminar</DropdownMenuItem>
@@ -206,7 +226,7 @@ export default function RoutesListPage() {
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={6} className="text-center h-24">
-                                    No hay rutas planificadas.
+                                    No hay rutas para mostrar.
                                 </TableCell>
                             </TableRow>
                         )}

@@ -66,15 +66,18 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
-    if (currentUser.role === 'Administrador') return true;
-    if (currentUser.id === route.supervisorId && route.status !== 'Completada') return true;
+    // Admin can edit if it's not in a final state.
+    if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
+    // The creator can edit if it's not pending or rejected.
     return route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada' && route.status !== 'Completada' && currentUser.id === route.createdBy;
   }, [currentUser, route]);
 
   const canApprove = useMemo(() => {
      if (!currentUser || !route) return false;
+     // Admin can always approve/reject.
      if (currentUser.role === 'Administrador') return true;
-     return currentUser.id === route.supervisorId;
+     // Supervisor can approve/reject if they are the assigned supervisor.
+     return currentUser.id === route.supervisorId && route.status === 'Pendiente de Aprobación';
   }, [currentUser, route]);
 
 
@@ -133,10 +136,18 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     e.preventDefault();
     if (!route) return;
 
-    if (!route.routeName || clientsInRoute.length === 0 || !route.supervisorId) {
-      toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente.', variant: 'destructive' });
-      return;
+    if (!newStatus) { // Only validate if saving, not when approving/rejecting
+        if (!route.routeName || clientsInRoute.length === 0 || !route.supervisorId) {
+            toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente.', variant: 'destructive' });
+            return;
+        }
     }
+
+    if (newStatus === 'Rechazada' && !route.supervisorObservation) {
+        toast({ title: 'Observación Requerida', description: 'Debes proporcionar una observación para rechazar la ruta.', variant: 'destructive' });
+        return;
+    }
+
 
     setIsSaving(true);
     try {
@@ -164,9 +175,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       await updateRoute(routeId, dataToUpdate);
 
       toast({ title: 'Éxito', description: `Ruta ${newStatus ? 'revisada' : 'actualizada'} correctamente.` });
-      if (newStatus) {
-        router.push('/dashboard/routes');
-      }
+      router.push('/dashboard/routes');
     } catch (error: any) {
       console.error(error);
       toast({ title: 'Error', description: 'No se pudo actualizar la ruta.', variant: 'destructive' });
@@ -240,7 +249,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   
   return (
     <>
-      <PageHeader title="Editar Ruta" description="Actualiza los detalles de la ruta planificada.">
+      <PageHeader title={canApprove ? "Revisar Ruta" : "Editar Ruta"} description="Actualiza los detalles de la ruta planificada.">
         <Link href="/dashboard/routes">
           <Button variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" />
@@ -269,7 +278,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         </Alert>
       )}
 
-      <form onSubmit={handleUpdateRoute}>
+      <form onSubmit={(e) => handleUpdateRoute(e)}>
         <div className="space-y-6">
             <Card>
             <CardHeader>
@@ -498,12 +507,14 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                 </Card>
             )}
 
-            <div className="flex justify-end">
-                <Button type="submit" disabled={isFormDisabled}>
-                    {isSaving && <LoaderCircle className="animate-spin" />}
-                    Guardar Cambios
-                </Button>
-            </div>
+             {canEdit && (
+                <div className="flex justify-end">
+                    <Button type="submit" disabled={isFormDisabled}>
+                        {isSaving && <LoaderCircle className="animate-spin" />}
+                        Guardar Cambios
+                    </Button>
+                </div>
+             )}
         </div>
       </form>
     </>
