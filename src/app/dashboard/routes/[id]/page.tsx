@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, PlusCircle, Search } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, PlusCircle, Search, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
 import { getRoute, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -26,6 +26,8 @@ import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
@@ -46,7 +48,7 @@ const endTimeSlots = generateTimeSlots(8, 18, 30, 30);
 export default function EditRoutePage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
-  const { clients, users, loading: authLoading } = useAuth();
+  const { user: currentUser, users, clients, loading: authLoading } = useAuth();
 
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [clientsInRoute, setClientsInRoute] = useState<ClientInRoute[]>([]);
@@ -55,15 +57,25 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
-  // State to manage individual calendar popovers
   const [calendarOpen, setCalendarOpen] = useState<{[key: string]: boolean}>({});
-
-  // Client Selection Dialog State
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
   const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
 
   const routeId = params.id;
+  
+  const canEdit = useMemo(() => {
+    if (!currentUser || !route) return false;
+    if (currentUser.role === 'Administrador') return true;
+    if (currentUser.id === route.supervisorId && route.status !== 'Completada') return true;
+    return route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada' && route.status !== 'Completada' && currentUser.id === route.createdBy;
+  }, [currentUser, route]);
+
+  const canApprove = useMemo(() => {
+     if (!currentUser || !route) return false;
+     if (currentUser.role === 'Administrador') return true;
+     return currentUser.id === route.supervisorId;
+  }, [currentUser, route]);
 
 
   useEffect(() => {
@@ -97,7 +109,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   }, [users]);
   
   useEffect(() => {
-    // Sync dialog selection with the main form selection when opening
     if (isClientDialogOpen) {
       const currentSelectedClientsFromMainList = clients.filter(c => clientsInRoute.some(sc => sc.ruc === c.ruc));
       setDialogSelectedClients(currentSelectedClientsFromMainList);
@@ -118,7 +129,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       );
   }, []);
 
-  const handleUpdateRoute = async (e: React.FormEvent) => {
+  const handleUpdateRoute = async (e: React.FormEvent, newStatus?: RoutePlan['status']) => {
     e.preventDefault();
     if (!route) return;
 
@@ -144,12 +155,18 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         })),
       };
       
-      delete dataToUpdate.id;
+      if(newStatus) {
+        dataToUpdate.status = newStatus;
+      }
+
+      delete (dataToUpdate as Partial<RoutePlan>).id;
 
       await updateRoute(routeId, dataToUpdate);
 
-      toast({ title: 'Éxito', description: 'Ruta actualizada correctamente.' });
-      router.push('/dashboard/routes');
+      toast({ title: 'Éxito', description: `Ruta ${newStatus ? 'revisada' : 'actualizada'} correctamente.` });
+      if (newStatus) {
+        router.push('/dashboard/routes');
+      }
     } catch (error: any) {
       console.error(error);
       toast({ title: 'Error', description: 'No se pudo actualizar la ruta.', variant: 'destructive' });
@@ -184,9 +201,9 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   
   const filteredAvailableClients = useMemo(() => {
     return clients.filter(c => 
-        c.nombre_cliente.toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
-        c.nombre_comercial.toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
-        c.ruc.includes(dialogSearchTerm)
+        String(c.nombre_cliente).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
+        String(c.nombre_comercial).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
+        String(c.ruc).includes(dialogSearchTerm)
     );
   }, [clients, dialogSearchTerm]);
 
@@ -219,6 +236,8 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     return notFound();
   }
   
+  const isFormDisabled = isSaving || !canEdit;
+  
   return (
     <>
       <PageHeader title="Editar Ruta" description="Actualiza los detalles de la ruta planificada.">
@@ -229,208 +248,263 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
           </Button>
         </Link>
       </PageHeader>
-      <form onSubmit={handleUpdateRoute}>
-        <Card>
-          <CardHeader>
-            <CardTitle>Detalles Generales de la Ruta</CardTitle>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2 sm:col-span-2">
-              <Label htmlFor="routeName">Nombre de la Ruta</Label>
-              <Input id="routeName" value={route.routeName} onChange={(e) => handleInputChange('routeName', e.target.value)} disabled={isSaving} />
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="supervisor">Asignar Supervisor</Label>
-                <Select value={route.supervisorId} onValueChange={(value) => handleInputChange('supervisorId', value)} disabled={isSaving}>
-                  <SelectTrigger id="supervisor"><Users className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                  <SelectContent>{supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
-                </Select>
-            </div>
-            <div className="space-y-2">
-                <Label htmlFor="status">Estado</Label>
-                <Select value={route.status} onValueChange={(value: any) => handleInputChange('status', value)} disabled={isSaving}>
-                  <SelectTrigger id="status"><SelectValue placeholder="Seleccionar estado" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="Planificada">Planificada</SelectItem>
-                    <SelectItem value="En Progreso">En Progreso</SelectItem>
-                    <SelectItem value="Completada">Completada</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-          </CardContent>
-        </Card>
 
-        <Card className="mt-6">
+      {route.status === 'Rechazada' && (
+        <Alert variant="destructive" className="mb-6">
+          <ThumbsDown className="h-4 w-4" />
+          <AlertTitle>Ruta Rechazada</AlertTitle>
+          <AlertDescription>
+            {route.supervisorObservation || 'Esta ruta fue rechazada por el supervisor. Contacta con él para más detalles.'}
+          </AlertDescription>
+        </Alert>
+      )}
+
+       {route.status === 'Pendiente de Aprobación' && !canApprove && (
+        <Alert className="mb-6">
+          <Eye className="h-4 w-4" />
+          <AlertTitle>Pendiente de Revisión</AlertTitle>
+          <AlertDescription>
+            Esta ruta está esperando la aprobación de tu supervisor. No podrás editarla hasta que sea aprobada.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <form onSubmit={handleUpdateRoute}>
+        <div className="space-y-6">
+            <Card>
             <CardHeader>
-                <CardTitle>Clientes en Ruta</CardTitle>
-                <CardDescription>Añade clientes a la ruta y especifica los detalles de la visita para cada uno.</CardDescription>
+                <CardTitle>Detalles Generales de la Ruta</CardTitle>
             </CardHeader>
-            <CardContent>
-                <div className="space-y-2">
-                    <Label>Añadir o Quitar Clientes</Label>
-                    <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" className="w-full justify-start" disabled={isSaving}>
-                            <PlusCircle className="mr-2 h-4 w-4"/>
-                            Añadir o Quitar Clientes ({clientsInRoute.length} seleccionados)
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent className="max-w-2xl">
-                          <DialogHeader>
-                              <DialogTitle>Seleccionar Clientes</DialogTitle>
-                              <DialogDescription>
-                                  Elige los clientes que formarán parte de esta ruta.
-                              </DialogDescription>
-                          </DialogHeader>
-                          <div className="relative">
-                              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                              <Input 
-                                  placeholder="Buscar por nombre, RUC..." 
-                                  className="pl-8" 
-                                  value={dialogSearchTerm}
-                                  onChange={(e) => setDialogSearchTerm(e.target.value)}
-                              />
-                          </div>
-                          <ScrollArea className="h-72">
-                            <div className="space-y-2 p-1">
-                              {filteredAvailableClients.map(client => (
-                                <div key={client.ruc} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                                  <div className="flex items-center space-x-3">
-                                    <Checkbox 
-                                      id={`client-${client.ruc}`}
-                                      checked={dialogSelectedClients.some(c => c.ruc === client.ruc)}
-                                      onCheckedChange={() => handleDialogClientToggle(client)}
-                                    />
-                                    <Label htmlFor={`client-${client.ruc}`} className="font-normal cursor-pointer">
-                                      <p className="font-medium">{client.nombre_comercial}</p>
-                                      <p className="text-xs text-muted-foreground">{client.ruc} - {client.nombre_cliente}</p>
-                                    </Label>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          </ScrollArea>
-                          <DialogFooter>
-                              <span className="text-sm text-muted-foreground mr-auto">{dialogSelectedClients.length} cliente(s) seleccionados</span>
-                              <Button variant="ghost" onClick={() => setIsClientDialogOpen(false)}>Cancelar</Button>
-                              <Button onClick={handleConfirmClientSelection}>Actualizar Clientes</Button>
-                          </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
+            <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="routeName">Nombre de la Ruta</Label>
+                <Input id="routeName" value={route.routeName} onChange={(e) => handleInputChange('routeName', e.target.value)} disabled={isFormDisabled} />
                 </div>
-                 {clientsInRoute.length > 0 && (
-                    <Collapsible defaultOpen className="space-y-4 mt-4">
-                        <CollapsibleTrigger asChild>
-                            <Button variant="ghost" className="w-full justify-between p-2">
-                                <span>Ver/Ocultar Detalles de Clientes ({clientsInRoute.length})</span>
-                                <ChevronsUpDown className="h-4 w-4" />
-                            </Button>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="space-y-4 p-2 pt-0 max-h-[60vh] overflow-y-auto">
-                            {clientsInRoute.map((client, index) => {
-                                const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
-                                return (
-                                <Card key={client.ruc} className="p-4 bg-muted/50">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
-                                            <p className="text-xs text-muted-foreground">{client.ruc}</p>
-                                        </div>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientsInRoute(prev => prev.filter(c => c.ruc !== client.ruc))}>
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                    </div>
-                                    <Separator className="my-2" />
-                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
-                                        <div className="space-y-2">
-                                            <Label htmlFor={`dayOfWeek-${client.ruc}`}>Día</Label>
-                                            <Select value={client.dayOfWeek} onValueChange={(value) => handleClientValueChange(client.ruc, 'dayOfWeek', value)} disabled={isSaving}>
-                                                <SelectTrigger id={`dayOfWeek-${client.ruc}`}><CalendarIcon className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar día" /></SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="Lunes">Lunes</SelectItem><SelectItem value="Martes">Martes</SelectItem><SelectItem value="Miércoles">Miércoles</SelectItem><SelectItem value="Jueves">Jueves</SelectItem><SelectItem value="Viernes">Viernes</SelectItem><SelectItem value="Sábado">Sábado</SelectItem><SelectItem value="Domingo">Domingo</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label>Fecha</Label>
-                                            <Popover open={calendarOpen[client.ruc] || false} onOpenChange={(isOpen) => setCalendarOpen(prev => ({ ...prev, [client.ruc]: isOpen }))}>
-                                            <PopoverTrigger asChild>
-                                                <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !client.date && 'text-muted-foreground')} disabled={isSaving}>
-                                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {client.date ? format(client.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="p-0">
-                                                <Calendar mode="single" selected={client.date} onSelect={(date) => handleClientValueChange(client.ruc, 'date', date)} initialFocus locale={es} />
-                                                <div className="p-2 border-t border-border"><Button onClick={() => setCalendarOpen(prev => ({ ...prev, [client.ruc]: false }))} className="w-full">Seleccionar</Button></div>
-                                            </PopoverContent>
-                                            </Popover>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor={`start-time-${client.ruc}`}>Hora de Inicio</Label>
-                                            <Select value={client.startTime} onValueChange={(value) => handleClientValueChange(client.ruc, 'startTime', value)} disabled={isSaving}>
-                                            <SelectTrigger id={`start-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                                            <SelectContent>{startTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor={`end-time-${client.ruc}`}>Hora de Fin</Label>
-                                            <Select value={client.endTime} onValueChange={(value) => handleClientValueChange(client.ruc, 'endTime', value)} disabled={isSaving}>
-                                            <SelectTrigger id={`end-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
-                                            <SelectContent>{endTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
-                                            </Select>
-                                        </div>
-                                    </div>
-                                    <Separator className="my-4" />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
-                                        <div className="space-y-2">
-                                            <Label htmlFor={`valor-venta-${client.ruc}`}>Valor de Venta ($)</Label>
-                                            <Input id={`valor-venta-${client.ruc}`} type="text" placeholder="0.00" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorVenta', e.target.value)} disabled={isSaving} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor={`valor-cobro-${client.ruc}`}>Valor a Cobrar ($)</Label>
-                                            <Input id={`valor-cobro-${client.ruc}`} type="text" placeholder="0.00" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorCobro', e.target.value)} disabled={isSaving} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor={`tipo-cobro-${client.ruc}`}>Tipo de Cobro</Label>
-                                            <Select value={client.tipoCobro} onValueChange={(value: any) => handleClientValueChange(client.ruc, 'tipoCobro', value)} disabled={isSaving}>
-                                            <SelectTrigger id={`tipo-cobro-${client.ruc}`}><SelectValue placeholder="Seleccionar tipo" /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Efectivo">Efectivo</SelectItem><SelectItem value="Transferencia">Transferencia</SelectItem><SelectItem value="Cheque">Cheque</SelectItem>
-                                            </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor={`devoluciones-${client.ruc}`}>Devoluciones ($)</Label>
-                                            <Input id={`devoluciones-${client.ruc}`} type="text" placeholder="0.00" value={client.devoluciones ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'devoluciones', e.target.value)} disabled={isSaving} />
-                                        </div>
-                                        {hasDescuento && (
-                                            <>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor={`promociones-${client.ruc}`}>Promociones ($)</Label>
-                                                    <Input id={`promociones-${client.ruc}`} type="text" placeholder="0.00" value={client.promociones ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'promociones', e.target.value)} disabled={isSaving} />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor={`medicacionFrecuente-${client.ruc}`}>Medicación Frecuente ($)</Label>
-                                                    <Input id={`medicacionFrecuente-${client.ruc}`} type="text" placeholder="0.00" value={client.medicacionFrecuente ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'medicacionFrecuente', e.target.value)} disabled={isSaving} />
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
-                                </Card>
-                                )
-                            })}
-                        </CollapsibleContent>
-                    </Collapsible>
-                )}
+                <div className="space-y-2">
+                    <Label htmlFor="supervisor">Asignar Supervisor</Label>
+                    <Select value={route.supervisorId} onValueChange={(value) => handleInputChange('supervisorId', value)} disabled={isFormDisabled}>
+                    <SelectTrigger id="supervisor"><Users className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                    <SelectContent>{supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="status">Estado</Label>
+                    <Select value={route.status} onValueChange={(value: any) => handleInputChange('status', value)} disabled={isFormDisabled || !canApprove}>
+                    <SelectTrigger id="status"><SelectValue placeholder="Seleccionar estado" /></SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="Pendiente de Aprobación">Pendiente de Aprobación</SelectItem>
+                        <SelectItem value="Planificada">Planificada</SelectItem>
+                        <SelectItem value="En Progreso">En Progreso</SelectItem>
+                        <SelectItem value="Completada">Completada</SelectItem>
+                        <SelectItem value="Rechazada">Rechazada</SelectItem>
+                    </SelectContent>
+                    </Select>
+                </div>
             </CardContent>
-            <CardFooter>
-                <Button type="submit" disabled={isSaving}>
-                {isSaving && <LoaderCircle className="animate-spin" />}
-                Guardar Cambios
+            </Card>
+
+            <Card>
+                <CardHeader>
+                    <CardTitle>Clientes en Ruta</CardTitle>
+                    <CardDescription>Añade clientes a la ruta y especifica los detalles de la visita para cada uno.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="space-y-2">
+                        <Label>Añadir o Quitar Clientes</Label>
+                        <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
+                        <DialogTrigger asChild>
+                            <Button variant="outline" className="w-full justify-start" disabled={isFormDisabled}>
+                                <PlusCircle className="mr-2 h-4 w-4"/>
+                                Añadir o Quitar Clientes ({clientsInRoute.length} seleccionados)
+                            </Button>
+                        </DialogTrigger>
+                        <DialogContent className="max-w-2xl">
+                            <DialogHeader>
+                                <DialogTitle>Seleccionar Clientes</DialogTitle>
+                                <DialogDescription>
+                                    Elige los clientes que formarán parte de esta ruta.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input 
+                                    placeholder="Buscar por nombre, RUC..." 
+                                    className="pl-8" 
+                                    value={dialogSearchTerm}
+                                    onChange={(e) => setDialogSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <ScrollArea className="h-72">
+                                <div className="space-y-2 p-1">
+                                {filteredAvailableClients.map(client => (
+                                    <div key={client.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                    <div className="flex items-center space-x-3">
+                                        <Checkbox 
+                                        id={`client-${client.id}`}
+                                        checked={dialogSelectedClients.some(c => c.ruc === client.ruc)}
+                                        onCheckedChange={() => handleDialogClientToggle(client)}
+                                        />
+                                        <Label htmlFor={`client-${client.id}`} className="font-normal cursor-pointer">
+                                        <p className="font-medium">{client.nombre_comercial}</p>
+                                        <p className="text-xs text-muted-foreground">{client.ruc} - {client.nombre_cliente}</p>
+                                        </Label>
+                                    </div>
+                                    </div>
+                                ))}
+                                </div>
+                            </ScrollArea>
+                            <DialogFooter>
+                                <span className="text-sm text-muted-foreground mr-auto">{dialogSelectedClients.length} cliente(s) seleccionados</span>
+                                <Button variant="ghost" onClick={() => setIsClientDialogOpen(false)}>Cancelar</Button>
+                                <Button onClick={handleConfirmClientSelection}>Actualizar Clientes</Button>
+                            </DialogFooter>
+                        </DialogContent>
+                        </Dialog>
+                    </div>
+                    {clientsInRoute.length > 0 && (
+                        <Collapsible defaultOpen className="space-y-4 mt-4">
+                            <CollapsibleTrigger asChild>
+                                <Button variant="ghost" className="w-full justify-between p-2">
+                                    <span>Ver/Ocultar Detalles de Clientes ({clientsInRoute.length})</span>
+                                    <ChevronsUpDown className="h-4 w-4" />
+                                </Button>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="space-y-4 p-2 pt-0 max-h-[60vh] overflow-y-auto">
+                                {clientsInRoute.map((client, index) => {
+                                    const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
+                                    return (
+                                    <Card key={client.ruc} className="p-4 bg-muted/50">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
+                                                <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                                            </div>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientsInRoute(prev => prev.filter(c => c.ruc !== client.ruc))} disabled={isFormDisabled}>
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                        </div>
+                                        <Separator className="my-2" />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+                                            <div className="space-y-2">
+                                                <Label htmlFor={`dayOfWeek-${client.ruc}`}>Día</Label>
+                                                <Select value={client.dayOfWeek} onValueChange={(value) => handleClientValueChange(client.ruc, 'dayOfWeek', value)} disabled={isFormDisabled}>
+                                                    <SelectTrigger id={`dayOfWeek-${client.ruc}`}><CalendarIcon className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar día" /></SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="Lunes">Lunes</SelectItem><SelectItem value="Martes">Martes</SelectItem><SelectItem value="Miércoles">Miércoles</SelectItem><SelectItem value="Jueves">Jueves</SelectItem><SelectItem value="Viernes">Viernes</SelectItem><SelectItem value="Sábado">Sábado</SelectItem><SelectItem value="Domingo">Domingo</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label>Fecha</Label>
+                                                <Popover open={calendarOpen[client.ruc] || false} onOpenChange={(isOpen) => setCalendarOpen(prev => ({ ...prev, [client.ruc]: isOpen }))}>
+                                                <PopoverTrigger asChild>
+                                                    <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !client.date && 'text-muted-foreground')} disabled={isFormDisabled}>
+                                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                                    {client.date ? format(client.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="p-0">
+                                                    <Calendar mode="single" selected={client.date} onSelect={(date) => handleClientValueChange(client.ruc, 'date', date)} initialFocus locale={es} />
+                                                    <div className="p-2 border-t border-border"><Button onClick={() => setCalendarOpen(prev => ({ ...prev, [client.ruc]: false }))} className="w-full">Seleccionar</Button></div>
+                                                </PopoverContent>
+                                                </Popover>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor={`start-time-${client.ruc}`}>Hora de Inicio</Label>
+                                                <Select value={client.startTime} onValueChange={(value) => handleClientValueChange(client.ruc, 'startTime', value)} disabled={isFormDisabled}>
+                                                <SelectTrigger id={`start-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                                                <SelectContent>{startTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor={`end-time-${client.ruc}`}>Hora de Fin</Label>
+                                                <Select value={client.endTime} onValueChange={(value) => handleClientValueChange(client.ruc, 'endTime', value)} disabled={isFormDisabled}>
+                                                <SelectTrigger id={`end-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
+                                                <SelectContent>{endTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                        <Separator className="my-4" />
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
+                                            <div className="space-y-2">
+                                                <Label htmlFor={`valor-venta-${client.ruc}`}>Valor de Venta ($)</Label>
+                                                <Input id={`valor-venta-${client.ruc}`} type="text" placeholder="0.00" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor={`valor-cobro-${client.ruc}`}>Valor a Cobrar ($)</Label>
+                                                <Input id={`valor-cobro-${client.ruc}`} type="text" placeholder="0.00" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor={`tipo-cobro-${client.ruc}`}>Tipo de Cobro</Label>
+                                                <Select value={client.tipoCobro} onValueChange={(value: any) => handleClientValueChange(client.ruc, 'tipoCobro', value)} disabled={isFormDisabled}>
+                                                <SelectTrigger id={`tipo-cobro-${client.ruc}`}><SelectValue placeholder="Seleccionar tipo" /></SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="Efectivo">Efectivo</SelectItem><SelectItem value="Transferencia">Transferencia</SelectItem><SelectItem value="Cheque">Cheque</SelectItem>
+                                                </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-2">
+                                                <Label htmlFor={`devoluciones-${client.ruc}`}>Devoluciones ($)</Label>
+                                                <Input id={`devoluciones-${client.ruc}`} type="text" placeholder="0.00" value={client.devoluciones ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'devoluciones', e.target.value)} disabled={isFormDisabled} />
+                                            </div>
+                                            {hasDescuento && (
+                                                <>
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor={`promociones-${client.ruc}`}>Promociones ($)</Label>
+                                                        <Input id={`promociones-${client.ruc}`} type="text" placeholder="0.00" value={client.promociones ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'promociones', e.target.value)} disabled={isFormDisabled} />
+                                                    </div>
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor={`medicacionFrecuente-${client.ruc}`}>Medicación Frecuente ($)</Label>
+                                                        <Input id={`medicacionFrecuente-${client.ruc}`} type="text" placeholder="0.00" value={client.medicacionFrecuente ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'medicacionFrecuente', e.target.value)} disabled={isFormDisabled} />
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    </Card>
+                                    )
+                                })}
+                            </CollapsibleContent>
+                        </Collapsible>
+                    )}
+                </CardContent>
+            </Card>
+
+            {canApprove && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Aprobación del Supervisor</CardTitle>
+                        <CardDescription>Revisa y aprueba o rechaza esta ruta. Tu decisión será notificada.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="supervisorObservation">Observaciones</Label>
+                            <Textarea 
+                                id="supervisorObservation"
+                                placeholder="Añade un comentario para el usuario (requerido si se rechaza)..."
+                                value={route.supervisorObservation || ''}
+                                onChange={(e) => handleInputChange('supervisorObservation', e.target.value)}
+                                disabled={isSaving}
+                            />
+                        </div>
+                    </CardContent>
+                    <CardFooter className="gap-2">
+                        <Button type="button" variant="outline" className="text-destructive border-destructive hover:bg-destructive/10 hover:text-destructive" onClick={(e) => handleUpdateRoute(e, 'Rechazada')} disabled={isSaving || !route.supervisorObservation}>
+                            <ThumbsDown className="mr-2 h-4 w-4"/> Rechazar Ruta
+                        </Button>
+                        <Button type="button" className="bg-green-600 hover:bg-green-700 text-white" onClick={(e) => handleUpdateRoute(e, 'Planificada')} disabled={isSaving}>
+                            <ThumbsUp className="mr-2 h-4 w-4"/> Aprobar Ruta
+                        </Button>
+                    </CardFooter>
+                </Card>
+            )}
+
+            <div className="flex justify-end">
+                <Button type="submit" disabled={isFormDisabled}>
+                    {isSaving && <LoaderCircle className="animate-spin" />}
+                    Guardar Cambios
                 </Button>
-            </CardFooter>
-        </Card>
+            </div>
+        </div>
       </form>
     </>
   );

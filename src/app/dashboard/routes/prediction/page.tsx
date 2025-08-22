@@ -112,10 +112,18 @@ export default function PrediccionesPage() {
             supervisor = executiveUser;
         } else if (executiveUser.supervisorId) {
             supervisor = users.find(u => u.id === executiveUser.supervisorId);
+        } else if (currentUser.role === 'Supervisor') {
+            supervisor = currentUser;
+        } else if (currentUser.role === 'Administrador') {
+            // Un admin puede que necesite seleccionar un supervisor si el usuario no tiene uno
+            // Para este caso, buscaremos si hay alguno disponible o lanzamos error.
+             const availableSupervisors = users.filter(u => u.role === 'Supervisor');
+             if(availableSupervisors.length > 0) supervisor = availableSupervisors[0];
         }
 
+
         if (!supervisor) {
-            throw new Error(`El ejecutivo ${selectedEjecutivo} no tiene un supervisor asignado.`);
+            throw new Error(`El ejecutivo ${selectedEjecutivo} no tiene un supervisor asignado y no se pudo determinar uno.`);
         }
 
         const predictedClientsRucs = new Set(filteredPredicciones.map(p => p.RUC));
@@ -130,13 +138,13 @@ export default function PrediccionesPage() {
             }
         });
 
-
         const routeDate = parseISO(filteredPredicciones[0].fecha_predicha);
+        const isUserRole = currentUser.role === 'Usuario';
 
         const newRoute: Omit<RoutePlan, 'id' | 'createdAt'> = {
             routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`,
             clients: routeClients,
-            status: 'Planificada',
+            status: isUserRole ? 'Pendiente de Aprobación' : 'Planificada',
             supervisorId: supervisor.id,
             supervisorName: supervisor.name,
             createdBy: currentUser.id,

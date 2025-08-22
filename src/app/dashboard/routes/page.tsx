@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { getRoutes, deleteRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, PlusCircle } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -71,9 +71,9 @@ export default function RoutesListPage() {
     if (user) {
         fetchRoutes();
     }
-  }, [user, toast]);
+  }, [user]);
 
-  const handleEdit = (routeId: string) => {
+  const handleAction = (routeId: string, action: 'review' | 'edit') => {
     router.push(`/dashboard/routes/${routeId}`);
   };
 
@@ -88,12 +88,14 @@ export default function RoutesListPage() {
     }
   };
 
-  const getBadgeVariantForStatus = (status: RoutePlan['status']) => {
+  const getBadgeForStatus = (status: RoutePlan['status']) => {
     switch (status) {
-        case 'Planificada': return 'secondary';
-        case 'En Progreso': return 'default';
-        case 'Completada': return 'success';
-        default: return 'outline';
+        case 'Planificada': return <Badge variant="secondary"><CheckCircle2 className="mr-1 h-3 w-3"/>{status}</Badge>;
+        case 'En Progreso': return <Badge variant="default"><Clock className="mr-1 h-3 w-3"/>{status}</Badge>;
+        case 'Completada': return <Badge variant="success"><CheckCircle2 className="mr-1 h-3 w-3"/>{status}</Badge>;
+        case 'Pendiente de Aprobación': return <Badge variant="outline" className="text-amber-600 border-amber-500"><AlertCircle className="mr-1 h-3 w-3"/>Pendiente</Badge>;
+        case 'Rechazada': return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3"/>{status}</Badge>;
+        default: return <Badge variant="outline">{status}</Badge>;
     }
   }
 
@@ -151,15 +153,17 @@ export default function RoutesListPage() {
                                 </TableRow>
                             ))
                         ) : routes.length > 0 ? (
-                            routes.map((route) => (
+                            routes.map((route) => {
+                                const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
+                                const canEdit = route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada';
+
+                                return (
                                 <TableRow key={route.id}>
                                     <TableCell className="font-medium">{route.routeName}</TableCell>
                                     <TableCell>{getRouteDate(route)}</TableCell>
                                     <TableCell>{route.supervisorName}</TableCell>
                                     <TableCell>
-                                        <Badge variant={getBadgeVariantForStatus(route.status)}>
-                                            {route.status}
-                                        </Badge>
+                                        {getBadgeForStatus(route.status)}
                                     </TableCell>
                                     <TableCell className="text-center">{route.clients.length}</TableCell>
                                     <TableCell className="text-right">
@@ -173,10 +177,12 @@ export default function RoutesListPage() {
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end">
                                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                            <DropdownMenuItem onClick={() => handleEdit(route.id)}>Editar</DropdownMenuItem>
+                                            {canReview && <DropdownMenuItem onClick={() => handleAction(route.id, 'review')}>Revisar</DropdownMenuItem>}
+                                            {canEdit && <DropdownMenuItem onClick={() => handleAction(route.id, 'edit')}>Editar</DropdownMenuItem>}
+                                            {!canReview && !canEdit && <DropdownMenuItem disabled>No hay acciones</DropdownMenuItem>}
                                             <DropdownMenuSeparator />
                                             <AlertDialogTrigger asChild>
-                                              <DropdownMenuItem className="text-red-600">Eliminar</DropdownMenuItem>
+                                              <DropdownMenuItem className="text-red-600" disabled={route.status === 'Pendiente de Aprobación'}>Eliminar</DropdownMenuItem>
                                             </AlertDialogTrigger>
                                           </DropdownMenuContent>
                                         </DropdownMenu>
@@ -195,7 +201,8 @@ export default function RoutesListPage() {
                                       </AlertDialog>
                                     </TableCell>
                                 </TableRow>
-                            ))
+                                )
+                            })
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={6} className="text-center h-24">
@@ -211,5 +218,3 @@ export default function RoutesListPage() {
     </>
   );
 }
-
-    

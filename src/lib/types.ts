@@ -61,9 +61,10 @@ export type RoutePlan = {
   id: string; // ID único del documento en Firestore.
   routeName: string; // Nombre descriptivo de la ruta.
   clients: ClientInRoute[]; // Array de clientes con sus valores específicos para la ruta.
-  status: 'Planificada' | 'En Progreso' | 'Completada'; // Estado actual de la ruta.
+  status: 'Pendiente de Aprobación' | 'Planificada' | 'En Progreso' | 'Completada' | 'Rechazada'; // Estado actual de la ruta.
   supervisorId: string; // ID del supervisor responsable de la ruta.
   supervisorName?: string; // Nombre del supervisor (desnormalizado para fácil visualización).
+  supervisorObservation?: string; // Observaciones del supervisor al aprobar/rechazar.
   createdBy: string; // ID del usuario que creó la ruta.
   startTime?: string;
   endTime?: string;
@@ -81,5 +82,3 @@ export type Prediction = {
   LatitudTrz: number;
   LongitudTrz: number;
 };
-
-    

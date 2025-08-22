@@ -14,12 +14,10 @@ import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { useToast } from '@/hooks/use-toast';
 import { Timestamp } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/use-auth';
-import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
@@ -45,45 +43,35 @@ type StagedRoute = Omit<RoutePlan, 'id' | 'createdAt'> & { tempId: number };
 
 export default function NewRoutePage() {
   const { toast } = useToast();
-  const { user, users, clients, loading } = useAuth();
+  const { user: currentUser, users, clients, loading } = useAuth();
   
-  // Form State
   const [routeName, setRouteName] = useState('');
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
-  
-  // Client selection and details
   const [selectedClients, setSelectedClients] = useState<ClientInRoute[]>([]);
-  
-  // Data State
   const [supervisors, setSupervisors] = useState<User[]>([]);
-  
-  // UI State
   const [isSaving, setIsSaving] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState<{ [key: string]: boolean }>({});
-
-  // Client Selection Dialog State
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
   const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
-
-
-  // Staging area for routes
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
   
   useEffect(() => {
     if (users) {
-      setSupervisors(users.filter(u => u.role === 'Supervisor'));
+      const filteredSupervisors = users.filter(u => u.role === 'Supervisor');
+      setSupervisors(filteredSupervisors);
     }
-  }, [users]);
+    if (currentUser?.role === 'Usuario' && currentUser.supervisorId) {
+        setSelectedSupervisorId(currentUser.supervisorId);
+    }
+  }, [users, currentUser]);
 
   useEffect(() => {
-    // Sync dialog selection with the main form selection when opening
     if (isClientDialogOpen) {
       const currentSelectedClientsFromMainList = clients.filter(c => selectedClients.some(sc => sc.ruc === c.ruc));
       setDialogSelectedClients(currentSelectedClientsFromMainList);
     }
   }, [isClientDialogOpen, clients, selectedClients]);
-
 
   const handleClientDetailChange = (ruc: string, field: keyof Omit<ClientInRoute, 'ruc' | 'nombre_comercial'>, value: any) => {
     setSelectedClients(prev => prev.map(client => 
@@ -94,7 +82,9 @@ export default function NewRoutePage() {
   const resetForm = () => {
     setRouteName('');
     setSelectedClients([]);
-    setSelectedSupervisorId(undefined);
+    if (currentUser?.role !== 'Usuario') {
+        setSelectedSupervisorId(undefined);
+    }
   }
 
   const handleAddToStage = () => {
@@ -102,26 +92,27 @@ export default function NewRoutePage() {
       toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente.', variant: 'destructive' });
       return;
     }
-    if (!user) {
+    if (!currentUser) {
         toast({ title: 'Error', description: 'Debes iniciar sesión para crear una ruta.', variant: 'destructive' });
         return;
     }
 
     const supervisor = supervisors.find(s => s.id === selectedSupervisorId);
-
     if (!supervisor) {
         toast({ title: 'Error', description: 'Supervisor no encontrado.', variant: 'destructive' });
         return;
     }
+
+    const isUserRole = currentUser.role === 'Usuario';
     
     const newStagedRoute: StagedRoute = {
         tempId: Date.now(),
         routeName,
         clients: selectedClients,
-        status: 'Planificada',
+        status: isUserRole ? 'Pendiente de Aprobación' : 'Planificada',
         supervisorId: selectedSupervisorId,
         supervisorName: supervisor.name,
-        createdBy: user.id,
+        createdBy: currentUser.id,
     };
 
     setStagedRoutes(prev => [...prev, newStagedRoute]);
@@ -220,7 +211,7 @@ export default function NewRoutePage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="supervisor">Asignar Supervisor</Label>
-               <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isLoading}>
+               <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isLoading || currentUser?.role === 'Usuario'}>
                   <SelectTrigger id="supervisor">
                       <Users className="mr-2 h-4 w-4" />
                       <SelectValue placeholder="Seleccionar" />
@@ -270,11 +261,11 @@ export default function NewRoutePage() {
                           <div key={client.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
                             <div className="flex items-center space-x-3">
                               <Checkbox 
-                                id={`client-${client.ruc}`}
+                                id={`client-${client.id}`}
                                 checked={dialogSelectedClients.some(c => c.ruc === client.ruc)}
                                 onCheckedChange={() => handleDialogClientToggle(client)}
                               />
-                              <Label htmlFor={`client-${client.ruc}`} className="font-normal cursor-pointer">
+                              <Label htmlFor={`client-${client.id}`} className="font-normal cursor-pointer">
                                 <p className="font-medium">{client.nombre_comercial}</p>
                                 <p className="text-xs text-muted-foreground">{client.ruc} - {client.nombre_cliente}</p>
                               </Label>
