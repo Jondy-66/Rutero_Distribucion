@@ -1,4 +1,5 @@
 
+
 /**
  * @fileoverview Este archivo define el `AuthContext` y el `AuthProvider`.
  * Es el núcleo de la gestión de estado de autenticación y datos globales en la aplicación.
@@ -182,10 +183,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
             const notificationsData = snapshot.docs.map(doc => {
                 const data = doc.data();
+                // Safely convert Timestamp to Date
+                const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
                 return {
                     id: doc.id,
                     ...data,
-                    createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
+                    createdAt,
                 } as Notification;
             });
             setNotifications(notificationsData);
