@@ -16,7 +16,7 @@ import type { User, Client, Notification } from '@/lib/types';
 import { collection, doc, onSnapshot, setDoc, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { Route } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getClients, getUsers, markNotificationAsRead, markAllNotificationsAsRead } from '@/lib/firebase/firestore';
+import { getClients, getUsers, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore } from '@/lib/firebase/firestore';
 
 /**
  * Define la forma de los datos que se proporcionarán a través del AuthContext.
@@ -101,7 +101,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const handleMarkNotificationAsRead = async (notificationId: string) => {
     try {
-        await markNotificationAsRead(notificationId);
+        await markAsReadFirestore(notificationId);
     } catch (error) {
         console.error("Failed to mark notification as read:", error);
         toast({ title: "Error", description: "No se pudo marcar la notificación como leída.", variant: "destructive" });
@@ -111,7 +111,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const handleMarkAllNotificationsAsRead = async () => {
     if (!user) return;
     try {
-        await markAllNotificationsAsRead(user.id);
+        await markAllAsReadFirestore(user.id);
     } catch (error) {
         console.error("Failed to mark all notifications as read:", error);
         toast({ title: "Error", description: "No se pudieron marcar las notificaciones.", variant: "destructive" });
@@ -179,12 +179,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
 
         // Suscripción en tiempo real a las notificaciones del usuario.
-        // Quitamos el orderBy para evitar la necesidad de un índice compuesto.
         const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', fbUser.uid));
         const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
             const notificationsData = snapshot.docs.map(doc => {
                 const data = doc.data();
-                const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
+                const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : null;
                 return {
                     id: doc.id,
                     ...data,
@@ -193,7 +192,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             });
             
             // Ordenamos las notificaciones en el cliente
-            notificationsData.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+            notificationsData.sort((a, b) => {
+                if (!a.createdAt) return 1;
+                if (!b.createdAt) return -1;
+                return b.createdAt.getTime() - a.createdAt.getTime()
+            });
 
             setNotifications(notificationsData);
 

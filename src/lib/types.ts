@@ -97,5 +97,5 @@ export type Notification = {
     message: string; // Mensaje de la notificación.
     read: boolean; // Estado de lectura de la notificación.
     link: string; // Enlace al que se redirige al hacer clic.
-    createdAt: Date; // Fecha de creación de la notificación.
+    createdAt: Date | null; // Fecha de creación de la notificación.
 }
