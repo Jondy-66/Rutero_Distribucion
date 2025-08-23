@@ -179,11 +179,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         });
 
         // Suscripción en tiempo real a las notificaciones del usuario.
-        const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', fbUser.uid), orderBy('createdAt', 'desc'));
+        // Quitamos el orderBy para evitar la necesidad de un índice compuesto.
+        const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', fbUser.uid));
         const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
             const notificationsData = snapshot.docs.map(doc => {
                 const data = doc.data();
-                // Safely convert Timestamp to Date
                 const createdAt = data.createdAt instanceof Timestamp ? data.createdAt.toDate() : new Date();
                 return {
                     id: doc.id,
@@ -191,6 +191,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     createdAt,
                 } as Notification;
             });
+            
+            // Ordenamos las notificaciones en el cliente
+            notificationsData.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
+
             setNotifications(notificationsData);
 
              const unreadCount = notificationsData.filter(n => !n.read).length;
