@@ -14,68 +14,48 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
-import { getRoutes, deleteRoute } from '@/lib/firebase/firestore';
+import { getRoutes } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import type { RoutePlan, User } from '@/lib/types';
-import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock } from 'lucide-react';
+import type { RoutePlan } from '@/lib/types';
+import { CheckCircle2, AlertCircle, XCircle, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator
-} from '@/components/ui/dropdown-menu';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
-import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function TeamRoutesPage() {
-  const { user, users } = useAuth();
+  const { user, users, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [allRoutes, setAllRoutes] = useState<RoutePlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<string>('all');
   
-  const fetchRoutes = async () => {
-    setLoading(true);
-    try {
-      const routesData = await getRoutes();
-      setAllRoutes(routesData);
-    } catch (error: any) {
-      console.error("Failed to fetch routes:", error);
-      toast({
-        title: "Error al Cargar Rutas",
-        description: "No se pudieron cargar las rutas planificadas.",
-        variant: "destructive"
-      });
-    } finally {
+  useEffect(() => {
+    const fetchRoutesData = async () => {
+      setLoading(true);
+      try {
+        const routesData = await getRoutes();
+        setAllRoutes(routesData);
+      } catch (error: any) {
+        console.error("Failed to fetch routes:", error);
+        toast({
+          title: "Error al Cargar Rutas",
+          description: "No se pudieron cargar las rutas planificadas.",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user && (user.role === 'Administrador' || user.role === 'Supervisor')) {
+      fetchRoutesData();
+    } else if(!authLoading) {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    if (user && (user.role === 'Administrador' || user.role === 'Supervisor')) {
-        fetchRoutes();
-    } else {
-        setLoading(false);
-    }
-  }, [user]);
+  }, [user, authLoading, toast]);
 
   const managedUsers = useMemo(() => {
     if (!user) return [];
@@ -130,10 +110,18 @@ export default function TeamRoutesPage() {
 
   const getRouteDate = (route: RoutePlan) => {
     if (route.clients && route.clients.length > 0 && route.clients[0].date) {
-      return format(route.clients[0].date, 'PPP', { locale: es });
+      // Ensure date is a valid Date object before formatting
+      const date = route.clients[0].date;
+      if (date instanceof Date && !isNaN(date.getTime())) {
+          return format(date, 'PPP', { locale: es });
+      }
     }
     return 'N/A';
   };
+
+  if (authLoading) {
+      return <PageHeader title="Rutas de Equipo" description="Cargando..." />
+  }
 
   if (user?.role !== 'Administrador' && user?.role !== 'Supervisor') {
       return (
@@ -235,3 +223,5 @@ export default function TeamRoutesPage() {
     </>
   );
 }
+
+    
