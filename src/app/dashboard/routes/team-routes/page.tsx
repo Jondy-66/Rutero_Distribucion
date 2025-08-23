@@ -23,6 +23,7 @@ import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Timestamp } from 'firebase/firestore';
 
 export default function TeamRoutesPage() {
   const { user, users, loading: authLoading } = useAuth();
@@ -112,6 +113,9 @@ export default function TeamRoutesPage() {
     if (route.clients && route.clients.length > 0 && route.clients[0].date) {
       // Ensure date is a valid Date object before formatting
       const date = route.clients[0].date;
+      if (date instanceof Timestamp) {
+        return format(date.toDate(), 'PPP', { locale: es });
+      }
       if (date instanceof Date && !isNaN(date.getTime())) {
           return format(date, 'PPP', { locale: es });
       }
@@ -223,5 +227,3 @@ export default function TeamRoutesPage() {
     </>
   );
 }
-
-    
