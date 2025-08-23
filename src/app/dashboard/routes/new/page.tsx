@@ -135,26 +135,27 @@ export default function NewRoutePage() {
     }
     setIsSaving(true);
     try {
-        const routesToSave = stagedRoutes.map(({ tempId, ...rest }) => ({
-            ...rest,
-            clients: rest.clients.map(c => ({
-              ...c,
-              date: c.date ? Timestamp.fromDate(c.date) : null,
-              dayOfWeek: c.dayOfWeek || null,
-              startTime: c.startTime || null,
-              endTime: c.endTime || null,
-            })),
-        }));
+        const routesToSave = stagedRoutes.map(({ tempId, ...rest }) => {
+            const clientsWithTimestamps = rest.clients.map(c => ({
+                ...c,
+                date: c.date ? Timestamp.fromDate(c.date) : null,
+            }));
+            
+            return {
+                ...rest,
+                clients: clientsWithTimestamps,
+            };
+        });
 
-        await addRoutesBatch(routesToSave as any);
+        await addRoutesBatch(routesToSave);
         toast({ title: 'Rutas Guardadas', description: `${stagedRoutes.length} rutas han sido guardadas exitosamente.` });
         setStagedRoutes([]);
     } catch(error: any) {
-        console.error(error);
+        console.error("Error saving routes:", error);
         if (error.code === 'permission-denied') {
             toast({ title: 'Error de Permisos', description: 'No tienes permiso para crear rutas.', variant: 'destructive' });
         } else {
-            toast({ title: 'Error', description: 'No se pudieron guardar las rutas.', variant: 'destructive' });
+            toast({ title: 'Error', description: error.message || 'No se pudieron guardar las rutas.', variant: 'destructive' });
         }
     } finally {
         setIsSaving(false);
