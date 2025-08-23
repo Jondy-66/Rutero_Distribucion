@@ -1,8 +1,11 @@
 
+
 /**
  * @fileoverview Define los tipos de datos principales utilizados en la aplicación.
  * Estos tipos aseguran la consistencia de los datos entre los componentes y la base de datos de Firestore.
  */
+
+import { Timestamp } from 'firebase/firestore';
 
 /**
  * Representa la estructura de un objeto de Usuario en el sistema.
@@ -68,6 +71,7 @@ export type RoutePlan = {
   createdBy: string; // ID del usuario que creó la ruta.
   startTime?: string;
   endTime?: string;
+  createdAt?: Timestamp | Date;
 };
 
 
@@ -82,3 +86,16 @@ export type Prediction = {
   LatitudTrz: number;
   LongitudTrz: number;
 };
+
+/**
+ * Representa la estructura de una notificación en el sistema.
+ */
+export type Notification = {
+    id: string; // ID único del documento en Firestore.
+    userId: string; // ID del usuario que debe recibir la notificación.
+    title: string; // Título de la notificación.
+    message: string; // Mensaje de la notificación.
+    read: boolean; // Estado de lectura de la notificación.
+    link: string; // Enlace al que se redirige al hacer clic.
+    createdAt: Date; // Fecha de creación de la notificación.
+}

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PlusCircle, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, Save, Search } from 'lucide-react';
-import { addRoutesBatch } from '@/lib/firebase/firestore';
+import { addRoutesBatch, addNotification } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -133,6 +133,8 @@ export default function NewRoutePage() {
         toast({ title: 'Lista Vacía', description: 'No hay rutas planificadas para guardar.', variant: 'destructive' });
         return;
     }
+    if (!currentUser) return;
+
     setIsSaving(true);
     try {
         const routesToSave = stagedRoutes.map(({ tempId, ...rest }) => {
@@ -147,7 +149,21 @@ export default function NewRoutePage() {
             };
         });
 
-        await addRoutesBatch(routesToSave);
+        const routeIds = await addRoutesBatch(routesToSave);
+        
+        for (let i = 0; i < stagedRoutes.length; i++) {
+            const route = stagedRoutes[i];
+            const routeId = routeIds[i];
+            if (route.status === 'Pendiente de Aprobación') {
+                await addNotification({
+                    userId: route.supervisorId,
+                    title: 'Nueva ruta para aprobar',
+                    message: `${currentUser.name} ha enviado la ruta "${route.routeName}" para tu aprobación.`,
+                    link: `/dashboard/routes/${routeId}`
+                });
+            }
+        }
+        
         toast({ title: 'Rutas Guardadas', description: `${stagedRoutes.length} rutas han sido guardadas exitosamente.` });
         setStagedRoutes([]);
     } catch(error: any) {

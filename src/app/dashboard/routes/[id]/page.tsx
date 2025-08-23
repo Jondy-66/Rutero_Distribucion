@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, PlusCircle, Search, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
-import { getRoute, updateRoute } from '@/lib/firebase/firestore';
+import { getRoute, updateRoute, addNotification } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -134,7 +134,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
 
   const handleUpdateRoute = async (e: React.FormEvent, newStatus?: RoutePlan['status']) => {
     e.preventDefault();
-    if (!route) return;
+    if (!route || !currentUser) return;
 
     if (!newStatus) { // Only validate if saving, not when approving/rejecting
         if (!route.routeName || clientsInRoute.length === 0 || !route.supervisorId) {
@@ -168,6 +168,15 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       
       if(newStatus) {
         dataToUpdate.status = newStatus;
+
+        // Send notification to the user who created the route
+        await addNotification({
+            userId: route.createdBy,
+            title: `Ruta ${newStatus === 'Planificada' ? 'Aprobada' : 'Rechazada'}`,
+            message: `Tu ruta "${route.routeName}" ha sido ${newStatus === 'Planificada' ? 'aprobada' : 'rechazada'} por ${currentUser.name}.`,
+            link: `/dashboard/routes/${routeId}`
+        });
+
       }
 
       delete (dataToUpdate as Partial<RoutePlan>).id;

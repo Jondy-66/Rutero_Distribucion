@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Este archivo define el `AuthContext` y el `AuthProvider`.
  * Es el núcleo de la gestión de estado de autenticación y datos globales en la aplicación.
@@ -7,14 +8,14 @@
 
 'use client';
 
-import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { User as FirebaseAuthUser, onAuthStateChanged } from 'firebase/auth';
 import { app, db, auth } from '@/lib/firebase/config';
-import type { User, Client } from '@/lib/types';
-import { collection, doc, onSnapshot, setDoc } from 'firebase/firestore';
+import type { User, Client, Notification } from '@/lib/types';
+import { collection, doc, onSnapshot, setDoc, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { Route } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getClients, getUsers } from '@/lib/firebase/firestore';
+import { getClients, getUsers, markNotificationAsRead, markAllNotificationsAsRead } from '@/lib/firebase/firestore';
 
 /**
  * Define la forma de los datos que se proporcionarán a través del AuthContext.
@@ -25,7 +26,11 @@ interface AuthContextType {
   loading: boolean; // Indica si se está cargando el estado inicial de autenticación o los datos.
   clients: Client[]; // Lista de todos los clientes.
   users: User[]; // Lista de todos los usuarios.
+  notifications: Notification[];
+  unreadCount: number;
   refetchData: (dataType: 'clients' | 'users') => Promise<void>; // Función para recargar datos específicos.
+  markNotificationAsRead: (notificationId: string) => Promise<void>;
+  markAllNotificationsAsRead: () => Promise<void>;
 }
 
 /**
@@ -48,11 +53,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [clients, setClients] = useState<Client[]>([]);
   // Estado para la lista de usuarios.
   const [users, setUsers] = useState<User[]>([]);
+  // Estado para la lista de notificaciones.
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   // Estado de carga general para la autenticación inicial.
   const [loading, setLoading] = useState(true);
   // Estado de carga específico para la carga de datos (clientes, usuarios).
   const [dataLoading, setDataLoading] = useState(false);
   const { toast } = useToast();
+  const notificationToastShown = useRef(false);
 
   /**
    * Carga los datos iniciales de la aplicación (usuarios) cuando un usuario inicia sesión.
@@ -90,6 +98,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
   }, [toast]);
 
+  const handleMarkNotificationAsRead = async (notificationId: string) => {
+    try {
+        await markNotificationAsRead(notificationId);
+    } catch (error) {
+        console.error("Failed to mark notification as read:", error);
+        toast({ title: "Error", description: "No se pudo marcar la notificación como leída.", variant: "destructive" });
+    }
+  }
+
+  const handleMarkAllNotificationsAsRead = async () => {
+    if (!user) return;
+    try {
+        await markAllNotificationsAsRead(user.id);
+    } catch (error) {
+        console.error("Failed to mark all notifications as read:", error);
+        toast({ title: "Error", description: "No se pudieron marcar las notificaciones.", variant: "destructive" });
+    }
+  }
+
   /**
    * Efecto principal que se suscribe a los cambios de estado de autenticación de Firebase.
    */
@@ -97,6 +124,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // onAuthStateChanged devuelve una función para darse de baja (unsubscribe).
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
       setLoading(true);
+      notificationToastShown.current = false; // Reset toast shown status on user change
       setFirebaseUser(fbUser);
 
       if (fbUser) {
@@ -149,10 +177,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             toast({ title: "Error", description: "No se pudieron cargar los clientes en tiempo real.", variant: "destructive" });
         });
 
+        // Suscripción en tiempo real a las notificaciones del usuario.
+        const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', fbUser.uid), orderBy('createdAt', 'desc'));
+        const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
+            const notificationsData = snapshot.docs.map(doc => {
+                const data = doc.data();
+                return {
+                    id: doc.id,
+                    ...data,
+                    createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
+                } as Notification;
+            });
+            setNotifications(notificationsData);
+
+             const unreadCount = notificationsData.filter(n => !n.read).length;
+             if (unreadCount > 0 && !notificationToastShown.current) {
+                toast({
+                    title: "Notificaciones Pendientes",
+                    description: `Tienes ${unreadCount} notificación(es) sin leer.`,
+                });
+                notificationToastShown.current = true;
+             }
+
+        }, (error) => {
+            console.error("Error fetching notifications:", error);
+            toast({ title: "Error", description: "No se pudieron cargar las notificaciones.", variant: "destructive" });
+        });
+
         // Función de limpieza: darse de baja de las suscripciones cuando el componente se desmonta.
         return () => {
             unsubscribeUser();
             unsubscribeClients();
+            unsubscribeNotifications();
         };
 
       } else {
@@ -161,6 +217,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setFirebaseUser(null);
         setClients([]);
         setUsers([]);
+        setNotifications([]);
         setLoading(false);
       }
     });
@@ -182,10 +239,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       </div>
       )
   }
+  
+  const unreadCount = notifications.filter(n => !n.read).length;
 
   // Provee el estado y las funciones a los componentes hijos.
   return (
-    <AuthContext.Provider value={{ user, firebaseUser, loading: dataLoading, clients, users, refetchData }}>
+    <AuthContext.Provider value={{ 
+        user, 
+        firebaseUser, 
+        loading: dataLoading, 
+        clients, 
+        users, 
+        refetchData, 
+        notifications,
+        unreadCount,
+        markNotificationAsRead: handleMarkNotificationAsRead,
+        markAllNotificationsAsRead: handleMarkAllNotificationsAsRead
+    }}>
       {children}
     </AuthContext.Provider>
   );

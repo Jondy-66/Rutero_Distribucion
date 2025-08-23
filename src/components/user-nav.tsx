@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -12,14 +13,23 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { User, Settings, LogOut } from 'lucide-react';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover"
+import { User, Settings, LogOut, Bell, CheckCheck } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { handleSignOut } from '@/lib/firebase/auth';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
+import type { Notification } from '@/lib/types';
+import { cn } from '@/lib/utils';
+import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 export function UserNav() {
-  const { user } = useAuth();
+  const { user, notifications, unreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   
@@ -33,46 +43,100 @@ export function UserNav() {
     return null;
   }
   
+  const handleNotificationClick = (notification: Notification) => {
+    markNotificationAsRead(notification.id);
+    router.push(notification.link);
+  }
+  
   const fallback = user.name ? user.name.split(' ').map(n => n[0]).join('') : 'U';
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={user.avatar} alt={user.name} data-ai-hint="user avatar" />
-            <AvatarFallback>{fallback}</AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56" align="end" forceMount>
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col space-y-1">
-            <p className="text-sm font-medium leading-none">{user.name}</p>
-            <p className="text-xs leading-none text-muted-foreground">
-              {user.email}
-            </p>
-          </div>
-        </DropdownMenuLabel>
-        <DropdownMenuSeparator />
-        <DropdownMenuGroup>
-          <Link href="/dashboard/profile">
+    <div className="flex items-center gap-4">
+      <Popover>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="icon" className="relative">
+            <Bell className="h-5 w-5" />
+            {unreadCount > 0 && (
+              <span className="absolute top-0 right-0 flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+              </span>
+            )}
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-80 p-0" align="end">
+            <div className="flex items-center justify-between p-4 border-b">
+                <h3 className="font-semibold">Notificaciones</h3>
+                <Button variant="ghost" size="sm" onClick={markAllNotificationsAsRead} disabled={unreadCount === 0}>
+                    <CheckCheck className="mr-2 h-4 w-4" />
+                    Marcar todo leído
+                </Button>
+            </div>
+            <div className="p-2 max-h-80 overflow-y-auto">
+              {notifications.length === 0 ? (
+                <p className="text-center text-sm text-muted-foreground py-4">No tienes notificaciones.</p>
+              ) : (
+                notifications.map((n) => (
+                  <div 
+                    key={n.id} 
+                    onClick={() => handleNotificationClick(n)}
+                    className={cn(
+                        "flex items-start gap-3 p-2 rounded-lg cursor-pointer hover:bg-accent/50",
+                        !n.read && "bg-accent/20"
+                    )}
+                  >
+                    <div className={cn("mt-1 h-2 w-2 shrink-0 rounded-full", !n.read && "bg-primary")} />
+                    <div className="flex-1">
+                      <p className="font-medium text-sm">{n.title}</p>
+                      <p className="text-xs text-muted-foreground">{n.message}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {n.createdAt ? formatDistanceToNow(n.createdAt, { addSuffix: true, locale: es }) : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+        </PopoverContent>
+      </Popover>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={user.avatar} alt={user.name} data-ai-hint="user avatar" />
+              <AvatarFallback>{fallback}</AvatarFallback>
+            </Avatar>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-56" align="end" forceMount>
+          <DropdownMenuLabel className="font-normal">
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm font-medium leading-none">{user.name}</p>
+              <p className="text-xs leading-none text-muted-foreground">
+                {user.email}
+              </p>
+            </div>
+          </DropdownMenuLabel>
+          <DropdownMenuSeparator />
+          <DropdownMenuGroup>
+            <Link href="/dashboard/profile">
+              <DropdownMenuItem>
+                <User className="mr-2 h-4 w-4" />
+                <span>Perfil</span>
+              </DropdownMenuItem>
+            </Link>
             <DropdownMenuItem>
-              <User className="mr-2 h-4 w-4" />
-              <span>Perfil</span>
+              <Settings className="mr-2 h-4 w-4" />
+              <span>Configuración</span>
             </DropdownMenuItem>
-          </Link>
-          <DropdownMenuItem>
-            <Settings className="mr-2 h-4 w-4" />
-            <span>Configuración</span>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onClick={onSignOut}>
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Cerrar Sesión</span>
           </DropdownMenuItem>
-        </DropdownMenuGroup>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onClick={onSignOut}>
-            <LogOut className="mr-2 h-4 w-4" />
-            <span>Cerrar Sesión</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
   );
 }

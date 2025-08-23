@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Este archivo contiene funciones para interactuar con la base de datos Firestore.
  * Proporciona una capa de abstracción para realizar operaciones CRUD (Crear, Leer, Actualizar, Eliminar)
@@ -6,7 +7,7 @@
 
 import { db } from './config';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp } from 'firebase/firestore';
-import type { User, Client, RoutePlan, ClientInRoute } from '@/lib/types';
+import type { User, Client, RoutePlan, ClientInRoute, Notification } from '@/lib/types';
 
 // --- COLECCIÓN DE USUARIOS ---
 
@@ -240,13 +241,15 @@ type RouteToSave = Omit<RoutePlan, 'id' | 'createdAt'>;
 /**
  * Añade múltiples planes de ruta en un lote.
  * @param {RouteToSave[]} routesData - Un array de objetos de ruta a guardar.
- * @returns {Promise<void>} Una promesa que se resuelve cuando todas las rutas han sido añadidas.
+ * @returns {Promise<string[]>} Una promesa que se resuelve con los IDs de las nuevas rutas.
  */
-export const addRoutesBatch = async (routesData: RouteToSave[]) => {
+export const addRoutesBatch = async (routesData: RouteToSave[]): Promise<string[]> => {
     const batch = writeBatch(db);
+    const newRouteIds: string[] = [];
     
     for (const route of routesData) {
         const newRouteRef = doc(routesCollection);
+        newRouteIds.push(newRouteRef.id);
         
         const clientsWithTimestamps = route.clients.map(client => ({
             ...client,
@@ -263,15 +266,16 @@ export const addRoutesBatch = async (routesData: RouteToSave[]) => {
         });
     }
 
-    return batch.commit();
+    await batch.commit();
+    return newRouteIds;
 }
 
 /**
  * Añade un único plan de ruta a Firestore.
  * @param {Omit<RoutePlan, 'id' | 'createdAt'>} routeData - El objeto de ruta a guardar. La fecha debe ser un Timestamp.
- * @returns {Promise<DocumentReference>} Una promesa que se resuelve con la referencia al documento creado.
+ * @returns {Promise<string>} Una promesa que se resuelve con el ID del documento creado.
  */
-export const addRoute = (routeData: Omit<RoutePlan, 'id' | 'createdAt'>) => {
+export const addRoute = async (routeData: Omit<RoutePlan, 'id' | 'createdAt'>): Promise<string> => {
     // Convert client dates to Timestamps
     const clientsWithTimestamps = (routeData.clients as ClientInRoute[]).map(client => ({
         ...client,
@@ -281,11 +285,12 @@ export const addRoute = (routeData: Omit<RoutePlan, 'id' | 'createdAt'>) => {
         endTime: client.endTime || null,
     }));
 
-    return addDoc(routesCollection, {
+    const newDocRef = await addDoc(routesCollection, {
         ...routeData,
         clients: clientsWithTimestamps,
         createdAt: serverTimestamp()
     });
+    return newDocRef.id;
 };
 
 /**
@@ -400,4 +405,48 @@ export const deleteRoute = (id: string) => {
   return deleteDoc(routeDoc);
 };
 
-    
+
+// --- COLECCIÓN DE NOTIFICACIONES ---
+
+/**
+ * Referencia a la colección 'notifications' en Firestore.
+ */
+const notificationsCollection = collection(db, 'notifications');
+
+/**
+ * Añade una nueva notificación a Firestore.
+ * @param {Omit<Notification, 'id' | 'createdAt' | 'read'>} notificationData - Los datos de la notificación a añadir.
+ * @returns {Promise<void>}
+ */
+export const addNotification = (notificationData: Omit<Notification, 'id' | 'createdAt' | 'read'>) => {
+    return addDoc(notificationsCollection, {
+        ...notificationData,
+        read: false,
+        createdAt: serverTimestamp(),
+    });
+};
+
+/**
+ * Marca una notificación específica como leída.
+ * @param {string} notificationId - El ID de la notificación a marcar como leída.
+ * @returns {Promise<void>}
+ */
+export const markNotificationAsRead = (notificationId: string) => {
+    const notificationDoc = doc(db, 'notifications', notificationId);
+    return updateDoc(notificationDoc, { read: true });
+};
+
+/**
+ * Marca todas las notificaciones de un usuario como leídas.
+ * @param {string} userId - El ID del usuario cuyas notificaciones se marcarán como leídas.
+ * @returns {Promise<void>}
+ */
+export const markAllNotificationsAsRead = async (userId: string) => {
+    const q = query(notificationsCollection, where('userId', '==', userId), where('read', '==', false));
+    const snapshot = await getDocs(q);
+    const batch = writeBatch(db);
+    snapshot.docs.forEach(doc => {
+        batch.update(doc.ref, { read: true });
+    });
+    return batch.commit();
+};
