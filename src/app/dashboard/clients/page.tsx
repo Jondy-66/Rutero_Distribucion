@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { addClientsBatch, deleteClient, getClients, updateClient } from '@/lib/firebase/firestore';
+import { addClientsBatch, deleteClient, updateClient } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
 import { PlusCircle, UploadCloud, File, Search, MoreHorizontal } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -455,4 +455,5 @@ export default function ClientsPage() {
   );
 }
 
+    
     

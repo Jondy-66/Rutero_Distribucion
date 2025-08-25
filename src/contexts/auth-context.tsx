@@ -64,13 +64,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const notificationToastShown = useRef(false);
 
   /**
-   * Carga los datos iniciales de la aplicación (usuarios) cuando un usuario inicia sesión.
+   * Carga los datos iniciales de la aplicación (usuarios y clientes) cuando un usuario inicia sesión.
    */
   const fetchInitialData = useCallback(async () => {
     setDataLoading(true);
     try {
-        const usersData = await getUsers();
+        const [usersData, clientsData] = await Promise.all([getUsers(), getClients()]);
         setUsers(usersData);
+        setClients(clientsData);
     } catch(error) {
         console.error("Failed to fetch initial data:", error);
         toast({ title: "Error", description: "No se pudieron cargar los datos iniciales.", variant: "destructive" });
@@ -168,16 +169,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         );
 
-        // Suscripción en tiempo real a la colección de clientes.
-        const clientsCollectionRef = collection(db, 'clients');
-        const unsubscribeClients = onSnapshot(clientsCollectionRef, (snapshot) => {
-            const clientsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
-            setClients(clientsData);
-        }, (error) => {
-            console.error("Error fetching clients in real-time:", error);
-            toast({ title: "Error", description: "No se pudieron cargar los clientes en tiempo real.", variant: "destructive" });
-        });
-
         // Suscripción en tiempo real a las notificaciones del usuario.
         const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', fbUser.uid));
         const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
@@ -195,6 +186,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             notificationsData.sort((a, b) => {
                 if (!a.createdAt) return 1;
                 if (!b.createdAt) return -1;
+                if (a.createdAt.getTime() === b.createdAt.getTime()) return 0;
                 return b.createdAt.getTime() - a.createdAt.getTime()
             });
 
@@ -217,7 +209,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // Función de limpieza: darse de baja de las suscripciones cuando el componente se desmonta.
         return () => {
             unsubscribeUser();
-            unsubscribeClients();
             unsubscribeNotifications();
         };
 
@@ -270,3 +261,5 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     </AuthContext.Provider>
   );
 };
+
+    
