@@ -177,8 +177,12 @@ export default function PrediccionesPage() {
   }
 
   const handleViewOnMap = (prediction: Prediction) => {
-    setSelectedLocation({ lat: prediction.LatitudTrz, lng: prediction.LongitudTrz });
-    setIsMapOpen(true);
+    if (isFinite(prediction.LatitudTrz) && isFinite(prediction.LongitudTrz)) {
+      setSelectedLocation({ lat: prediction.LatitudTrz, lng: prediction.LongitudTrz });
+      setIsMapOpen(true);
+    } else {
+      toast({ title: 'Ubicación no válida', description: 'Las coordenadas para esta predicción no son válidas.', variant: 'destructive' });
+    }
   };
 
   const handleViewOptimizedRoute = () => {
@@ -187,19 +191,28 @@ export default function PrediccionesPage() {
       return;
     }
     
-    const rucsFromPrediction = new Set(filteredPredicciones.map(p => p.RUC));
-    const clientsFromDb = clients.filter(client => 
-      rucsFromPrediction.has(client.ruc) && 
-      isFinite(client.latitud) && 
-      isFinite(client.longitud)
-    );
+    const clientsFromPrediction = filteredPredicciones
+      .filter(p => isFinite(p.LatitudTrz) && isFinite(p.LongitudTrz))
+      .map((p, index) => ({
+        id: p.RUC || `pred-${index}`,
+        ruc: p.RUC,
+        latitud: p.LatitudTrz,
+        longitud: p.LongitudTrz,
+        nombre_comercial: p.RUC, // Usamos RUC como fallback si no hay otro nombre
+        ejecutivo: p.Ejecutivo,
+        nombre_cliente: p.RUC,
+        provincia: '',
+        canton: '',
+        direccion: '',
+        status: 'active' as const,
+      }));
 
-    if (clientsFromDb.length === 0) {
-      toast({ title: "Sin ubicaciones válidas", description: "Ninguno de los clientes predichos tiene coordenadas válidas en la base de datos para mostrar la ruta." });
+    if (clientsFromPrediction.length === 0) {
+      toast({ title: "Sin ubicaciones válidas", description: "Ninguna de las predicciones tiene coordenadas válidas para mostrar la ruta." });
       return;
     }
 
-    setClientsForMap(clientsFromDb);
+    setClientsForMap(clientsFromPrediction);
     setIsRouteMapOpen(true);
   };
 
