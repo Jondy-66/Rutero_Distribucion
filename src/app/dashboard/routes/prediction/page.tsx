@@ -8,14 +8,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Search, Save, MapPin, Download } from "lucide-react";
+import { LoaderCircle, Search, Save, MapPin, Download, Route } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
-import { addRoute } from "@/lib/firebase/firestore";
+import { addRoute, addNotification } from "@/lib/firebase/firestore";
 import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { MapView } from "@/components/map-view";
@@ -36,6 +36,8 @@ export default function PrediccionesPage() {
   const [selectedEjecutivo, setSelectedEjecutivo] = useState('todos');
   const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [isRouteMapOpen, setIsRouteMapOpen] = useState(false);
+  const [clientsForMap, setClientsForMap] = useState<Client[]>([]);
   const { toast } = useToast();
   const { users, clients, user: currentUser } = useAuth();
   const router = useRouter();
@@ -107,7 +109,7 @@ export default function PrediccionesPage() {
             throw new Error(`No se pudo encontrar al usuario ejecutivo: ${selectedEjecutivo}`);
         }
         
-        let supervisor: typeof users[0] | undefined;
+        let supervisor;
         if(executiveUser.role === 'Supervisor') {
             supervisor = executiveUser;
         } else if (executiveUser.supervisorId) {
@@ -115,12 +117,9 @@ export default function PrediccionesPage() {
         } else if (currentUser.role === 'Supervisor') {
             supervisor = currentUser;
         } else if (currentUser.role === 'Administrador') {
-            // Un admin puede que necesite seleccionar un supervisor si el usuario no tiene uno
-            // Para este caso, buscaremos si hay alguno disponible o lanzamos error.
              const availableSupervisors = users.filter(u => u.role === 'Supervisor');
              if(availableSupervisors.length > 0) supervisor = availableSupervisors[0];
         }
-
 
         if (!supervisor) {
             throw new Error(`El ejecutivo ${selectedEjecutivo} no tiene un supervisor asignado y no se pudo determinar uno.`);
@@ -150,7 +149,17 @@ export default function PrediccionesPage() {
             createdBy: currentUser.id,
         };
 
-        await addRoute(newRoute);
+        const newRouteId = await addRoute(newRoute);
+
+        if (newRoute.status === 'Pendiente de Aprobación') {
+             await addNotification({
+                userId: supervisor.id,
+                title: 'Nueva ruta para aprobar',
+                message: `${currentUser.name} ha enviado la ruta "${newRoute.routeName}" para tu aprobación.`,
+                link: `/dashboard/routes/${newRouteId}`
+            });
+        }
+        
         toast({ title: 'Ruta Guardada', description: `Se ha creado una nueva ruta para ${selectedEjecutivo}.`});
         router.push('/dashboard/routes');
 
@@ -169,6 +178,32 @@ export default function PrediccionesPage() {
   const handleViewOnMap = (prediction: Prediction) => {
     setSelectedLocation({ lat: prediction.LatitudTrz, lng: prediction.LongitudTrz });
     setIsMapOpen(true);
+  };
+
+  const handleViewOptimizedRoute = () => {
+    if (filteredPredicciones.length === 0) {
+      toast({ title: "Sin datos", description: "No hay predicciones para mostrar en el mapa." });
+      return;
+    }
+    const clientsData = filteredPredicciones.map(p => {
+        const clientDetail = clients.find(c => c.ruc === p.RUC);
+        return {
+            id: p.RUC,
+            latitud: p.LatitudTrz,
+            longitud: p.LongitudTrz,
+            nombre_comercial: clientDetail?.nombre_comercial || p.RUC,
+            // Add other required Client fields with default values
+            ejecutivo: clientDetail?.ejecutivo || p.Ejecutivo,
+            ruc: p.RUC,
+            nombre_cliente: clientDetail?.nombre_cliente || p.RUC,
+            provincia: clientDetail?.provincia || '',
+            canton: clientDetail?.canton || '',
+            direccion: clientDetail?.direccion || 'N/A',
+            status: clientDetail?.status || 'active'
+        } as Client
+    });
+    setClientsForMap(clientsData);
+    setIsRouteMapOpen(true);
   };
 
   const handleDownloadExcel = () => {
@@ -322,6 +357,10 @@ export default function PrediccionesPage() {
                     <Save className="mr-2 h-4 w-4" />
                     Guardar Ruta de Predicción
                 </Button>
+                 <Button onClick={handleViewOptimizedRoute} variant="outline" disabled={loading || filteredPredicciones.length === 0}>
+                    <Route className="mr-2 h-4 w-4" />
+                    Ver Ruta en Mapa
+                </Button>
                 <Button onClick={handleDownloadExcel} variant="outline" disabled={loading || filteredPredicciones.length === 0}>
                     <Download className="mr-2 h-4 w-4" />
                     Descargar Excel
@@ -346,6 +385,24 @@ export default function PrediccionesPage() {
                             containerClassName="h-full w-full"
                         />
                     )}
+                </div>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog open={isRouteMapOpen} onOpenChange={setIsRouteMapOpen}>
+            <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
+                <DialogHeader>
+                    <DialogTitle>Ruta Optimizada de Predicciones</DialogTitle>
+                     <DialogDescription>
+                        Esta es la ruta óptima sugerida que conecta todos los clientes de la predicción actual.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="flex-grow">
+                    <MapView 
+                        clients={clientsForMap}
+                        containerClassName="h-full w-full"
+                        showDirections={true}
+                    />
                 </div>
             </DialogContent>
         </Dialog>

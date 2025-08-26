@@ -1,7 +1,7 @@
 
 'use client';
 
-import { APIProvider, Map, AdvancedMarker } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
 import type { Client } from '@/lib/types';
 import { Card } from './ui/card';
 import { useState, useEffect } from 'react';
@@ -11,14 +11,56 @@ type MapViewProps = {
     center?: { lat: number; lng: number };
     markerPosition?: { lat: number; lng: number } | null;
     containerClassName?: string;
+    showDirections?: boolean;
 };
+
+
+function DirectionsRenderer({ clients }: { clients: Client[] }) {
+    const map = useMap();
+
+    useEffect(() => {
+        if (!map || !clients || clients.length < 2) return;
+        const directionsService = new google.maps.DirectionsService();
+        const directionsRenderer = new google.maps.DirectionsRenderer({
+            map,
+            suppressMarkers: true // We use AdvancedMarker instead
+        });
+        
+        const origin = { lat: clients[0].latitud, lng: clients[0].longitud };
+        const destination = { lat: clients[clients.length - 1].latitud, lng: clients[clients.length - 1].longitud };
+        const waypoints = clients.slice(1, -1).map(client => ({
+            location: { lat: client.latitud, lng: client.longitud },
+            stopover: true
+        }));
+
+        directionsService.route({
+            origin,
+            destination,
+            waypoints,
+            travelMode: google.maps.TravelMode.DRIVING
+        }, (result, status) => {
+            if (status === google.maps.DirectionsStatus.OK) {
+                directionsRenderer.setDirections(result);
+            } else {
+                console.error(`error fetching directions ${result}`);
+            }
+        });
+
+        return () => {
+            directionsRenderer.setMap(null);
+        };
+    }, [map, clients]);
+
+    return null;
+}
 
 
 export function MapView({ 
     clients, 
     center, 
     markerPosition,
-    containerClassName
+    containerClassName,
+    showDirections = false
 }: MapViewProps) {
   const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
   const defaultPosition = { lat: -1.8312, lng: -78.1834 }; // Centered on Ecuador
@@ -27,8 +69,11 @@ export function MapView({
   useEffect(() => {
     if (center) {
       setCurrentCenter(center);
+    } else if (clients && clients.length > 0) {
+        // Center map on the first client if clients are provided but no center
+        setCurrentCenter({ lat: clients[0].latitud, lng: clients[0].longitud });
     }
-  }, [center]);
+  }, [center, clients]);
 
   if (!apiKey) {
     return (
@@ -63,6 +108,9 @@ export function MapView({
           ))}
           {markerPosition && (
               <AdvancedMarker position={markerPosition} />
+          )}
+          {showDirections && clients && clients.length > 1 && (
+            <DirectionsRenderer clients={clients} />
           )}
         </Map>
       </div>
