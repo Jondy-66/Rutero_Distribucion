@@ -20,6 +20,7 @@ import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { MapView } from "@/components/map-view";
 import * as XLSX from 'xlsx';
+import { isFinite } from "lodash";
 
 /**
  * Componente de la página de predicciones.
@@ -185,34 +186,20 @@ export default function PrediccionesPage() {
       toast({ title: "Sin datos", description: "No hay predicciones para mostrar en el mapa." });
       return;
     }
-    const validPredictions = filteredPredicciones.filter(p =>
-      isFinite(p.LatitudTrz) && isFinite(p.LongitudTrz)
+    
+    const rucsFromPrediction = new Set(filteredPredicciones.map(p => p.RUC));
+    const clientsFromDb = clients.filter(client => 
+      rucsFromPrediction.has(client.ruc) && 
+      isFinite(client.latitud) && 
+      isFinite(client.longitud)
     );
 
-    if (validPredictions.length === 0) {
-      toast({ title: "Sin ubicaciones válidas", description: "Ninguna de las predicciones tiene coordenadas válidas para mostrar en el mapa." });
+    if (clientsFromDb.length === 0) {
+      toast({ title: "Sin ubicaciones válidas", description: "Ninguno de los clientes predichos tiene coordenadas válidas en la base de datos para mostrar la ruta." });
       return;
     }
 
-    const clientsData = validPredictions.map(p => {
-        const clientDetail = clients.find(c => c.ruc === p.RUC);
-        return {
-            id: p.RUC,
-            latitud: p.LatitudTrz,
-            longitud: p.LongitudTrz,
-            nombre_comercial: clientDetail?.nombre_comercial || p.RUC,
-            // Add other required Client fields with default values
-            ejecutivo: clientDetail?.ejecutivo || p.Ejecutivo,
-            ruc: p.RUC,
-            nombre_cliente: clientDetail?.nombre_cliente || p.RUC,
-            provincia: clientDetail?.provincia || '',
-            canton: clientDetail?.canton || '',
-            direccion: clientDetail?.direccion || 'N/A',
-            status: clientDetail?.status || 'active'
-        } as Client
-    });
-
-    setClientsForMap(clientsData);
+    setClientsForMap(clientsFromDb);
     setIsRouteMapOpen(true);
   };
 
