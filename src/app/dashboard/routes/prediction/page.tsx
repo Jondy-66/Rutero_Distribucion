@@ -185,7 +185,16 @@ export default function PrediccionesPage() {
       toast({ title: "Sin datos", description: "No hay predicciones para mostrar en el mapa." });
       return;
     }
-    const clientsData = filteredPredicciones.map(p => {
+    const validPredictions = filteredPredicciones.filter(p =>
+      isFinite(p.LatitudTrz) && isFinite(p.LongitudTrz)
+    );
+
+    if (validPredictions.length === 0) {
+      toast({ title: "Sin ubicaciones válidas", description: "Ninguna de las predicciones tiene coordenadas válidas para mostrar en el mapa." });
+      return;
+    }
+
+    const clientsData = validPredictions.map(p => {
         const clientDetail = clients.find(c => c.ruc === p.RUC);
         return {
             id: p.RUC,
@@ -202,6 +211,7 @@ export default function PrediccionesPage() {
             status: clientDetail?.status || 'active'
         } as Client
     });
+
     setClientsForMap(clientsData);
     setIsRouteMapOpen(true);
   };
