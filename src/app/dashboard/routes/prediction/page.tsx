@@ -191,28 +191,17 @@ export default function PrediccionesPage() {
       return;
     }
     
-    const clientsFromPrediction = filteredPredicciones
-      .filter(p => isFinite(p.LatitudTrz) && isFinite(p.LongitudTrz))
-      .map((p, index) => ({
-        id: p.RUC || `pred-${index}`,
-        ruc: p.RUC,
-        latitud: p.LatitudTrz,
-        longitud: p.LongitudTrz,
-        nombre_comercial: p.RUC, // Usamos RUC como fallback si no hay otro nombre
-        ejecutivo: p.Ejecutivo,
-        nombre_cliente: p.RUC,
-        provincia: '',
-        canton: '',
-        direccion: '',
-        status: 'active' as const,
-      }));
+    const predictedRucs = new Set(filteredPredicciones.map(p => p.RUC));
 
-    if (clientsFromPrediction.length === 0) {
-      toast({ title: "Sin ubicaciones válidas", description: "Ninguna de las predicciones tiene coordenadas válidas para mostrar la ruta." });
+    const clientsFromRucs = clients
+      .filter(client => predictedRucs.has(client.ruc) && isFinite(client.latitud) && isFinite(client.longitud));
+
+    if (clientsFromRucs.length === 0) {
+      toast({ title: "Sin ubicaciones válidas", description: "Ninguno de los clientes predichos tiene coordenadas válidas registradas." });
       return;
     }
 
-    setClientsForMap(clientsFromPrediction);
+    setClientsForMap(clientsFromRucs);
     setIsRouteMapOpen(true);
   };
 
