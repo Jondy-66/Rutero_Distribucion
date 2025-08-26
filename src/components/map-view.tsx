@@ -5,6 +5,7 @@ import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-m
 import type { Client } from '@/lib/types';
 import { Card } from './ui/card';
 import { useState, useEffect } from 'react';
+import { isFinite } from 'lodash';
 
 type MapViewProps = {
     clients?: Client[];
@@ -70,8 +71,14 @@ export function MapView({
     if (center) {
       setCurrentCenter(center);
     } else if (clients && clients.length > 0) {
-        // Center map on the first client if clients are provided but no center
-        setCurrentCenter({ lat: clients[0].latitud, lng: clients[0].longitud });
+      const firstValidClient = clients.find(c => 
+        isFinite(c.latitud) && isFinite(c.longitud)
+      );
+      if (firstValidClient) {
+        setCurrentCenter({ lat: firstValidClient.latitud, lng: firstValidClient.longitud });
+      } else {
+        setCurrentCenter(defaultPosition);
+      }
     }
   }, [center, clients]);
 
@@ -88,18 +95,20 @@ export function MapView({
     );
   }
 
+  const validClients = clients?.filter(c => isFinite(c.latitud) && isFinite(c.longitud)) || [];
+
   return (
     <APIProvider apiKey={apiKey}>
       <div className={containerClassName || "h-[600px] w-full"}>
         <Map
           key={JSON.stringify(currentCenter)} // Force re-render when center changes
           defaultCenter={currentCenter}
-          defaultZoom={markerPosition ? 15 : clients && clients.length > 0 ? 7 : 7}
+          defaultZoom={markerPosition ? 15 : validClients.length > 0 ? 7 : 7}
           mapId="e9a3b4c1a2b3c4d5"
           gestureHandling={'greedy'}
           disableDefaultUI={true}
         >
-          {clients && clients.map((client) => (
+          {validClients.map((client) => (
             <AdvancedMarker
               key={client.id}
               position={{ lat: client.latitud, lng: client.longitud }}
@@ -109,8 +118,8 @@ export function MapView({
           {markerPosition && (
               <AdvancedMarker position={markerPosition} />
           )}
-          {showDirections && clients && clients.length > 1 && (
-            <DirectionsRenderer clients={clients} />
+          {showDirections && validClients.length > 1 && (
+            <DirectionsRenderer clients={validClients} />
           )}
         </Map>
       </div>
