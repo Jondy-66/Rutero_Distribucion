@@ -1,7 +1,7 @@
 
 'use client';
 
-import { APIProvider, Map, AdvancedMarker, useMap } from '@vis.gl/react-google-maps';
+import { APIProvider, Map, AdvancedMarker, useMap, Pin } from '@vis.gl/react-google-maps';
 import type { Client } from '@/lib/types';
 import { Card } from './ui/card';
 import { useState, useEffect } from 'react';
@@ -108,12 +108,14 @@ export function MapView({
           gestureHandling={'greedy'}
           disableDefaultUI={true}
         >
-          {validClients.map((client) => (
+          {validClients.map((client, index) => (
             <AdvancedMarker
               key={client.id}
               position={{ lat: client.latitud, lng: client.longitud }}
               title={client.nombre_comercial}
-            />
+            >
+                <Pin><span className="font-bold text-white">{index + 1}</span></Pin>
+            </AdvancedMarker>
           ))}
           {markerPosition && (
               <AdvancedMarker position={markerPosition} />
