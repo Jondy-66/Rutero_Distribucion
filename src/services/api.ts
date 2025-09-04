@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Este archivo contiene funciones para interactuar con APIs externas,
  * como el servicio de predicción de rutas.
@@ -36,5 +37,32 @@ export async function getPredicciones({ fecha_inicio, dias }: GetPrediccionesPar
     }
   }
   
+  return response.json();
+}
+
+/**
+ * Parámetros para la función getRutaOptima.
+ */
+type GetRutaOptimaParams = {
+  origen: string;
+  waypoints: string[];
+  api_key: string;
+};
+
+/**
+ * Obtiene la ruta óptima desde el servicio externo.
+ * @param {GetRutaOptimaParams} params - Los parámetros para el cálculo de la ruta.
+ * @returns {Promise<any>} Una promesa que se resuelve con los datos de la ruta óptima.
+ */
+export async function getRutaOptima({ origen, waypoints, api_key }: GetRutaOptimaParams): Promise<any> {
+  const url = new URL("/api/ruta-optima", window.location.origin);
+  url.searchParams.append("origen", origen);
+  url.searchParams.append("api_key", api_key);
+  waypoints.forEach((wp) => url.searchParams.append("waypoints", wp.trim()));
+ 
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`Error en la API: ${response.statusText}`);
+  }
   return response.json();
 }

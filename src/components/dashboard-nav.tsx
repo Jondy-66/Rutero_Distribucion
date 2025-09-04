@@ -17,6 +17,7 @@ import {
   List,
   Wand2,
   Users2,
+  GitCommitHorizontal,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -184,6 +185,14 @@ export function DashboardNav() {
                       <Link href="/dashboard/routes/prediction">
                         <Wand2 />
                         <span>Predicción Ruta</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/optimal-route'}>
+                      <Link href="/dashboard/routes/optimal-route">
+                        <GitCommitHorizontal />
+                        <span>Ruta Óptima</span>
                       </Link>
                     </SidebarMenuSubButton>
                 </SidebarMenuItem>
