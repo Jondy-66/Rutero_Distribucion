@@ -67,7 +67,11 @@ export default function RutaOptimaPage() {
       const data = await getRutaOptima({ origen, waypoints, api_key: apiKey });
       setRuta(data.ruta_optima || []);
       setMapsLink(data.maps_link || "");
-      toast({ title: "Éxito", description: "Se ha calculado la ruta óptima."});
+      if(data.ruta_optima && data.ruta_optima.length > 0) {
+        toast({ title: "Éxito", description: "Se ha calculado la ruta óptima."});
+      } else {
+        toast({ title: "Sin resultados", description: data.error || "No se pudo obtener una ruta con los datos proporcionados.", variant: "destructive" });
+      }
     } catch (error: any) {
       console.error(error);
       toast({ title: "Error al Calcular", description: error.message || "No se pudo obtener la ruta.", variant: "destructive" });
