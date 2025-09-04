@@ -1,33 +1,37 @@
 
 'use client';
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { PageHeader } from "@/components/page-header";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getRutaOptima } from "@/services/api";
-import { LoaderCircle, Link as LinkIcon, MapPin, Waypoints } from "lucide-react";
+import { LoaderCircle, Link as LinkIcon, MapPin, Waypoints, Route as RouteIcon } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
+import { useAuth } from "@/hooks/use-auth";
+import type { RoutePlan, Client } from "@/lib/types";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { isFinite } from "lodash";
 
 export default function RutaOptimaPage() {
-  const [origen, setOrigen] = useState("-0.1807,-78.4678");
-  const [waypoints, setWaypoints] = useState<string[]>([
-    "-0.1850,-78.4700",
-    "-0.1900,-78.4600",
-    "-0.1750,-78.4550",
-  ]);
+  const [origen, setOrigen] = useState("");
+  const [waypoints, setWaypoints] = useState<string[]>([]);
   const [apiKey, setApiKey] = useState("");
   const [ruta, setRuta] = useState<string[]>([]);
   const [mapsLink, setMapsLink] = useState("");
   const [loading, setLoading] = useState(false);
+  const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
   const { toast } = useToast();
-  
+  const { clients, users, loading: authLoading } = useAuth();
+  const [allRoutes, setAllRoutes] = useState<RoutePlan[]>([]);
+  const [loadingRoutes, setLoadingRoutes] = useState(true);
+
+  // Cargar la API key desde las variables de entorno del cliente.
   useEffect(() => {
-    // Cargar la API key desde las variables de entorno del cliente.
     const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
     if (googleMapsApiKey) {
       setApiKey(googleMapsApiKey);
@@ -40,10 +44,53 @@ export default function RutaOptimaPage() {
     }
   }, [toast]);
   
+  // Cargar todas las rutas existentes
+  useEffect(() => {
+      const fetchRoutes = async () => {
+          setLoadingRoutes(true);
+          try {
+              // Simulando una llamada a getRoutes. En un caso real, la obtendrías desde tu contexto o una llamada a firestore.
+              const { getRoutes } = await import('@/lib/firebase/firestore');
+              const routesData = await getRoutes();
+              setAllRoutes(routesData);
+          } catch(error) {
+              console.error("Error fetching routes:", error);
+              toast({title: "Error", description: "No se pudieron cargar las rutas."});
+          } finally {
+              setLoadingRoutes(false);
+          }
+      }
+      fetchRoutes();
+  }, [toast]);
+
   const handleWaypointsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     // Asume que los waypoints están separados por saltos de línea.
     const waypointsArray = e.target.value.split('\n').map(wp => wp.trim()).filter(wp => wp);
     setWaypoints(waypointsArray);
+  };
+  
+  const handleRouteSelect = (routeId: string) => {
+    setSelectedRouteId(routeId);
+    const selectedRoute = allRoutes.find(r => r.id === routeId);
+
+    if (selectedRoute && clients.length > 0) {
+        const routeClientsWithCoords = selectedRoute.clients
+            .map(rc => clients.find(c => c.ruc === rc.ruc))
+            .filter((c): c is Client => !!c && isFinite(c.latitud) && isFinite(c.longitud));
+
+        if (routeClientsWithCoords.length > 0) {
+            const firstClient = routeClientsWithCoords[0];
+            const remainingClients = routeClientsWithCoords.slice(1);
+            
+            setOrigen(`${firstClient.latitud},${firstClient.longitud}`);
+            setWaypoints(remainingClients.map(c => `${c.latitud},${c.longitud}`));
+            toast({title: "Ruta Cargada", description: `Se cargaron ${routeClientsWithCoords.length} ubicaciones.`});
+        } else {
+            setOrigen("");
+            setWaypoints([]);
+            toast({title: "Sin Ubicaciones", description: "La ruta seleccionada no tiene clientes con coordenadas válidas.", variant: "destructive"});
+        }
+    }
   };
 
   const obtenerRuta = async () => {
@@ -82,51 +129,83 @@ export default function RutaOptimaPage() {
  
   return (
     <>
-        <PageHeader title="Cálculo de Ruta Óptima" description="Introduce un origen y una lista de paradas para calcular la ruta más eficiente." />
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-                <CardHeader>
-                    <CardTitle>Parámetros de la Ruta</CardTitle>
-                    <CardDescription>Define el punto de partida y las paradas intermedias.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="origen">
-                            <MapPin className="inline-block mr-2" />
-                            Origen (lat,lng)
-                        </Label>
-                        <Input
-                            id="origen"
-                            type="text"
-                            value={origen}
-                            onChange={(e) => setOrigen(e.target.value)}
-                            placeholder="-0.1807,-78.4678"
-                            disabled={loading}
-                        />
-                    </div>
-            
-                    <div className="space-y-2">
-                        <Label htmlFor="waypoints">
-                            <Waypoints className="inline-block mr-2" />
-                            Waypoints (uno por línea)
-                        </Label>
-                        <Textarea
-                            id="waypoints"
-                            value={waypoints.join("\n")}
-                            onChange={handleWaypointsChange}
-                            placeholder="-0.1850,-78.4700\n-0.1900,-78.4600\n-0.1750,-78.4550"
-                            rows={5}
-                            disabled={loading}
-                        />
-                    </div>
-                </CardContent>
-                <CardFooter>
-                    <Button onClick={obtenerRuta} disabled={loading || !apiKey}>
-                        {loading && <LoaderCircle className="animate-spin mr-2" />}
-                        Obtener Ruta Óptima
-                    </Button>
-                </CardFooter>
-            </Card>
+        <PageHeader title="Cálculo de Ruta Óptima" description="Selecciona una ruta existente o introduce un origen y paradas para calcular la ruta más eficiente." />
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            <div className="flex flex-col gap-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Seleccionar Ruta Existente</CardTitle>
+                        <CardDescription>Elige una ruta planificada para autocompletar el origen y las paradas.</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <Label htmlFor="route-select">Ruta</Label>
+                        <Select
+                            value={selectedRouteId}
+                            onValueChange={handleRouteSelect}
+                            disabled={loadingRoutes || authLoading}
+                        >
+                            <SelectTrigger id="route-select">
+                                <RouteIcon className="inline-block mr-2 h-4 w-4" />
+                                <SelectValue placeholder="Seleccionar una ruta..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {loadingRoutes ? (
+                                    <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>
+                                ) : (
+                                    allRoutes.map(route => (
+                                        <SelectItem key={route.id} value={route.id}>
+                                            {route.routeName}
+                                        </SelectItem>
+                                    ))
+                                )}
+                            </SelectContent>
+                        </Select>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Parámetros de la Ruta</CardTitle>
+                        <CardDescription>Define el punto de partida y las paradas intermedias manualmente.</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="origen">
+                                <MapPin className="inline-block mr-2 h-4 w-4" />
+                                Origen (lat,lng)
+                            </Label>
+                            <Input
+                                id="origen"
+                                type="text"
+                                value={origen}
+                                onChange={(e) => setOrigen(e.target.value)}
+                                placeholder="-0.1807,-78.4678"
+                                disabled={loading}
+                            />
+                        </div>
+                
+                        <div className="space-y-2">
+                            <Label htmlFor="waypoints">
+                                <Waypoints className="inline-block mr-2 h-4 w-4" />
+                                Waypoints (uno por línea)
+                            </Label>
+                            <Textarea
+                                id="waypoints"
+                                value={waypoints.join("\n")}
+                                onChange={handleWaypointsChange}
+                                placeholder="-0.1850,-78.4700\n-0.1900,-78.4600"
+                                rows={5}
+                                disabled={loading}
+                            />
+                        </div>
+                    </CardContent>
+                    <CardFooter>
+                        <Button onClick={obtenerRuta} disabled={loading || !apiKey}>
+                            {loading && <LoaderCircle className="animate-spin mr-2" />}
+                            Obtener Ruta Óptima
+                        </Button>
+                    </CardFooter>
+                </Card>
+            </div>
             
             <Card>
                 <CardHeader>
@@ -169,3 +248,4 @@ export default function RutaOptimaPage() {
     </>
   );
 }
+
