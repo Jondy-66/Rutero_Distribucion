@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle } from 'lucide-react';
+import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getClients, getRoutes } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan } from '@/lib/types';
@@ -289,6 +289,28 @@ export default function RouteManagementPage() {
                             </PopoverContent>
                         </Popover>
                     </div>
+
+                    <div className="space-y-4">
+                        <Separator />
+                        <Label className="flex items-center gap-2 text-muted-foreground">
+                            <Building2 className="h-5 w-5" />
+                            Marcación Entrada/Salida
+                        </Label>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Button variant="outline" className="flex-col h-auto py-3">
+                                <LogIn className="h-6 w-6 text-primary mb-2" />
+                                <span className="font-semibold text-primary">MARCAR ENTRADA</span>
+                                <span className="text-xs text-muted-foreground">(Pend. Hoy)</span>
+                            </Button>
+                            <Button variant="outline" className="flex-col h-auto py-3">
+                                <LogOut className="h-6 w-6 text-primary mb-2" />
+                                <span className="font-semibold text-primary">MARCAR SALIDA</span>
+                                <span className="text-xs text-muted-foreground">(Pend. Hoy)</span>
+                            </Button>
+                        </div>
+                    </div>
+
+
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-2">
                             <Label>Hora de Inicio</Label>
@@ -499,6 +521,3 @@ export default function RouteManagementPage() {
     </>
   );
 }
-
-    
-
