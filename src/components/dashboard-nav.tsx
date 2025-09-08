@@ -162,6 +162,22 @@ export function DashboardNav() {
                                </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                             <SidebarMenuSubItem>
+                                <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/prediction'}>
+                                <Link href="/dashboard/routes/prediction">
+                                    <Wand2 />
+                                    <span>Predicción Ruta</span>
+                                </Link>
+                                </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                            <SidebarMenuSubItem>
+                                <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/optimal-route'}>
+                                <Link href="/dashboard/routes/optimal-route">
+                                    <GitCommitHorizontal />
+                                    <span>Ruta Óptima</span>
+                                </Link>
+                                </SidebarMenuSubButton>
+                            </SidebarMenuSubItem>
+                            <SidebarMenuSubItem>
                                <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes'}>
                                  <Link href="/dashboard/routes">
                                     <List />
@@ -172,22 +188,6 @@ export function DashboardNav() {
                          </SidebarMenuSub>
                       </CollapsibleContent>
                   </Collapsible>
-                <SidebarMenuItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/prediction'}>
-                      <Link href="/dashboard/routes/prediction">
-                        <Wand2 />
-                        <span>Predicción Ruta</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/optimal-route'}>
-                      <Link href="/dashboard/routes/optimal-route">
-                        <GitCommitHorizontal />
-                        <span>Ruta Óptima</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuItem>
                  <SidebarMenuItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/management'}>
                       <Link href="/dashboard/routes/management">
