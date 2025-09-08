@@ -172,14 +172,6 @@ export function DashboardNav() {
                          </SidebarMenuSub>
                       </CollapsibleContent>
                   </Collapsible>
-                 <SidebarMenuItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/management'}>
-                      <Link href="/dashboard/routes/management">
-                        <ClipboardList />
-                        <span>Gestión Ruta</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuItem>
                 <SidebarMenuItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/prediction'}>
                       <Link href="/dashboard/routes/prediction">
@@ -193,6 +185,14 @@ export function DashboardNav() {
                       <Link href="/dashboard/routes/optimal-route">
                         <GitCommitHorizontal />
                         <span>Ruta Óptima</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuItem>
+                 <SidebarMenuItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/management'}>
+                      <Link href="/dashboard/routes/management">
+                        <ClipboardList />
+                        <span>Gestión Ruta</span>
                       </Link>
                     </SidebarMenuSubButton>
                 </SidebarMenuItem>
