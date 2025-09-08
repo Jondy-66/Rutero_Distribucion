@@ -65,6 +65,7 @@ export default function RouteManagementPage() {
   const [selectedClient, setSelectedClient] = useState<RouteClient | null>(null);
 
   const [checkInTime, setCheckInTime] = useState('');
+  const [checkOutTime, setCheckOutTime] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -169,6 +170,11 @@ export default function RouteManagementPage() {
   
   const handleCheckInOpen = () => {
     setCheckInTime(format(new Date(), 'HH:mm:ss'));
+    handleGetLocation(true);
+  }
+
+  const handleCheckOutOpen = () => {
+    setCheckOutTime(format(new Date(), 'HH:mm:ss'));
     handleGetLocation(true);
   }
 
@@ -340,11 +346,39 @@ export default function RouteManagementPage() {
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
-                            <Button variant="outline" className="flex-col h-auto py-3" disabled={!selectedClient}>
-                                <LogOut className="h-6 w-6 text-primary mb-2" />
-                                <span className="font-semibold text-primary">MARCAR SALIDA</span>
-                                <span className="text-xs text-muted-foreground">(Pend. Hoy)</span>
-                            </Button>
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="outline" className="flex-col h-auto py-3" onClick={handleCheckOutOpen} disabled={!selectedClient}>
+                                        <LogOut className="h-6 w-6 text-primary mb-2" />
+                                        <span className="font-semibold text-primary">MARCAR SALIDA</span>
+                                        <span className="text-xs text-muted-foreground">(Pend. Hoy)</span>
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <div className="h-40 -mx-6 -mt-6 rounded-t-lg overflow-hidden">
+                                        {gettingLocation || !markerPosition ? (
+                                             <Skeleton className="h-full w-full" />
+                                        ) : (
+                                            <MapView center={markerPosition} markerPosition={markerPosition} containerClassName="h-full w-full" />
+                                        )}
+                                    </div>
+                                    <AlertDialogHeader className="text-center items-center">
+                                    <AlertDialogTitle className="text-2xl">Salida de Cliente</AlertDialogTitle>
+                                    <AlertDialogDescription className="text-base">
+                                        Se marcará evento de salida con fecha <br />
+                                        <span className="font-bold text-lg text-foreground">
+                                             hoy a las {checkOutTime}
+                                        </span>
+                                        <br />
+                                        en la ubicación mostrada. ¿Desea continuar?
+                                    </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter className="flex-row gap-4">
+                                        <AlertDialogCancel className="w-full">Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction className="w-full">Confirmar</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
                         </div>
                     </div>
 
