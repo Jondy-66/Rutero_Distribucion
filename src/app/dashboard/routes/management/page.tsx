@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { MapView } from '@/components/map-view';
+import { isFinite } from 'lodash';
 
 
 type RouteClient = Client & {
@@ -57,6 +58,8 @@ export default function RouteManagementPage() {
   const [mapCenter, setMapCenter] = useState({ lat: -1.8312, lng: -78.1834 });
   const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number} | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [isClientMapOpen, setIsClientMapOpen] = useState(false);
+  const [clientForMap, setClientForMap] = useState<Client | null>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -168,7 +171,7 @@ export default function RouteManagementPage() {
                   promociones: String(clientInRoute.promociones || '0.00'),
                   medicacionFrecuente: String(clientInRoute.medicacionFrecuente || '0.00'),
               } as RouteClient;
-          });
+          }).filter(c => c.id); // Ensure only valid clients are added
           setRouteClients(clientsData);
       }
   }
@@ -187,9 +190,19 @@ export default function RouteManagementPage() {
     }
     return null;
   }, [selectedRoute]);
+  
+  const handleViewClientOnMap = (client: Client) => {
+    if (isFinite(client.latitud) && isFinite(client.longitud)) {
+        setClientForMap(client);
+        setIsClientMapOpen(true);
+    } else {
+        toast({ title: "Ubicación no válida", description: "Este cliente no tiene coordenadas válidas.", variant: "destructive" });
+    }
+  }
 
 
   return (
+    <>
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left Column */}
         <div className="lg:col-span-1 flex flex-col gap-6">
@@ -213,6 +226,31 @@ export default function RouteManagementPage() {
                             </SelectContent>
                         </Select>
                     </div>
+
+                    {selectedRoute && (
+                       <div className="space-y-4">
+                            <Separator />
+                            <div>
+                                <Label>Clientes en Ruta ({routeClients.length})</Label>
+                                <div className="mt-2 space-y-2 max-h-60 overflow-y-auto pr-2 rounded-md border p-2">
+                                    {routeClients.length > 0 ? routeClients.map(client => (
+                                        <div key={client.ruc} className="flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md">
+                                            <span className="truncate flex-1" title={client.nombre_comercial}>{client.nombre_comercial}</span>
+                                            <div className="flex items-center">
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleViewClientOnMap(client)}>
+                                                    <MapPin className="h-4 w-4" />
+                                                </Button>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveClient(client.ruc)}>
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )) : <p className="text-sm text-muted-foreground text-center py-4">No hay clientes en esta ruta.</p>}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                      <div className="space-y-2">
                         <Label>Fecha</Label>
                         <Popover>
@@ -415,7 +453,22 @@ export default function RouteManagementPage() {
             </Card>
         </div>
     </div>
+    <Dialog open={isClientMapOpen} onOpenChange={setIsClientMapOpen}>
+        <DialogContent className="max-w-xl h-[60vh] flex flex-col">
+            <DialogHeader>
+                <DialogTitle>Ubicación de {clientForMap?.nombre_comercial}</DialogTitle>
+            </DialogHeader>
+            <div className="flex-grow">
+                {clientForMap && (
+                    <MapView 
+                        key={clientForMap.id}
+                        clients={[clientForMap]}
+                        containerClassName="h-full w-full"
+                    />
+                )}
+            </div>
+        </DialogContent>
+    </Dialog>
+    </>
   );
 }
-
-    
