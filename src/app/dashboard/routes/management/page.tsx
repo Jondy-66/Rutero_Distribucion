@@ -16,7 +16,6 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
@@ -61,6 +60,7 @@ export default function RouteManagementPage() {
   const [isClientMapOpen, setIsClientMapOpen] = useState(false);
   const [clientForMap, setClientForMap] = useState<Client | null>(null);
   const { toast } = useToast();
+  const [selectedClient, setSelectedClient] = useState<RouteClient | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -98,14 +98,29 @@ export default function RouteManagementPage() {
   }
 
   const handleRemoveClient = (ruc: string) => {
-    setRouteClients(prev => prev.filter((client) => client.ruc !== ruc));
+    setRouteClients(prev => {
+        const updatedClients = prev.filter((client) => client.ruc !== ruc);
+        if (selectedClient?.ruc === ruc) {
+            setSelectedClient(null);
+        }
+        return updatedClients;
+    });
   }
   
-  const handleClientValueChange = (index: number, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
-      const updatedClients = [...routeClients];
-      const clientToUpdate = { ...updatedClients[index], [field]: value };
-      updatedClients[index] = clientToUpdate;
-      setRouteClients(updatedClients);
+  const handleClientValueChange = (ruc: string, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
+      setRouteClients(prevClients => {
+          const updatedClients = prevClients.map(client => {
+              if (client.ruc === ruc) {
+                  return { ...client, [field]: value };
+              }
+              return client;
+          });
+          const updatedSelectedClient = updatedClients.find(c => c.ruc === ruc);
+          if (updatedSelectedClient) {
+              setSelectedClient(updatedSelectedClient);
+          }
+          return updatedClients;
+      });
   }
 
   const handleGetLocation = () => {
@@ -160,6 +175,7 @@ export default function RouteManagementPage() {
       const route = routes.find(r => r.id === routeId);
       if (route) {
           setSelectedRoute(route);
+          setSelectedClient(null); // Reset selected client when route changes
           const clientsData = route.clients.map(clientInRoute => {
               const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
               return {
@@ -234,13 +250,20 @@ export default function RouteManagementPage() {
                                 <Label>Clientes en Ruta ({routeClients.length})</Label>
                                 <div className="mt-2 space-y-2 max-h-60 overflow-y-auto pr-2 rounded-md border p-2">
                                     {routeClients.length > 0 ? routeClients.map(client => (
-                                        <div key={client.ruc} className="flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md">
+                                        <div 
+                                            key={client.ruc} 
+                                            className={cn(
+                                                "flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md cursor-pointer hover:bg-muted",
+                                                selectedClient?.ruc === client.ruc && "bg-primary/10 border-primary/50 border"
+                                            )}
+                                            onClick={() => setSelectedClient(client)}
+                                        >
                                             <span className="truncate flex-1" title={client.nombre_comercial}>{client.nombre_comercial}</span>
                                             <div className="flex items-center">
-                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleViewClientOnMap(client)}>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); handleViewClientOnMap(client)}}>
                                                     <MapPin className="h-4 w-4" />
                                                 </Button>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => handleRemoveClient(client.ruc)}>
+                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={(e) => {e.stopPropagation(); handleRemoveClient(client.ruc)}}>
                                                     <Trash2 className="h-4 w-4" />
                                                 </Button>
                                             </div>
@@ -387,66 +410,69 @@ export default function RouteManagementPage() {
                 <CardHeader>
                     <div className="flex justify-between items-center">
                         <div>
-                            <CardTitle>{selectedRoute ? selectedRoute.routeName : 'Ruta de Hoy'}</CardTitle>
-                            <CardDescription>Arrastra para reordenar los clientes en tu ruta.</CardDescription>
+                            <CardTitle>{selectedRoute ? selectedRoute.routeName : 'Gestión de Clientes'}</CardTitle>
+                            <CardDescription>
+                                {selectedClient ? `Gestionando a ${selectedClient.nombre_comercial}` : 'Selecciona un cliente de la lista para ver sus detalles.'}
+                            </CardDescription>
                         </div>
                          {selectedRoute && <Badge variant="secondary">{selectedRoute.status}</Badge>}
                     </div>
                 </CardHeader>
                 <CardContent>
-                    {routeClients.length === 0 ? (
+                    {!selectedRoute ? (
                         <div className="flex items-center justify-center min-h-[60vh] rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/20 p-8 text-center">
                             <div>
-                                <p className="font-semibold text-lg">Tu ruta está vacía.</p>
-                                <p className="text-muted-foreground">Selecciona una ruta o añade clientes para empezar.</p>
+                                <p className="font-semibold text-lg">Sin Ruta Seleccionada</p>
+                                <p className="text-muted-foreground">Por favor, elige una ruta para empezar a gestionar clientes.</p>
+                            </div>
+                        </div>
+                    ) : !selectedClient ? (
+                        <div className="flex items-center justify-center min-h-[60vh] rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/20 p-8 text-center">
+                            <div>
+                                <p className="font-semibold text-lg">Selecciona un Cliente</p>
+                                <p className="text-muted-foreground">Haz clic en un cliente de la lista de la izquierda para ver y editar sus detalles.</p>
                             </div>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            {routeClients.map((client, index) => (
-                                <Card key={client.id} className="p-4 bg-background">
-                                    <div className="flex items-start gap-4">
-                                        <div className="flex items-center gap-2 pt-1">
-                                            <span className="font-bold text-lg">{index + 1}</span>
-                                            <GripVertical className="h-5 w-5 text-muted-foreground cursor-grab" />
-                                        </div>
-                                        <div className="flex-1">
-                                            <div className="flex justify-between items-start">
-                                                <div>
-                                                    <p className="font-bold text-lg">{client.nombre_comercial}</p>
-                                                    <p className="text-sm text-muted-foreground">{client.direccion}</p>
-                                                </div>
-                                                <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleRemoveClient(client.ruc)}>
-                                                    <Trash2 className="h-5 w-5" />
-                                                </Button>
+                            <Card key={selectedClient.id} className="p-4 bg-background">
+                                <div className="flex items-start gap-4">
+                                    <div className="flex-1">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-bold text-lg">{selectedClient.nombre_comercial}</p>
+                                                <p className="text-sm text-muted-foreground">{selectedClient.direccion}</p>
                                             </div>
-                                            <Separator className="my-4" />
-                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                                <div className="space-y-1">
-                                                    <Label htmlFor={`venta-${index}`}>Valor de Venta ($)</Label>
-                                                    <Input id={`venta-${index}`} type="number" value={client.valorVenta} onChange={(e) => handleClientValueChange(index, 'valorVenta', e.target.value)} />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label htmlFor={`cobro-${index}`}>Valor de Cobro ($)</Label>
-                                                    <Input id={`cobro-${index}`} type="number" value={client.valorCobro} onChange={(e) => handleClientValueChange(index, 'valorCobro', e.target.value)} />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label htmlFor={`devoluciones-${index}`}>Devoluciones ($)</Label>
-                                                    <Input id={`devoluciones-${index}`} type="number" value={client.devoluciones} onChange={(e) => handleClientValueChange(index, 'devoluciones', e.target.value)} />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label htmlFor={`promociones-${index}`}>Promociones ($)</Label>
-                                                    <Input id={`promociones-${index}`} type="number" value={client.promociones} onChange={(e) => handleClientValueChange(index, 'promociones', e.target.value)} className={getNumericValueClass(client.promociones)} />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label htmlFor={`medicacionFrecuente-${index}`}>Medicación Frecuente ($)</Label>
-                                                    <Input id={`medicacionFrecuente-${index}`} type="number" value={client.medicacionFrecuente} onChange={(e) => handleClientValueChange(index, 'medicacionFrecuente', e.target.value)} className={getNumericValueClass(client.medicacionFrecuente)} />
-                                                </div>
+                                            <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleRemoveClient(selectedClient.ruc)}>
+                                                <Trash2 className="h-5 w-5" />
+                                            </Button>
+                                        </div>
+                                        <Separator className="my-4" />
+                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                                            <div className="space-y-1">
+                                                <Label htmlFor={`venta-${selectedClient.ruc}`}>Valor de Venta ($)</Label>
+                                                <Input id={`venta-${selectedClient.ruc}`} type="number" value={selectedClient.valorVenta} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'valorVenta', e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label htmlFor={`cobro-${selectedClient.ruc}`}>Valor de Cobro ($)</Label>
+                                                <Input id={`cobro-${selectedClient.ruc}`} type="number" value={selectedClient.valorCobro} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'valorCobro', e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label htmlFor={`devoluciones-${selectedClient.ruc}`}>Devoluciones ($)</Label>
+                                                <Input id={`devoluciones-${selectedClient.ruc}`} type="number" value={selectedClient.devoluciones} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'devoluciones', e.target.value)} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label htmlFor={`promociones-${selectedClient.ruc}`}>Promociones ($)</Label>
+                                                <Input id={`promociones-${selectedClient.ruc}`} type="number" value={selectedClient.promociones} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'promociones', e.target.value)} className={getNumericValueClass(selectedClient.promociones)} />
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label htmlFor={`medicacionFrecuente-${selectedClient.ruc}`}>Medicación Frecuente ($)</Label>
+                                                <Input id={`medicacionFrecuente-${selectedClient.ruc}`} type="number" value={selectedClient.medicacionFrecuente} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'medicacionFrecuente', e.target.value)} className={getNumericValueClass(selectedClient.medicacionFrecuente)} />
                                             </div>
                                         </div>
                                     </div>
-                                </Card>
-                            ))}
+                                </div>
+                            </Card>
                         </div>
                     )}
                 </CardContent>
@@ -472,3 +498,5 @@ export default function RouteManagementPage() {
     </>
   );
 }
+
+    
