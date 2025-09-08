@@ -18,6 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { MapView } from '@/components/map-view';
 import { isFinite } from 'lodash';
@@ -62,6 +63,8 @@ export default function RouteManagementPage() {
   const [clientForMap, setClientForMap] = useState<Client | null>(null);
   const { toast } = useToast();
   const [selectedClient, setSelectedClient] = useState<RouteClient | null>(null);
+
+  const [checkInTime, setCheckInTime] = useState('');
 
   useEffect(() => {
     const fetchData = async () => {
@@ -124,7 +127,7 @@ export default function RouteManagementPage() {
       });
   }
 
-  const handleGetLocation = () => {
+  const handleGetLocation = (forDialog: boolean = false) => {
     if (!navigator.geolocation) {
       toast({
         title: "Geolocalización no soportada",
@@ -142,10 +145,12 @@ export default function RouteManagementPage() {
         const newPos = { lat: latitude, lng: longitude };
         setMapCenter(newPos);
         setMarkerPosition(newPos);
-        toast({
-          title: "Ubicación Obtenida",
-          description: `Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`
-        });
+        if(!forDialog) {
+          toast({
+            title: "Ubicación Obtenida",
+            description: `Lat: ${latitude.toFixed(4)}, Lon: ${longitude.toFixed(4)}`
+          });
+        }
       },
       (error) => {
         setGettingLocation(false);
@@ -161,6 +166,11 @@ export default function RouteManagementPage() {
       }
     );
   };
+  
+  const handleCheckInOpen = () => {
+    setCheckInTime(format(new Date(), 'HH:mm:ss'));
+    handleGetLocation(true);
+  }
 
   const handleSaveLocation = () => {
       if(!markerPosition) {
@@ -297,12 +307,40 @@ export default function RouteManagementPage() {
                             Marcación Entrada/Salida
                         </Label>
                         <div className="grid grid-cols-2 gap-4">
-                            <Button variant="outline" className="flex-col h-auto py-3">
-                                <LogIn className="h-6 w-6 text-primary mb-2" />
-                                <span className="font-semibold text-primary">MARCAR ENTRADA</span>
-                                <span className="text-xs text-muted-foreground">(Pend. Hoy)</span>
-                            </Button>
-                            <Button variant="outline" className="flex-col h-auto py-3">
+                            <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                    <Button variant="outline" className="flex-col h-auto py-3" onClick={handleCheckInOpen} disabled={!selectedClient}>
+                                        <LogIn className="h-6 w-6 text-primary mb-2" />
+                                        <span className="font-semibold text-primary">MARCAR ENTRADA</span>
+                                        <span className="text-xs text-muted-foreground">(Pend. Hoy)</span>
+                                    </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                    <div className="h-40 -mx-6 -mt-6 rounded-t-lg overflow-hidden">
+                                        {gettingLocation || !markerPosition ? (
+                                             <Skeleton className="h-full w-full" />
+                                        ) : (
+                                            <MapView center={markerPosition} markerPosition={markerPosition} containerClassName="h-full w-full" />
+                                        )}
+                                    </div>
+                                    <AlertDialogHeader className="text-center items-center">
+                                    <AlertDialogTitle className="text-2xl">Entrada a Cliente</AlertDialogTitle>
+                                    <AlertDialogDescription className="text-base">
+                                        Se marcará evento de entrada con fecha <br />
+                                        <span className="font-bold text-lg text-foreground">
+                                             hoy a las {checkInTime}
+                                        </span>
+                                        <br />
+                                        en la ubicación mostrada. ¿Desea continuar?
+                                    </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter className="flex-row gap-4">
+                                        <AlertDialogCancel className="w-full">Cancelar</AlertDialogCancel>
+                                        <AlertDialogAction className="w-full">Confirmar</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                </AlertDialogContent>
+                            </AlertDialog>
+                            <Button variant="outline" className="flex-col h-auto py-3" disabled={!selectedClient}>
                                 <LogOut className="h-6 w-6 text-primary mb-2" />
                                 <span className="font-semibold text-primary">MARCAR SALIDA</span>
                                 <span className="text-xs text-muted-foreground">(Pend. Hoy)</span>
@@ -364,7 +402,7 @@ export default function RouteManagementPage() {
                                      />
                                 </div>
                                 <DialogFooter>
-                                    <Button onClick={handleGetLocation} disabled={gettingLocation}>
+                                    <Button onClick={() => handleGetLocation(false)} disabled={gettingLocation}>
                                         {gettingLocation && <LoaderCircle className="animate-spin" />}
                                         {gettingLocation ? 'Buscando...' : 'Obtener Mi Ubicación Actual'}
                                     </Button>
