@@ -233,6 +233,8 @@ export default function RouteManagementPage() {
     }
   }
 
+  const esFarmacia = selectedClient?.nombre_comercial?.toLowerCase().includes('farmacia');
+
 
   return (
     <>
@@ -556,14 +558,18 @@ export default function RouteManagementPage() {
                                                 <Label htmlFor={`devoluciones-${selectedClient.ruc}`}>Devoluciones ($)</Label>
                                                 <Input id={`devoluciones-${selectedClient.ruc}`} type="number" value={selectedClient.devoluciones} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'devoluciones', e.target.value)} />
                                             </div>
-                                            <div className="space-y-1">
-                                                <Label htmlFor={`promociones-${selectedClient.ruc}`}>Promociones ($)</Label>
-                                                <Input id={`promociones-${selectedClient.ruc}`} type="number" value={selectedClient.promociones} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'promociones', e.target.value)} className={getNumericValueClass(selectedClient.promociones)} />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label htmlFor={`medicacionFrecuente-${selectedClient.ruc}`}>Medicación Frecuente ($)</Label>
-                                                <Input id={`medicacionFrecuente-${selectedClient.ruc}`} type="number" value={selectedClient.medicacionFrecuente} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'medicacionFrecuente', e.target.value)} className={getNumericValueClass(selectedClient.medicacionFrecuente)} />
-                                            </div>
+                                            {esFarmacia && (
+                                                <>
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor={`promociones-${selectedClient.ruc}`}>Promociones ($)</Label>
+                                                        <Input id={`promociones-${selectedClient.ruc}`} type="number" value={selectedClient.promociones} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'promociones', e.target.value)} className={getNumericValueClass(selectedClient.promociones)} />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor={`medicacionFrecuente-${selectedClient.ruc}`}>Medicación Frecuente ($)</Label>
+                                                        <Input id={`medicacionFrecuente-${selectedClient.ruc}`} type="number" value={selectedClient.medicacionFrecuente} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'medicacionFrecuente', e.target.value)} className={getNumericValueClass(selectedClient.medicacionFrecuente)} />
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -593,3 +599,5 @@ export default function RouteManagementPage() {
     </>
   );
 }
+
+    
