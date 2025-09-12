@@ -4,4 +4,13 @@
 runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
-  maxInstances: 1
+  maxInstances: 10
+  cpu: 1
+  timeoutSeconds: 60
+
+# Pass secrets from Cloud Secret Manager to the app.
+# secrets:
+#   - secret: API_KEY
+#   - secret: STRIPE_API_KEY
+#     # Make the secret available to the app as the environment variable, `STRIPE_KEY`.
+#     env: STRIPE_KEY

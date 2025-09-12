@@ -1,0 +1,17 @@
+diff --git a/node_modules/firebase/package.json b/node_modules/firebase/package.json
+index 548c582..2234f0d 100644
+--- a/node_modules/firebase/package.json
++++ b/node_modules/firebase/package.json
+@@ -62,7 +62,10 @@
+   "exports": {
+     ".": {
+       "types": "./index.d.ts",
+-      "node": "./index.node.js",
++      "node": {
++        "import": "./index.node.mjs",
++        "require": "./index.node.js"
++      },
+       "default": "./index.js"
+     },
+     "./app": {
+
