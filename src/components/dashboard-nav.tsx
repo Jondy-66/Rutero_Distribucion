@@ -154,14 +154,6 @@ export function DashboardNav() {
                       <CollapsibleContent>
                          <SidebarMenuSub>
                             <SidebarMenuSubItem>
-                               <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/new'}>
-                                <Link href="/dashboard/routes/new">
-                                    <PlusCircle />
-                                    <span>Nueva Ruta</span>
-                                </Link>
-                               </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                            <SidebarMenuSubItem>
                                 <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/prediction'}>
                                 <Link href="/dashboard/routes/prediction">
                                     <Wand2 />
