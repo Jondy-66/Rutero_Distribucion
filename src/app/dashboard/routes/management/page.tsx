@@ -537,9 +537,6 @@ export default function RouteManagementPage() {
                                                 <p className="font-bold text-lg">{selectedClient.nombre_comercial}</p>
                                                 <p className="text-sm text-muted-foreground">{selectedClient.direccion}</p>
                                             </div>
-                                            <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleRemoveClient(selectedClient.ruc)}>
-                                                <Trash2 className="h-5 w-5" />
-                                            </Button>
                                         </div>
                                         <Separator className="my-4" />
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
