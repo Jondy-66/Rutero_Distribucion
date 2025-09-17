@@ -282,9 +282,6 @@ export default function RouteManagementPage() {
                                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); handleViewClientOnMap(client)}}>
                                                     <MapPin className="h-4 w-4" />
                                                 </Button>
-                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={(e) => {e.stopPropagation(); handleRemoveClient(client.ruc)}}>
-                                                    <Trash2 className="h-4 w-4" />
-                                                </Button>
                                             </div>
                                         </div>
                                     )) : <p className="text-sm text-muted-foreground text-center py-4">No hay clientes en esta ruta.</p>}
