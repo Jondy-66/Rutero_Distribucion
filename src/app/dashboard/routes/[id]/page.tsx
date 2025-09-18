@@ -214,10 +214,14 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   const handleConfirmClientSelection = () => {
     const newClientsInRoute: ClientInRoute[] = dialogSelectedClients.map(client => {
         const existingClient = clientsInRoute.find(c => c.ruc === client.ruc);
-        return existingClient || {
+        if (existingClient) {
+            return existingClient;
+        }
+        return {
             ruc: client.ruc,
             nombre_comercial: client.nombre_comercial,
             date: new Date(),
+            origin: 'manual' // Mark as manually added
         };
     });
     setClientsInRoute(newClientsInRoute);
@@ -415,7 +419,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                             <CollapsibleContent className="space-y-4 p-2 pt-0 max-h-[60vh] overflow-y-auto">
                                 {clientsInRoute.map((client, index) => {
                                     const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
-                                    const isNew = !originalClientRucs.has(client.ruc);
+                                    const isNew = client.origin === 'manual';
                                     return (
                                     <Card key={client.ruc} className={cn("p-4 bg-muted/50 relative", isNew && "border-green-500 border-2")}>
                                         {isNew && <Badge className="absolute -top-2 -right-2">Nuevo</Badge>}
