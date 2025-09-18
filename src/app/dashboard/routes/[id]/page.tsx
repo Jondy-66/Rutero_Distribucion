@@ -118,6 +118,12 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       }
   }, [users]);
   
+    useEffect(() => {
+        if (route && !route.supervisorId && currentUser?.role === 'Usuario' && currentUser.supervisorId) {
+            handleInputChange('supervisorId', currentUser.supervisorId);
+        }
+    }, [route, currentUser]);
+
   useEffect(() => {
     if (isClientDialogOpen) {
       const currentSelectedClientsFromMainList = clients.filter(c => clientsInRoute.some(sc => sc.ruc === c.ruc));
