@@ -79,7 +79,7 @@ export default function RoutesListPage() {
     return allRoutes.filter(route => route.createdBy === user.id);
   }, [allRoutes, user]);
 
-  const handleAction = (routeId: string, action: 'review' | 'edit') => {
+  const handleAction = (routeId: string) => {
     router.push(`/dashboard/routes/${routeId}`);
   };
 
@@ -163,7 +163,7 @@ export default function RoutesListPage() {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
                                 const canEdit = user?.id === route.createdBy && route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada';
                                 const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada';
-
+                                const canViewDetails = !canReview && !canEdit && !canAdminEdit;
 
                                 return (
                                 <TableRow key={route.id}>
@@ -185,9 +185,10 @@ export default function RoutesListPage() {
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end">
                                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                            {canReview && <DropdownMenuItem onClick={() => handleAction(route.id, 'review')}>Revisar</DropdownMenuItem>}
-                                            {(canEdit || canAdminEdit) && <DropdownMenuItem onClick={() => handleAction(route.id, 'edit')}>Editar</DropdownMenuItem>}
-                                            {!canReview && !canEdit && !canAdminEdit && <DropdownMenuItem disabled>No hay acciones</DropdownMenuItem>}
+                                            {canReview && <DropdownMenuItem onClick={() => handleAction(route.id)}>Revisar</DropdownMenuItem>}
+                                            {(canEdit || canAdminEdit) && <DropdownMenuItem onClick={() => handleAction(route.id)}>Editar</DropdownMenuItem>}
+                                            {canViewDetails && <DropdownMenuItem onClick={() => handleAction(route.id)}>Ver Detalles</DropdownMenuItem>}
+                                            
                                           </DropdownMenuContent>
                                         </DropdownMenu>
                                         <AlertDialogContent>
