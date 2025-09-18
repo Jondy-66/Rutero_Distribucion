@@ -188,10 +188,6 @@ export default function RoutesListPage() {
                                             {canReview && <DropdownMenuItem onClick={() => handleAction(route.id, 'review')}>Revisar</DropdownMenuItem>}
                                             {(canEdit || canAdminEdit) && <DropdownMenuItem onClick={() => handleAction(route.id, 'edit')}>Editar</DropdownMenuItem>}
                                             {!canReview && !canEdit && !canAdminEdit && <DropdownMenuItem disabled>No hay acciones</DropdownMenuItem>}
-                                            <DropdownMenuSeparator />
-                                            <AlertDialogTrigger asChild>
-                                              <DropdownMenuItem className="text-red-600" disabled={route.status === 'Pendiente de Aprobación'}>Eliminar</DropdownMenuItem>
-                                            </AlertDialogTrigger>
                                           </DropdownMenuContent>
                                         </DropdownMenu>
                                         <AlertDialogContent>
