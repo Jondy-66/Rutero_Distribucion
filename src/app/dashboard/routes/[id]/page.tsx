@@ -424,7 +424,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                                                 <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
                                                 <p className="text-xs text-muted-foreground">{client.ruc}</p>
                                             </div>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientToRemove(client)} disabled={isFormDisabled}>
+                                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientToRemove(client)} disabled={isFormDisabled}>
                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                             </Button>
                                         </div>
@@ -580,3 +580,4 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   );
 }
 
+    
