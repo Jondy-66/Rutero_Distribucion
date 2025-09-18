@@ -28,6 +28,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogHeader, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
 
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
@@ -51,6 +53,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   const { user: currentUser, users, clients, loading: authLoading } = useAuth();
 
   const [route, setRoute] = useState<RoutePlan | null>(null);
+  const [originalClients, setOriginalClients] = useState<ClientInRoute[]>([]);
   const [clientsInRoute, setClientsInRoute] = useState<ClientInRoute[]>([]);
   const [supervisors, setSupervisors] = useState<User[]>([]);
 
@@ -61,6 +64,9 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
   const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
+
+  const [clientToRemove, setClientToRemove] = useState<ClientInRoute | null>(null);
+  const [removalObservation, setRemovalObservation] = useState('');
 
   const routeId = params.id;
   
@@ -89,6 +95,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         if (routeData) {
           setRoute(routeData);
           setClientsInRoute(routeData.clients || []);
+          setOriginalClients(routeData.clients || []); // Store the initial list
         } else {
           notFound();
         }
@@ -217,6 +224,22 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     setIsClientDialogOpen(false);
   };
   
+  const handleConfirmRemoval = () => {
+    if (!clientToRemove) return;
+    if (!removalObservation.trim()) {
+        toast({ title: 'Observación requerida', description: 'Debes añadir una observación para eliminar al cliente.', variant: 'destructive'});
+        return;
+    }
+
+    setClientsInRoute(prev => prev.map(c => 
+        c.ruc === clientToRemove.ruc ? { ...c, removalObservation: removalObservation, status: 'Removed' } : c
+    ).filter(c => c.ruc !== clientToRemove.ruc));
+    
+    toast({ title: 'Cliente Eliminado', description: `${clientToRemove.nombre_comercial} ha sido quitado de la ruta.`});
+    setClientToRemove(null);
+    setRemovalObservation('');
+  }
+  
   const filteredAvailableClients = useMemo(() => {
     return clients.filter(c => 
         String(c.nombre_cliente).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
@@ -224,6 +247,8 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         String(c.ruc).includes(dialogSearchTerm)
     );
   }, [clients, dialogSearchTerm]);
+  
+  const originalClientRucs = useMemo(() => new Set(originalClients.map(c => c.ruc)), [originalClients]);
 
   if (loading || authLoading) {
     return (
@@ -390,14 +415,16 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                             <CollapsibleContent className="space-y-4 p-2 pt-0 max-h-[60vh] overflow-y-auto">
                                 {clientsInRoute.map((client, index) => {
                                     const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
+                                    const isNew = !originalClientRucs.has(client.ruc);
                                     return (
-                                    <Card key={client.ruc} className="p-4 bg-muted/50">
+                                    <Card key={client.ruc} className={cn("p-4 bg-muted/50 relative", isNew && "border-green-500 border-2")}>
+                                        {isNew && <Badge className="absolute -top-2 -right-2">Nuevo</Badge>}
                                         <div className="flex justify-between items-start">
                                             <div>
                                                 <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
                                                 <p className="text-xs text-muted-foreground">{client.ruc}</p>
                                             </div>
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientsInRoute(prev => prev.filter(c => c.ruc !== client.ruc))} disabled={isFormDisabled}>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientToRemove(client)} disabled={isFormDisabled}>
                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                             </Button>
                                         </div>
@@ -526,6 +553,30 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
              )}
         </div>
       </form>
+       <AlertDialog open={!!clientToRemove} onOpenChange={() => setClientToRemove(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>¿Eliminar a {clientToRemove?.nombre_comercial}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Para eliminar a este cliente de la ruta, por favor, introduce una observación.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+             <div className="py-4">
+                <Label htmlFor="removal-observation">Observación (requerido)</Label>
+                <Textarea
+                    id="removal-observation"
+                    value={removalObservation}
+                    onChange={(e) => setRemovalObservation(e.target.value)}
+                    placeholder="Ej: Cliente solicitó no ser visitado esta semana."
+                />
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setRemovalObservation('')}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleConfirmRemoval}>Confirmar Eliminación</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }
+

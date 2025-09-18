@@ -54,6 +54,9 @@ export type ClientInRoute = {
   dayOfWeek?: string;
   startTime?: string;
   endTime?: string;
+  // Nuevo campo para la observación de eliminación
+  removalObservation?: string;
+  status?: 'Active' | 'Removed';
 }
 
 
@@ -99,3 +102,4 @@ export type Notification = {
     link: string; // Enlace al que se redirige al hacer clic.
     createdAt: Date | null; // Fecha de creación de la notificación.
 }
+
