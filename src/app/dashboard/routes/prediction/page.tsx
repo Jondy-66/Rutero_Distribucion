@@ -1,4 +1,5 @@
 
+
 'use client';
 import React, { useState, useMemo, useEffect } from "react";
 import { getPredicciones } from "@/services/api";
@@ -151,18 +152,9 @@ export default function PrediccionesPage() {
         };
 
         const newRouteId = await addRoute(newRoute);
-
-        if (newRoute.status === 'Pendiente de Aprobación') {
-             await addNotification({
-                userId: supervisor.id,
-                title: 'Nueva ruta para aprobar',
-                message: `${currentUser.name} ha enviado la ruta "${newRoute.routeName}" para tu aprobación.`,
-                link: `/dashboard/routes/${newRouteId}`
-            });
-        }
         
-        toast({ title: 'Ruta Guardada', description: `Se ha creado una nueva ruta para ${selectedEjecutivo}.`});
-        router.push('/dashboard/routes');
+        toast({ title: 'Ruta Creada', description: `Serás redirigido para editar la ruta para ${selectedEjecutivo}.`});
+        router.push(`/dashboard/routes/${newRouteId}`);
 
     } catch (error: any) {
         console.error("Error saving prediction route:", error);
@@ -408,3 +400,4 @@ export default function PrediccionesPage() {
     </>
   );
 }
+
