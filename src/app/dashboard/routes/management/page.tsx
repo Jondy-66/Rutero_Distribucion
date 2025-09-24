@@ -73,6 +73,7 @@ export default function RouteManagementPage() {
   const loading = authLoading;
   
   const unassignedClients = useMemo(() => {
+    if (!availableClients) return [];
     const assignedRucs = new Set(routeClients.map(c => c.ruc));
     return availableClients.filter(c => !assignedRucs.has(c.ruc));
   }, [availableClients, routeClients]);
@@ -167,24 +168,27 @@ export default function RouteManagementPage() {
   }
   
   const handleRouteSelect = (routeId: string) => {
+      if (!allRoutes) return;
       const route = allRoutes.find(r => r.id === routeId);
       if (route) {
           setSelectedRoute(route);
           setIsRouteStarted(route.status === 'En Progreso');
           setSelectedClient(null); // Reset selected client when route changes
-          const clientsData = route.clients.map(clientInRoute => {
-              const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
-              return {
-                  ...(clientDetails || {}), // Detalle completo del cliente
-                  ...clientInRoute, // Datos específicos de la ruta
-                  valorVenta: String(clientInRoute.valorVenta || '0.00'),
-                  valorCobro: String(clientInRoute.valorCobro || '0.00'),
-                  devoluciones: String(clientInRoute.devoluciones || '0.00'),
-                  promociones: String(clientInRoute.promociones || '0.00'),
-                  medicacionFrecuente: String(clientInRoute.medicacionFrecuente || '0.00'),
-              } as RouteClient;
-          }).filter(c => c.id); // Ensure only valid clients are added
-          setRouteClients(clientsData);
+          if (availableClients) {
+            const clientsData = route.clients.map(clientInRoute => {
+                const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
+                return {
+                    ...(clientDetails || {}), // Detalle completo del cliente
+                    ...clientInRoute, // Datos específicos de la ruta
+                    valorVenta: String(clientInRoute.valorVenta || '0.00'),
+                    valorCobro: String(clientInRoute.valorCobro || '0.00'),
+                    devoluciones: String(clientInRoute.devoluciones || '0.00'),
+                    promociones: String(clientInRoute.promociones || '0.00'),
+                    medicacionFrecuente: String(clientInRoute.medicacionFrecuente || '0.00'),
+                } as RouteClient;
+            }).filter(c => c.id); // Ensure only valid clients are added
+            setRouteClients(clientsData);
+          }
       }
   }
 
@@ -250,7 +254,7 @@ export default function RouteManagementPage() {
                             <SelectValue placeholder="Elige una ruta planificada" />
                         </SelectTrigger>
                         <SelectContent>
-                            {allRoutes.filter(r => r.status === 'Planificada' || r.status === 'En Progreso').map(route => (
+                            {allRoutes && allRoutes.filter(r => r.status === 'Planificada' || r.status === 'En Progreso').map(route => (
                                 <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
                             ))}
                         </SelectContent>
