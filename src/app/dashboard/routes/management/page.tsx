@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2 } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { getClients, getRoutes } from '@/lib/firebase/firestore';
+import { getClients, getRoutes, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,6 +23,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { MapView } from '@/components/map-view';
 import { isFinite } from 'lodash';
 import { Calendar } from '@/components/ui/calendar';
+import { useAuth } from '@/hooks/use-auth';
+import { PageHeader } from '@/components/page-header';
 
 
 type RouteClient = Client & {
@@ -49,12 +51,13 @@ const timeSlots = generateTimeSlots(8, 18, 30);
 
 
 export default function RouteManagementPage() {
-  const [availableClients, setAvailableClients] = useState<Client[]>([]);
-  const [routes, setRoutes] = useState<RoutePlan[]>([]);
+  const { clients: availableClients, routes: allRoutes, loading: authLoading, refetchData } = useAuth();
+  
   const [selectedRoute, setSelectedRoute] = useState<RoutePlan | undefined>();
+  const [isRouteStarted, setIsRouteStarted] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
 
   const [routeClients, setRouteClients] = useState<RouteClient[]>([]);
-  const [loading, setLoading] = useState(true);
   const [gettingLocation, setGettingLocation] = useState(false);
   const [mapCenter, setMapCenter] = useState({ lat: -1.8312, lng: -78.1834 });
   const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number} | null>(null);
@@ -67,22 +70,7 @@ export default function RouteManagementPage() {
   const [checkInTime, setCheckInTime] = useState('');
   const [checkOutTime, setCheckOutTime] = useState('');
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [clientsData, routesData] = await Promise.all([getClients(), getRoutes()]);
-        setAvailableClients(clientsData);
-        setRoutes(routesData);
-      } catch (error: any) {
-        console.error("Failed to fetch data:", error);
-        toast({ title: "Error", description: "No se pudieron cargar los clientes y rutas.", variant: "destructive" });
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchData();
-  }, [toast]);
+  const loading = authLoading;
   
   const unassignedClients = useMemo(() => {
     const assignedRucs = new Set(routeClients.map(c => c.ruc));
@@ -102,16 +90,6 @@ export default function RouteManagementPage() {
     setRouteClients(prev => [...prev, newClient]);
   }
 
-  const handleRemoveClient = (ruc: string) => {
-    setRouteClients(prev => {
-        const updatedClients = prev.filter((client) => client.ruc !== ruc);
-        if (selectedClient?.ruc === ruc) {
-            setSelectedClient(null);
-        }
-        return updatedClients;
-    });
-  }
-  
   const handleClientValueChange = (ruc: string, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
       setRouteClients(prevClients => {
           const updatedClients = prevClients.map(client => {
@@ -189,9 +167,10 @@ export default function RouteManagementPage() {
   }
   
   const handleRouteSelect = (routeId: string) => {
-      const route = routes.find(r => r.id === routeId);
+      const route = allRoutes.find(r => r.id === routeId);
       if (route) {
           setSelectedRoute(route);
+          setIsRouteStarted(route.status === 'En Progreso');
           setSelectedClient(null); // Reset selected client when route changes
           const clientsData = route.clients.map(clientInRoute => {
               const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
@@ -206,6 +185,22 @@ export default function RouteManagementPage() {
               } as RouteClient;
           }).filter(c => c.id); // Ensure only valid clients are added
           setRouteClients(clientsData);
+      }
+  }
+
+  const handleStartRoute = async () => {
+      if (!selectedRoute) return;
+      setIsStarting(true);
+      try {
+          await updateRoute(selectedRoute.id, { status: 'En Progreso' });
+          await refetchData('routes');
+          setIsRouteStarted(true);
+          toast({ title: "Ruta Iniciada", description: `La ruta "${selectedRoute.routeName}" ha comenzado.` });
+      } catch (error) {
+          console.error("Failed to start route:", error);
+          toast({ title: "Error", description: "No se pudo iniciar la ruta.", variant: 'destructive' });
+      } finally {
+          setIsStarting(false);
       }
   }
 
@@ -238,33 +233,49 @@ export default function RouteManagementPage() {
 
   return (
     <>
+    <PageHeader title="Gestión de Ruta" description="Selecciona, inicia y gestiona tus rutas diarias."/>
+    
+    {!isRouteStarted ? (
+        <Card className="max-w-2xl mx-auto">
+            <CardHeader>
+                <CardTitle>Selecciona una Ruta para Empezar</CardTitle>
+                <CardDescription>Elige una de tus rutas planificadas para poder iniciarla y gestionarla.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="space-y-2">
+                    <Label>Ruta</Label>
+                    <Select onValueChange={handleRouteSelect} value={selectedRoute?.id} disabled={loading}>
+                        <SelectTrigger>
+                            <Route className="mr-2 h-4 w-4" />
+                            <SelectValue placeholder="Elige una ruta planificada" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {allRoutes.filter(r => r.status === 'Planificada' || r.status === 'En Progreso').map(route => (
+                                <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                {selectedRoute && (
+                    <Button onClick={handleStartRoute} disabled={isStarting || selectedRoute.status !== 'Planificada'} className="w-full">
+                        {isStarting && <LoaderCircle className="animate-spin mr-2" />}
+                        {selectedRoute.status === 'Planificada' ? 'Iniciar Ruta' : 'Ruta ya en Progreso'}
+                    </Button>
+                )}
+            </CardContent>
+        </Card>
+    ) : (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
         {/* Left Column */}
         <div className="lg:col-span-1 flex flex-col gap-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>Configuración de Ruta</CardTitle>
-                    <CardDescription>Selecciona una ruta o configura una nueva.</CardDescription>
+                    <CardTitle>{selectedRoute?.routeName}</CardTitle>
+                    <CardDescription>Ruta actualmente en progreso.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
-                    <div className="space-y-2">
-                        <Label>Seleccionar Ruta</Label>
-                        <Select onValueChange={handleRouteSelect} value={selectedRoute?.id} disabled={loading}>
-                            <SelectTrigger>
-                                <Route className="mr-2 h-4 w-4" />
-                                <SelectValue placeholder="Elige una ruta planificada" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {routes.map(route => (
-                                    <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                    </div>
-
                     {selectedRoute && (
                        <div className="space-y-4">
-                            <Separator />
                             <div>
                                 <Label>Clientes en Ruta ({routeClients.length})</Label>
                                 <div className="mt-2 space-y-2 max-h-60 overflow-y-auto pr-2 rounded-md border p-2">
@@ -294,14 +305,11 @@ export default function RouteManagementPage() {
                         <Label>Fecha</Label>
                         <Popover>
                             <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("w-full justify-start font-normal text-left", !routeDate && "text-muted-foreground")}>
+                                <Button variant="outline" className={cn("w-full justify-start font-normal text-left", !routeDate && "text-muted-foreground")} disabled>
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {routeDate ? format(routeDate, 'PPP', {locale: es}) : 'Selecciona una fecha'}
                                 </Button>
                             </PopoverTrigger>
-                            <PopoverContent className="w-auto p-0">
-                                <Calendar mode="single" selected={routeDate || undefined} initialFocus locale={es} />
-                            </PopoverContent>
                         </Popover>
                     </div>
 
@@ -382,36 +390,6 @@ export default function RouteManagementPage() {
                     </div>
 
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <Label>Hora de Inicio</Label>
-                             <Select value={selectedRoute?.startTime} defaultValue="08:00">
-                                <SelectTrigger>
-                                     <Clock className="mr-2 h-4 w-4" />
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {timeSlots.map(time => (
-                                        <SelectItem key={time} value={time}>{time}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                        <div className="space-y-2">
-                            <Label>Hora de Fin</Label>
-                             <Select value={selectedRoute?.endTime} defaultValue="18:00">
-                                <SelectTrigger>
-                                     <Clock className="mr-2 h-4 w-4" />
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                     {timeSlots.map(time => (
-                                        <SelectItem key={time} value={time}>{time}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
                     <div className="space-y-4">
                         <Dialog open={isMapOpen} onOpenChange={setIsMapOpen}>
                             <DialogTrigger asChild>
@@ -455,44 +433,6 @@ export default function RouteManagementPage() {
                                 Llamada telefónica
                             </label>
                         </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Clientes Disponibles</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <div className="relative mb-4">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input placeholder="Buscar por RUC, nombre..." className="pl-8" />
-                    </div>
-                    <div className="space-y-4 max-h-96 overflow-y-auto">
-                       {loading ? (
-                         Array.from({ length: 5 }).map((_, i) => (
-                            <div key={i} className="flex items-center justify-between">
-                               <div className="space-y-2">
-                                   <Skeleton className="h-4 w-32" />
-                                   <Skeleton className="h-3 w-48" />
-                               </div>
-                               <Skeleton className="h-8 w-20" />
-                           </div>
-                         ))
-                       ) : (
-                         unassignedClients.map((client) => (
-                           <div key={client.id} className="flex items-center justify-between">
-                              <div>
-                                  <p className="font-medium">{client.nombre_comercial}</p>
-                                  <p className="text-sm text-muted-foreground">{client.nombre_cliente}</p>
-                              </div>
-                              <Button variant="ghost" size="sm" onClick={() => handleAddClient(client)}>
-                                  <Plus className="mr-2 h-4 w-4" />
-                                  Añadir
-                              </Button>
-                          </div>
-                         ))
-                       )}
                     </div>
                 </CardContent>
             </Card>
@@ -574,6 +514,7 @@ export default function RouteManagementPage() {
             </Card>
         </div>
     </div>
+    )}
     <Dialog open={isClientMapOpen} onOpenChange={setIsClientMapOpen}>
         <DialogContent className="max-w-xl h-[60vh] flex flex-col">
             <DialogHeader>
@@ -593,5 +534,3 @@ export default function RouteManagementPage() {
     </>
   );
 }
-
-    
