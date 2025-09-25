@@ -21,6 +21,7 @@ import {
 } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
+import { Progress } from '@/components/ui/progress';
 
 const data = [
   { name: 'Lun', routes: 4, sales: 2400 },
@@ -33,12 +34,30 @@ const data = [
 
 
 export default function DashboardPage() {
-  const { user, clients, users, loading } = useAuth();
+  const { user, clients, users, routes, loading } = useAuth();
   
   const clientCount = useMemo(() => clients.length, [clients]);
   const userCount = useMemo(() => users.length, [users]);
 
   const canSeeUserCount = user?.role === 'Administrador' || user?.role === 'Supervisor';
+
+  const activeRoute = useMemo(() => {
+    return routes.find(r => r.createdBy === user?.id && r.status === 'En Progreso');
+  }, [routes, user]);
+
+  const progress = useMemo(() => {
+    if (!activeRoute) return 0;
+    const completedClients = activeRoute.clients.filter(c => c.visitStatus === 'Completado').length;
+    const totalClients = activeRoute.clients.length;
+    if (totalClients === 0) return 0;
+    return (completedClients / totalClients) * 100;
+  }, [activeRoute]);
+
+  const completedCount = useMemo(() => {
+      if (!activeRoute) return 0;
+      return activeRoute.clients.filter(c => c.visitStatus === 'Completado').length;
+  }, [activeRoute]);
+
 
   return (
     <>
@@ -54,16 +73,30 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground">Clientes registrados en el sistema</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Rutas Planificadas</CardTitle>
-            <Route className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">0</div>}
-            <p className="text-xs text-muted-foreground">Próximamente</p>
-          </CardContent>
-        </Card>
+        {activeRoute ? (
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium truncate" title={activeRoute.routeName}>Ruta en Progreso</CardTitle>
+                    <Route className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{completedCount} de {activeRoute.clients.length}</div>
+                    <p className="text-xs text-muted-foreground mb-2">clientes gestionados</p>
+                    <Progress value={progress} aria-label={`${progress.toFixed(0)}% completado`} />
+                </CardContent>
+            </Card>
+        ) : (
+             <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Rutas Planificadas</CardTitle>
+                <Route className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{routes.filter(r => r.status === 'Planificada').length}</div>}
+                <p className="text-xs text-muted-foreground">Rutas listas para iniciar</p>
+              </CardContent>
+            </Card>
+        )}
         {canSeeUserCount && (
             <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">

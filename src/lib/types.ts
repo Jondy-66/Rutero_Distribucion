@@ -1,5 +1,4 @@
 
-
 /**
  * @fileoverview Define los tipos de datos principales utilizados en la aplicación.
  * Estos tipos aseguran la consistencia de los datos entre los componentes y la base de datos de Firestore.
@@ -58,6 +57,7 @@ export type ClientInRoute = {
   removalObservation?: string;
   status?: 'Active' | 'Removed';
   origin?: 'manual' | 'predicted';
+  visitStatus?: 'Pendiente' | 'Completado';
 }
 
 
@@ -103,5 +103,3 @@ export type Notification = {
     link: string; // Enlace al que se redirige al hacer clic.
     createdAt: Date | null; // Fecha de creación de la notificación.
 }
-
-

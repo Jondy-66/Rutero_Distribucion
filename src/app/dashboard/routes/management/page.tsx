@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2 } from 'lucide-react';
+import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getClients, getRoutes, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan } from '@/lib/types';
@@ -28,6 +28,7 @@ import { PageHeader } from '@/components/page-header';
 
 
 type RouteClient = Client & {
+    visitStatus?: 'Pendiente' | 'Completado';
     valorVenta: string;
     valorCobro: string;
     devoluciones: string;
@@ -51,7 +52,7 @@ const timeSlots = generateTimeSlots(8, 18, 30);
 
 
 export default function RouteManagementPage() {
-  const { clients: availableClients, routes: allRoutes, loading: authLoading, refetchData } = useAuth();
+  const { user, clients: availableClients, routes: allRoutes, loading: authLoading, refetchData } = useAuth();
   
   const [selectedRoute, setSelectedRoute] = useState<RoutePlan | undefined>();
   const [isRouteStarted, setIsRouteStarted] = useState(false);
@@ -166,6 +167,23 @@ export default function RouteManagementPage() {
       toast({ title: "Ubicación Guardada", description: `Lat: ${markerPosition.lat.toFixed(4)}, Lon: ${markerPosition.lng.toFixed(4)}` });
       setIsMapOpen(false);
   }
+
+  const handleConfirmCheckOut = async () => {
+    if (!selectedRoute || !selectedClient) return;
+
+    const updatedClients = routeClients.map(c => 
+        c.ruc === selectedClient.ruc ? { ...c, visitStatus: 'Completado' as const } : c
+    );
+
+    try {
+        await updateRoute(selectedRoute.id, { clients: updatedClients });
+        setRouteClients(updatedClients);
+        toast({ title: "Salida Confirmada", description: `Visita a ${selectedClient.nombre_comercial} completada.` });
+    } catch(error) {
+        console.error("Error updating route on checkout:", error);
+        toast({ title: "Error", description: "No se pudo actualizar el estado de la visita.", variant: "destructive"});
+    }
+  }
   
   const handleRouteSelect = (routeId: string) => {
       if (!allRoutes) return;
@@ -180,6 +198,7 @@ export default function RouteManagementPage() {
                 return {
                     ...(clientDetails || {}), // Detalle completo del cliente
                     ...clientInRoute, // Datos específicos de la ruta
+                    visitStatus: clientInRoute.visitStatus || 'Pendiente',
                     valorVenta: String(clientInRoute.valorVenta || '0.00'),
                     valorCobro: String(clientInRoute.valorCobro || '0.00'),
                     devoluciones: String(clientInRoute.devoluciones || '0.00'),
@@ -254,6 +273,7 @@ export default function RouteManagementPage() {
                             <SelectValue placeholder="Elige una ruta planificada" />
                         </SelectTrigger>
                         <SelectContent>
+                            {loading && <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>}
                             {allRoutes && allRoutes.filter(r => r.status === 'Planificada' || r.status === 'En Progreso').map(route => (
                                 <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
                             ))}
@@ -294,6 +314,7 @@ export default function RouteManagementPage() {
                                         >
                                             <span className="truncate flex-1" title={client.nombre_comercial}>{client.nombre_comercial}</span>
                                             <div className="flex items-center">
+                                                {client.visitStatus === 'Completado' && <CheckCircle className="h-4 w-4 text-green-500 mr-2" />}
                                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); handleViewClientOnMap(client)}}>
                                                     <MapPin className="h-4 w-4" />
                                                 </Button>
@@ -386,7 +407,7 @@ export default function RouteManagementPage() {
                                     </AlertDialogHeader>
                                     <AlertDialogFooter className="flex-row gap-4">
                                         <AlertDialogCancel className="w-full">Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction className="w-full">Confirmar</AlertDialogAction>
+                                        <AlertDialogAction className="w-full" onClick={handleConfirmCheckOut}>Confirmar</AlertDialogAction>
                                     </AlertDialogFooter>
                                 </AlertDialogContent>
                             </AlertDialog>
