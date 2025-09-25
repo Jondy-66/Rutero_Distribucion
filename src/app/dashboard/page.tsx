@@ -92,7 +92,7 @@ export default function DashboardPage() {
                 <Route className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{routes.filter(r => r.status === 'Planificada').length}</div>}
+                {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{routes.filter(r => r.status === 'Planificada' && r.createdBy === user?.id).length}</div>}
                 <p className="text-xs text-muted-foreground">Rutas listas para iniciar</p>
               </CardContent>
             </Card>
