@@ -1,4 +1,5 @@
 
+
 /**
  * @fileoverview Este archivo contiene funciones para interactuar con la base de datos Firestore.
  * Proporciona una capa de abstracción para realizar operaciones CRUD (Crear, Leer, Actualizar, Eliminar)
@@ -261,6 +262,7 @@ export const addRoutesBatch = async (routesData: RouteToSave[]): Promise<string[
         
         batch.set(newRouteRef, {
             ...route, 
+            date: route.date ? Timestamp.fromDate(route.date) : serverTimestamp(),
             clients: clientsWithTimestamps,
             createdAt: serverTimestamp()
         });
@@ -287,6 +289,7 @@ export const addRoute = async (routeData: Omit<RoutePlan, 'id' | 'createdAt'>): 
 
     const newDocRef = await addDoc(routesCollection, {
         ...routeData,
+        date: routeData.date ? Timestamp.fromDate(routeData.date) : serverTimestamp(),
         clients: clientsWithTimestamps,
         createdAt: serverTimestamp()
     });
@@ -304,6 +307,7 @@ export const getRoutes = async (): Promise<RoutePlan[]> => {
     const snapshot = await getDocs(q);
     const routes = snapshot.docs.map(doc => {
         const data = doc.data();
+        const routeDate = data.date ? (data.date as Timestamp).toDate() : new Date();
         // Convierte los Timestamps de cliente a objetos Date de JavaScript.
         const clients = (data.clients as any[]).map(client => ({
             ...client,
@@ -312,6 +316,7 @@ export const getRoutes = async (): Promise<RoutePlan[]> => {
         return {
             id: doc.id,
             ...data,
+            date: routeDate,
             clients,
         } as RoutePlan;
     });
@@ -337,6 +342,7 @@ export const getRoute = async (id: string): Promise<RoutePlan | null> => {
     const docSnap = await getDoc(docRef);
     if(docSnap.exists()) {
         const data = docSnap.data();
+        const routeDate = data.date ? (data.date as Timestamp).toDate() : new Date();
         // Convierte los Timestamps de cliente a objetos Date de JavaScript.
         const clients = (data.clients as any[]).map(client => ({
             ...client,
@@ -345,6 +351,7 @@ export const getRoute = async (id: string): Promise<RoutePlan | null> => {
         return {
             id: docSnap.id,
             ...data,
+            date: routeDate,
             clients,
         } as RoutePlan;
     }
@@ -373,6 +380,7 @@ export const getRoutesBySupervisor = async (supervisorId: string): Promise<Route
     const snapshot = await getDocs(q);
     const routes = snapshot.docs.map(doc => {
         const data = doc.data();
+        const routeDate = data.date ? (data.date as Timestamp).toDate() : new Date();
          const clients = (data.clients as any[]).map(client => ({
             ...client,
             date: client.date ? (client.date as Timestamp).toDate() : undefined
@@ -380,6 +388,7 @@ export const getRoutesBySupervisor = async (supervisorId: string): Promise<Route
         return {
             id: doc.id,
             ...data,
+            date: routeDate,
             clients,
         } as RoutePlan;
     });

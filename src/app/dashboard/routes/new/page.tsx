@@ -102,12 +102,15 @@ export default function NewRoutePage() {
         toast({ title: 'Error', description: 'Supervisor no encontrado.', variant: 'destructive' });
         return;
     }
+    
+    const routeDate = selectedClients[0]?.date || new Date();
 
     const isUserRole = currentUser.role === 'Usuario';
     
     const newStagedRoute: StagedRoute = {
         tempId: Date.now(),
         routeName,
+        date: routeDate,
         clients: selectedClients,
         status: isUserRole ? 'Pendiente de Aprobación' : 'Planificada',
         supervisorId: selectedSupervisorId,

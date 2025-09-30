@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Briefcase, Route, Users, BarChart } from 'lucide-react';
+import { Briefcase, Route, Users, BarChart, Clock } from 'lucide-react';
 import {
   Bar,
   BarChart as RechartsBarChart,
@@ -22,6 +22,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
+import { isToday } from 'date-fns';
 
 const data = [
   { name: 'Lun', routes: 4, sales: 2400 },
@@ -42,8 +44,37 @@ export default function DashboardPage() {
   const canSeeUserCount = user?.role === 'Administrador' || user?.role === 'Supervisor';
 
   const activeRoute = useMemo(() => {
-    return routes.find(r => r.createdBy === user?.id && r.status === 'En Progreso');
+    return routes.find(r => r.createdBy === user?.id && r.status === 'En Progreso' && r.date && isToday(r.date));
   }, [routes, user]);
+
+  const [remainingTime, setRemainingTime] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false });
+  
+  useEffect(() => {
+    if (!activeRoute) return;
+
+    const interval = setInterval(() => {
+      const now = new Date();
+      const expirationDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0, 0); // 18:00 del día de hoy
+      const diff = expirationDate.getTime() - now.getTime();
+
+      if (diff <= 0) {
+        setRemainingTime({ hours: 0, minutes: 0, seconds: 0, expired: true });
+        clearInterval(interval);
+        return;
+      }
+
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+      
+      setRemainingTime({ hours, minutes, seconds, expired: false });
+
+    }, 1000);
+
+    return () => clearInterval(interval);
+
+  }, [activeRoute]);
+
 
   const progress = useMemo(() => {
     if (!activeRoute) return 0;
@@ -74,6 +105,7 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
         {activeRoute ? (
+            <>
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                     <CardTitle className="text-sm font-medium truncate" title={activeRoute.routeName}>Ruta en Progreso</CardTitle>
@@ -85,6 +117,22 @@ export default function DashboardPage() {
                     <Progress value={progress} aria-label={`${progress.toFixed(0)}% completado`} />
                 </CardContent>
             </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Tiempo Restante</CardTitle>
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                   <div className={cn("text-2xl font-bold", remainingTime.expired && "text-destructive")}>
+                       {remainingTime.expired 
+                           ? "Expirado" 
+                           : `${String(remainingTime.hours).padStart(2, '0')}:${String(remainingTime.minutes).padStart(2, '0')}:${String(remainingTime.seconds).padStart(2, '0')}`
+                       }
+                   </div>
+                   <p className="text-xs text-muted-foreground">Para finalizar la ruta de hoy (18:00)</p>
+                </CardContent>
+            </Card>
+            </>
         ) : (
              <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -97,7 +145,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
         )}
-        {canSeeUserCount && (
+        {canSeeUserCount && !activeRoute && ( // Ocultamos si hay ruta activa para dar espacio
             <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Usuarios Activos</CardTitle>

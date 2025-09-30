@@ -6,13 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle } from 'lucide-react';
+import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getClients, getRoutes, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -25,6 +25,7 @@ import { isFinite } from 'lodash';
 import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/page-header';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 
 type RouteClient = Client & {
@@ -57,6 +58,7 @@ export default function RouteManagementPage() {
   const [selectedRoute, setSelectedRoute] = useState<RoutePlan | undefined>();
   const [isRouteStarted, setIsRouteStarted] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [isRouteExpired, setIsRouteExpired] = useState(false);
 
   const [routeClients, setRouteClients] = useState<RouteClient[]>([]);
   const [gettingLocation, setGettingLocation] = useState(false);
@@ -78,6 +80,18 @@ export default function RouteManagementPage() {
     const assignedRucs = new Set(routeClients.map(c => c.ruc));
     return availableClients.filter(c => !assignedRucs.has(c.ruc));
   }, [availableClients, routeClients]);
+  
+  useEffect(() => {
+    if (selectedRoute && selectedRoute.status === 'En Progreso') {
+        const expirationDate = new Date(selectedRoute.date);
+        expirationDate.setHours(18, 0, 0, 0); // 6 PM on the route's date
+        if (new Date() > expirationDate) {
+            setIsRouteExpired(true);
+        }
+    } else {
+        setIsRouteExpired(false);
+    }
+}, [selectedRoute]);
 
 
   const handleAddClient = (client: Client) => {
@@ -236,8 +250,8 @@ export default function RouteManagementPage() {
   };
   
   const routeDate = useMemo(() => {
-    if (selectedRoute && selectedRoute.clients.length > 0 && selectedRoute.clients[0].date) {
-        return selectedRoute.clients[0].date;
+    if (selectedRoute) {
+        return selectedRoute.date;
     }
     return null;
   }, [selectedRoute]);
@@ -252,6 +266,7 @@ export default function RouteManagementPage() {
   }
 
   const esFarmacia = selectedClient?.nombre_comercial?.toLowerCase().includes('farmacia');
+  const isFormDisabled = isRouteExpired;
 
 
   return (
@@ -308,9 +323,10 @@ export default function RouteManagementPage() {
                                             key={client.ruc} 
                                             className={cn(
                                                 "flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md cursor-pointer hover:bg-muted",
-                                                selectedClient?.ruc === client.ruc && "bg-primary/10 border-primary/50 border"
+                                                selectedClient?.ruc === client.ruc && "bg-primary/10 border-primary/50 border",
+                                                isFormDisabled && "cursor-not-allowed opacity-70"
                                             )}
-                                            onClick={() => setSelectedClient(client)}
+                                            onClick={() => !isFormDisabled && setSelectedClient(client)}
                                         >
                                             <span className="truncate flex-1" title={client.nombre_comercial}>{client.nombre_comercial}</span>
                                             <div className="flex items-center">
@@ -347,7 +363,7 @@ export default function RouteManagementPage() {
                         <div className="grid grid-cols-2 gap-4">
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                    <Button variant="outline" className="flex-col h-auto py-3" onClick={handleCheckInOpen} disabled={!selectedClient}>
+                                    <Button variant="outline" className="flex-col h-auto py-3" onClick={handleCheckInOpen} disabled={!selectedClient || isFormDisabled}>
                                         <LogIn className="h-6 w-6 text-primary mb-2" />
                                         <span className="font-semibold text-primary">MARCAR ENTRADA</span>
                                         <span className="text-xs text-muted-foreground">(Pend. Hoy)</span>
@@ -380,7 +396,7 @@ export default function RouteManagementPage() {
                             </AlertDialog>
                             <AlertDialog>
                                 <AlertDialogTrigger asChild>
-                                    <Button variant="outline" className="flex-col h-auto py-3" onClick={handleCheckOutOpen} disabled={!selectedClient}>
+                                    <Button variant="outline" className="flex-col h-auto py-3" onClick={handleCheckOutOpen} disabled={!selectedClient || isFormDisabled}>
                                         <LogOut className="h-6 w-6 text-primary mb-2" />
                                         <span className="font-semibold text-primary">MARCAR SALIDA</span>
                                         <span className="text-xs text-muted-foreground">(Pend. Hoy)</span>
@@ -418,7 +434,7 @@ export default function RouteManagementPage() {
                     <div className="space-y-4">
                         <Dialog open={isMapOpen} onOpenChange={setIsMapOpen}>
                             <DialogTrigger asChild>
-                                <Button className="w-full">
+                                <Button className="w-full" disabled={isFormDisabled}>
                                     <MapPin className="mr-2 h-4 w-4" />
                                     Mi Ubicación
                                 </Button>
@@ -450,7 +466,7 @@ export default function RouteManagementPage() {
                         </Dialog>
 
                         <div className="flex items-center space-x-2">
-                            <Checkbox id="phone-call" />
+                            <Checkbox id="phone-call" disabled={isFormDisabled} />
                             <label
                                 htmlFor="phone-call"
                                 className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
@@ -478,6 +494,15 @@ export default function RouteManagementPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
+                     {isRouteExpired && (
+                        <Alert variant="destructive" className="mb-4">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>Ruta Expirada</AlertTitle>
+                            <AlertDescription>
+                                El tiempo para gestionar esta ruta ha terminado (18:00). Ya no puedes realizar cambios.
+                            </AlertDescription>
+                        </Alert>
+                    )}
                     {!selectedRoute ? (
                         <div className="flex items-center justify-center min-h-[60vh] rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/20 p-8 text-center">
                             <div>
@@ -507,25 +532,25 @@ export default function RouteManagementPage() {
                                         <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                             <div className="space-y-1">
                                                 <Label htmlFor={`venta-${selectedClient.ruc}`}>Valor de Venta ($)</Label>
-                                                <Input id={`venta-${selectedClient.ruc}`} type="number" value={selectedClient.valorVenta} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'valorVenta', e.target.value)} />
+                                                <Input id={`venta-${selectedClient.ruc}`} type="number" value={selectedClient.valorVenta} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
                                             </div>
                                             <div className="space-y-1">
                                                 <Label htmlFor={`cobro-${selectedClient.ruc}`}>Valor de Cobro ($)</Label>
-                                                <Input id={`cobro-${selectedClient.ruc}`} type="number" value={selectedClient.valorCobro} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'valorCobro', e.target.value)} />
+                                                <Input id={`cobro-${selectedClient.ruc}`} type="number" value={selectedClient.valorCobro} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
                                             </div>
                                             <div className="space-y-1">
                                                 <Label htmlFor={`devoluciones-${selectedClient.ruc}`}>Devoluciones ($)</Label>
-                                                <Input id={`devoluciones-${selectedClient.ruc}`} type="number" value={selectedClient.devoluciones} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'devoluciones', e.target.value)} />
+                                                <Input id={`devoluciones-${selectedClient.ruc}`} type="number" value={selectedClient.devoluciones} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'devoluciones', e.target.value)} disabled={isFormDisabled} />
                                             </div>
                                             {esFarmacia && (
                                                 <>
                                                     <div className="space-y-1">
                                                         <Label htmlFor={`promociones-${selectedClient.ruc}`}>Promociones ($)</Label>
-                                                        <Input id={`promociones-${selectedClient.ruc}`} type="number" value={selectedClient.promociones} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'promociones', e.target.value)} className={getNumericValueClass(selectedClient.promociones)} />
+                                                        <Input id={`promociones-${selectedClient.ruc}`} type="number" value={selectedClient.promociones} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'promociones', e.target.value)} className={getNumericValueClass(selectedClient.promociones)} disabled={isFormDisabled} />
                                                     </div>
                                                     <div className="space-y-1">
                                                         <Label htmlFor={`medicacionFrecuente-${selectedClient.ruc}`}>Medicación Frecuente ($)</Label>
-                                                        <Input id={`medicacionFrecuente-${selectedClient.ruc}`} type="number" value={selectedClient.medicacionFrecuente} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'medicacionFrecuente', e.target.value)} className={getNumericValueClass(selectedClient.medicacionFrecuente)} />
+                                                        <Input id={`medicacionFrecuente-${selectedClient.ruc}`} type="number" value={selectedClient.medicacionFrecuente} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'medicacionFrecuente', e.target.value)} className={getNumericValueClass(selectedClient.medicacionFrecuente)} disabled={isFormDisabled} />
                                                     </div>
                                                 </>
                                             )}
