@@ -54,7 +54,7 @@ type ClientCsvData = {
 const ITEMS_PER_PAGE = 10;
 
 export default function ClientsPage() {
-  const { clients, loading, refetchData } = useAuth();
+  const { user, clients, loading, refetchData } = useAuth();
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -253,6 +253,12 @@ export default function ClientsPage() {
   const filteredClients = useMemo(() => {
     return clients
       .filter(client => {
+        if (user?.role === 'Usuario') {
+            return client.ejecutivo === user.name;
+        }
+        return true;
+      })
+      .filter(client => {
         if (filter === 'all') return true;
         return (client.status || 'active') === filter;
       })
@@ -266,7 +272,7 @@ export default function ClientsPage() {
           String(client.provincia).toLowerCase().includes(search)
         );
       });
-  }, [clients, filter, searchTerm]);
+  }, [clients, filter, searchTerm, user]);
   
   const paginatedClients = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -457,3 +463,4 @@ export default function ClientsPage() {
 
     
     
+
