@@ -1,12 +1,21 @@
 
 'use client';
+import { useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
 import { MapView } from '@/components/map-view';
 
 export default function MapPage() {
-    const { clients, loading } = useAuth();
+    const { user, clients, loading } = useAuth();
+
+    const filteredClients = useMemo(() => {
+        if (!user || loading) return [];
+        if (user.role === 'Usuario') {
+            return clients.filter(client => client.ejecutivo === user.name);
+        }
+        return clients;
+    }, [user, clients, loading]);
     
     return (
         <>
@@ -14,7 +23,7 @@ export default function MapPage() {
             title="Visualización de Ubicaciones"
             description="Visualiza todas las ubicaciones de los clientes en el mapa."
         />
-        {loading ? <Skeleton className="h-[600px] w-full" /> : <MapView clients={clients} />}
+        {loading ? <Skeleton className="h-[600px] w-full" /> : <MapView clients={filteredClients} />}
         </>
     );
 }
