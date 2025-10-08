@@ -73,7 +73,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
     // Admin can edit if it's not in a final state.
-    if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
+    if (currentUser.role === 'Administrador' && route.status !== 'Completada' && route.status !== 'En Progreso') return true;
     // The creator can edit if it's not pending or rejected.
     return route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada' && route.status !== 'Completada' && route.status !== 'En Progreso' && currentUser.id === route.createdBy;
   }, [currentUser, route]);

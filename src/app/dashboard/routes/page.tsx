@@ -162,9 +162,9 @@ export default function RoutesListPage() {
                             filteredRoutes.map((route) => {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
                                 const canEdit = user?.id === route.createdBy && route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada' && route.status !== 'En Progreso';
-                                const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada';
+                                const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada' && route.status !== 'En Progreso';
                                 const canViewDetails = !canReview && !canEdit && !canAdminEdit;
-                                const canDelete = (user?.id === route.createdBy && route.status !== 'En Progreso' && route.status !== 'Completada') || user?.role === 'Administrador';
+                                const canDelete = user?.role === 'Administrador' || (user?.id === route.createdBy && route.status !== 'En Progreso' && route.status !== 'Completada');
 
                                 return (
                                 <TableRow key={route.id}>
