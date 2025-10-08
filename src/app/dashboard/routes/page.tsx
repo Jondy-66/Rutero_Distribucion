@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { getRoutes, deleteRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock, Trash2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -161,9 +161,10 @@ export default function RoutesListPage() {
                         ) : filteredRoutes.length > 0 ? (
                             filteredRoutes.map((route) => {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
-                                const canEdit = user?.id === route.createdBy && route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada';
+                                const canEdit = user?.id === route.createdBy && route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada' && route.status !== 'En Progreso';
                                 const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada';
                                 const canViewDetails = !canReview && !canEdit && !canAdminEdit;
+                                const canDelete = (user?.id === route.createdBy && route.status !== 'En Progreso' && route.status !== 'Completada') || user?.role === 'Administrador';
 
                                 return (
                                 <TableRow key={route.id}>
@@ -188,7 +189,17 @@ export default function RoutesListPage() {
                                             {canReview && <DropdownMenuItem onClick={() => handleAction(route.id)}>Revisar</DropdownMenuItem>}
                                             {(canEdit || canAdminEdit) && <DropdownMenuItem onClick={() => handleAction(route.id)}>Editar</DropdownMenuItem>}
                                             {canViewDetails && <DropdownMenuItem onClick={() => handleAction(route.id)}>Ver Detalles</DropdownMenuItem>}
-                                            
+                                            {canDelete && (
+                                                <>
+                                                    <DropdownMenuSeparator />
+                                                    <AlertDialogTrigger asChild>
+                                                        <DropdownMenuItem className="text-red-600">
+                                                            <Trash2 className="mr-2 h-4 w-4" />
+                                                            Eliminar
+                                                        </DropdownMenuItem>
+                                                    </AlertDialogTrigger>
+                                                </>
+                                            )}
                                           </DropdownMenuContent>
                                         </DropdownMenu>
                                         <AlertDialogContent>
