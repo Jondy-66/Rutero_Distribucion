@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -44,12 +43,6 @@ const navItems = [
     icon: LayoutDashboard,
     roles: ['Administrador', 'Supervisor', 'Usuario'],
   },
-   {
-    href: '/dashboard/reports',
-    label: 'Reportes',
-    icon: FileText,
-    roles: ['Supervisor'],
-  },
   {
     href: '/dashboard/clients',
     label: 'Clientes',
@@ -88,17 +81,23 @@ export function DashboardNav() {
   const [isRoutesOpen, setIsRoutesOpen] = useState(
     pathname.startsWith('/dashboard/routes')
   );
-   const [isPlanningOpen, setIsPlanningOpen] = useState(
+  const [isPlanningOpen, setIsPlanningOpen] = useState(
     pathname.startsWith('/dashboard/routes')
   );
   const [isUsersOpen, setIsUsersOpen] = useState(
     pathname.startsWith('/dashboard/users')
   );
+  const [isReportsOpen, setIsReportsOpen] = useState(
+    pathname.startsWith('/dashboard/reports')
+  );
+
 
   const filteredNavItems = navItems.filter((item) => {
     if (!user || !user.role) return false;
     return item.roles.includes(user.role);
   });
+
+  const canSeeReports = user?.role === 'Supervisor';
 
   const canSeeRoutes =
     user?.role === 'Administrador' ||
@@ -130,6 +129,38 @@ export function DashboardNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         ))}
+         {canSeeReports && (
+          <Collapsible open={isReportsOpen} onOpenChange={setIsReportsOpen}>
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton tooltip="Reportes">
+                  <FileText className="h-5 w-5" />
+                  <span>Reportes</span>
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+            </SidebarMenuItem>
+            <CollapsibleContent>
+              <SidebarMenuSub>
+                <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-reports'}>
+                      <Link href="/dashboard/reports/my-reports">
+                        <FileText />
+                        <span>Mis Rutas Asignadas</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/seller-reports'}>
+                      <Link href="/dashboard/reports/seller-reports">
+                        <Users />
+                        <span>Reportes Vendedores</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
         {canSeeRoutes && (
           <Collapsible open={isRoutesOpen} onOpenChange={setIsRoutesOpen}>
             <SidebarMenuItem>
