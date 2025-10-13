@@ -14,27 +14,45 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
-import { getRoutes } from '@/lib/firebase/firestore';
+import { getRoutes, deleteRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { CheckCircle2, AlertCircle, XCircle, Clock } from 'lucide-react';
+import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { Timestamp } from 'firebase/firestore';
 
 export default function TeamRoutesPage() {
-  const { user, users, loading: authLoading } = useAuth();
+  const { user, users, loading: authLoading, refetchData } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [allRoutes, setAllRoutes] = useState<RoutePlan[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedUser, setSelectedUser] = useState<string>('all');
   
-  useEffect(() => {
-    const fetchRoutesData = async () => {
+   const fetchRoutesData = async () => {
       setLoading(true);
       try {
         const routesData = await getRoutes();
@@ -51,6 +69,7 @@ export default function TeamRoutesPage() {
       }
     };
 
+  useEffect(() => {
     if (user && (user.role === 'Administrador' || user.role === 'Supervisor')) {
       fetchRoutesData();
     } else if(!authLoading) {
@@ -96,6 +115,17 @@ export default function TeamRoutesPage() {
 
   const handleAction = (routeId: string) => {
     router.push(`/dashboard/routes/${routeId}`);
+  };
+
+  const handleDelete = async (routeId: string) => {
+    try {
+        await deleteRoute(routeId);
+        toast({ title: 'Éxito', description: 'Ruta eliminada correctamente.' });
+        fetchRoutesData(); // Re-fetch data to update the list
+    } catch (error: any) {
+        console.error('Failed to delete route:', error);
+        toast({ title: 'Error', description: 'No se pudo eliminar la ruta.', variant: 'destructive' });
+    }
   };
   
   const getBadgeForStatus = (status: RoutePlan['status']) => {
@@ -190,6 +220,7 @@ export default function TeamRoutesPage() {
                         ) : filteredRoutes.length > 0 ? (
                             filteredRoutes.map((route) => {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
+                                const canDelete = user?.role === 'Administrador';
                                
                                 return (
                                 <TableRow key={route.id}>
@@ -201,13 +232,45 @@ export default function TeamRoutesPage() {
                                     </TableCell>
                                     <TableCell className="text-center">{route.clients.length}</TableCell>
                                     <TableCell className="text-right">
-                                        <Button 
-                                            variant={canReview ? "default" : "outline"} 
-                                            size="sm"
-                                            onClick={() => handleAction(route.id)}
-                                        >
-                                            {canReview ? "Revisar" : "Ver Detalles"}
-                                        </Button>
+                                        <AlertDialog>
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                        <MoreHorizontal className="h-4 w-4" />
+                                                        <span className="sr-only">Alternar menú</span>
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end">
+                                                    <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => handleAction(route.id)}>
+                                                        {canReview ? "Revisar" : "Ver Detalles"}
+                                                    </DropdownMenuItem>
+                                                    {canDelete && (
+                                                        <>
+                                                            <DropdownMenuSeparator />
+                                                            <AlertDialogTrigger asChild>
+                                                                <DropdownMenuItem className="text-red-600">
+                                                                    <Trash2 className="mr-2 h-4 w-4" />
+                                                                    Eliminar
+                                                                </DropdownMenuItem>
+                                                            </AlertDialogTrigger>
+                                                        </>
+                                                    )}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Esta acción no se puede deshacer. Esto eliminará permanentemente la ruta.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleDelete(route.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
                                     </TableCell>
                                 </TableRow>
                                 )
