@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle, AlertTriangle } from 'lucide-react';
+import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle, AlertTriangle, ChevronRight, Save } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getClients, getRoutes, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan } from '@/lib/types';
@@ -68,19 +68,22 @@ export default function RouteManagementPage() {
   const [isClientMapOpen, setIsClientMapOpen] = useState(false);
   const [clientForMap, setClientForMap] = useState<Client | null>(null);
   const { toast } = useToast();
-  const [selectedClient, setSelectedClient] = useState<RouteClient | null>(null);
+  
+  // State for the active client being managed
+  const [activeClient, setActiveClient] = useState<RouteClient | null>(null);
+  const [checkInTime, setCheckInTime] = useState<string | null>(null);
+  const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const [checkInTime, setCheckInTime] = useState('');
-  const [checkOutTime, setCheckOutTime] = useState('');
 
   const loading = authLoading;
   
-  const unassignedClients = useMemo(() => {
-    if (!availableClients) return [];
-    const assignedRucs = new Set(routeClients.map(c => c.ruc));
-    return availableClients.filter(c => !assignedRucs.has(c.ruc));
-  }, [availableClients, routeClients]);
-  
+  useEffect(() => {
+    const currentClient = routeClients.find(c => c.visitStatus !== 'Completado');
+    setActiveClient(currentClient || null);
+    setCheckInTime(null); // Reset check-in time when client changes
+  }, [routeClients]);
+
   useEffect(() => {
     if (selectedRoute && selectedRoute.status === 'En Progreso') {
         const expirationDate = new Date(selectedRoute.date);
@@ -93,19 +96,6 @@ export default function RouteManagementPage() {
     }
 }, [selectedRoute]);
 
-
-  const handleAddClient = (client: Client) => {
-    const newClient: RouteClient = {
-        ...client,
-        valorVenta: '0.00',
-        valorCobro: '0.00',
-        devoluciones: '0.00',
-        promociones: '0.00',
-        medicacionFrecuente: '0.00',
-    };
-    setRouteClients(prev => [...prev, newClient]);
-  }
-
   const handleClientValueChange = (ruc: string, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
       setRouteClients(prevClients => {
           const updatedClients = prevClients.map(client => {
@@ -114,10 +104,10 @@ export default function RouteManagementPage() {
               }
               return client;
           });
-          const updatedSelectedClient = updatedClients.find(c => c.ruc === ruc);
-          if (updatedSelectedClient) {
-              setSelectedClient(updatedSelectedClient);
-          }
+           const updatedActiveClient = updatedClients.find(c => c.ruc === activeClient?.ruc);
+           if (updatedActiveClient) {
+               setActiveClient(updatedActiveClient);
+           }
           return updatedClients;
       });
   }
@@ -162,40 +152,29 @@ export default function RouteManagementPage() {
     );
   };
   
-  const handleCheckInOpen = () => {
+  const handleCheckIn = () => {
     setCheckInTime(format(new Date(), 'HH:mm:ss'));
     handleGetLocation(true);
-  }
-
-  const handleCheckOutOpen = () => {
-    setCheckOutTime(format(new Date(), 'HH:mm:ss'));
-    handleGetLocation(true);
-  }
-
-  const handleSaveLocation = () => {
-      if(!markerPosition) {
-          toast({ title: "Sin ubicación", description: "No se ha fijado una ubicación para guardar.", variant: "destructive" });
-          return;
-      }
-      // Here you would typically save the location to your state or database
-      toast({ title: "Ubicación Guardada", description: `Lat: ${markerPosition.lat.toFixed(4)}, Lon: ${markerPosition.lng.toFixed(4)}` });
-      setIsMapOpen(false);
+    toast({ title: "Entrada Marcada", description: `Hora de entrada registrada a las ${format(new Date(), 'HH:mm:ss')}` });
   }
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || !selectedClient) return;
+    if (!selectedRoute || !activeClient) return;
 
+    setIsSaving(true);
     const updatedClients = routeClients.map(c => 
-        c.ruc === selectedClient.ruc ? { ...c, visitStatus: 'Completado' as const } : c
+        c.ruc === activeClient.ruc ? { ...c, visitStatus: 'Completado' as const } : c
     );
 
     try {
         await updateRoute(selectedRoute.id, { clients: updatedClients });
         setRouteClients(updatedClients);
-        toast({ title: "Salida Confirmada", description: `Visita a ${selectedClient.nombre_comercial} completada.` });
+        toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
     } catch(error) {
         console.error("Error updating route on checkout:", error);
         toast({ title: "Error", description: "No se pudo actualizar el estado de la visita.", variant: "destructive"});
+    } finally {
+        setIsSaving(false);
     }
   }
   
@@ -205,7 +184,7 @@ export default function RouteManagementPage() {
       if (route) {
           setSelectedRoute(route);
           setIsRouteStarted(route.status === 'En Progreso');
-          setSelectedClient(null); // Reset selected client when route changes
+          setActiveClient(null); // Reset selected client when route changes
           if (availableClients) {
             const clientsData = route.clients.map(clientInRoute => {
                 const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
@@ -265,8 +244,8 @@ export default function RouteManagementPage() {
     }
   }
 
-  const esFarmacia = selectedClient?.nombre_comercial?.toLowerCase().includes('farmacia');
-  const isFormDisabled = isRouteExpired;
+  const esFarmacia = activeClient?.nombre_comercial?.toLowerCase().includes('farmacia');
+  const isFormDisabled = isRouteExpired || !checkInTime;
 
 
   return (
@@ -317,18 +296,20 @@ export default function RouteManagementPage() {
                        <div className="space-y-4">
                             <div>
                                 <Label>Clientes en Ruta ({routeClients.length})</Label>
-                                <div className="mt-2 space-y-2 max-h-60 overflow-y-auto pr-2 rounded-md border p-2">
-                                    {routeClients.length > 0 ? routeClients.map(client => (
+                                <div className="mt-2 space-y-2 max-h-[calc(100vh-20rem)] overflow-y-auto pr-2 rounded-md border p-2">
+                                    {routeClients.length > 0 ? routeClients.map((client, index) => (
                                         <div 
                                             key={client.ruc} 
                                             className={cn(
-                                                "flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md cursor-pointer hover:bg-muted",
-                                                selectedClient?.ruc === client.ruc && "bg-primary/10 border-primary/50 border",
-                                                isFormDisabled && "cursor-not-allowed opacity-70"
+                                                "flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md",
+                                                activeClient?.ruc === client.ruc && "bg-primary/10 border-primary/50 border",
+                                                client.visitStatus === 'Completado' && 'opacity-60'
                                             )}
-                                            onClick={() => !isFormDisabled && setSelectedClient(client)}
                                         >
-                                            <span className="truncate flex-1" title={client.nombre_comercial}>{client.nombre_comercial}</span>
+                                            <div className="flex items-center gap-3">
+                                                <span className={cn("font-semibold", activeClient?.ruc === client.ruc && "text-primary")}>{index + 1}.</span>
+                                                <span className="truncate flex-1" title={client.nombre_comercial}>{client.nombre_comercial}</span>
+                                            </div>
                                             <div className="flex items-center">
                                                 {client.visitStatus === 'Completado' && <CheckCircle className="h-4 w-4 text-green-500 mr-2" />}
                                                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); handleViewClientOnMap(client)}}>
@@ -341,140 +322,6 @@ export default function RouteManagementPage() {
                             </div>
                         </div>
                     )}
-
-                     <div className="space-y-2">
-                        <Label>Fecha</Label>
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className={cn("w-full justify-start font-normal text-left", !routeDate && "text-muted-foreground")} disabled>
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                {routeDate ? format(routeDate, 'PPP', {locale: es}) : 'Selecciona una fecha'}
-                                </Button>
-                            </PopoverTrigger>
-                        </Popover>
-                    </div>
-
-                    <div className="space-y-4">
-                        <Separator />
-                        <Label className="flex items-center gap-2 text-muted-foreground">
-                            <Building2 className="h-5 w-5" />
-                            Marcación Entrada/Salida
-                        </Label>
-                        <div className="grid grid-cols-2 gap-4">
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="outline" className="flex-col h-auto py-3" onClick={handleCheckInOpen} disabled={!selectedClient || isFormDisabled}>
-                                        <LogIn className="h-6 w-6 text-primary mb-2" />
-                                        <span className="font-semibold text-primary">MARCAR ENTRADA</span>
-                                        <span className="text-xs text-muted-foreground">(Pend. Hoy)</span>
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <div className="h-40 -mx-6 -mt-6 rounded-t-lg overflow-hidden">
-                                        {gettingLocation || !markerPosition ? (
-                                             <Skeleton className="h-full w-full" />
-                                        ) : (
-                                            <MapView center={markerPosition} markerPosition={markerPosition} containerClassName="h-full w-full" />
-                                        )}
-                                    </div>
-                                    <AlertDialogHeader className="text-center items-center">
-                                    <AlertDialogTitle className="text-2xl">Entrada a Cliente</AlertDialogTitle>
-                                    <AlertDialogDescription className="text-base">
-                                        Se marcará evento de entrada con fecha <br />
-                                        <span className="font-bold text-lg text-foreground">
-                                             hoy a las {checkInTime}
-                                        </span>
-                                        <br />
-                                        en la ubicación mostrada. ¿Desea continuar?
-                                    </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter className="flex-row gap-4">
-                                        <AlertDialogCancel className="w-full">Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction className="w-full">Confirmar</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                            <AlertDialog>
-                                <AlertDialogTrigger asChild>
-                                    <Button variant="outline" className="flex-col h-auto py-3" onClick={handleCheckOutOpen} disabled={!selectedClient || isFormDisabled}>
-                                        <LogOut className="h-6 w-6 text-primary mb-2" />
-                                        <span className="font-semibold text-primary">MARCAR SALIDA</span>
-                                        <span className="text-xs text-muted-foreground">(Pend. Hoy)</span>
-                                    </Button>
-                                </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                    <div className="h-40 -mx-6 -mt-6 rounded-t-lg overflow-hidden">
-                                        {gettingLocation || !markerPosition ? (
-                                             <Skeleton className="h-full w-full" />
-                                        ) : (
-                                            <MapView center={markerPosition} markerPosition={markerPosition} containerClassName="h-full w-full" />
-                                        )}
-                                    </div>
-                                    <AlertDialogHeader className="text-center items-center">
-                                    <AlertDialogTitle className="text-2xl">Salida de Cliente</AlertDialogTitle>
-                                    <AlertDialogDescription className="text-base">
-                                        Se marcará evento de salida con fecha <br />
-                                        <span className="font-bold text-lg text-foreground">
-                                             hoy a las {checkOutTime}
-                                        </span>
-                                        <br />
-                                        en la ubicación mostrada. ¿Desea continuar?
-                                    </AlertDialogDescription>
-                                    </AlertDialogHeader>
-                                    <AlertDialogFooter className="flex-row gap-4">
-                                        <AlertDialogCancel className="w-full">Cancelar</AlertDialogCancel>
-                                        <AlertDialogAction className="w-full" onClick={handleConfirmCheckOut}>Confirmar</AlertDialogAction>
-                                    </AlertDialogFooter>
-                                </AlertDialogContent>
-                            </AlertDialog>
-                        </div>
-                    </div>
-
-
-                    <div className="space-y-4">
-                        <Dialog open={isMapOpen} onOpenChange={setIsMapOpen}>
-                            <DialogTrigger asChild>
-                                <Button className="w-full" disabled={isFormDisabled}>
-                                    <MapPin className="mr-2 h-4 w-4" />
-                                    Mi Ubicación
-                                </Button>
-                            </DialogTrigger>
-                            <DialogContent className="max-w-3xl h-[80vh] flex flex-col">
-                                <DialogHeader>
-                                    <DialogTitle>Verificar Ubicación</DialogTitle>
-                                    <DialogDescription>
-                                        Usa el botón para encontrar tu ubicación actual o arrastra el marcador. Haz clic en guardar cuando termines.
-                                    </DialogDescription>
-                                </DialogHeader>
-                                <div className="flex-grow">
-                                     <MapView 
-                                        center={mapCenter}
-                                        markerPosition={markerPosition}
-                                        containerClassName="h-full w-full"
-                                     />
-                                </div>
-                                <DialogFooter>
-                                    <Button onClick={() => handleGetLocation(false)} disabled={gettingLocation}>
-                                        {gettingLocation && <LoaderCircle className="animate-spin" />}
-                                        {gettingLocation ? 'Buscando...' : 'Obtener Mi Ubicación Actual'}
-                                    </Button>
-                                    <Button onClick={handleSaveLocation} variant="default">
-                                        Guardar Ubicación
-                                    </Button>
-                                </DialogFooter>
-                            </DialogContent>
-                        </Dialog>
-
-                        <div className="flex items-center space-x-2">
-                            <Checkbox id="phone-call" disabled={isFormDisabled} />
-                            <label
-                                htmlFor="phone-call"
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
-                            >
-                                Llamada telefónica
-                            </label>
-                        </div>
-                    </div>
                 </CardContent>
             </Card>
         </div>
@@ -485,9 +332,9 @@ export default function RouteManagementPage() {
                 <CardHeader>
                     <div className="flex justify-between items-center">
                         <div>
-                            <CardTitle>{selectedRoute ? selectedRoute.routeName : 'Gestión de Clientes'}</CardTitle>
+                            <CardTitle>{selectedRoute ? "Gestión de Cliente" : 'Gestión de Clientes'}</CardTitle>
                             <CardDescription>
-                                {selectedClient ? `Gestionando a ${selectedClient.nombre_comercial}` : 'Selecciona un cliente de la lista para ver sus detalles.'}
+                                {activeClient ? `Gestionando a ${activeClient.nombre_comercial}` : 'Selecciona un cliente de la lista para ver sus detalles.'}
                             </CardDescription>
                         </div>
                          {selectedRoute && <Badge variant="secondary">{selectedRoute.status}</Badge>}
@@ -510,50 +357,116 @@ export default function RouteManagementPage() {
                                 <p className="text-muted-foreground">Por favor, elige una ruta para empezar a gestionar clientes.</p>
                             </div>
                         </div>
-                    ) : !selectedClient ? (
-                        <div className="flex items-center justify-center min-h-[60vh] rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/20 p-8 text-center">
+                    ) : !activeClient ? (
+                        <div className="flex items-center justify-center min-h-[60vh] rounded-lg border-2 border-dashed border-green-500/50 bg-green-500/10 p-8 text-center text-green-900">
                             <div>
-                                <p className="font-semibold text-lg">Selecciona un Cliente</p>
-                                <p className="text-muted-foreground">Haz clic en un cliente de la lista de la izquierda para ver y editar sus detalles.</p>
+                                <CheckCircle className="h-12 w-12 mx-auto mb-4" />
+                                <p className="font-semibold text-xl">¡Ruta Completada!</p>
+                                <p>Has gestionado todos los clientes de esta ruta. ¡Buen trabajo!</p>
                             </div>
                         </div>
                     ) : (
                         <div className="space-y-4">
-                            <Card key={selectedClient.id} className="p-4 bg-background">
+                            <Card key={activeClient.id} className="p-4 bg-background">
                                 <div className="flex items-start gap-4">
                                     <div className="flex-1">
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <p className="font-bold text-lg">{selectedClient.nombre_comercial}</p>
-                                                <p className="text-sm text-muted-foreground">{selectedClient.direccion}</p>
+                                                <p className="font-bold text-lg">{activeClient.nombre_comercial}</p>
+                                                <p className="text-sm text-muted-foreground">{activeClient.direccion}</p>
                                             </div>
                                         </div>
                                         <Separator className="my-4" />
-                                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                                            <div className="space-y-1">
-                                                <Label htmlFor={`venta-${selectedClient.ruc}`}>Valor de Venta ($)</Label>
-                                                <Input id={`venta-${selectedClient.ruc}`} type="number" value={selectedClient.valorVenta} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
+
+                                        <div className="space-y-6">
+                                            {/* --- CHECK IN --- */}
+                                            <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
+                                                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">1</div>
+                                                <div className="flex-1">
+                                                    <h4 className="font-semibold">Marcar Entrada</h4>
+                                                    <p className="text-sm text-muted-foreground">Registra tu hora de llegada al cliente.</p>
+                                                </div>
+                                                {checkInTime ? (
+                                                     <div className="text-center">
+                                                        <p className="font-bold text-green-600">Entrada Marcada</p>
+                                                        <p className="text-sm font-mono">{checkInTime}</p>
+                                                    </div>
+                                                ) : (
+                                                    <Button onClick={handleCheckIn} disabled={isRouteExpired}>
+                                                        <LogIn className="mr-2" />
+                                                        Marcar Entrada
+                                                    </Button>
+                                                )}
                                             </div>
-                                            <div className="space-y-1">
-                                                <Label htmlFor={`cobro-${selectedClient.ruc}`}>Valor de Cobro ($)</Label>
-                                                <Input id={`cobro-${selectedClient.ruc}`} type="number" value={selectedClient.valorCobro} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label htmlFor={`devoluciones-${selectedClient.ruc}`}>Devoluciones ($)</Label>
-                                                <Input id={`devoluciones-${selectedClient.ruc}`} type="number" value={selectedClient.devoluciones} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'devoluciones', e.target.value)} disabled={isFormDisabled} />
-                                            </div>
-                                            {esFarmacia && (
-                                                <>
+                                            
+                                            {/* --- DATA INPUT --- */}
+                                            <div className={cn("space-y-4 transition-opacity", !checkInTime && "opacity-50 pointer-events-none")}>
+                                                <div className="flex items-center gap-4">
+                                                     <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">2</div>
+                                                     <div>
+                                                        <h4 className="font-semibold">Registrar Gestión</h4>
+                                                        <p className="text-sm text-muted-foreground">Ingresa los valores de la visita.</p>
+                                                     </div>
+                                                </div>
+                                                <div className="grid grid-cols-2 md:grid-cols-3 gap-4 pl-14">
                                                     <div className="space-y-1">
-                                                        <Label htmlFor={`promociones-${selectedClient.ruc}`}>Promociones ($)</Label>
-                                                        <Input id={`promociones-${selectedClient.ruc}`} type="number" value={selectedClient.promociones} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'promociones', e.target.value)} className={getNumericValueClass(selectedClient.promociones)} disabled={isFormDisabled} />
+                                                        <Label htmlFor={`venta-${activeClient.ruc}`}>Valor de Venta ($)</Label>
+                                                        <Input id={`venta-${activeClient.ruc}`} type="number" value={activeClient.valorVenta} onChange={(e) => handleClientValueChange(activeClient.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
                                                     </div>
                                                     <div className="space-y-1">
-                                                        <Label htmlFor={`medicacionFrecuente-${selectedClient.ruc}`}>Medicación Frecuente ($)</Label>
-                                                        <Input id={`medicacionFrecuente-${selectedClient.ruc}`} type="number" value={selectedClient.medicacionFrecuente} onChange={(e) => handleClientValueChange(selectedClient.ruc, 'medicacionFrecuente', e.target.value)} className={getNumericValueClass(selectedClient.medicacionFrecuente)} disabled={isFormDisabled} />
+                                                        <Label htmlFor={`cobro-${activeClient.ruc}`}>Valor de Cobro ($)</Label>
+                                                        <Input id={`cobro-${activeClient.ruc}`} type="number" value={activeClient.valorCobro} onChange={(e) => handleClientValueChange(activeClient.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
                                                     </div>
-                                                </>
-                                            )}
+                                                    <div className="space-y-1">
+                                                        <Label htmlFor={`devoluciones-${activeClient.ruc}`}>Devoluciones ($)</Label>
+                                                        <Input id={`devoluciones-${activeClient.ruc}`} type="number" value={activeClient.devoluciones} onChange={(e) => handleClientValueChange(activeClient.ruc, 'devoluciones', e.target.value)} disabled={isFormDisabled} />
+                                                    </div>
+                                                    {esFarmacia && (
+                                                        <>
+                                                            <div className="space-y-1">
+                                                                <Label htmlFor={`promociones-${activeClient.ruc}`}>Promociones ($)</Label>
+                                                                <Input id={`promociones-${activeClient.ruc}`} type="number" value={activeClient.promociones} onChange={(e) => handleClientValueChange(activeClient.ruc, 'promociones', e.target.value)} className={getNumericValueClass(activeClient.promociones)} disabled={isFormDisabled} />
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <Label htmlFor={`medicacionFrecuente-${activeClient.ruc}`}>Medicación Frecuente ($)</Label>
+                                                                <Input id={`medicacionFrecuente-${activeClient.ruc}`} type="number" value={activeClient.medicacionFrecuente} onChange={(e) => handleClientValueChange(activeClient.ruc, 'medicacionFrecuente', e.target.value)} className={getNumericValueClass(activeClient.medicacionFrecuente)} disabled={isFormDisabled} />
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            
+                                            {/* --- CHECK OUT --- */}
+                                            <div className={cn("flex items-center gap-4 p-3 rounded-lg bg-muted/50 transition-opacity", !checkInTime && "opacity-50 pointer-events-none")}>
+                                                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">3</div>
+                                                <div className="flex-1">
+                                                    <h4 className="font-semibold">Marcar Salida</h4>
+                                                    <p className="text-sm text-muted-foreground">Finaliza y guarda la visita a este cliente.</p>
+                                                </div>
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                         <Button disabled={isFormDisabled || isSaving}>
+                                                            <LogOut className="mr-2" />
+                                                            Marcar y Guardar Salida
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                        <AlertDialogTitle>¿Confirmar Salida?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Estás a punto de finalizar la visita a <strong>{activeClient.nombre_comercial}</strong>. Se guardarán los datos ingresados y se marcará la visita como completada.
+                                                        </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                                            <AlertDialogAction onClick={handleConfirmCheckOut} disabled={isSaving}>
+                                                                {isSaving && <LoaderCircle className="animate-spin mr-2" />}
+                                                                Confirmar
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
