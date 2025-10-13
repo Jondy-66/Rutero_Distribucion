@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -164,7 +165,7 @@ export default function RoutesListPage() {
                                 const canEdit = user?.id === route.createdBy && route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada' && route.status !== 'En Progreso';
                                 const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada' && route.status !== 'En Progreso';
                                 const canViewDetails = !canReview && !canEdit && !canAdminEdit;
-                                const canDelete = user?.role === 'Administrador' || (user?.id === route.createdBy && route.status !== 'En Progreso' && route.status !== 'Completada');
+                                const canDelete = user?.role === 'Administrador' || (user?.id === route.createdBy && route.status !== 'En Progreso');
 
                                 return (
                                 <TableRow key={route.id}>
