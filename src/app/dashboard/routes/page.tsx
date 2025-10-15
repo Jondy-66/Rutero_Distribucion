@@ -162,10 +162,10 @@ export default function RoutesListPage() {
                         ) : filteredRoutes.length > 0 ? (
                             filteredRoutes.map((route) => {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
-                                const canEdit = user?.id === route.createdBy && route.status === 'Rechazada';
+                                const canEdit = user?.id === route.createdBy && (route.status === 'Rechazada' || route.status === 'Planificada');
                                 const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada';
                                 let canViewDetails = !canReview && !canEdit && !canAdminEdit;
-                                if (user?.id === route.createdBy && (route.status === 'Planificada' || route.status === 'En Progreso' || route.status === 'Pendiente de Aprobación')) {
+                                if (user?.id === route.createdBy && (route.status === 'En Progreso' || route.status === 'Pendiente de Aprobación')) {
                                     canViewDetails = true;
                                 }
                                 const canDelete = user?.role === 'Administrador' || (user?.id === route.createdBy && route.status === 'Rechazada');
