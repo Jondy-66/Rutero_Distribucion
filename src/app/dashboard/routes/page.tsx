@@ -165,7 +165,7 @@ export default function RoutesListPage() {
                                 const canEdit = user?.id === route.createdBy && route.status !== 'Pendiente de Aprobación' && route.status !== 'Rechazada' && route.status !== 'En Progreso';
                                 const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada' && route.status !== 'En Progreso';
                                 const canViewDetails = !canReview && !canEdit && !canAdminEdit;
-                                const canDelete = user?.role === 'Administrador' || (user?.id === route.createdBy && route.status !== 'En Progreso' && route.status !== 'Planificada' && route.status !== 'Completada');
+                                const canDelete = user?.role === 'Administrador' || (user?.id === route.createdBy && route.status !== 'En Progreso' && route.status !== 'Planificada' && route.status !== 'Completada' && route.status !== 'Pendiente de Aprobación');
 
                                 return (
                                 <TableRow key={route.id}>
