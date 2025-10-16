@@ -138,9 +138,9 @@ export default function PrediccionesPage() {
                 ruc: client.ruc,
                 nombre_comercial: client.nombre_comercial,
                 date: prediction ? parseISO(prediction.fecha_predicha) : new Date(),
-                valorVenta: prediction?.venta,
-                valorCobro: prediction?.cobro,
-                promociones: prediction?.promociones,
+                valorVenta: prediction ? parseFloat(String(prediction.venta)) || 0 : 0,
+                valorCobro: prediction ? parseFloat(String(prediction.cobro)) || 0 : 0,
+                promociones: prediction ? parseFloat(String(prediction.promociones)) || 0 : 0,
             }
         });
 
@@ -232,12 +232,14 @@ export default function PrediccionesPage() {
     toast({ title: "Descarga Iniciada", description: "Tu reporte en Excel se está descargando." });
   };
   
-   const formatCurrency = (value: number | undefined) => {
+   const formatCurrency = (value: number | string | undefined | null) => {
     if (value === undefined || value === null) return '$0.00';
+    const numValue = typeof value === 'string' ? parseFloat(value) : value;
+    if (isNaN(numValue)) return '$0.00';
     return new Intl.NumberFormat('en-US', {
       style: 'currency',
       currency: 'USD',
-    }).format(value);
+    }).format(numValue);
   };
 
 
