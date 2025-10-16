@@ -91,9 +91,9 @@ export type Prediction = {
   probabilidad_visita: number;
   LatitudTrz: number;
   LongitudTrz: number;
-  venta?: number;
-  cobro?: number;
-  promociones?: number;
+  venta?: string | number;
+  cobro?: string | number;
+  promociones?: string | number;
 };
 
 /**
