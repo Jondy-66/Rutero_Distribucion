@@ -23,6 +23,12 @@ import { MapView } from "@/components/map-view";
 import * as XLSX from 'xlsx';
 import { isFinite } from "lodash";
 
+type EnrichedPrediction = Prediction & Partial<Client> & {
+    valorVenta?: number;
+    valorCobro?: number;
+    promociones?: number;
+};
+
 /**
  * Componente de la página de predicciones.
  * Permite al usuario solicitar y visualizar predicciones de visitas a clientes.
@@ -31,7 +37,7 @@ import { isFinite } from "lodash";
 export default function PrediccionesPage() {
   const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dias, setDias] = useState(7);
-  const [predicciones, setPredicciones] = useState<Prediction[]>([]);
+  const [predicciones, setPredicciones] = useState<EnrichedPrediction[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -63,7 +69,14 @@ export default function PrediccionesPage() {
     setPredicciones([]); // Limpiar predicciones anteriores
     try {
       const data = await getPredicciones({ fecha_inicio: fechaInicio, dias });
-      setPredicciones(data);
+      
+      const enrichedData = data.map(prediction => {
+          const clientInfo = clients.find(c => c.ruc === prediction.RUC);
+          return { ...prediction, ...clientInfo };
+      });
+
+      setPredicciones(enrichedData);
+
        if (data.length === 0) {
         toast({
           title: "Sin Resultados",
@@ -149,6 +162,7 @@ export default function PrediccionesPage() {
             supervisorId: supervisor.id,
             supervisorName: supervisor.name,
             createdBy: currentUser.id,
+            date: routeDate,
         };
 
         const newRouteId = await addRoute(newRoute);
@@ -222,6 +236,15 @@ export default function PrediccionesPage() {
     XLSX.writeFile(workbook, "predicciones_de_visitas.xlsx");
     toast({ title: "Descarga Iniciada", description: "Tu reporte en Excel se está descargando." });
   };
+  
+   const formatCurrency = (value: number | undefined) => {
+    if (value === undefined || value === null) return '$0.00';
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+    }).format(value);
+  };
+
 
   return (
     <>
@@ -307,13 +330,16 @@ export default function PrediccionesPage() {
                                 <TableHead>RUC</TableHead>
                                 <TableHead>Fecha Predicha</TableHead>
                                 <TableHead className="text-right">Probabilidad</TableHead>
+                                <TableHead className="text-right">Venta</TableHead>
+                                <TableHead className="text-right">Cobro</TableHead>
+                                <TableHead className="text-right">Promociones</TableHead>
                                 <TableHead>Mapa</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">
+                                    <TableCell colSpan={8} className="h-24 text-center">
                                         <LoaderCircle className="mx-auto animate-spin text-primary" />
                                     </TableCell>
                                 </TableRow>
@@ -324,6 +350,9 @@ export default function PrediccionesPage() {
                                         <TableCell>{pred.RUC}</TableCell>
                                         <TableCell>{format(parseISO(pred.fecha_predicha), 'PPP', { locale: es })}</TableCell>
                                         <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(pred.valorVenta)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(pred.valorCobro)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(pred.promociones)}</TableCell>
                                         <TableCell>
                                             <Button variant="ghost" size="icon" onClick={() => handleViewOnMap(pred)} title="Ver en Mapa">
                                                 <MapPin className="h-4 w-4" />
@@ -333,7 +362,7 @@ export default function PrediccionesPage() {
                                 ))
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">
+                                    <TableCell colSpan={8} className="h-24 text-center">
                                         No hay predicciones para mostrar.
                                     </TableCell>
                                 </TableRow>
@@ -400,4 +429,3 @@ export default function PrediccionesPage() {
     </>
   );
 }
-
