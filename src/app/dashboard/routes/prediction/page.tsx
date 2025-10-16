@@ -138,8 +138,8 @@ export default function PrediccionesPage() {
                 ruc: client.ruc,
                 nombre_comercial: client.nombre_comercial,
                 date: prediction ? parseISO(prediction.fecha_predicha) : new Date(),
-                valorVenta: prediction?.valorVenta,
-                valorCobro: prediction?.valorCobro,
+                valorVenta: prediction?.venta,
+                valorCobro: prediction?.cobro,
                 promociones: prediction?.promociones,
             }
         });
@@ -220,8 +220,8 @@ export default function PrediccionesPage() {
       'Probabilidad de Visita (%)': (p.probabilidad_visita * 100).toFixed(2),
       'Latitud': p.LatitudTrz,
       'Longitud': p.LongitudTrz,
-      'Venta': p.valorVenta || 0,
-      'Cobro': p.valorCobro || 0,
+      'Venta': p.venta || 0,
+      'Cobro': p.cobro || 0,
       'Promociones': p.promociones || 0,
     }));
 
@@ -345,8 +345,8 @@ export default function PrediccionesPage() {
                                         <TableCell>{pred.RUC}</TableCell>
                                         <TableCell>{format(parseISO(pred.fecha_predicha), 'PPP', { locale: es })}</TableCell>
                                         <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(pred.valorVenta)}</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(pred.valorCobro)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(pred.venta)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(pred.cobro)}</TableCell>
                                         <TableCell className="text-right">{formatCurrency(pred.promociones)}</TableCell>
                                         <TableCell>
                                             <Button variant="ghost" size="icon" onClick={() => handleViewOnMap(pred)} title="Ver en Mapa">
