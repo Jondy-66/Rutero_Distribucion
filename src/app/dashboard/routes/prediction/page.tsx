@@ -23,12 +23,6 @@ import { MapView } from "@/components/map-view";
 import * as XLSX from 'xlsx';
 import { isFinite } from "lodash";
 
-type EnrichedPrediction = Prediction & Partial<Client> & {
-    valorVenta?: number;
-    valorCobro?: number;
-    promociones?: number;
-};
-
 /**
  * Componente de la página de predicciones.
  * Permite al usuario solicitar y visualizar predicciones de visitas a clientes.
@@ -37,7 +31,7 @@ type EnrichedPrediction = Prediction & Partial<Client> & {
 export default function PrediccionesPage() {
   const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dias, setDias] = useState(7);
-  const [predicciones, setPredicciones] = useState<EnrichedPrediction[]>([]);
+  const [predicciones, setPredicciones] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -70,12 +64,7 @@ export default function PrediccionesPage() {
     try {
       const data = await getPredicciones({ fecha_inicio: fechaInicio, dias });
       
-      const enrichedData = data.map(prediction => {
-          const clientInfo = clients.find(c => c.ruc === prediction.RUC);
-          return { ...prediction, ...clientInfo };
-      });
-
-      setPredicciones(enrichedData);
+      setPredicciones(data);
 
        if (data.length === 0) {
         toast({
@@ -149,6 +138,9 @@ export default function PrediccionesPage() {
                 ruc: client.ruc,
                 nombre_comercial: client.nombre_comercial,
                 date: prediction ? parseISO(prediction.fecha_predicha) : new Date(),
+                valorVenta: prediction?.valorVenta,
+                valorCobro: prediction?.valorCobro,
+                promociones: prediction?.promociones,
             }
         });
 
@@ -228,6 +220,9 @@ export default function PrediccionesPage() {
       'Probabilidad de Visita (%)': (p.probabilidad_visita * 100).toFixed(2),
       'Latitud': p.LatitudTrz,
       'Longitud': p.LongitudTrz,
+      'Venta': p.valorVenta || 0,
+      'Cobro': p.valorCobro || 0,
+      'Promociones': p.promociones || 0,
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
