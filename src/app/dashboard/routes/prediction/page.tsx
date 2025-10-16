@@ -138,8 +138,8 @@ export default function PrediccionesPage() {
                 ruc: client.ruc,
                 nombre_comercial: client.nombre_comercial,
                 date: prediction ? parseISO(prediction.fecha_predicha) : new Date(),
-                valorVenta: prediction ? parseFloat(String(prediction.Venta)) || 0 : 0,
-                valorCobro: prediction ? parseFloat(String(prediction.Cobro)) || 0 : 0,
+                valorVenta: prediction ? parseFloat(String(prediction.ventas)) || 0 : 0,
+                valorCobro: prediction ? parseFloat(String(prediction.cobros)) || 0 : 0,
                 promociones: prediction ? parseFloat(String(prediction.promociones)) || 0 : 0,
             }
         });
@@ -220,8 +220,8 @@ export default function PrediccionesPage() {
       'Probabilidad de Visita (%)': (p.probabilidad_visita * 100).toFixed(2),
       'Latitud': p.LatitudTrz,
       'Longitud': p.LongitudTrz,
-      'Venta': p.Venta || 0,
-      'Cobro': p.Cobro || 0,
+      'Ventas': p.ventas || 0,
+      'Cobros': p.cobros || 0,
       'Promociones': p.promociones || 0,
     }));
 
@@ -327,8 +327,8 @@ export default function PrediccionesPage() {
                                 <TableHead>RUC</TableHead>
                                 <TableHead>Fecha Predicha</TableHead>
                                 <TableHead className="text-right">Probabilidad</TableHead>
-                                <TableHead className="text-right">Venta</TableHead>
-                                <TableHead className="text-right">Cobro</TableHead>
+                                <TableHead className="text-right">Ventas</TableHead>
+                                <TableHead className="text-right">Cobros</TableHead>
                                 <TableHead className="text-right">Promociones</TableHead>
                                 <TableHead>Mapa</TableHead>
                             </TableRow>
@@ -347,8 +347,8 @@ export default function PrediccionesPage() {
                                         <TableCell>{pred.RUC}</TableCell>
                                         <TableCell>{format(parseISO(pred.fecha_predicha), 'PPP', { locale: es })}</TableCell>
                                         <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(pred.Venta)}</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(pred.Cobro)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(pred.ventas)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(pred.cobros)}</TableCell>
                                         <TableCell className="text-right">{formatCurrency(pred.promociones)}</TableCell>
                                         <TableCell>
                                             <Button variant="ghost" size="icon" onClick={() => handleViewOnMap(pred)} title="Ver en Mapa">
