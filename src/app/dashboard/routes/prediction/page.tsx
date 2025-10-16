@@ -138,8 +138,8 @@ export default function PrediccionesPage() {
                 ruc: client.ruc,
                 nombre_comercial: client.nombre_comercial,
                 date: prediction ? parseISO(prediction.fecha_predicha) : new Date(),
-                valorVenta: prediction ? parseFloat(String(prediction.venta)) || 0 : 0,
-                valorCobro: prediction ? parseFloat(String(prediction.cobro)) || 0 : 0,
+                valorVenta: prediction ? parseFloat(String(prediction.Venta)) || 0 : 0,
+                valorCobro: prediction ? parseFloat(String(prediction.Cobro)) || 0 : 0,
                 promociones: prediction ? parseFloat(String(prediction.promociones)) || 0 : 0,
             }
         });
@@ -220,8 +220,8 @@ export default function PrediccionesPage() {
       'Probabilidad de Visita (%)': (p.probabilidad_visita * 100).toFixed(2),
       'Latitud': p.LatitudTrz,
       'Longitud': p.LongitudTrz,
-      'Venta': p.venta || 0,
-      'Cobro': p.cobro || 0,
+      'Venta': p.Venta || 0,
+      'Cobro': p.Cobro || 0,
       'Promociones': p.promociones || 0,
     }));
 
@@ -347,8 +347,8 @@ export default function PrediccionesPage() {
                                         <TableCell>{pred.RUC}</TableCell>
                                         <TableCell>{format(parseISO(pred.fecha_predicha), 'PPP', { locale: es })}</TableCell>
                                         <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(pred.venta)}</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(pred.cobro)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(pred.Venta)}</TableCell>
+                                        <TableCell className="text-right">{formatCurrency(pred.Cobro)}</TableCell>
                                         <TableCell className="text-right">{formatCurrency(pred.promociones)}</TableCell>
                                         <TableCell>
                                             <Button variant="ghost" size="icon" onClick={() => handleViewOnMap(pred)} title="Ver en Mapa">
