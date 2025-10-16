@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getRutaOptima } from "@/services/api";
-import { LoaderCircle, Link as LinkIcon, MapPin, Waypoints, Route as RouteIcon } from "lucide-react";
+import { LoaderCircle, Link as LinkIcon, MapPin, Waypoints, Route as RouteIcon, Calendar as CalendarIcon } from "lucide-react";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Separator } from "@/components/ui/separator";
@@ -16,6 +16,12 @@ import { useAuth } from "@/hooks/use-auth";
 import type { RoutePlan, Client } from "@/lib/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { isFinite } from "lodash";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import { es } from "date-fns/locale";
+import { Calendar } from "@/components/ui/calendar";
+import { Timestamp } from "firebase/firestore";
 
 export default function RutaOptimaPage() {
   const [origen, setOrigen] = useState("");
@@ -25,11 +31,11 @@ export default function RutaOptimaPage() {
   const [mapsLink, setMapsLink] = useState("");
   const [loading, setLoading] = useState(false);
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
+  
   const { toast } = useToast();
-  const { clients, users, loading: authLoading } = useAuth();
-  const [allRoutes, setAllRoutes] = useState<RoutePlan[]>([]);
-  const [loadingRoutes, setLoadingRoutes] = useState(true);
-
+  const { clients, routes: allRoutes, loading: authLoading } = useAuth();
+  
   // Cargar la API key desde las variables de entorno del cliente.
   useEffect(() => {
     const googleMapsApiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
@@ -43,28 +49,18 @@ export default function RutaOptimaPage() {
         })
     }
   }, [toast]);
+
+  const filteredRoutes = useMemo(() => {
+    if (!selectedDate) return [];
+    return allRoutes.filter(route => {
+        if (!route.date) return false;
+        const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
+        return format(routeDate, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
+    });
+  }, [allRoutes, selectedDate]);
   
-  // Cargar todas las rutas existentes
-  useEffect(() => {
-      const fetchRoutes = async () => {
-          setLoadingRoutes(true);
-          try {
-              // Simulando una llamada a getRoutes. En un caso real, la obtendrías desde tu contexto o una llamada a firestore.
-              const { getRoutes } = await import('@/lib/firebase/firestore');
-              const routesData = await getRoutes();
-              setAllRoutes(routesData);
-          } catch(error) {
-              console.error("Error fetching routes:", error);
-              toast({title: "Error", description: "No se pudieron cargar las rutas."});
-          } finally {
-              setLoadingRoutes(false);
-          }
-      }
-      fetchRoutes();
-  }, [toast]);
 
   const handleWaypointsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    // Asume que los waypoints están separados por saltos de línea.
     const waypointsArray = e.target.value.split('\n').map(wp => wp.trim()).filter(wp => wp);
     setWaypoints(waypointsArray);
   };
@@ -135,37 +131,67 @@ export default function RutaOptimaPage() {
                 <Card>
                     <CardHeader>
                         <CardTitle>Seleccionar Ruta Existente</CardTitle>
-                        <CardDescription>Elige una ruta planificada para autocompletar el origen y las paradas.</CardDescription>
+                        <CardDescription>Elige una fecha y luego una ruta planificada para autocompletar el origen y las paradas.</CardDescription>
                     </CardHeader>
-                    <CardContent>
-                        <Label htmlFor="route-select">Ruta</Label>
-                        <Select
-                            value={selectedRouteId}
-                            onValueChange={handleRouteSelect}
-                            disabled={loadingRoutes || authLoading}
-                        >
-                            <SelectTrigger id="route-select">
-                                <RouteIcon className="inline-block mr-2 h-4 w-4" />
-                                <SelectValue placeholder="Seleccionar una ruta..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {loadingRoutes ? (
-                                    <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>
-                                ) : (
-                                    allRoutes.map(route => (
-                                        <SelectItem key={route.id} value={route.id}>
-                                            {route.routeName}
-                                        </SelectItem>
-                                    ))
-                                )}
-                            </SelectContent>
-                        </Select>
+                    <CardContent className="space-y-4">
+                        <div>
+                            <Label>Fecha de la Ruta</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                <Button
+                                    variant={"outline"}
+                                    className={cn(
+                                    "w-full justify-start text-left font-normal",
+                                    !selectedDate && "text-muted-foreground"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {selectedDate ? format(selectedDate, "PPP", {locale: es}) : <span>Elige una fecha</span>}
+                                </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-auto p-0">
+                                <Calendar
+                                    mode="single"
+                                    selected={selectedDate}
+                                    onSelect={setSelectedDate}
+                                    initialFocus
+                                    locale={es}
+                                />
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+                        <div>
+                            <Label htmlFor="route-select">Ruta</Label>
+                            <Select
+                                value={selectedRouteId}
+                                onValueChange={handleRouteSelect}
+                                disabled={authLoading || !selectedDate}
+                            >
+                                <SelectTrigger id="route-select">
+                                    <RouteIcon className="inline-block mr-2 h-4 w-4" />
+                                    <SelectValue placeholder="Seleccionar una ruta..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {authLoading ? (
+                                        <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>
+                                    ) : filteredRoutes.length > 0 ? (
+                                        filteredRoutes.map(route => (
+                                            <SelectItem key={route.id} value={route.id}>
+                                                {route.routeName}
+                                            </SelectItem>
+                                        ))
+                                    ) : (
+                                        <SelectItem value="no-routes" disabled>No hay rutas para esta fecha</SelectItem>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader>
                         <CardTitle>Parámetros de la Ruta</CardTitle>
-                        <CardDescription>Define el punto de partida y las paradas intermedias manualmente.</CardDescription>
+                        <CardDescription>Define el punto de partida y las paradas intermedias manually.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-2">
@@ -248,4 +274,3 @@ export default function RutaOptimaPage() {
     </>
   );
 }
-
