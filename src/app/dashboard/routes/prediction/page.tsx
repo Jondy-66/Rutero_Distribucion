@@ -128,21 +128,22 @@ export default function PrediccionesPage() {
         if (!supervisor) {
             throw new Error(`El ejecutivo ${selectedEjecutivo} no tiene un supervisor asignado y no se pudo determinar uno.`);
         }
-
-        const predictedClientsRucs = new Set(filteredPredicciones.map(p => p.RUC));
-        const routeClientsData = clients.filter(c => predictedClientsRucs.has(c.ruc));
-
-        const routeClients: ClientInRoute[] = routeClientsData.map(client => {
-            const prediction = filteredPredicciones.find(p => p.RUC === client.ruc);
-            return {
-                ruc: client.ruc,
-                nombre_comercial: client.nombre_comercial,
-                date: prediction ? parseISO(prediction.fecha_predicha) : new Date(),
-                valorVenta: prediction ? parseFloat(String(prediction.ventas)) || 0 : 0,
-                valorCobro: prediction ? parseFloat(String(prediction.cobros)) || 0 : 0,
-                promociones: prediction ? parseFloat(String(prediction.promociones)) || 0 : 0,
+        
+        const routeClients: ClientInRoute[] = [];
+        for (const prediction of filteredPredicciones) {
+            const client = clients.find(c => c.ruc === prediction.RUC);
+            if (client) {
+                routeClients.push({
+                    ruc: client.ruc,
+                    nombre_comercial: client.nombre_comercial,
+                    date: parseISO(prediction.fecha_predicha),
+                    valorVenta: parseFloat(String(prediction.ventas)) || 0,
+                    valorCobro: parseFloat(String(prediction.cobros)) || 0,
+                    promociones: parseFloat(String(prediction.promociones)) || 0,
+                });
             }
-        });
+        }
+
 
         const routeDate = parseISO(filteredPredicciones[0].fecha_predicha);
         const isUserRole = currentUser.role === 'Usuario';
