@@ -265,12 +265,12 @@ export default function RouteManagementPage() {
                     <Select onValueChange={handleRouteSelect} value={selectedRoute?.id} disabled={loading}>
                         <SelectTrigger>
                             <Route className="mr-2 h-4 w-4" />
-                            <SelectValue placeholder="Elige una ruta planificada" />
+                            <SelectValue placeholder="Elige una ruta planificada para hoy" />
                         </SelectTrigger>
                         <SelectContent>
                             {loading && <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>}
                             {allRoutes && allRoutes
-                                .filter(r => (r.status === 'Planificada' || r.status === 'En Progreso') && r.createdBy === user?.id)
+                                .filter(r => (r.status === 'Planificada' || r.status === 'En Progreso') && r.createdBy === user?.id && isToday(r.date))
                                 .map(route => (
                                     <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
                             ))}
