@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
@@ -268,8 +269,10 @@ export default function RouteManagementPage() {
                         </SelectTrigger>
                         <SelectContent>
                             {loading && <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>}
-                            {allRoutes && allRoutes.filter(r => r.status === 'Planificada' || r.status === 'En Progreso').map(route => (
-                                <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
+                            {allRoutes && allRoutes
+                                .filter(r => (r.status === 'Planificada' || r.status === 'En Progreso') && r.createdBy === user?.id)
+                                .map(route => (
+                                    <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
