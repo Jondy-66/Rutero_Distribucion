@@ -34,7 +34,7 @@ export default function RutaOptimaPage() {
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   
   const { toast } = useToast();
-  const { clients, routes: allRoutes, loading: authLoading } = useAuth();
+  const { user, clients, routes: allRoutes, loading: authLoading } = useAuth();
   
   // Cargar la API key desde las variables de entorno del cliente.
   useEffect(() => {
@@ -51,13 +51,13 @@ export default function RutaOptimaPage() {
   }, [toast]);
 
   const filteredRoutes = useMemo(() => {
-    if (!selectedDate) return [];
+    if (!selectedDate || !user) return [];
     return allRoutes.filter(route => {
-        if (!route.date) return false;
+        if (!route.date || route.createdBy !== user.id) return false;
         const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
         return format(routeDate, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
     });
-  }, [allRoutes, selectedDate]);
+  }, [allRoutes, selectedDate, user]);
   
 
   const handleWaypointsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
