@@ -30,7 +30,7 @@ export default function RutaOptimaPage() {
   const [ruta, setRuta] = useState<string[]>([]);
   const [mapsLink, setMapsLink] = useState("");
   const [loading, setLoading] = useState(false);
-  const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
+  const [selectedRoute, setSelectedRoute] = useState<RoutePlan | undefined>();
   const [selectedDate, setSelectedDate] = useState<Date | undefined>(new Date());
   
   const { toast } = useToast();
@@ -59,6 +59,14 @@ export default function RutaOptimaPage() {
     });
   }, [allRoutes, selectedDate, user]);
   
+  // Clear selection when date changes
+  useEffect(() => {
+    setSelectedRoute(undefined);
+    setOrigen("");
+    setWaypoints([]);
+    setRuta([]);
+    setMapsLink("");
+  }, [selectedDate]);
 
   const handleWaypointsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const waypointsArray = e.target.value.split('\n').map(wp => wp.trim()).filter(wp => wp);
@@ -66,11 +74,11 @@ export default function RutaOptimaPage() {
   };
   
   const handleRouteSelect = (routeId: string) => {
-    setSelectedRouteId(routeId);
-    const selectedRoute = allRoutes.find(r => r.id === routeId);
+    const route = allRoutes.find(r => r.id === routeId);
+    setSelectedRoute(route);
 
-    if (selectedRoute && clients.length > 0) {
-        const routeClientsWithCoords = selectedRoute.clients
+    if (route && clients.length > 0) {
+        const routeClientsWithCoords = route.clients
             .map(rc => clients.find(c => c.ruc === rc.ruc))
             .filter((c): c is Client => !!c && isFinite(c.latitud) && isFinite(c.longitud));
 
@@ -86,6 +94,9 @@ export default function RutaOptimaPage() {
             setWaypoints([]);
             toast({title: "Sin Ubicaciones", description: "La ruta seleccionada no tiene clientes con coordenadas válidas.", variant: "destructive"});
         }
+    } else {
+        setOrigen("");
+        setWaypoints([]);
     }
   };
 
@@ -130,7 +141,7 @@ export default function RutaOptimaPage() {
             <div className="flex flex-col gap-6">
                 <Card>
                     <CardHeader>
-                        <CardTitle>Seleccionar Ruta Existente</CardTitle>
+                        <CardTitle>1. Seleccionar Ruta Existente</CardTitle>
                         <CardDescription>Elige una fecha y luego una ruta planificada para autocompletar el origen y las paradas.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -163,7 +174,7 @@ export default function RutaOptimaPage() {
                         <div>
                             <Label htmlFor="route-select">Ruta</Label>
                             <Select
-                                value={selectedRouteId}
+                                value={selectedRoute?.id || ""}
                                 onValueChange={handleRouteSelect}
                                 disabled={authLoading || !selectedDate}
                             >
@@ -188,49 +199,52 @@ export default function RutaOptimaPage() {
                         </div>
                     </CardContent>
                 </Card>
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Parámetros de la Ruta</CardTitle>
-                        <CardDescription>Define el punto de partida y las paradas intermedias manually.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                        <div className="space-y-2">
-                            <Label htmlFor="origen">
-                                <MapPin className="inline-block mr-2 h-4 w-4" />
-                                Origen (lat,lng)
-                            </Label>
-                            <Input
-                                id="origen"
-                                type="text"
-                                value={origen}
-                                onChange={(e) => setOrigen(e.target.value)}
-                                placeholder="-0.1807,-78.4678"
-                                disabled={loading}
-                            />
-                        </div>
                 
-                        <div className="space-y-2">
-                            <Label htmlFor="waypoints">
-                                <Waypoints className="inline-block mr-2 h-4 w-4" />
-                                Waypoints (uno por línea)
-                            </Label>
-                            <Textarea
-                                id="waypoints"
-                                value={waypoints.join("\n")}
-                                onChange={handleWaypointsChange}
-                                placeholder="-0.1850,-78.4700\n-0.1900,-78.4600"
-                                rows={5}
-                                disabled={loading}
-                            />
-                        </div>
-                    </CardContent>
-                    <CardFooter>
-                        <Button onClick={obtenerRuta} disabled={loading || !apiKey}>
-                            {loading && <LoaderCircle className="animate-spin mr-2" />}
-                            Obtener Ruta Óptima
-                        </Button>
-                    </CardFooter>
-                </Card>
+                {selectedRoute && (
+                  <Card>
+                      <CardHeader>
+                          <CardTitle>2. Parámetros de la Ruta</CardTitle>
+                          <CardDescription>Define el punto de partida y las paradas intermedias. Estos se han autocompletado desde la ruta seleccionada.</CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-4">
+                          <div className="space-y-2">
+                              <Label htmlFor="origen">
+                                  <MapPin className="inline-block mr-2 h-4 w-4" />
+                                  Origen (lat,lng)
+                              </Label>
+                              <Input
+                                  id="origen"
+                                  type="text"
+                                  value={origen}
+                                  onChange={(e) => setOrigen(e.target.value)}
+                                  placeholder="-0.1807,-78.4678"
+                                  disabled={loading}
+                              />
+                          </div>
+                  
+                          <div className="space-y-2">
+                              <Label htmlFor="waypoints">
+                                  <Waypoints className="inline-block mr-2 h-4 w-4" />
+                                  Waypoints (uno por línea)
+                              </Label>
+                              <Textarea
+                                  id="waypoints"
+                                  value={waypoints.join("\n")}
+                                  onChange={handleWaypointsChange}
+                                  placeholder="-0.1850,-78.4700\n-0.1900,-78.4600"
+                                  rows={5}
+                                  disabled={loading}
+                              />
+                          </div>
+                      </CardContent>
+                      <CardFooter>
+                          <Button onClick={obtenerRuta} disabled={loading || !apiKey}>
+                              {loading && <LoaderCircle className="animate-spin mr-2" />}
+                              Obtener Ruta Óptima
+                          </Button>
+                      </CardFooter>
+                  </Card>
+                )}
             </div>
             
             <Card>
