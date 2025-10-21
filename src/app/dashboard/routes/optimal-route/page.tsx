@@ -77,28 +77,36 @@ export default function RutaOptimaPage() {
     const route = allRoutes.find(r => r.id === routeId);
     setSelectedRoute(route);
 
-    if (route && clients.length > 0) {
-        const routeClientsWithCoords = route.clients
+    if (route && clients.length > 0 && selectedDate) {
+        // Filtra los clientes de la ruta cuya fecha de visita coincide con la fecha seleccionada.
+        const dailyClientsInRoute = route.clients.filter(rc => {
+            if (!rc.date) return false;
+            const clientDate = rc.date instanceof Timestamp ? rc.date.toDate() : rc.date;
+            return format(clientDate, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd');
+        });
+
+        // Obtiene los detalles completos de esos clientes, asegurándose de que tengan coordenadas.
+        const dailyClientsWithCoords = dailyClientsInRoute
             .map(rc => clients.find(c => c.ruc === rc.ruc))
             .filter((c): c is Client => !!c && isFinite(c.latitud) && isFinite(c.longitud));
 
-        if (routeClientsWithCoords.length > 0) {
-            const firstClient = routeClientsWithCoords[0];
-            const remainingClients = routeClientsWithCoords.slice(1);
+        if (dailyClientsWithCoords.length > 0) {
+            const firstClient = dailyClientsWithCoords[0];
+            const remainingClients = dailyClientsWithCoords.slice(1);
             
             setOrigen(`${firstClient.latitud},${firstClient.longitud}`);
             setWaypoints(remainingClients.map(c => `${c.latitud},${c.longitud}`));
-            toast({title: "Ruta Cargada", description: `Se cargaron ${routeClientsWithCoords.length} ubicaciones.`});
+            toast({title: "Ruta Cargada", description: `Se cargaron ${dailyClientsWithCoords.length} ubicaciones para el día seleccionado.`});
         } else {
             setOrigen("");
             setWaypoints([]);
-            toast({title: "Sin Ubicaciones", description: "La ruta seleccionada no tiene clientes con coordenadas válidas.", variant: "destructive"});
+            toast({title: "Sin Ubicaciones", description: "La ruta no tiene clientes con coordenadas válidas para este día.", variant: "destructive"});
         }
     } else {
         setOrigen("");
         setWaypoints([]);
     }
-  };
+};
 
   const obtenerRuta = async () => {
     if (!origen) {
