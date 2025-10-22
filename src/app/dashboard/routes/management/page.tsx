@@ -105,17 +105,11 @@ export default function RouteManagementPage() {
     }
 }, [selectedRoute]);
 
-  const handleClientValueChange = useCallback((ruc: string, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
-    setRouteClients(prevClients => 
-      prevClients.map(client => 
-        client.ruc === ruc ? { ...client, [field]: value } : client
-      )
-    );
-    // Also update the active client state if it's the one being changed
+  const handleClientValueChange = (ruc: string, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
     if (activeClient && activeClient.ruc === ruc) {
-        setActiveClient(prevActiveClient => prevActiveClient ? { ...prevActiveClient, [field]: value } : null);
+        setActiveClient(prev => prev ? { ...prev, [field]: value } : null);
     }
-  }, [activeClient]);
+  };
 
   const handleGetLocation = (forDialog: boolean = false) => {
     if (!navigator.geolocation) {
@@ -172,18 +166,33 @@ export default function RouteManagementPage() {
     }
 
     setIsSaving(true);
-    const updatedClients = routeClients.map(c => 
-        c.ruc === activeClient.ruc ? { 
-            ...c, 
-            visitStatus: 'Completado' as const,
-            visitType: visitType,
-            callObservation: visitType === 'telefonica' ? callObservation : undefined,
-        } : c
+    const finalActiveClientState = {
+        ...activeClient,
+        visitStatus: 'Completado' as const,
+        visitType: visitType,
+        callObservation: visitType === 'telefonica' ? callObservation : undefined,
+    }
+    
+    const updatedRouteClients = routeClients.map(c => 
+        c.ruc === activeClient.ruc ? finalActiveClientState : c
     );
 
+    const clientsForFirestore = updatedRouteClients.map(c => {
+        const { id, status, ...clientData } = c; // Exclude fields not in ClientInRoute
+        return {
+          ...clientData,
+          valorVenta: parseFloat(c.valorVenta) || 0,
+          valorCobro: parseFloat(c.valorCobro) || 0,
+          devoluciones: parseFloat(c.devoluciones) || 0,
+          promociones: parseFloat(c.promociones) || 0,
+          medicacionFrecuente: parseFloat(c.medicacionFrecuente) || 0,
+        };
+    });
+
+
     try {
-        await updateRoute(selectedRoute.id, { clients: updatedClients });
-        setRouteClients(updatedClients);
+        await updateRoute(selectedRoute.id, { clients: clientsForFirestore });
+        setRouteClients(updatedRouteClients);
         toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
     } catch(error) {
         console.error("Error updating route on checkout:", error);
@@ -553,3 +562,5 @@ export default function RouteManagementPage() {
     </>
   );
 }
+
+    
