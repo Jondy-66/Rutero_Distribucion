@@ -146,11 +146,12 @@ export default function PrediccionesPage() {
         }
 
         const routeDate = parseISO(filteredPredicciones[0].fecha_predicha);
+        const isUserRole = currentUser.role === 'Usuario';
         
         const newRoute: Omit<RoutePlan, 'id' | 'createdAt'> = {
             routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`,
             clients: routeClients,
-            status: 'Planificada', // Guardar siempre como 'Planificada' para revisión
+            status: 'Planificada', // Always save as 'Planificada' for review
             supervisorId: supervisor.id,
             supervisorName: supervisor.name,
             createdBy: currentUser.id,
