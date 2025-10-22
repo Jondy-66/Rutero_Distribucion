@@ -270,7 +270,11 @@ export default function RouteManagementPage() {
                         <SelectContent>
                             {loading && <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>}
                             {allRoutes && allRoutes
-                                .filter(r => (r.status === 'Planificada' || r.status === 'En Progreso') && r.createdBy === user?.id && isToday(r.date))
+                                .filter(r => 
+                                    r.createdBy === user?.id &&
+                                    (r.status === 'Planificada' || r.status === 'En Progreso') && 
+                                    r.date && isToday(r.date)
+                                )
                                 .map(route => (
                                     <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
                             ))}
