@@ -1,7 +1,7 @@
 
 
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -105,21 +105,17 @@ export default function RouteManagementPage() {
     }
 }, [selectedRoute]);
 
-  const handleClientValueChange = (ruc: string, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
-      setRouteClients(prevClients => {
-          const updatedClients = prevClients.map(client => {
-              if (client.ruc === ruc) {
-                  return { ...client, [field]: value };
-              }
-              return client;
-          });
-           const updatedActiveClient = updatedClients.find(c => c.ruc === activeClient?.ruc);
-           if (updatedActiveClient) {
-               setActiveClient(updatedActiveClient);
-           }
-          return updatedClients;
-      });
-  }
+  const handleClientValueChange = useCallback((ruc: string, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
+    setRouteClients(prevClients => 
+      prevClients.map(client => 
+        client.ruc === ruc ? { ...client, [field]: value } : client
+      )
+    );
+    // Also update the active client state if it's the one being changed
+    if (activeClient && activeClient.ruc === ruc) {
+        setActiveClient(prevActiveClient => prevActiveClient ? { ...prevActiveClient, [field]: value } : null);
+    }
+  }, [activeClient]);
 
   const handleGetLocation = (forDialog: boolean = false) => {
     if (!navigator.geolocation) {
