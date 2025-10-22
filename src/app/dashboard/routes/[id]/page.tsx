@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter, notFound } from 'next/navigation';
@@ -7,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, PlusCircle, Search, ThumbsUp, ThumbsDown, Eye } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, PlusCircle, Search, ThumbsUp, ThumbsDown, Eye, Send } from 'lucide-react';
 import { getRoute, updateRoute, addNotification } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -50,7 +51,7 @@ const endTimeSlots = generateTimeSlots(8, 18, 30, 30);
 export default function EditRoutePage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
-  const { user: currentUser, users, clients, loading: authLoading } = useAuth();
+  const { user: currentUser, users, clients, loading: authLoading, refetchData } = useAuth();
 
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [originalClients, setOriginalClients] = useState<ClientInRoute[]>([]);
@@ -181,19 +182,28 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       if(newStatus) {
         dataToUpdate.status = newStatus;
 
-        // Send notification to the user who created the route
-        await addNotification({
-            userId: route.createdBy,
-            title: `Ruta ${newStatus === 'Planificada' ? 'Aprobada' : 'Rechazada'}`,
-            message: `Tu ruta "${route.routeName}" ha sido ${newStatus === 'Planificada' ? 'aprobada' : 'rechazada'} por ${currentUser.name}.`,
-            link: `/dashboard/routes/${routeId}`
-        });
-
+        if (newStatus === 'Pendiente de Aprobación') {
+            await addNotification({
+                userId: route.supervisorId,
+                title: 'Nueva ruta para aprobar',
+                message: `${currentUser.name} ha enviado la ruta "${route.routeName}" para tu aprobación.`,
+                link: `/dashboard/routes/${routeId}`
+            });
+        } else {
+            // Send notification to the user who created the route for approval/rejection
+            await addNotification({
+                userId: route.createdBy,
+                title: `Ruta ${newStatus === 'Planificada' ? 'Aprobada' : 'Rechazada'}`,
+                message: `Tu ruta "${route.routeName}" ha sido ${newStatus === 'Planificada' ? 'aprobada' : 'rechazada'} por ${currentUser.name}.`,
+                link: `/dashboard/routes/${routeId}`
+            });
+        }
       }
 
       delete (dataToUpdate as Partial<RoutePlan>).id;
 
       await updateRoute(routeId, dataToUpdate);
+      await refetchData('routes');
 
       toast({ title: 'Éxito', description: `Ruta ${newStatus ? 'revisada' : 'actualizada'} correctamente.` });
       router.push('/dashboard/routes');
@@ -259,6 +269,12 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   
   const originalClientRucs = useMemo(() => new Set(originalClients.map(c => c.ruc)), [originalClients]);
 
+  const canSendForApproval = useMemo(() => {
+      if (!currentUser || !route) return false;
+      return currentUser.id === route.createdBy && route.status === 'Planificada';
+  }, [currentUser, route]);
+
+
   if (loading || authLoading) {
     return (
       <>
@@ -316,7 +332,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
           <Eye className="h-4 w-4" />
           <AlertTitle>Pendiente de Revisión</AlertTitle>
           <AlertDescription>
-            Esta ruta está esperando la aprobación de tu supervisor. No podrás editarla hasta que sea aprobada.
+            Esta ruta está esperando la aprobación de tu supervisor. No podrás editarla hasta que sea aprobada o rechazada.
           </AlertDescription>
         </Alert>
       )}
@@ -341,7 +357,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="status">Estado</Label>
-                    <Select value={route.status} onValueChange={(value: any) => handleInputChange('status', value)} disabled={isFormDisabled || !canApprove}>
+                    <Select value={route.status} onValueChange={(value: any) => handleInputChange('status', value)} disabled={true}>
                     <SelectTrigger id="status"><SelectValue placeholder="Seleccionar estado" /></SelectTrigger>
                     <SelectContent>
                         <SelectItem value="Pendiente de Aprobación">Pendiente de Aprobación</SelectItem>
@@ -552,14 +568,21 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                 </Card>
             )}
 
-             {canEdit && (
-                <div className="flex justify-end">
+            <div className="flex justify-end gap-2">
+                {canEdit && (
                     <Button type="submit" disabled={isFormDisabled}>
                         {isSaving && <LoaderCircle className="animate-spin" />}
                         Guardar Cambios
                     </Button>
-                </div>
-             )}
+                )}
+                {canSendForApproval && (
+                     <Button type="button" onClick={(e) => handleUpdateRoute(e, 'Pendiente de Aprobación')} disabled={isSaving}>
+                        {isSaving && <LoaderCircle className="animate-spin mr-2" />}
+                        <Send className="mr-2 h-4 w-4"/>
+                        Enviar a Aprobación
+                    </Button>
+                )}
+            </div>
         </div>
       </form>
        <AlertDialog open={!!clientToRemove} onOpenChange={() => setClientToRemove(null)}>

@@ -140,18 +140,17 @@ export default function PrediccionesPage() {
                     valorVenta: parseFloat(String(prediction.ventas)) || 0,
                     valorCobro: parseFloat(String(prediction.cobros)) || 0,
                     promociones: parseFloat(String(prediction.promociones)) || 0,
+                    origin: 'predicted'
                 });
             }
         }
 
-
         const routeDate = parseISO(filteredPredicciones[0].fecha_predicha);
-        const isUserRole = currentUser.role === 'Usuario';
-
+        
         const newRoute: Omit<RoutePlan, 'id' | 'createdAt'> = {
             routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`,
             clients: routeClients,
-            status: isUserRole ? 'Pendiente de Aprobación' : 'Planificada',
+            status: 'Planificada', // Guardar siempre como 'Planificada' para revisión
             supervisorId: supervisor.id,
             supervisorName: supervisor.name,
             createdBy: currentUser.id,
@@ -160,7 +159,7 @@ export default function PrediccionesPage() {
 
         const newRouteId = await addRoute(newRoute);
         
-        toast({ title: 'Ruta Creada', description: `Serás redirigido para editar la ruta para ${selectedEjecutivo}.`});
+        toast({ title: 'Ruta Creada', description: `Serás redirigido para revisar la ruta para ${selectedEjecutivo}.`});
         router.push(`/dashboard/routes/${newRouteId}`);
 
     } catch (error: any) {
