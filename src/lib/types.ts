@@ -59,6 +59,8 @@ export type ClientInRoute = {
   status?: 'Active' | 'Removed';
   origin?: 'manual' | 'predicted';
   visitStatus?: 'Pendiente' | 'Completado';
+  visitType?: 'presencial' | 'telefonica';
+  callObservation?: string;
 }
 
 

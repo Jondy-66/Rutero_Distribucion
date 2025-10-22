@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle, AlertTriangle, ChevronRight, Save } from 'lucide-react';
+import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle, AlertTriangle, ChevronRight, Save, Phone, User } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getClients, getRoutes, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan } from '@/lib/types';
@@ -27,6 +27,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Textarea } from '@/components/ui/textarea';
 
 
 type RouteClient = Client & {
@@ -36,6 +38,8 @@ type RouteClient = Client & {
     devoluciones: string;
     promociones: string;
     medicacionFrecuente: string;
+    visitType?: 'presencial' | 'telefonica';
+    callObservation?: string;
 }
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
@@ -75,6 +79,8 @@ export default function RouteManagementPage() {
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
   const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
+  const [callObservation, setCallObservation] = useState('');
 
 
   const loading = authLoading;
@@ -83,6 +89,8 @@ export default function RouteManagementPage() {
     const currentClient = routeClients.find(c => c.visitStatus !== 'Completado');
     setActiveClient(currentClient || null);
     setCheckInTime(null); // Reset check-in time when client changes
+    setVisitType(undefined); // Reset visit type
+    setCallObservation(''); // Reset observation
   }, [routeClients]);
 
   useEffect(() => {
@@ -160,11 +168,21 @@ export default function RouteManagementPage() {
   }
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || !activeClient) return;
+    if (!selectedRoute || !activeClient || !visitType) return;
+    
+    if (visitType === 'telefonica' && !callObservation) {
+        toast({ title: "Observación Requerida", description: "Debes añadir un comentario para la gestión telefónica.", variant: "destructive" });
+        return;
+    }
 
     setIsSaving(true);
     const updatedClients = routeClients.map(c => 
-        c.ruc === activeClient.ruc ? { ...c, visitStatus: 'Completado' as const } : c
+        c.ruc === activeClient.ruc ? { 
+            ...c, 
+            visitStatus: 'Completado' as const,
+            visitType: visitType,
+            callObservation: visitType === 'telefonica' ? callObservation : undefined,
+        } : c
     );
 
     try {
@@ -246,7 +264,7 @@ export default function RouteManagementPage() {
   }
 
   const esFarmacia = activeClient?.nombre_comercial?.toLowerCase().includes('farmacia');
-  const isFormDisabled = isRouteExpired || !checkInTime;
+  const isFormDisabled = isRouteExpired || !checkInTime || !visitType;
 
 
   return (
@@ -405,11 +423,46 @@ export default function RouteManagementPage() {
                                                     </Button>
                                                 )}
                                             </div>
+
+                                            {/* --- VISIT TYPE --- */}
+                                            <div className={cn("space-y-4 pl-14 transition-opacity", !checkInTime && "opacity-50 pointer-events-none")}>
+                                                 <div className="flex items-center gap-4">
+                                                     <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">2</div>
+                                                     <div>
+                                                        <h4 className="font-semibold">Tipo de Visita</h4>
+                                                        <p className="text-sm text-muted-foreground">Selecciona si la visita es presencial o por llamada.</p>
+                                                     </div>
+                                                </div>
+                                                <RadioGroup onValueChange={(value: any) => setVisitType(value)} value={visitType} className="flex gap-4 pl-14">
+                                                    <Label htmlFor="presencial" className="flex items-center gap-2 cursor-pointer rounded-md border p-3 has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
+                                                        <RadioGroupItem value="presencial" id="presencial" />
+                                                        <User className="mr-1 h-4 w-4" />
+                                                        Visita Presencial
+                                                    </Label>
+                                                    <Label htmlFor="telefonica" className="flex items-center gap-2 cursor-pointer rounded-md border p-3 has-[:checked]:bg-primary/10 has-[:checked]:border-primary">
+                                                        <RadioGroupItem value="telefonica" id="telefonica" />
+                                                        <Phone className="mr-1 h-4 w-4" />
+                                                        Llamada Telefónica
+                                                    </Label>
+                                                </RadioGroup>
+                                                {visitType === 'telefonica' && (
+                                                    <div className="pl-14">
+                                                        <Label htmlFor="callObservation">Observación de la llamada (requerido)</Label>
+                                                        <Textarea
+                                                            id="callObservation"
+                                                            value={callObservation}
+                                                            onChange={(e) => setCallObservation(e.target.value)}
+                                                            placeholder="Ej: Cliente solicitó gestionar por teléfono..."
+                                                            disabled={isRouteExpired}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
                                             
                                             {/* --- DATA INPUT --- */}
-                                            <div className={cn("space-y-4 transition-opacity", !checkInTime && "opacity-50 pointer-events-none")}>
+                                            <div className={cn("space-y-4 transition-opacity", isFormDisabled && "opacity-50 pointer-events-none")}>
                                                 <div className="flex items-center gap-4">
-                                                     <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">2</div>
+                                                     <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">3</div>
                                                      <div>
                                                         <h4 className="font-semibold">Registrar Gestión</h4>
                                                         <p className="text-sm text-muted-foreground">Ingresa los valores de la visita.</p>
@@ -444,8 +497,8 @@ export default function RouteManagementPage() {
                                             </div>
                                             
                                             {/* --- CHECK OUT --- */}
-                                            <div className={cn("flex items-center gap-4 p-3 rounded-lg bg-muted/50 transition-opacity", !checkInTime && "opacity-50 pointer-events-none")}>
-                                                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">3</div>
+                                            <div className={cn("flex items-center gap-4 p-3 rounded-lg bg-muted/50 transition-opacity", isFormDisabled && "opacity-50 pointer-events-none")}>
+                                                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">4</div>
                                                 <div className="flex-1">
                                                     <h4 className="font-semibold">Marcar Salida</h4>
                                                     <p className="text-sm text-muted-foreground">Finaliza y guarda la visita a este cliente.</p>
