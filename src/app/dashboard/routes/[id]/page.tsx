@@ -74,7 +74,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
-    if (currentUser.id === route.createdBy && route.status === 'Rechazada') return true;
+    if (currentUser.id === route.createdBy && (route.status === 'Rechazada' || route.status === 'Planificada')) return true;
     return false;
   }, [currentUser, route]);
 

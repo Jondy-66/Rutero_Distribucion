@@ -146,7 +146,6 @@ export default function PrediccionesPage() {
         }
 
         const routeDate = parseISO(filteredPredicciones[0].fecha_predicha);
-        const isUserRole = currentUser.role === 'Usuario';
         
         const newRoute: Omit<RoutePlan, 'id' | 'createdAt'> = {
             routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`,
