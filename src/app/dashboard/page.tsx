@@ -38,7 +38,13 @@ const data = [
 export default function DashboardPage() {
   const { user, clients, users, routes, loading } = useAuth();
   
-  const clientCount = useMemo(() => clients.length, [clients]);
+  const clientCount = useMemo(() => {
+    if (user?.role === 'Usuario') {
+      return clients.filter(client => client.ejecutivo === user.name).length;
+    }
+    return clients.length;
+  }, [clients, user]);
+
   const userCount = useMemo(() => users.length, [users]);
 
   const canSeeUserCount = user?.role === 'Administrador' || user?.role === 'Supervisor';
@@ -101,7 +107,9 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{clientCount}</div>}
-            <p className="text-xs text-muted-foreground">Clientes registrados en el sistema</p>
+            <p className="text-xs text-muted-foreground">
+              {user?.role === 'Usuario' ? 'Clientes asignados a ti' : 'Clientes registrados en el sistema'}
+            </p>
           </CardContent>
         </Card>
         {activeRoute ? (
