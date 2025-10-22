@@ -271,7 +271,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
 
   const canSendForApproval = useMemo(() => {
       if (!currentUser || !route) return false;
-      return currentUser.id === route.createdBy && (route.status === 'Planificada' || route.status === 'Rechazada');
+      return currentUser.id === route.createdBy && (route.status === 'Rechazada');
   }, [currentUser, route]);
 
 
