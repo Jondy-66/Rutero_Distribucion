@@ -73,8 +73,10 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
+    // Admin can edit unless it's completed
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
-    if (currentUser.id === route.createdBy && (route.status === 'Rechazada' || route.status === 'Planificada')) return true;
+    // The user who created it can edit ONLY if it was rejected.
+    if (currentUser.id === route.createdBy && route.status === 'Rechazada') return true;
     return false;
   }, [currentUser, route]);
 
