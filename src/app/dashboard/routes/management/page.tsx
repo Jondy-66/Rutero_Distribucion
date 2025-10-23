@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle, AlertTriangle, ChevronRight, Save, Phone, User, PlusCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getClients, getRoutes, updateRoute } from '@/lib/firebase/firestore';
-import type { Client, RoutePlan } from '@/lib/types';
+import type { Client, RoutePlan, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { format, parseISO, isToday, startOfDay } from 'date-fns';
@@ -173,58 +174,68 @@ export default function RouteManagementPage() {
     }
 
     setIsSaving(true);
-    const finalActiveClientState = {
-        ...activeClient,
-        visitStatus: 'Completado' as const,
-        visitType: visitType,
-        callObservation: visitType === 'telefonica' ? callObservation : undefined,
-    }
-    
-    const updatedRouteClients = routeClients.map(c => 
-        c.ruc === activeClient.ruc ? finalActiveClientState : c
-    );
-
-    const fullRoutePlanClients = allRoutes.find(r => r.id === selectedRoute.id)?.clients || [];
-    
-    const updatedFullRoutePlanClients = fullRoutePlanClients.map(originalClient => {
-        const updatedClient = updatedRouteClients.find(uc => uc.ruc === originalClient.ruc);
-        if (updatedClient) {
-             const { id, status, ...clientData } = updatedClient;
-             return {
-                ...clientData,
-                valorVenta: parseFloat(clientData.valorVenta) || 0,
-                valorCobro: parseFloat(clientData.valorCobro) || 0,
-                devoluciones: parseFloat(clientData.devoluciones) || 0,
-                promociones: parseFloat(clientData.promociones) || 0,
-                medicacionFrecuente: parseFloat(clientData.medicacionFrecuente) || 0,
-             };
-        }
-        return originalClient;
-    })
-    
-     // Add new manually added clients to the full list
-    const existingRucs = new Set(fullRoutePlanClients.map(c => c.ruc));
-    updatedRouteClients.forEach(c => {
-        if (!existingRucs.has(c.ruc)) {
-            const { id, status, ...clientData } = c;
-            updatedFullRoutePlanClients.push({
-                ...clientData,
-                valorVenta: parseFloat(clientData.valorVenta) || 0,
-                valorCobro: parseFloat(clientData.valorCobro) || 0,
-                devoluciones: parseFloat(clientData.devoluciones) || 0,
-                promociones: parseFloat(clientData.promociones) || 0,
-                medicacionFrecuente: parseFloat(clientData.medicacionFrecuente) || 0,
-            });
-        }
-    });
 
     try {
-        await updateRoute(selectedRoute.id, { clients: updatedFullRoutePlanClients });
-        setRouteClients(updatedRouteClients);
+        // 1. Get the original full list of clients from the route plan in `allRoutes`
+        const originalRoutePlan = allRoutes.find(r => r.id === selectedRoute.id);
+        if (!originalRoutePlan) {
+            throw new Error("No se pudo encontrar el plan de ruta original.");
+        }
+        let fullRoutePlanClients = [...originalRoutePlan.clients];
+
+        // 2. Prepare the data for the client that was just managed
+        const completedClientData: ClientInRoute = {
+            // Start with all original data to preserve fields like date, dayOfWeek etc.
+            ...(fullRoutePlanClients.find(c => c.ruc === activeClient.ruc) || {}),
+            // Add all data from the form
+            ...activeClient,
+            // Set final status and visit type
+            visitStatus: 'Completado',
+            visitType: visitType,
+            callObservation: visitType === 'telefonica' ? callObservation : undefined,
+            // Ensure numeric values are correctly formatted
+            valorVenta: parseFloat(activeClient.valorVenta) || 0,
+            valorCobro: parseFloat(activeClient.valorCobro) || 0,
+            devoluciones: parseFloat(activeClient.devoluciones) || 0,
+            promociones: parseFloat(activeClient.promociones) || 0,
+            medicacionFrecuente: parseFloat(activeClient.medicacionFrecuente) || 0,
+        };
+        // Remove client-specific properties that don't belong in ClientInRoute
+        delete (completedClientData as any).id; 
+        delete (completedClientData as any).status;
+        delete (completedClientData as any).ejecutivo;
+        delete (completedClientData as any).nombre_cliente;
+        delete (completedClientData as any).provincia;
+        delete (completedClientData as any).canton;
+        delete (completedClientData as any).direccion;
+        delete (completedClientData as any).latitud;
+        delete (completedClientData as any).longitud;
+
+        // 3. Update or add the client to the full list
+        const clientIndex = fullRoutePlanClients.findIndex(c => c.ruc === activeClient.ruc);
+
+        if (clientIndex !== -1) {
+            // Client already existed, update it
+            fullRoutePlanClients[clientIndex] = completedClientData;
+        } else {
+            // Client was manually added, add it to the list
+            fullRoutePlanClients.push(completedClientData);
+        }
+
+        // 4. Update the route in Firestore with the complete, updated list
+        await updateRoute(selectedRoute.id, { clients: fullRoutePlanClients });
+        
+        // 5. Update local state to reflect the change in the UI
+        const updatedLocalRouteClients = routeClients.map(c => 
+            c.ruc === activeClient.ruc ? { ...c, visitStatus: 'Completado' as const } : c
+        );
+        setRouteClients(updatedLocalRouteClients);
+
         toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
-    } catch(error) {
+
+    } catch(error: any) {
         console.error("Error updating route on checkout:", error);
-        toast({ title: "Error", description: "No se pudo actualizar el estado de la visita.", variant: "destructive"});
+        toast({ title: "Error", description: error.message || "No se pudo actualizar el estado de la visita.", variant: "destructive"});
     } finally {
         setIsSaving(false);
     }
@@ -668,5 +679,7 @@ export default function RouteManagementPage() {
     </>
   );
 }
+
+    
 
     
