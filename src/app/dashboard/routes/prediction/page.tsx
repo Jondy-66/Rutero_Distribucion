@@ -155,6 +155,7 @@ export default function PrediccionesPage() {
             supervisorName: supervisor.name,
             createdBy: currentUser.id,
             date: routeDate,
+            origin: 'predicted',
         };
 
         const newRouteId = await addRoute(newRoute);

@@ -75,10 +75,13 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     if (!currentUser || !route) return false;
     // Admin can edit unless it's completed
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
-    // The user who created it can edit if it's 'Planificada' or 'Rechazada'
-    if (currentUser.id === route.createdBy && (route.status === 'Planificada' || route.status === 'Rechazada')) return true;
+    // The user who created it can edit if it's 'Planificada' and it's a predicted route (no createdAt yet or very recent), or if it's 'Rechazada'
+    if (currentUser.id === route.createdBy && route.status === 'Rechazada') return true;
+    if (currentUser.id === route.createdBy && route.status === 'Planificada' && route.origin === 'predicted' && route.isNew) return true;
+    
     return false;
   }, [currentUser, route]);
+
 
   const canApprove = useMemo(() => {
      if (!currentUser || !route) return false;
@@ -95,7 +98,8 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       try {
         const routeData = await getRoute(routeId);
         if (routeData) {
-          setRoute(routeData);
+          const isNew = !routeData.createdAt || (Timestamp.now().toMillis() - (routeData.createdAt as Timestamp).toMillis()) < 5 * 60 * 1000;
+          setRoute({ ...routeData, isNew });
           setClientsInRoute(routeData.clients || []);
           setOriginalClients(routeData.clients || []); // Store the initial list
         } else {
@@ -202,7 +206,8 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         }
       }
 
-      delete (dataToUpdate as Partial<RoutePlan>).id;
+      delete (dataToUpdate as any).id;
+      delete (dataToUpdate as any).isNew;
 
       await updateRoute(routeId, dataToUpdate);
       await refetchData('routes');

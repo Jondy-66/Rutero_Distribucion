@@ -80,6 +80,8 @@ export type RoutePlan = {
   startTime?: string;
   endTime?: string;
   createdAt?: Timestamp | Date;
+  origin?: 'manual' | 'predicted';
+  isNew?: boolean;
 };
 
 
