@@ -5,6 +5,8 @@
 
 Rutero es una aplicación web avanzada diseñada para la planificación, gestión y optimización de rutas de venta y cobranza. Construida sobre un stack tecnológico moderno, permite a los usuarios administrar clientes, planificar rutas, asignar supervisores, visualizar ubicaciones en un mapa interactivo y utilizar modelos de inteligencia artificial para predecir visitas y calcular rutas óptimas.
 
+Para una visión de alto nivel de los componentes y sus interacciones, consulta el documento de [Diseño de Arquitectura](docs/arquitectura.md).
+
 ### 1.1. Stack Tecnológico
 
 - **Framework Frontend**: Next.js 15 (con App Router)
@@ -53,6 +55,9 @@ El proyecto sigue la estructura estándar de una aplicación Next.js con el App 
 
 - **`services/`**: Contiene funciones para interactuar con APIs externas.
   - **`api.ts`**: Define las funciones `getPredicciones` y `getRutaOptima` que se comunican con los endpoints proxy de la aplicación.
+
+- **`docs/`**: Contiene la documentación del proyecto.
+    - **`arquitectura.md`**: Describe la arquitectura de alto nivel de la solución.
 
 ---
 
