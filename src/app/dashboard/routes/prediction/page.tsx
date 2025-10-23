@@ -326,6 +326,7 @@ export default function PrediccionesPage() {
                             <TableRow>
                                 <TableHead>Ejecutivo</TableHead>
                                 <TableHead>RUC</TableHead>
+                                <TableHead>Cliente</TableHead>
                                 <TableHead>Fecha Predicha</TableHead>
                                 <TableHead className="text-right">Probabilidad</TableHead>
                                 <TableHead className="text-right">Ventas</TableHead>
@@ -337,30 +338,34 @@ export default function PrediccionesPage() {
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="h-24 text-center">
+                                    <TableCell colSpan={9} className="h-24 text-center">
                                         <LoaderCircle className="mx-auto animate-spin text-primary" />
                                     </TableCell>
                                 </TableRow>
                             ) : filteredPredicciones.length > 0 ? (
-                                filteredPredicciones.map((pred, i) => (
-                                    <TableRow key={i}>
-                                        <TableCell>{pred.Ejecutivo}</TableCell>
-                                        <TableCell>{pred.RUC}</TableCell>
-                                        <TableCell>{format(parseISO(pred.fecha_predicha), 'PPP', { locale: es })}</TableCell>
-                                        <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(pred.ventas)}</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(pred.cobros)}</TableCell>
-                                        <TableCell className="text-right">{formatCurrency(pred.promociones)}</TableCell>
-                                        <TableCell>
-                                            <Button variant="ghost" size="icon" onClick={() => handleViewOnMap(pred)} title="Ver en Mapa">
-                                                <MapPin className="h-4 w-4" />
-                                            </Button>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                filteredPredicciones.map((pred, i) => {
+                                    const client = clients.find(c => c.ruc === pred.RUC);
+                                    return (
+                                        <TableRow key={i}>
+                                            <TableCell>{pred.Ejecutivo}</TableCell>
+                                            <TableCell>{pred.RUC}</TableCell>
+                                            <TableCell>{client ? client.nombre_comercial : 'No encontrado'}</TableCell>
+                                            <TableCell>{format(parseISO(pred.fecha_predicha), 'PPP', { locale: es })}</TableCell>
+                                            <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(pred.ventas)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(pred.cobros)}</TableCell>
+                                            <TableCell className="text-right">{formatCurrency(pred.promociones)}</TableCell>
+                                            <TableCell>
+                                                <Button variant="ghost" size="icon" onClick={() => handleViewOnMap(pred)} title="Ver en Mapa">
+                                                    <MapPin className="h-4 w-4" />
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    )
+                                })
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={8} className="h-24 text-center">
+                                    <TableCell colSpan={9} className="h-24 text-center">
                                         No hay predicciones para mostrar.
                                     </TableCell>
                                 </TableRow>
