@@ -75,8 +75,8 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     if (!currentUser || !route) return false;
     // Admin can edit unless it's completed
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
-    // The user who created it can edit ONLY if it was rejected.
-    if (currentUser.id === route.createdBy && route.status === 'Rechazada') return true;
+    // The user who created it can edit if it's 'Planificada' or 'Rechazada'
+    if (currentUser.id === route.createdBy && (route.status === 'Planificada' || route.status === 'Rechazada')) return true;
     return false;
   }, [currentUser, route]);
 
@@ -273,7 +273,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
 
   const canSendForApproval = useMemo(() => {
       if (!currentUser || !route) return false;
-      return currentUser.id === route.createdBy && (route.status === 'Rechazada');
+      return currentUser.id === route.createdBy && (route.status === 'Planificada' || route.status === 'Rechazada');
   }, [currentUser, route]);
 
 
