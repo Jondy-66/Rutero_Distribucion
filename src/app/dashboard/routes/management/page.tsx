@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -13,7 +12,7 @@ import { getClients, getRoutes, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
-import { format, parseISO, isToday } from 'date-fns';
+import { format, parseISO, isToday, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -106,9 +105,12 @@ export default function RouteManagementPage() {
 }, [selectedRoute]);
 
   const handleClientValueChange = (ruc: string, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
-    if (activeClient && activeClient.ruc === ruc) {
-        setActiveClient(prev => prev ? { ...prev, [field]: value } : null);
-    }
+    setActiveClient(prev => {
+        if (prev && prev.ruc === ruc) {
+            return { ...prev, [field]: value };
+        }
+        return prev;
+    });
   };
 
   const handleGetLocation = (forDialog: boolean = false) => {
@@ -177,21 +179,27 @@ export default function RouteManagementPage() {
         c.ruc === activeClient.ruc ? finalActiveClientState : c
     );
 
-    const clientsForFirestore = updatedRouteClients.map(c => {
-        const { id, status, ...clientData } = c; // Exclude fields not in ClientInRoute
-        return {
-          ...clientData,
-          valorVenta: parseFloat(c.valorVenta) || 0,
-          valorCobro: parseFloat(c.valorCobro) || 0,
-          devoluciones: parseFloat(c.devoluciones) || 0,
-          promociones: parseFloat(c.promociones) || 0,
-          medicacionFrecuente: parseFloat(c.medicacionFrecuente) || 0,
-        };
-    });
+    const fullRoutePlanClients = allRoutes.find(r => r.id === selectedRoute.id)?.clients || [];
+    
+    const updatedFullRoutePlanClients = fullRoutePlanClients.map(originalClient => {
+        const updatedClient = updatedRouteClients.find(uc => uc.ruc === originalClient.ruc);
+        if (updatedClient) {
+             const { id, status, ...clientData } = updatedClient;
+             return {
+                ...clientData,
+                valorVenta: parseFloat(clientData.valorVenta) || 0,
+                valorCobro: parseFloat(clientData.valorCobro) || 0,
+                devoluciones: parseFloat(clientData.devoluciones) || 0,
+                promociones: parseFloat(clientData.promociones) || 0,
+                medicacionFrecuente: parseFloat(clientData.medicacionFrecuente) || 0,
+             };
+        }
+        return originalClient;
+    })
 
 
     try {
-        await updateRoute(selectedRoute.id, { clients: clientsForFirestore });
+        await updateRoute(selectedRoute.id, { clients: updatedFullRoutePlanClients });
         setRouteClients(updatedRouteClients);
         toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
     } catch(error) {
@@ -210,7 +218,15 @@ export default function RouteManagementPage() {
           setIsRouteStarted(route.status === 'En Progreso');
           setActiveClient(null); // Reset selected client when route changes
           if (availableClients) {
-            const clientsData = route.clients.map(clientInRoute => {
+            const today = startOfDay(new Date());
+
+            const clientsData = route.clients
+            .filter(clientInRoute => {
+              if (!clientInRoute.date) return false;
+              const visitDate = startOfDay(clientInRoute.date);
+              return visitDate.getTime() === today.getTime();
+            })
+            .map(clientInRoute => {
                 const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
                 return {
                     ...(clientDetails || {}), // Detalle completo del cliente
