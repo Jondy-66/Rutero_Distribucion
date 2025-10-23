@@ -176,56 +176,52 @@ export default function RouteManagementPage() {
     setIsSaving(true);
 
     try {
-        // 1. Get the original full list of clients from the route plan in `allRoutes`
         const originalRoutePlan = allRoutes.find(r => r.id === selectedRoute.id);
         if (!originalRoutePlan) {
             throw new Error("No se pudo encontrar el plan de ruta original.");
         }
         let fullRoutePlanClients = [...originalRoutePlan.clients];
 
-        // 2. Prepare the data for the client that was just managed
+        const existingClientInPlan = fullRoutePlanClients.find(c => c.ruc === activeClient.ruc);
+
         const completedClientData: ClientInRoute = {
-            // Start with all original data to preserve fields like date, dayOfWeek etc.
-            ...(fullRoutePlanClients.find(c => c.ruc === activeClient.ruc) || {}),
-            // Add all data from the form
-            ...activeClient,
-            // Set final status and visit type
+            // Base properties from existing data or safe defaults
+            ruc: activeClient.ruc,
+            nombre_comercial: activeClient.nombre_comercial,
+            date: existingClientInPlan?.date ?? activeClient.date ?? new Date(),
+            dayOfWeek: existingClientInPlan?.dayOfWeek ?? activeClient.dayOfWeek,
+            startTime: existingClientInPlan?.startTime ?? activeClient.startTime,
+            endTime: existingClientInPlan?.endTime ?? activeClient.endTime,
+            origin: existingClientInPlan?.origin ?? activeClient.origin,
+            
+            // Updated properties from the form
             visitStatus: 'Completado',
             visitType: visitType,
             callObservation: visitType === 'telefonica' ? callObservation : undefined,
-            // Ensure numeric values are correctly formatted
             valorVenta: parseFloat(activeClient.valorVenta) || 0,
             valorCobro: parseFloat(activeClient.valorCobro) || 0,
             devoluciones: parseFloat(activeClient.devoluciones) || 0,
             promociones: parseFloat(activeClient.promociones) || 0,
             medicacionFrecuente: parseFloat(activeClient.medicacionFrecuente) || 0,
         };
-        // Remove client-specific properties that don't belong in ClientInRoute
-        delete (completedClientData as any).id; 
-        delete (completedClientData as any).status;
-        delete (completedClientData as any).ejecutivo;
-        delete (completedClientData as any).nombre_cliente;
-        delete (completedClientData as any).provincia;
-        delete (completedClientData as any).canton;
-        delete (completedClientData as any).direccion;
-        delete (completedClientData as any).latitud;
-        delete (completedClientData as any).longitud;
 
-        // 3. Update or add the client to the full list
+        // Clean up any undefined properties before saving to Firestore
+        Object.keys(completedClientData).forEach(key => {
+            if (completedClientData[key as keyof ClientInRoute] === undefined) {
+                delete completedClientData[key as keyof ClientInRoute];
+            }
+        });
+
         const clientIndex = fullRoutePlanClients.findIndex(c => c.ruc === activeClient.ruc);
 
         if (clientIndex !== -1) {
-            // Client already existed, update it
             fullRoutePlanClients[clientIndex] = completedClientData;
         } else {
-            // Client was manually added, add it to the list
             fullRoutePlanClients.push(completedClientData);
         }
 
-        // 4. Update the route in Firestore with the complete, updated list
         await updateRoute(selectedRoute.id, { clients: fullRoutePlanClients });
         
-        // 5. Update local state to reflect the change in the UI
         const updatedLocalRouteClients = routeClients.map(c => 
             c.ruc === activeClient.ruc ? { ...c, visitStatus: 'Completado' as const } : c
         );
