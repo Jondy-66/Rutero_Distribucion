@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle, AlertTriangle, ChevronRight, Save, Phone, User } from 'lucide-react';
+import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle, AlertTriangle, ChevronRight, Save, Phone, User, PlusCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getClients, getRoutes, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan } from '@/lib/types';
@@ -28,6 +28,7 @@ import { PageHeader } from '@/components/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 
 type RouteClient = Client & {
@@ -39,6 +40,7 @@ type RouteClient = Client & {
     medicacionFrecuente: string;
     visitType?: 'presencial' | 'telefonica';
     callObservation?: string;
+    origin?: 'manual' | 'predicted';
 }
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
@@ -80,6 +82,9 @@ export default function RouteManagementPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
   const [callObservation, setCallObservation] = useState('');
+
+  const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
+  const [dialogSearchTerm, setDialogSearchTerm] = useState('');
 
 
   const loading = authLoading;
@@ -196,7 +201,22 @@ export default function RouteManagementPage() {
         }
         return originalClient;
     })
-
+    
+     // Add new manually added clients to the full list
+    const existingRucs = new Set(fullRoutePlanClients.map(c => c.ruc));
+    updatedRouteClients.forEach(c => {
+        if (!existingRucs.has(c.ruc)) {
+            const { id, status, ...clientData } = c;
+            updatedFullRoutePlanClients.push({
+                ...clientData,
+                valorVenta: parseFloat(clientData.valorVenta) || 0,
+                valorCobro: parseFloat(clientData.valorCobro) || 0,
+                devoluciones: parseFloat(clientData.devoluciones) || 0,
+                promociones: parseFloat(clientData.promociones) || 0,
+                medicacionFrecuente: parseFloat(clientData.medicacionFrecuente) || 0,
+            });
+        }
+    });
 
     try {
         await updateRoute(selectedRoute.id, { clients: updatedFullRoutePlanClients });
@@ -223,7 +243,8 @@ export default function RouteManagementPage() {
             const clientsData = route.clients
             .filter(clientInRoute => {
               if (!clientInRoute.date) return false;
-              const visitDate = startOfDay(clientInRoute.date);
+              // Ensure date is a Date object before comparing
+              const visitDate = startOfDay(clientInRoute.date instanceof Date ? clientInRoute.date : clientInRoute.date.toDate());
               return visitDate.getTime() === today.getTime();
             })
             .map(clientInRoute => {
@@ -259,6 +280,32 @@ export default function RouteManagementPage() {
           setIsStarting(false);
       }
   }
+
+    const handleAddClientToRoute = (client: Client) => {
+        const newRouteClient: RouteClient = {
+            ...client,
+            visitStatus: 'Pendiente',
+            valorVenta: '0.00',
+            valorCobro: '0.00',
+            devoluciones: '0.00',
+            promociones: '0.00',
+            medicacionFrecuente: '0.00',
+            origin: 'manual',
+        };
+        setRouteClients(prev => [...prev, newRouteClient]);
+        toast({ title: 'Cliente Añadido', description: `${client.nombre_comercial} ha sido añadido a la ruta de hoy.` });
+        setIsAddClientDialogOpen(false);
+    }
+    
+    const availableClientsForDialog = useMemo(() => {
+        const currentRucs = new Set(routeClients.map(c => c.ruc));
+        return availableClients.filter(c => 
+            !currentRucs.has(c.ruc) &&
+            (String(c.nombre_cliente).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
+             String(c.nombre_comercial).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
+             String(c.ruc).includes(dialogSearchTerm))
+        );
+    }, [availableClients, routeClients, dialogSearchTerm]);
 
   const getNumericValueClass = (value: string) => {
     const numericValue = parseFloat(value);
@@ -340,31 +387,74 @@ export default function RouteManagementPage() {
                 <CardContent className="space-y-6">
                     {selectedRoute && (
                        <div className="space-y-4">
-                            <div>
+                            <div className="flex items-center justify-between">
                                 <Label>Clientes en Ruta ({routeClients.length})</Label>
-                                <div className="mt-2 space-y-2 max-h-[calc(100vh-20rem)] overflow-y-auto pr-2 rounded-md border p-2">
-                                    {routeClients.length > 0 ? routeClients.map((client, index) => (
-                                        <div 
-                                            key={client.ruc} 
-                                            className={cn(
-                                                "flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md",
-                                                activeClient?.ruc === client.ruc && "bg-primary/10 border-primary/50 border",
-                                                client.visitStatus === 'Completado' && 'opacity-60'
-                                            )}
-                                        >
-                                            <div className="flex items-center gap-3">
-                                                <span className={cn("font-semibold", activeClient?.ruc === client.ruc && "text-primary")}>{index + 1}.</span>
-                                                <span className="truncate flex-1" title={client.nombre_comercial}>{client.nombre_comercial}</span>
-                                            </div>
-                                            <div className="flex items-center">
-                                                {client.visitStatus === 'Completado' && <CheckCircle className="h-4 w-4 text-green-500 mr-2" />}
-                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); handleViewClientOnMap(client)}}>
-                                                    <MapPin className="h-4 w-4" />
-                                                </Button>
-                                            </div>
+                                <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
+                                    <DialogTrigger asChild>
+                                        <Button variant="ghost" size="sm">
+                                            <PlusCircle className="mr-2 h-4 w-4"/>
+                                            Añadir
+                                        </Button>
+                                    </DialogTrigger>
+                                    <DialogContent className="max-w-2xl">
+                                        <DialogHeader>
+                                            <DialogTitle>Añadir Cliente a la Ruta</DialogTitle>
+                                            <DialogDescription>
+                                                Busca y selecciona un cliente para añadirlo a tu ruta actual.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="relative">
+                                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                            <Input 
+                                                placeholder="Buscar por nombre, RUC..." 
+                                                className="pl-8" 
+                                                value={dialogSearchTerm}
+                                                onChange={(e) => setDialogSearchTerm(e.target.value)}
+                                            />
                                         </div>
-                                    )) : <p className="text-sm text-muted-foreground text-center py-4">No hay clientes en esta ruta.</p>}
-                                </div>
+                                        <ScrollArea className="h-72">
+                                            <div className="space-y-2 p-1">
+                                                {availableClientsForDialog.map(client => (
+                                                <div key={client.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                                    <div className="flex items-center space-x-3">
+                                                        <Label htmlFor={`client-${client.id}`} className="font-normal cursor-pointer">
+                                                        <p className="font-medium">{client.nombre_comercial}</p>
+                                                        <p className="text-xs text-muted-foreground">{client.ruc} - {client.nombre_cliente}</p>
+                                                        </Label>
+                                                    </div>
+                                                    <Button size="sm" onClick={() => handleAddClientToRoute(client)}>
+                                                        <Plus className="mr-2"/> Añadir
+                                                    </Button>
+                                                </div>
+                                                ))}
+                                            </div>
+                                        </ScrollArea>
+                                    </DialogContent>
+                                </Dialog>
+                            </div>
+                            <div className="mt-2 space-y-2 max-h-[calc(100vh-20rem)] overflow-y-auto pr-2 rounded-md border p-2">
+                                {routeClients.length > 0 ? routeClients.map((client, index) => (
+                                    <div 
+                                        key={client.ruc} 
+                                        className={cn(
+                                            "flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md relative",
+                                            activeClient?.ruc === client.ruc && "bg-primary/10 border-primary/50 border",
+                                            client.visitStatus === 'Completado' && 'opacity-60'
+                                        )}
+                                    >
+                                        {client.origin === 'manual' && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
+                                        <div className="flex items-center gap-3">
+                                            <span className={cn("font-semibold", activeClient?.ruc === client.ruc && "text-primary")}>{index + 1}.</span>
+                                            <span className="truncate flex-1" title={client.nombre_comercial}>{client.nombre_comercial}</span>
+                                        </div>
+                                        <div className="flex items-center">
+                                            {client.visitStatus === 'Completado' && <CheckCircle className="h-4 w-4 text-green-500 mr-2" />}
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); handleViewClientOnMap(client)}}>
+                                                <MapPin className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )) : <p className="text-sm text-muted-foreground text-center py-4">No hay clientes en esta ruta.</p>}
                             </div>
                         </div>
                     )}
