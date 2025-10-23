@@ -189,9 +189,9 @@ export default function RouteManagementPage() {
             ruc: activeClient.ruc,
             nombre_comercial: activeClient.nombre_comercial,
             date: existingClientInPlan?.date ?? activeClient.date ?? new Date(),
-            dayOfWeek: existingClientInPlan?.dayOfWeek ?? activeClient.dayOfWeek,
-            startTime: existingClientInPlan?.startTime ?? activeClient.startTime,
-            endTime: existingClientInPlan?.endTime ?? activeClient.endTime,
+            dayOfWeek: existingClientInPlan?.dayOfWeek,
+            startTime: existingClientInPlan?.startTime,
+            endTime: existingClientInPlan?.endTime,
             origin: existingClientInPlan?.origin ?? activeClient.origin,
             
             // Updated properties from the form
