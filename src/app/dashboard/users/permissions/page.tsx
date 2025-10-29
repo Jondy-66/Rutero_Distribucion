@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
@@ -16,7 +16,7 @@ import type { User } from '@/lib/types';
 
 
 const modules = [
-    { id: 'dashboard', label: 'Panel de Control' },
+    { id: 'dashboard', label: 'Panel' },
     { id: 'clients', label: 'Clientes' },
     { id: 'locations', label: 'Ubicaciones' },
     { id: 'map', label: 'Mapa' },
@@ -24,6 +24,13 @@ const modules = [
     { id: 'routes', label: 'Rutas' },
     { id: 'users', label: 'Usuarios' },
 ];
+
+const permissionsByRole: Record<User['role'], string[]> = {
+    'Administrador': ['dashboard', 'clients', 'locations', 'map', 'reports', 'routes', 'users'],
+    'Supervisor': ['dashboard', 'clients', 'map', 'reports', 'routes'],
+    'Usuario': ['dashboard', 'clients', 'map', 'routes'],
+    'Telemercaderista': ['dashboard', 'clients', 'map', 'routes'],
+};
 
 export default function PermissionsPage() {
     const { users, loading: authLoading } = useAuth();
@@ -36,15 +43,25 @@ export default function PermissionsPage() {
         return users.find(u => u.id === selectedUserId) || null;
     }, [selectedUserId, users]);
 
+    useEffect(() => {
+        if (selectedUser) {
+            const userRole = selectedUser.role;
+            const userPermissions = permissionsByRole[userRole] || [];
+            const initialPermissions: Record<string, boolean> = {};
+            modules.forEach(m => {
+                initialPermissions[m.id] = userPermissions.includes(m.id);
+            });
+            setPermissions(initialPermissions);
+        } else {
+            const initialPermissions: Record<string, boolean> = {};
+            modules.forEach(m => initialPermissions[m.id] = false);
+            setPermissions(initialPermissions);
+        }
+    }, [selectedUser]);
+
 
     const handleUserChange = (userId: string) => {
         setSelectedUserId(userId);
-        const user = users.find(u => u.id === userId);
-        // Aquí se cargaría los permisos existentes del usuario
-        // Por ahora, lo inicializamos todo en falso como maqueta
-        const initialPermissions: Record<string, boolean> = {};
-        modules.forEach(m => initialPermissions[m.id] = false);
-        setPermissions(initialPermissions);
     };
 
     const handlePermissionChange = (moduleId: string, checked: boolean) => {
@@ -108,7 +125,9 @@ export default function PermissionsPage() {
                 <Card className="mt-6">
                     <CardHeader>
                         <CardTitle>Permisos para {selectedUser.name}</CardTitle>
-                        <CardDescription>Activa o desactiva los módulos a los que este usuario tendrá acceso.</CardDescription>
+                        <CardDescription>
+                            Rol actual: <span className="font-semibold">{selectedUser.role}</span>. Activa o desactiva los módulos a los que este usuario tendrá acceso.
+                        </CardDescription>
                     </CardHeader>
                     <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
                         {modules.map(module => (
