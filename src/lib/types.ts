@@ -14,7 +14,7 @@ export type User = {
   id: string; // El UID de Firebase Auth.
   name: string; // Nombre completo del usuario.
   email: string; // Correo electrónico del usuario.
-  role: 'Administrador' | 'Supervisor' | 'Usuario'; // Rol del usuario, que define sus permisos.
+  role: 'Administrador' | 'Supervisor' | 'Usuario' | 'Telemercaderista'; // Rol del usuario, que define sus permisos.
   avatar?: string; // URL de la imagen de perfil del usuario.
   status?: 'active' | 'inactive'; // Estado del usuario, para activarlo o desactivarlo.
   supervisorId?: string; // ID del supervisor asignado, si el rol es 'Usuario'.

@@ -71,7 +71,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
         status: user.status,
       };
 
-      if (user.role === 'Usuario') {
+      if (user.role === 'Usuario' || user.role === 'Telemercaderista') {
         dataToUpdate.supervisorId = user.supervisorId || '';
       }
 
@@ -166,6 +166,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                         <SelectItem value="Administrador">Administrador</SelectItem>
                         <SelectItem value="Supervisor">Supervisor</SelectItem>
                         <SelectItem value="Usuario">Usuario</SelectItem>
+                        <SelectItem value="Telemercaderista">Telemercaderista</SelectItem>
                         </SelectContent>
                     </Select>
                     </div>
@@ -181,7 +182,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                             </SelectContent>
                         </Select>
                     </div>
-                    {user.role === 'Usuario' && (
+                    {(user.role === 'Usuario' || user.role === 'Telemercaderista') && (
                         <div className="space-y-2">
                             <Label htmlFor="supervisor">Asignar Supervisor</Label>
                             <Select value={user.supervisorId} onValueChange={(value) => handleFieldChange('supervisorId', value)} disabled={isSaving || supervisors.length === 0}>

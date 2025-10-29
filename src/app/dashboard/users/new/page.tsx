@@ -30,7 +30,7 @@ export default function NewUserPage() {
   const { users, loading, refetchData } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'Administrador' | 'Supervisor' | 'Usuario'>('Usuario');
+  const [role, setRole] = useState<'Administrador' | 'Supervisor' | 'Usuario' | 'Telemercaderista'>('Usuario');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -49,8 +49,8 @@ export default function NewUserPage() {
       toast({ title: "Error", description: "Las contraseñas no coinciden.", variant: "destructive" });
       return;
     }
-    if (role === 'Usuario' && !selectedSupervisor) {
-      toast({ title: "Error", description: "Debes asignar un supervisor para el rol de Usuario.", variant: "destructive" });
+    if ((role === 'Usuario' || role === 'Telemercaderista') && !selectedSupervisor) {
+      toast({ title: "Error", description: "Debes asignar un supervisor para el rol de Usuario o Telemercaderista.", variant: "destructive" });
       return;
     }
 
@@ -66,7 +66,7 @@ export default function NewUserPage() {
         avatar: `https://placehold.co/100x100/011688/FFFFFF/png?text=${name.charAt(0)}`
       };
 
-      if (role === 'Usuario' && selectedSupervisor) {
+      if ((role === 'Usuario' || role === 'Telemercaderista') && selectedSupervisor) {
           newUser.supervisorId = selectedSupervisor;
       }
 
@@ -130,10 +130,11 @@ export default function NewUserPage() {
                   <SelectItem value="Administrador">Administrador</SelectItem>
                   <SelectItem value="Supervisor">Supervisor</SelectItem>
                   <SelectItem value="Usuario">Usuario</SelectItem>
+                  <SelectItem value="Telemercaderista">Telemercaderista</SelectItem>
                 </SelectContent>
               </Select>
             </div>
-            {role === 'Usuario' && (
+            {(role === 'Usuario' || role === 'Telemercaderista') && (
               <div className="space-y-2">
                 <Label htmlFor="supervisor">Asignar Supervisor</Label>
                 <Select value={selectedSupervisor} onValueChange={setSelectedSupervisor} disabled={isLoading || loading}>
