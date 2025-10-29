@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Route, LoaderCircle, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { handlePasswordReset } from '@/lib/firebase/auth';
+import { getUsers } from '@/lib/firebase/firestore';
 
 export default function ForgotPasswordPage() {
   const { toast } = useToast();
@@ -20,18 +21,30 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      await handlePasswordReset(email);
-      setIsSent(true);
-      toast({ 
-        title: "Correo enviado", 
-        description: "Revisa tu bandeja de entrada para restablecer tu contraseña."
-      });
+      // Primero, verificamos si el usuario existe en Firestore.
+      const allUsers = await getUsers();
+      const userExists = allUsers.some(user => user.email === email);
+
+      if (userExists) {
+        await handlePasswordReset(email);
+        setIsSent(true);
+        toast({ 
+          title: "Correo enviado", 
+          description: "Revisa tu bandeja de entrada para restablecer tu contraseña."
+        });
+      } else {
+        // Si el usuario no existe, mostramos un error específico.
+        toast({
+          title: "Error",
+          description: "No se encontró ningún usuario con ese correo electrónico.",
+          variant: 'destructive'
+        });
+      }
     } catch (error: any) {
       console.error(error);
       let description = "Ocurrió un error al enviar el correo.";
-      if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found') {
-        description = "No se encontró ningún usuario con ese correo electrónico.";
-      } else {
+      // Mantenemos el manejo de otros posibles errores de la API.
+      if (error.code) {
         description = error.message || description;
       }
       toast({
