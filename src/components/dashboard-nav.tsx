@@ -17,6 +17,7 @@ import {
   Wand2,
   Users2,
   GitCommitHorizontal,
+  Lock,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -41,13 +42,13 @@ const navItems = [
     href: '/dashboard',
     label: 'Panel',
     icon: LayoutDashboard,
-    roles: ['Administrador', 'Supervisor', 'Usuario'],
+    roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista'],
   },
   {
     href: '/dashboard/clients',
     label: 'Clientes',
     icon: Briefcase,
-    roles: ['Administrador', 'Supervisor', 'Usuario'],
+    roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista'],
   },
   {
     href: '/dashboard/locations',
@@ -59,7 +60,7 @@ const navItems = [
     href: '/dashboard/map',
     label: 'Mapa',
     icon: Map,
-    roles: ['Administrador', 'Supervisor', 'Usuario'],
+    roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista'],
   },
 ];
 
@@ -97,12 +98,13 @@ export function DashboardNav() {
     return item.roles.includes(user.role);
   });
 
-  const canSeeReports = user?.role === 'Supervisor';
+  const canSeeReports = user?.role === 'Supervisor' || user?.role === 'Administrador';
 
   const canSeeRoutes =
     user?.role === 'Administrador' ||
     user?.role === 'Supervisor' ||
-    user?.role === 'Usuario';
+    user?.role === 'Usuario' ||
+    user?.role === 'Telemercaderista';
     
   const canSeeUsers =
     user?.role && usersNavItem.roles.includes(user.role);
@@ -258,6 +260,14 @@ export function DashboardNav() {
                       <Link href="/dashboard/users/supervisors">
                         <UserCheck />
                         <span>Supervisores</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/users/permissions'}>
+                      <Link href="/dashboard/users/permissions">
+                        <Lock />
+                        <span>Permisos</span>
                       </Link>
                     </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
