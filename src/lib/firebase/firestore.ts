@@ -64,6 +64,25 @@ export const getUser = async (id: string): Promise<User | null> => {
     return null;
 }
 
+
+/**
+ * Obtiene un único usuario por su dirección de correo electrónico.
+ * @param {string} email - El correo electrónico del usuario a buscar.
+ * @returns {Promise<User | null>} Una promesa que se resuelve con el objeto User o null si no se encuentra.
+ */
+export const getUserByEmail = async (email: string): Promise<User | null> => {
+    const q = query(usersCollection, where("email", "==", email));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+        return null; // No se encontró ningún usuario con ese correo.
+    }
+
+    // Devuelve el primer usuario encontrado (el correo debe ser único).
+    const userDoc = querySnapshot.docs[0];
+    return { id: userDoc.id, ...userDoc.data() } as User;
+};
+
 /**
  * Añade un nuevo usuario a la colección 'users' utilizando su UID de Firebase Auth como ID del documento.
  * @param {string} uid - El UID del usuario de Firebase Authentication.
@@ -73,7 +92,7 @@ export const getUser = async (id: string): Promise<User | null> => {
 export const addUser = (uid: string, userData: Partial<Omit<User, 'id' | 'status'>>) => {
     const userDoc = doc(db, "users", uid);
     // Todos los usuarios nuevos se crean con estado 'active'.
-    return setDoc(userDoc, { ...userData, status: 'active' });
+    return setDoc(userDoc, { ...userData, status: 'active', failedLoginAttempts: 0 });
 };
 
 /**

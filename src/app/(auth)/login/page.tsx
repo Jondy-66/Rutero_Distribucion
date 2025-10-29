@@ -13,9 +13,10 @@ import { redirect } from 'next/navigation';
 import { FloatingLabelInput } from '@/components/ui/floating-label-input';
 import { FloatingLabelPasswordInput } from '@/components/ui/floating-label-password-input';
 import Image from 'next/image';
+import { getUserByEmail, updateUser } from '@/lib/firebase/firestore';
 
 export default function LoginPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, refetchData } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [email, setEmail] = useState('');
@@ -25,24 +26,64 @@ export default function LoginPage() {
   const onSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
     try {
+        const userToLogin = await getUserByEmail(email);
+
+        if (userToLogin && userToLogin.status === 'inactive') {
+            toast({
+                title: "Cuenta Bloqueada",
+                description: "Tu cuenta ha sido bloqueada. Por favor, contacta al administrador.",
+                variant: "destructive",
+            });
+            setIsLoading(false);
+            return;
+        }
+
       await handleSignIn(email, password);
-      toast({ title: "Inicio de sesión exitoso", description: "Verificando perfil..." });
-    } catch (error: any) {
-      console.error(error);
-      let description = "Ocurrió un error al iniciar sesión.";
-      if (error.code === 'auth/invalid-credential') {
-        description = "Credenciales incorrectas. Por favor, verifica tus datos.";
-      } else {
-        description = error.message || description;
+
+      if (userToLogin && userToLogin.failedLoginAttempts && userToLogin.failedLoginAttempts > 0) {
+          await updateUser(userToLogin.id, { failedLoginAttempts: 0 });
+          await refetchData('users');
       }
-      toast({
-        title: "Error de inicio de sesión",
-        description: description,
-        variant: 'destructive'
-      });
+
+      toast({ title: "Inicio de sesión exitoso", description: "Verificando perfil..." });
+
+    } catch (error: any) {
+        console.error(error);
+        
+        let description = "Ocurrió un error al iniciar sesión.";
+        
+        if (error.code === 'auth/invalid-credential') {
+            description = "Credenciales incorrectas. Por favor, verifica tus datos.";
+            
+            // Handle failed login attempts
+            const userToUpdate = await getUserByEmail(email);
+            if (userToUpdate) {
+                const currentAttempts = userToUpdate.failedLoginAttempts || 0;
+                const newAttempts = currentAttempts + 1;
+                
+                if (newAttempts >= 5) {
+                    await updateUser(userToUpdate.id, { status: 'inactive', failedLoginAttempts: newAttempts });
+                    await refetchData('users');
+                    description = "Cuenta bloqueada por demasiados intentos fallidos. Contacta al administrador.";
+                } else {
+                    await updateUser(userToUpdate.id, { failedLoginAttempts: newAttempts });
+                    await refetchData('users');
+                    description += ` Intento ${newAttempts} de 5.`;
+                }
+            }
+        } else {
+            description = error.message || description;
+        }
+
+        toast({
+            title: "Error de inicio de sesión",
+            description: description,
+            variant: 'destructive'
+        });
     } finally {
-      setIsLoading(false);
+        setIsLoading(false);
     }
   };
 

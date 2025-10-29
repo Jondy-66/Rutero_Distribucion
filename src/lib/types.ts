@@ -18,6 +18,7 @@ export type User = {
   avatar?: string; // URL de la imagen de perfil del usuario.
   status?: 'active' | 'inactive'; // Estado del usuario, para activarlo o desactivarlo.
   supervisorId?: string; // ID del supervisor asignado, si el rol es 'Usuario'.
+  failedLoginAttempts?: number; // Contador de intentos fallidos de inicio de sesión.
 };
 
 /**
