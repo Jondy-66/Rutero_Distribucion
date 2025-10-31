@@ -33,6 +33,7 @@ Los roles de usuario principales son:
 - **Administrador:** Gestión total del sistema (usuarios, clientes, rutas).
 - **Supervisor:** Gestiona y aprueba las rutas de los vendedores a su cargo.
 - **Usuario (Vendedor):** Planifica y ejecuta las rutas diarias de visita a clientes.
+- **Telemercaderista:** Rol con permisos similares al 'Usuario', enfocado en gestión remota.
 
 ### 3. Arquitectura de la Solución
 El siguiente diagrama ilustra la arquitectura de alto nivel de la aplicación "Rutero", mostrando los componentes principales y cómo interactúan entre sí.
@@ -85,12 +86,13 @@ El proyecto sigue la estructura estándar de una aplicación Next.js con el App 
   - **`(auth)/`**: Rutas de autenticación (`login`, `forgot-password`).
   - **`api/`**: Endpoints proxy de Next.js para interactuar con servicios externos.
   - **`dashboard/`**: Layout y páginas protegidas del panel de control.
+    - **`users/permissions`**: Nueva página para la gestión de permisos por módulo.
 - **`components/`**: Componentes de React reutilizables (UI de ShadCN y componentes personalizados).
 - **`contexts/`**: Proveedores de contexto, principalmente `auth-context.tsx` para el estado global.
 - **`hooks/`**: Hooks personalizados como `use-auth.ts`.
 - **`lib/`**: Lógica de negocio, tipos y utilidades.
   - **`firebase/`**: Configuración de Firebase y funciones de ayuda (auth y firestore).
-  - **`types.ts`**: Definiciones de tipos de TypeScript para los datos principales.
+  - **`types.ts`**: Definiciones de tipos de TypeScript para los datos principales, incluyendo `failedLoginAttempts`.
 - **`services/`**: Funciones para interactuar con las API proxy.
 - **`docs/`**: Documentación del proyecto.
 
@@ -128,7 +130,7 @@ La aplicación estará disponible en `http://localhost:9002`.
 ### 6. Base de Datos
 - **Motor:** Google Firestore (NoSQL).
 - **Colecciones Principales:**
-    - `users`: Almacena los perfiles de usuario, incluyendo su rol (`Administrador`, `Supervisor`, `Usuario`). El ID del documento corresponde al UID de Firebase Authentication.
+    - `users`: Almacena los perfiles de usuario, incluyendo su rol (`Administrador`, `Supervisor`, `Usuario`, `Telemercaderista`), estado (`active`, `inactive`) y `failedLoginAttempts`. El ID del documento corresponde al UID de Firebase Authentication.
     - `clients`: Contiene la información de todos los clientes (RUC, nombre, dirección, coordenadas, etc.).
     - `routes`: Guarda todos los planes de ruta, su estado (`Planificada`, `En Progreso`, etc.), los clientes asociados y el supervisor asignado.
     - `notifications`: Almacena notificaciones para los usuarios, con suscripción en tiempo real.
@@ -143,6 +145,8 @@ La aplicación estará disponible en `http://localhost:9002`.
 
 ### 8. Seguridad y Cumplimiento
 - **Autenticación:** Realizada por Firebase Authentication, que utiliza tokens (JWT) para gestionar las sesiones de forma segura.
+- **Bloqueo Inteligente:** Se ha implementado un mecanismo de bloqueo de cuentas en `src/app/(auth)/login/page.tsx`. Tras 5 intentos de inicio de sesión fallidos, la cuenta del usuario se marca como `inactive` en Firestore y se bloquea el acceso. El desbloqueo debe ser realizado por un `Administrador`.
+- **Recuperación de Contraseña:** El flujo en `src/app/(auth)/forgot-password/page.tsx` ha sido modificado para validar la existencia del correo electrónico en Firestore antes de invocar el envío del correo de recuperación, mostrando un error si el usuario no existe.
 - **Autorización:** Implementada en el frontend (mostrando/ocultando UI según el rol) y reforzada en el backend con Reglas de Seguridad de Firestore. Por ejemplo, un `Usuario` solo puede modificar las rutas que ha creado (`request.auth.uid == resource.data.createdBy`).
 - **Protección de Datos:** Las claves de API y URLs de servicios sensibles están en el backend (API Routes), no expuestas en el cliente.
 - **Cumplimiento:** Se recomienda seguir las mejores prácticas de OWASP Top 10 para aplicaciones web.
@@ -166,6 +170,7 @@ La aplicación estará disponible en `http://localhost:9002`.
 | Error Común | Causa Probable | Solución |
 | :--- | :--- | :--- |
 | El usuario no puede iniciar sesión. | Credenciales incorrectas o el usuario no existe. | Verificar correo/contraseña. Utilizar la función "Recuperar Contraseña". Si persiste, verificar en Firebase Auth. |
+| El usuario reporta cuenta bloqueada. | El usuario ha superado los 5 intentos fallidos de inicio de sesión. | Un `Administrador` debe acceder al perfil del usuario en la sección "Usuarios", cambiar su estado de `inactive` a `active` y guardar los cambios. |
 | El usuario no puede ver datos (clientes, rutas). | Error en las reglas de seguridad de Firestore o el usuario no tiene el rol correcto. | Verificar los logs de Firestore y las reglas de seguridad. Asegurarse de que el `user.role` sea el adecuado. |
 | El mapa no se carga. | La `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` no está configurada o es incorrecta. | Revisar el archivo `.env.local` y asegurarse de que la clave de API de Google Maps sea válida. |
 | Las predicciones de ruta fallan. | El servicio externo `api-distribucion-rutas.onrender.com` está caído o hay un problema de red. | Verificar el estado del servicio externo y los logs de la ruta proxy en `/api/predicciones`. |

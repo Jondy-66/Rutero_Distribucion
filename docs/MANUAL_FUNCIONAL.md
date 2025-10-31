@@ -34,29 +34,32 @@ Está orientado a usuarios clave, supervisores, analistas funcionales y personal
 
 **Alcance Funcional:**
 - Gestión centralizada de clientes y sus ubicaciones.
-- Gestión de usuarios con roles y permisos específicos (Administrador, Supervisor, Vendedor).
+- Gestión de usuarios con roles y permisos específicos (Administrador, Supervisor, Vendedor, Telemercaderista).
 - Planificación de rutas manual o asistida por Inteligencia Artificial (predicción de visitas).
 - Flujo de aprobación de rutas entre vendedores y supervisores.
 - Gestión y seguimiento en tiempo real de las rutas en progreso.
 - Optimización de rutas para calcular el recorrido más eficiente.
 - Visualización de clientes y rutas en un mapa interactivo.
 - Generación de reportes de gestión.
+- Seguridad reforzada con bloqueo de cuentas por intentos fallidos.
 
 **Objetivos de Negocio:**
 - Optimizar los tiempos y costos de desplazamiento.
 - Aumentar la cobertura de visitas a clientes.
 - Mejorar la eficiencia del equipo de ventas y cobranzas.
 - Proporcionar a la gerencia visibilidad y control sobre las operaciones en campo.
+- Asegurar el acceso a la plataforma mediante mecanismos de seguridad robustos.
 
 ## 3. Roles de Usuario y Permisos
-El sistema contempla tres perfiles de usuario, cada uno con responsabilidades y accesos definidos para garantizar la seguridad y la correcta operación del flujo de trabajo.
+El sistema contempla perfiles de usuario, cada uno con responsabilidades y accesos definidos para garantizar la seguridad y la correcta operación del flujo de trabajo.
 
 - **Administrador:**
-  - **Gestión Total de Usuarios:** Puede crear, editar y eliminar usuarios de cualquier rol.
+  - **Gestión Total de Usuarios:** Puede crear, editar y eliminar usuarios de cualquier rol. Es el único que puede desbloquear cuentas bloqueadas por intentos fallidos de inicio de sesión.
   - **Gestión Total de Clientes:** Tiene control absoluto sobre la creación, lectura, actualización y eliminación (CRUD) de clientes. Puede realizar cargas masivas de datos.
   - **Gestión de Ubicaciones:** Puede actualizar masivamente las coordenadas geográficas de los clientes.
   - **Visibilidad Completa:** Tiene acceso a todas las rutas, reportes y dashboards del sistema.
   - **Aprobación de Rutas:** Puede aprobar o rechazar rutas de cualquier usuario.
+  - **Gestión de Permisos:** Puede configurar el acceso a los módulos para cada usuario (funcionalidad en desarrollo).
 
 - **Supervisor:**
   - **Gestión de su Equipo:** Ve y gestiona las rutas y reportes de los vendedores (rol "Usuario") que tiene asignados.
@@ -69,6 +72,9 @@ El sistema contempla tres perfiles de usuario, cada uno con responsabilidades y 
   - **Envío a Aprobación:** Envía sus rutas planificadas a su supervisor asignado para que sean aprobadas.
   - **Gestión de Ruta Diaria:** Inicia la ruta del día, registra las visitas a cada cliente (check-in/check-out), e ingresa los datos de la gestión (ventas, cobros, etc.).
   - **Gestión de su Cartera:** Solo puede ver los clientes que tiene asignados a su nombre (ejecutivo).
+
+- **Telemercaderista:**
+  - Rol con funcionalidades similares al **Usuario (Vendedor)**, pero orientado a la gestión remota o telefónica de clientes.
 
 ## 4. Módulos Funcionales del Sistema
 
@@ -88,9 +94,10 @@ El sistema contempla tres perfiles de usuario, cada uno con responsabilidades y 
   - **Ruta Óptima (IA):** Calcula el orden de visita más eficiente para un conjunto de paradas.
 
 - **Módulo de Usuarios (Admin):** Permite la gestión completa de los usuarios del sistema.
-  - **Funcionalidades:** Crear nuevos usuarios (con asignación de rol y contraseña), editar perfiles y eliminar usuarios.
+  - **Funcionalidades:** Crear nuevos usuarios (con asignación de rol y contraseña), editar perfiles y eliminar usuarios. Incluye la capacidad de activar/desactivar cuentas.
+  - **Permisos:** Una sección dedicada para configurar el acceso de los usuarios a los distintos módulos del sistema.
 
-- **Módulo de Reportes (Supervisor):** Proporciona herramientas para el seguimiento del rendimiento.
+- **Módulo de Reportes (Supervisor/Admin):** Proporciona herramientas para el seguimiento del rendimiento.
   - **Funcionalidades:** Visualizar y descargar en Excel los reportes de rutas completadas por los vendedores a cargo.
 
 ## 5. Flujo de Procesos
@@ -120,6 +127,15 @@ El sistema contempla tres perfiles de usuario, cada uno con responsabilidades y 
     *   El cliente visitado se marca como "Completado".
     *   Si es necesario, puede añadir clientes no planificados sobre la marcha.
 
+### 5.2. Flujo de Acceso y Seguridad
+
+1.  **Inicio de Sesión:** El usuario ingresa su correo y contraseña.
+2.  **Validación de Credenciales:** El sistema verifica los datos.
+3.  **Contador de Intentos:** Si la contraseña es incorrecta, el sistema registra un intento fallido.
+4.  **Bloqueo de Cuenta:** Después de 5 intentos fallidos consecutivos, la cuenta se bloquea automáticamente y el estado cambia a `inactivo`.
+5.  **Desbloqueo:** El usuario debe contactar a un **Administrador**, quien podrá reactivar la cuenta desde el módulo de "Usuarios".
+6.  **Recuperación de Contraseña:** Si el usuario olvida su contraseña, puede solicitar un enlace de recuperación. El sistema primero verifica que el correo electrónico exista en la base de datos antes de enviar el correo. Si no existe, muestra un mensaje de error.
+
 ## 6. Pantallas y Navegación
 La navegación principal se realiza a través de una barra lateral que contiene los siguientes accesos, visibles según el rol del usuario:
 
@@ -132,25 +148,27 @@ La navegación principal se realiza a través de una barra lateral que contiene 
   - **Mis Rutas:** Lista de las rutas creadas por el propio usuario.
   - **Gestión Ruta:** Interfaz para ejecutar la ruta del día.
   - **Rutas de Equipo (Supervisor/Admin):** Lista de rutas enviadas por otros para aprobación.
-- **Reportes (Supervisor):** Menú desplegable con acceso a los reportes.
-- **Usuarios (Admin):** Menú desplegable para gestionar "Todos los Usuarios" y "Supervisores".
+- **Reportes (Supervisor/Admin):** Menú desplegable con acceso a los reportes.
+- **Usuarios (Admin):** Menú desplegable para gestionar "Todos los Usuarios", "Supervisores" y "Permisos".
 
 ## 7. Reportes y Consultas
-- **Reporte de Vendedores (para Supervisores):**
+- **Reporte de Vendedores (para Supervisores/Admin):**
   - **Filtros:** Se puede filtrar por vendedor (de los que tiene a cargo) y por rango de fechas.
   - **Resultados:** Muestra una tabla con las rutas completadas por el vendedor, incluyendo nombre de la ruta, fecha y número de clientes.
   - **Exportación:** Los datos filtrados pueden ser exportados a un archivo **Excel (.xlsx)** para un análisis más profundo.
 
 ## 8. Reglas de Negocio Globales
-- Un usuario con rol "Usuario" debe tener siempre un supervisor asignado para que el flujo de aprobación funcione.
+- Un usuario con rol "Usuario" o "Telemercaderista" debe tener siempre un supervisor asignado para que el flujo de aprobación funcione.
 - Las rutas solo pueden ser iniciadas si están en estado "Planificada" y corresponden al día actual.
 - Una vez una ruta está "En Progreso" o "Completada", ya no puede ser editada por ningún rol (salvo para registrar la gestión del día).
 - El sistema de notificaciones es automático y se dispara en los eventos clave del flujo de aprobación (envío, aprobación, rechazo).
+- Una cuenta de usuario se bloquea automáticamente tras 5 intentos fallidos de inicio de sesión.
 
 ## 9. Excepciones y Mensajes del Sistema
 El sistema utiliza notificaciones "toast" para comunicar el resultado de las operaciones:
 - **Éxito:** "Cliente creado correctamente", "Ruta guardada exitosamente".
-- **Error:** "Las contraseñas no coinciden", "Faltan campos obligatorios", "No tienes permiso para realizar esta acción".
+- **Error:** "Las contraseñas no coinciden", "Faltan campos obligatorios", "No se encontró ningún usuario con ese correo electrónico.".
+- **Error de Seguridad:** "Cuenta bloqueada por demasiados intentos fallidos. Contacta al administrador."
 - **Informativo:** "Correo de recuperación enviado", "Tienes notificaciones sin leer".
 
 ## 10. Consideraciones Funcionales Especiales

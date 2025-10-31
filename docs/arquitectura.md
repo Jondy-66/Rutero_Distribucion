@@ -64,10 +64,11 @@ graph TD
 - **Firebase Authentication**:
     - Proporciona un sistema completo y seguro para la gestión de usuarios, incluyendo inicio de sesión con correo/contraseña y restablecimiento de contraseña.
     - Es el pilar de la seguridad del lado del cliente, ya que el estado de autenticación del usuario se utiliza en las reglas de seguridad de Firestore.
+    - Gestiona el mecanismo de bloqueo de cuentas, aunque la lógica (contador de intentos) se maneja en la aplicación.
 
 - **Firestore Database**:
     - Es la base de datos NoSQL donde se almacena toda la información persistente de la aplicación, organizada en colecciones:
-        - `users`: Perfiles de los usuarios, incluyendo su rol y supervisor asignado.
+        - `users`: Perfiles de los usuarios, incluyendo su rol (`Administrador`, `Supervisor`, `Usuario`, `Telemercaderista`), estado (`active`/`inactive`), `supervisorId` y el contador `failedLoginAttempts`.
         - `clients`: Información detallada de cada cliente.
         - `routes`: Todos los planes de ruta creados, con su estado y clientes asociados.
         - `notifications`: Notificaciones generadas para los usuarios.
