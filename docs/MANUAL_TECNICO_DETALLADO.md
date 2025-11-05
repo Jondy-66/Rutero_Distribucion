@@ -157,9 +157,46 @@ La aplicación estará disponible en `http://localhost:9002`.
 - **Respaldos:** Firestore ofrece respaldos automáticos gestionados desde la consola de Google Cloud. Se recomienda configurar exportaciones periódicas.
 
 ### 10. Pruebas y Calidad del Software
-- **Pruebas Unitarias:** *(Pendiente de implementación)*. Se recomienda usar Jest y React Testing Library.
-- **Pruebas de Integración:** *(Pendiente de implementación)*. Probar la integración entre el frontend y los servicios de Firebase.
-- **Pruebas E2E (End-to-End):** *(Pendiente de implementación)*. Se recomienda usar Cypress o Playwright para simular flujos de usuario completos.
+La estrategia de calidad del software se centra en garantizar la fiabilidad, funcionalidad y mantenibilidad de la aplicación a través de varios niveles de pruebas y estándares de codificación.
+
+- **Calidad del Código:**
+    - **TypeScript:** El uso de TypeScript en todo el proyecto asegura la tipificación estática, lo que permite detectar errores en tiempo de desarrollo y mejorar la legibilidad y el autocompletado del código.
+    - **Linting y Formateo:** Se utilizan herramientas como **ESLint** para aplicar reglas de estilo y buenas prácticas de codificación de manera automática. Esto ayuda a mantener un código consistente y a prevenir errores comunes.
+    - **Revisión de Código (Code Review):** Se recomienda un proceso de revisión por pares antes de integrar nuevo código a la rama principal para garantizar que cumple con los estándares de calidad del equipo.
+
+- **Pruebas Unitarias (Unit Testing):**
+    - **Objetivo:** Verificar que los componentes individuales y las funciones de lógica de negocio (helpers, utils) funcionen como se espera de forma aislada.
+    - **Herramientas Recomendadas:** **Jest** como corredor de pruebas y **React Testing Library** para renderizar y probar componentes de React.
+    - **Ejemplos de Casos de Prueba:**
+        - Un componente de botón (`Button`) se renderiza correctamente y responde a los eventos de clic.
+        - Un hook como `useAuth` lanza un error si se usa fuera de su proveedor.
+        - Una función de utilidad en `src/lib/utils.ts` formatea una fecha correctamente.
+
+- **Pruebas de Integración (Integration Testing):**
+    - **Objetivo:** Asegurar que diferentes partes de la aplicación funcionen juntas correctamente. Especialmente importante para la interacción entre el frontend y los servicios de backend (Firebase).
+    - **Herramientas Recomendadas:** Se puede usar **React Testing Library** junto con el **emulador de Firebase** para simular la base de datos y la autenticación en un entorno de prueba controlado.
+    - **Ejemplos de Casos de Prueba:**
+        - Al llenar un formulario de "Nuevo Cliente" y hacer clic en "Guardar", se verifica que la función `addClient` de Firestore sea llamada con los datos correctos.
+        - Un usuario con rol "Usuario" no puede ver los botones de administración.
+        - Al iniciar sesión con credenciales incorrectas, se muestra el toast de error correspondiente.
+
+- **Pruebas End-to-End (E2E Testing):**
+    - **Objetivo:** Simular flujos de usuario completos en un entorno lo más parecido posible a producción para validar la funcionalidad de la aplicación de principio a fin.
+    - **Herramientas Recomendadas:** **Cypress** o **Playwright**.
+    - **Ejemplos de Flujos a Probar:**
+        1.  **Flujo de Aprobación de Ruta:**
+            - Un usuario "Vendedor" inicia sesión.
+            - Crea una nueva ruta, añade clientes y la envía a aprobación.
+            - Cierra sesión.
+            - Un usuario "Supervisor" inicia sesión.
+            - Encuentra la ruta pendiente, la revisa y la aprueba.
+            - Verifica que el estado de la ruta cambie a "Planificada".
+        2.  **Flujo de Bloqueo de Cuenta:**
+            - Intentar iniciar sesión con un usuario y contraseña incorrecta 5 veces.
+            - Verificar que se muestra el mensaje de "Cuenta bloqueada".
+            - Iniciar sesión como "Administrador".
+            - Navegar al perfil del usuario bloqueado, cambiar su estado a "activo" y guardar.
+            - Volver a iniciar sesión con el usuario (ahora desbloqueado) y las credenciales correctas para confirmar el acceso.
 
 ### 11. Logs, Monitoreo y Alertas
 - **Logging:** Las rutas API de Next.js utilizan `console.error` para registrar errores del lado del servidor. El frontend también registra errores en la consola del navegador. Se recomienda integrar un servicio de logging centralizado (ej. Sentry, Logtail).
