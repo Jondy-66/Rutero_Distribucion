@@ -18,6 +18,7 @@ import {
   Users2,
   GitCommitHorizontal,
   Lock,
+  HeartHandshake,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -235,6 +236,18 @@ export function DashboardNav() {
             </CollapsibleContent>
           </Collapsible>
         )}
+        <SidebarMenuItem>
+          <SidebarMenuButton
+            asChild
+            isActive={pathname === '/dashboard/crm'}
+            tooltip="CRM"
+          >
+            <Link href="/dashboard/crm">
+              <HeartHandshake className="h-5 w-5" />
+              <span>CRM</span>
+            </Link>
+          </SidebarMenuButton>
+        </SidebarMenuItem>
         {canSeeUsers && (
           <Collapsible open={isUsersOpen} onOpenChange={setIsUsersOpen}>
             <SidebarMenuItem>
