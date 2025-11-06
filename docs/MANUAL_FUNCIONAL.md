@@ -59,7 +59,7 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
   - **Gestión de Ubicaciones:** Puede actualizar masivamente las coordenadas geográficas de los clientes.
   - **Visibilidad Completa:** Tiene acceso a todas las rutas, reportes y dashboards del sistema.
   - **Aprobación de Rutas:** Puede aprobar o rechazar rutas de cualquier usuario.
-  - **Gestión de Permisos:** Puede configurar el acceso a los módulos para cada usuario (funcionalidad en desarrollo).
+  - **Gestión de Permisos:** Puede configurar el acceso a los módulos para cada usuario desde la pantalla de "Permisos".
 
 - **Supervisor:**
   - **Gestión de su Equipo:** Ve y gestiona las rutas y reportes de los vendedores (rol "Usuario") que tiene asignados.
@@ -74,7 +74,7 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
   - **Gestión de su Cartera:** Solo puede ver los clientes que tiene asignados a su nombre (ejecutivo).
 
 - **Telemercaderista:**
-  - Rol con funcionalidades similares al **Usuario (Vendedor)**, pero orientado a la gestión remota o telefónica de clientes.
+  - Rol con funcionalidades similares al **Usuario (Vendedor)**, pero orientado a la gestión remota o telefónica de clientes. Su flujo de trabajo en la gestión de ruta incluye la opción de registrar la visita como "Llamada Telefónica".
 
 ## 4. Módulos Funcionales del Sistema
 
@@ -94,8 +94,8 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
   - **Ruta Óptima (IA):** Calcula el orden de visita más eficiente para un conjunto de paradas.
 
 - **Módulo de Usuarios (Admin):** Permite la gestión completa de los usuarios del sistema.
-  - **Funcionalidades:** Crear nuevos usuarios (con asignación de rol y contraseña), editar perfiles y eliminar usuarios. Incluye la capacidad de activar/desactivar cuentas.
-  - **Permisos:** Una sección dedicada para configurar el acceso de los usuarios a los distintos módulos del sistema.
+  - **Funcionalidades:** Crear nuevos usuarios (con asignación de rol y contraseña), editar perfiles, activar/desactivar y eliminar usuarios.
+  - **Permisos:** Una sección dedicada ("Permisos") para configurar el acceso de los usuarios a los distintos módulos del sistema.
 
 - **Módulo de Reportes (Supervisor/Admin):** Proporciona herramientas para el seguimiento del rendimiento.
   - **Funcionalidades:** Visualizar y descargar en Excel los reportes de rutas completadas por los vendedores a cargo.
@@ -121,9 +121,9 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
     *   Puede **Rechazar** la ruta, debiendo añadir una observación. La ruta cambia a estado **"Rechazada"**.
     *   En ambos casos, el vendedor creador de la ruta recibe una notificación.
 
-4.  **Gestión en Campo (Vendedor):**
+4.  **Gestión en Campo (Vendedor/Telemercaderista):**
     *   En el día correspondiente, el vendedor accede a **"Gestión de Ruta"**, selecciona la ruta aprobada y la **inicia**. El estado cambia a **"En Progreso"**.
-    *   Para cada cliente, el vendedor realiza el check-in, registra los datos de la gestión (venta, cobro, etc.) y realiza el check-out.
+    *   Para cada cliente, el usuario realiza el check-in, selecciona el tipo de visita (presencial o telefónica), registra los datos de la gestión (venta, cobro, etc.) y realiza el check-out.
     *   El cliente visitado se marca como "Completado".
     *   Si es necesario, puede añadir clientes no planificados sobre la marcha.
 
@@ -131,10 +131,10 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
 
 1.  **Inicio de Sesión:** El usuario ingresa su correo y contraseña.
 2.  **Validación de Credenciales:** El sistema verifica los datos.
-3.  **Contador de Intentos:** Si la contraseña es incorrecta, el sistema registra un intento fallido.
-4.  **Bloqueo de Cuenta:** Después de 5 intentos fallidos consecutivos, la cuenta se bloquea automáticamente y el estado cambia a `inactivo`.
-5.  **Desbloqueo:** El usuario debe contactar a un **Administrador**, quien podrá reactivar la cuenta desde el módulo de "Usuarios".
-6.  **Recuperación de Contraseña:** Si el usuario olvida su contraseña, puede solicitar un enlace de recuperación. El sistema primero verifica que el correo electrónico exista en la base de datos antes de enviar el correo. Si no existe, muestra un mensaje de error.
+3.  **Contador de Intentos:** Si la contraseña es incorrecta, el sistema registra un intento fallido para ese usuario.
+4.  **Bloqueo de Cuenta:** Después de 5 intentos fallidos consecutivos, la cuenta se bloquea automáticamente (el estado del usuario cambia a `inactivo`).
+5.  **Desbloqueo:** El usuario bloqueado debe contactar a un **Administrador**, quien podrá reactivar la cuenta desde el módulo de "Usuarios", cambiando su estado a `activo`.
+6.  **Recuperación de Contraseña:** Si el usuario olvida su contraseña, puede solicitar un enlace de recuperación. El sistema primero verifica que el correo electrónico exista en la base de datos de usuarios de la aplicación antes de invocar el envío del correo de recuperación. Si no existe, muestra un mensaje de error y no se envía nada.
 
 ## 6. Pantallas y Navegación
 La navegación principal se realiza a través de una barra lateral que contiene los siguientes accesos, visibles según el rol del usuario:
@@ -148,7 +148,7 @@ La navegación principal se realiza a través de una barra lateral que contiene 
   - **Mis Rutas:** Lista de las rutas creadas por el propio usuario.
   - **Gestión Ruta:** Interfaz para ejecutar la ruta del día.
   - **Rutas de Equipo (Supervisor/Admin):** Lista de rutas enviadas por otros para aprobación.
-- **Reportes (Supervisor/Admin):** Menú desplegable con acceso a los reportes.
+- **Reportes (Supervisor/Admin):** Menú desplegable con acceso a los reportes de rutas asignadas y de vendedores.
 - **Usuarios (Admin):** Menú desplegable para gestionar "Todos los Usuarios", "Supervisores" y "Permisos".
 
 ## 7. Reportes y Consultas
@@ -157,12 +157,18 @@ La navegación principal se realiza a través de una barra lateral que contiene 
   - **Resultados:** Muestra una tabla con las rutas completadas por el vendedor, incluyendo nombre de la ruta, fecha y número de clientes.
   - **Exportación:** Los datos filtrados pueden ser exportados a un archivo **Excel (.xlsx)** para un análisis más profundo.
 
+- **Reporte de Mis Rutas Asignadas (para Supervisores):**
+  - **Resultados:** Muestra una tabla con todas las rutas que el supervisor tiene asignadas para aprobar o que ha gestionado.
+  - **Exportación:** Permite descargar los datos en formato **Excel (.xlsx)** y **PDF**.
+
+
 ## 8. Reglas de Negocio Globales
 - Un usuario con rol "Usuario" o "Telemercaderista" debe tener siempre un supervisor asignado para que el flujo de aprobación funcione.
 - Las rutas solo pueden ser iniciadas si están en estado "Planificada" y corresponden al día actual.
 - Una vez una ruta está "En Progreso" o "Completada", ya no puede ser editada por ningún rol (salvo para registrar la gestión del día).
 - El sistema de notificaciones es automático y se dispara en los eventos clave del flujo de aprobación (envío, aprobación, rechazo).
 - Una cuenta de usuario se bloquea automáticamente tras 5 intentos fallidos de inicio de sesión.
+- El módulo de permisos (accesible por Administradores) permite visualizar los accesos predeterminados de cada rol. La funcionalidad para guardar cambios personalizados está en desarrollo.
 
 ## 9. Excepciones y Mensajes del Sistema
 El sistema utiliza notificaciones "toast" para comunicar el resultado de las operaciones:
@@ -181,8 +187,56 @@ El sistema utiliza notificaciones "toast" para comunicar el resultado de las ope
 | Versión | Fecha         | Autor          | Descripción del Cambio                                 |
 |---------|---------------|----------------|--------------------------------------------------------|
 | 1.0     | Octubre 2025  | Jonathan Diaz  | Creación inicial del documento con la funcionalidad base. |
-|         |               |                |                                                        |
-|         |               |                |                                                        |
+| 1.1     | Octubre 2025  | Asistente AI   | Añadido rol Telemercaderista, flujo de bloqueo de cuenta y validación de correo en recuperación. |
+| 1.2     | Octubre 2025  | Asistente AI   | Implementación de la sección de Anexos. |
 
 ## 12. Anexos
-*(Esta sección puede incluir un glosario de términos, ejemplos de los formatos de archivo para importación, o cualquier otro documento de soporte relevante para el entendimiento funcional).*
+
+### 12.1. Glosario de Términos
+- **Check-in/Check-out:** Acción de marcar el inicio y fin de una visita a un cliente durante la gestión de una ruta.
+- **Ruta Planificada:** Estado de una ruta que ha sido creada (manual o por predicción) y está lista para ser enviada a aprobación o, si ya fue aprobada, para ser ejecutada.
+- **Ruta en Progreso:** Estado de una ruta que ha sido iniciada por un vendedor y se está ejecutando en el día actual.
+- **Waypoint:** Una parada o punto intermedio en una ruta, que corresponde a la ubicación de un cliente.
+- **Proxy de API:** Un servidor intermedio (en este caso, una API de Next.js) que recibe peticiones del cliente y las reenvía a un servicio externo, protegiendo las credenciales y evitando problemas de CORS.
+
+### 12.2. Formatos de Archivo de Importación
+
+#### Formato para Importación de Clientes
+- **Ruta:** `Dashboard > Clientes > Importar`
+- **Formato:** CSV o Excel (.xlsx)
+- **Columnas Requeridas:**
+  - `ejecutivo`: Nombre del vendedor asignado.
+  - `ruc`: RUC del cliente. Clave para identificar y evitar duplicados.
+  - `nombre_cliente`: Razón social del cliente.
+  - `nombre_comercial`: Nombre de fantasía o comercial.
+  - `provincia`: Provincia del cliente.
+  - `canton`: Cantón del cliente.
+  - `direccion`: Dirección del cliente.
+- **Columnas Opcionales:**
+  - `latitud`: Coordenada de latitud.
+  - `longitud`: Coordenada de longitud.
+
+**Ejemplo (formato CSV):**
+```csv
+ejecutivo,ruc,nombre_cliente,nombre_comercial,provincia,canton,direccion,latitud,longitud
+Juan Perez,1792233445001,Supermercados La Favorita,Supermaxi,Pichincha,Quito,Av. de los Shyris y NN.UU.,-0.1762,-78.4847
+Maria Garcia,0992233445001,Corporación El Rosado,Mi Comisariato,Guayas,Guayaquil,Av. 9 de Octubre y Boyacá,-2.1931,-79.8822
+```
+
+#### Formato para Actualización Masiva de Ubicaciones
+- **Ruta:** `Dashboard > Ubicaciones > Subir Excel/CSV`
+- **Formato:** CSV
+- **Columnas Requeridas:**
+  - `RUC`: RUC del cliente. Se utiliza para buscar y actualizar el cliente existente.
+  - `Provincia`: Nueva provincia.
+  - `Canton`: Nuevo cantón.
+  - `Direccion`: Nueva dirección.
+  - `Latitud`: Nueva coordenada de latitud.
+  - `Longitud`: Nueva coordenada de longitud.
+
+**Ejemplo (formato CSV):**
+```csv
+RUC,Provincia,Canton,Direccion,Latitud,Longitud
+1792233445001,Pichincha,Quito,Av. Eloy Alfaro N30-380,-0.1875,-78.4831
+0992233445001,Guayas,Guayaquil,Centro Comercial Policentro, -2.1709,-79.9005
+```
