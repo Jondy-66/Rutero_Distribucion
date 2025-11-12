@@ -45,6 +45,10 @@ export default function PhoneBasePage() {
     // Placeholder for file upload logic
     toast({ title: "Función no implementada", description: "La lógica para procesar el archivo será añadida pronto." });
   };
+  
+  const handleImport = () => {
+    toast({ title: "Función no implementada", description: "La lógica de importación se conectará aquí." });
+  }
 
   return (
     <>
@@ -148,11 +152,16 @@ export default function PhoneBasePage() {
                     </div>
                     <DialogFooter className="sm:justify-between">
                         <span className="text-sm text-muted-foreground">{isUploading ? 'Procesando archivo...' : 'Selecciona un archivo para empezar.'}</span>
-                        <DialogClose asChild>
-                            <Button type="button" variant="secondary" id="close-dialog-clients">
-                                Cerrar
+                        <div className="flex gap-2">
+                             <Button type="button" onClick={handleImport} disabled={isUploading}>
+                                Importar
                             </Button>
-                        </DialogClose>
+                            <DialogClose asChild>
+                                <Button type="button" variant="secondary" id="close-dialog-clients">
+                                    Cerrar
+                                </Button>
+                            </DialogClose>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
