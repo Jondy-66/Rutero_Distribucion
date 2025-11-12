@@ -12,11 +12,11 @@
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { User as FirebaseAuthUser, onAuthStateChanged } from 'firebase/auth';
 import { app, db, auth } from '@/lib/firebase/config';
-import type { User, Client, Notification, RoutePlan } from '@/lib/types';
+import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
 import { collection, doc, onSnapshot, setDoc, query, where, orderBy, Timestamp } from 'firebase/firestore';
 import { Route } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getClients, getUsers, getRoutes, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore } from '@/lib/firebase/firestore';
+import { getClients, getUsers, getRoutes, getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore } from '@/lib/firebase/firestore';
 
 /**
  * Define la forma de los datos que se proporcionarán a través del AuthContext.
@@ -28,9 +28,10 @@ interface AuthContextType {
   clients: Client[]; // Lista de todos los clientes.
   users: User[]; // Lista de todos los usuarios.
   routes: RoutePlan[]; // Lista de todas las rutas
+  phoneContacts: PhoneContact[]; // Lista de contactos telefónicos del CRM
   notifications: Notification[];
   unreadCount: number;
-  refetchData: (dataType: 'clients' | 'users' | 'routes') => Promise<void>; // Función para recargar datos específicos.
+  refetchData: (dataType: 'clients' | 'users' | 'routes' | 'phoneContacts') => Promise<void>; // Función para recargar datos específicos.
   markNotificationAsRead: (notificationId: string) => Promise<void>;
   markAllNotificationsAsRead: () => Promise<void>;
 }
@@ -57,6 +58,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [users, setUsers] = useState<User[]>([]);
   // Estado para la lista de rutas.
   const [routes, setRoutes] = useState<RoutePlan[]>([]);
+  // Estado para la lista de contactos telefónicos.
+  const [phoneContacts, setPhoneContacts] = useState<PhoneContact[]>([]);
   // Estado para la lista de notificaciones.
   const [notifications, setNotifications] = useState<Notification[]>([]);
   // Estado de carga general para la autenticación inicial.
@@ -72,10 +75,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const fetchInitialData = useCallback(async () => {
     setDataLoading(true);
     try {
-        const [usersData, clientsData, routesData] = await Promise.all([getUsers(), getClients(), getRoutes()]);
+        const [usersData, clientsData, routesData, phoneContactsData] = await Promise.all([getUsers(), getClients(), getRoutes(), getPhoneContacts()]);
         setUsers(usersData);
         setClients(clientsData);
         setRoutes(routesData);
+        setPhoneContacts(phoneContactsData);
     } catch(error) {
         console.error("Failed to fetch initial data:", error);
         toast({ title: "Error", description: "No se pudieron cargar los datos iniciales.", variant: "destructive" });
@@ -86,9 +90,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   /**
    * Función para forzar la recarga de datos específicos (clientes o usuarios).
-   * @param {'clients' | 'users' | 'routes'} dataType - El tipo de datos a recargar.
+   * @param {'clients' | 'users' | 'routes' | 'phoneContacts'} dataType - El tipo de datos a recargar.
    */
-  const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'routes') => {
+  const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'routes' | 'phoneContacts') => {
       try {
           if (dataType === 'clients') {
               const clientsData = await getClients();
@@ -101,6 +105,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           if (dataType === 'routes') {
               const routesData = await getRoutes();
               setRoutes(routesData);
+          }
+           if (dataType === 'phoneContacts') {
+              const phoneContactsData = await getPhoneContacts();
+              setPhoneContacts(phoneContactsData);
           }
       } catch (error) {
           console.error(`Failed to refetch ${dataType}:`, error);
@@ -226,6 +234,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setFirebaseUser(null);
         setClients([]);
         setUsers([]);
+        setRoutes([]);
+        setPhoneContacts([]);
         setNotifications([]);
         setLoading(false);
       }
@@ -260,6 +270,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         clients, 
         users, 
         routes,
+        phoneContacts,
         refetchData, 
         notifications,
         unreadCount,

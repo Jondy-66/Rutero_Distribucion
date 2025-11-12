@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useRef } from 'react';
@@ -21,34 +22,219 @@ import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/hooks/use-auth';
+import type { PhoneContact } from '@/lib/types';
+import { addPhoneContact, addPhoneContactsBatch } from '@/lib/firebase/firestore';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 
-// Mock data until we have a real data source
-const mockPhoneBaseClients: any[] = [];
-const loading = false;
+
+type ContactCsvData = {
+    [key: string]: string;
+}
 
 export default function PhoneBasePage() {
+  const { phoneContacts, loading, refetchData } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  
+  const [newContact, setNewContact] = useState<Omit<PhoneContact, 'id'>>({
+      cedula: '',
+      nombre_cliente: '',
+      nombre_comercial: '',
+      ciudad: '',
+      regional: '',
+      nombre_vendedor: '',
+      direccion_cliente: '',
+      telefono1: '',
+      estado_cliente: 'Activo',
+      observacion: '',
+  });
 
-  const filteredClients = useMemo(() => {
-    if (!searchTerm) return mockPhoneBaseClients;
-    return mockPhoneBaseClients.filter(client =>
-      Object.values(client).some(value =>
+  const filteredContacts = useMemo(() => {
+    if (!searchTerm) return phoneContacts;
+    return phoneContacts.filter(contact =>
+      Object.values(contact).some(value =>
         String(value).toLowerCase().includes(searchTerm.toLowerCase())
       )
     );
-  }, [searchTerm]);
+  }, [searchTerm, phoneContacts]);
+  
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      const { id, value } = e.target;
+      setNewContact(prev => ({...prev, [id]: value}));
+  }
+
+  const handleStateChange = (value: 'Activo' | 'Inactivo') => {
+      setNewContact(prev => ({...prev, estado_cliente: value}));
+  }
+
+  const handleAddContact = async () => {
+    if (!newContact.cedula || !newContact.nombre_cliente) {
+        toast({ title: 'Campos requeridos', description: 'Cédula y Nombre del Cliente son obligatorios.', variant: 'destructive' });
+        return;
+    }
+    setIsSaving(true);
+    try {
+        await addPhoneContact(newContact);
+        toast({ title: 'Éxito', description: 'Nuevo contacto añadido a la base telefónica.' });
+        await refetchData('phoneContacts');
+        document.getElementById('close-add-dialog')?.click();
+        setNewContact({
+          cedula: '', nombre_cliente: '', nombre_comercial: '', ciudad: '', regional: '',
+          nombre_vendedor: '', direccion_cliente: '', telefono1: '', estado_cliente: 'Activo', observacion: ''
+        });
+    } catch (error: any) {
+        console.error("Error adding contact:", error);
+        toast({ title: 'Error', description: 'No se pudo añadir el contacto.', variant: 'destructive'});
+    } finally {
+        setIsSaving(false);
+    }
+  }
+  
+  const processImportedData = async (data: ContactCsvData[], fields: string[] | undefined) => {
+    const requiredColumns = ['cedula', 'nombredelcliente', 'nombrecomercial', 'ciudad', 'regional', 'nombredelvendedor', 'direcciondelcliente', 'telefono1', 'estadocliente', 'observacion'];
+    
+    // Normalize headers for validation
+    const headers = (fields || []).map(h => h.toString().trim().toLowerCase().replace(/ /g, '').replace(/_/g, ''));
+    const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+
+    if (missingColumns.length > 0) {
+      toast({
+        title: 'Error de formato',
+        description: `Faltan columnas requeridas: ${missingColumns.join(', ')}`,
+        variant: 'destructive',
+      });
+      setIsUploading(false);
+      return;
+    }
+    
+    // Normalize keys in data objects for consistent access
+    const normalizedData = data.map(row => {
+        const newRow: ContactCsvData = {};
+        for(const key in row) {
+            newRow[key.trim().toLowerCase().replace(/ /g, '').replace(/_/g, '')] = row[key];
+        }
+        return newRow;
+    });
+
+    const validData = normalizedData.filter(row => row.cedula && row.nombredelcliente);
+
+    const invalidRows = normalizedData.length - validData.length;
+    if(invalidRows > 0) {
+        toast({
+            title: 'Datos inválidos',
+            description: `Se omitieron ${invalidRows} filas por falta de Cédula o Nombre del Cliente.`,
+        });
+    }
+    
+    if (validData.length === 0) {
+        toast({
+            title: 'No hay datos válidos',
+            description: 'No se encontraron filas con datos válidos para procesar.',
+            variant: 'destructive',
+        });
+        setIsUploading(false);
+        return;
+    }
+
+    try {
+      const contactsToAdd: Omit<PhoneContact, 'id'>[] = validData.map(item => ({
+          cedula: item.cedula || '',
+          nombre_cliente: item.nombredelcliente || '',
+          nombre_comercial: item.nombrecomercial || '',
+          ciudad: item.ciudad || '',
+          regional: item.regional || '',
+          nombre_vendedor: item.nombredelvendedor || '',
+          direccion_cliente: item.direcciondelcliente || '',
+          telefono1: item.telefono1 || '',
+          estado_cliente: (item.estadocliente === 'Activo' || item.estadocliente === 'Inactivo') ? item.estadocliente : 'Activo',
+          observacion: item.observacion || '',
+      }));
+      
+      await addPhoneContactsBatch(contactsToAdd);
+
+      toast({
+        title: 'Carga exitosa',
+        description: `${contactsToAdd.length} contactos añadidos a la base telefónica.`,
+      });
+      await refetchData('phoneContacts');
+
+    } catch (error: any) {
+      console.error("Failed to add contacts batch:", error);
+      toast({
+        title: 'Error en la carga',
+        description: 'Ocurrió un error al guardar los contactos.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      document.getElementById('close-import-dialog')?.click();
+    }
+  }
+
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    // Placeholder for file upload logic
-    toast({ title: "Función no implementada", description: "La lógica para procesar el archivo será añadida pronto." });
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    
+     if (file.name.endsWith('.csv')) {
+        Papa.parse<ContactCsvData>(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: async (results) => {
+            processImportedData(results.data, results.meta.fields);
+        },
+        error: (error) => {
+            console.error('Error parsing CSV:', error);
+            toast({
+            title: 'Error de archivo',
+            description: 'No se pudo procesar el archivo CSV.',
+            variant: 'destructive',
+            });
+            setIsUploading(false);
+        }
+        });
+    } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = e.target?.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const sheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[sheetName];
+                const json: ContactCsvData[] = XLSX.utils.sheet_to_json(worksheet);
+                const headers = json.length > 0 ? Object.keys(json[0]) : [];
+                processImportedData(json, headers);
+            } catch (error) {
+                 console.error('Error processing Excel file:', error);
+                toast({
+                    title: 'Error de archivo',
+                    description: 'No se pudo procesar el archivo Excel.',
+                    variant: 'destructive',
+                });
+                setIsUploading(false);
+            }
+        };
+        reader.onerror = (error) => {
+            console.error('Error reading file:', error);
+            toast({ title: 'Error', description: 'No se pudo leer el archivo.', variant: 'destructive' });
+            setIsUploading(false);
+        };
+        reader.readAsBinaryString(file);
+    } else {
+        toast({ title: 'Formato no soportado', description: 'Por favor, sube un archivo CSV o Excel.', variant: 'destructive' });
+        setIsUploading(false);
+    }
   };
-  
-  const handleImport = () => {
-    toast({ title: "Función no implementada", description: "La lógica de importación se conectará aquí." });
-  }
 
   return (
     <>
@@ -74,55 +260,60 @@ export default function PhoneBasePage() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
                         <div className="space-y-2">
                             <Label htmlFor="cedula">Cédula</Label>
-                            <Input id="cedula" placeholder="Ej: 1712345678" />
+                            <Input id="cedula" placeholder="Ej: 1712345678" value={newContact.cedula} onChange={handleInputChange} />
                         </div>
                          <div className="space-y-2">
                             <Label htmlFor="nombre_cliente">Nombre del Cliente</Label>
-                            <Input id="nombre_cliente" placeholder="Ej: Juan Antonio Pérez" />
+                            <Input id="nombre_cliente" placeholder="Ej: Juan Antonio Pérez" value={newContact.nombre_cliente} onChange={handleInputChange} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="nombre_comercial">Nombre Comercial</Label>
-                            <Input id="nombre_comercial" placeholder="Ej: Supermercado El Ahorro" />
+                            <Input id="nombre_comercial" placeholder="Ej: Supermercado El Ahorro" value={newContact.nombre_comercial} onChange={handleInputChange} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="ciudad">Ciudad</Label>
-                            <Input id="ciudad" placeholder="Ej: Quito" />
+                            <Input id="ciudad" placeholder="Ej: Quito" value={newContact.ciudad} onChange={handleInputChange} />
                         </div>
                          <div className="space-y-2">
                             <Label htmlFor="regional">Regional</Label>
-                            <Input id="regional" placeholder="Ej: Sierra" />
+                            <Input id="regional" placeholder="Ej: Sierra" value={newContact.regional} onChange={handleInputChange} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="nombre_vendedor">Nombre del Vendedor</Label>
-                            <Input id="nombre_vendedor" placeholder="Ej: Ana Lucía Martínez" />
+                            <Input id="nombre_vendedor" placeholder="Ej: Ana Lucía Martínez" value={newContact.nombre_vendedor} onChange={handleInputChange} />
                         </div>
                          <div className="space-y-2 md:col-span-2">
-                            <Label htmlFor="direccion">Dirección del Cliente</Label>
-                            <Input id="direccion" placeholder="Ej: Av. Amazonas y Eloy Alfaro" />
+                            <Label htmlFor="direccion_cliente">Dirección del Cliente</Label>
+                            <Input id="direccion_cliente" placeholder="Ej: Av. Amazonas y Eloy Alfaro" value={newContact.direccion_cliente} onChange={handleInputChange} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="telefono1">Teléfono 1</Label>
-                            <Input id="telefono1" placeholder="Ej: 0991234567" />
+                            <Input id="telefono1" placeholder="Ej: 0991234567" value={newContact.telefono1} onChange={handleInputChange} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="estado_cliente">Estado Cliente</Label>
-                            <Select>
+                            <Select onValueChange={handleStateChange} value={newContact.estado_cliente}>
                                 <SelectTrigger id="estado_cliente">
                                     <SelectValue placeholder="Seleccionar estado" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="activo">Activo</SelectItem>
-                                    <SelectItem value="inactivo">Inactivo</SelectItem>
+                                    <SelectItem value="Activo">Activo</SelectItem>
+                                    <SelectItem value="Inactivo">Inactivo</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                         <div className="space-y-2 md:col-span-2">
                             <Label htmlFor="observacion">Observación</Label>
-                            <Textarea id="observacion" placeholder="Añadir una observación..." />
+                            <Textarea id="observacion" placeholder="Añadir una observación..." value={newContact.observacion} onChange={handleInputChange} />
                         </div>
                     </div>
                     <DialogFooter>
-                        <Button type="submit">Guardar Contacto</Button>
+                       <DialogClose asChild>
+                            <Button id="close-add-dialog" type="button" variant="secondary">Cerrar</Button>
+                       </DialogClose>
+                       <Button onClick={handleAddContact} disabled={isSaving}>
+                           {isSaving ? "Guardando..." : "Guardar Contacto"}
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -153,11 +344,11 @@ export default function PhoneBasePage() {
                     <DialogFooter className="sm:justify-between">
                         <span className="text-sm text-muted-foreground">{isUploading ? 'Procesando archivo...' : 'Selecciona un archivo para empezar.'}</span>
                         <div className="flex gap-2">
-                             <Button type="button" onClick={handleImport} disabled={isUploading}>
-                                Importar
+                             <Button type="button" onClick={handleFileUpload as any} disabled={isUploading}>
+                                {isUploading ? 'Importando...' : 'Importar'}
                             </Button>
                             <DialogClose asChild>
-                                <Button type="button" variant="secondary" id="close-dialog-clients">
+                                <Button type="button" variant="secondary" id="close-import-dialog">
                                     Cerrar
                                 </Button>
                             </DialogClose>
@@ -208,16 +399,15 @@ export default function PhoneBasePage() {
                       <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
                     </TableRow>
                   ))
-                ) : filteredClients.length > 0 ? (
-                  filteredClients.map((client) => (
-                    <TableRow key={client.id}>
-                        {/* Placeholder cells for when data is connected */}
-                        <TableCell>{client.nombre_cliente}</TableCell>
-                        <TableCell className="hidden sm:table-cell">{client.cedula}</TableCell>
-                        <TableCell className="hidden lg:table-cell">{client.telefono1}</TableCell>
-                        <TableCell>{client.ciudad}</TableCell>
-                        <TableCell>{client.nombre_vendedor}</TableCell>
-                        <TableCell>{client.estado_cliente}</TableCell>
+                ) : filteredContacts.length > 0 ? (
+                  filteredContacts.map((contact) => (
+                    <TableRow key={contact.id}>
+                        <TableCell>{contact.nombre_cliente}</TableCell>
+                        <TableCell className="hidden sm:table-cell">{contact.cedula}</TableCell>
+                        <TableCell className="hidden lg:table-cell">{contact.telefono1}</TableCell>
+                        <TableCell>{contact.ciudad}</TableCell>
+                        <TableCell>{contact.nombre_vendedor}</TableCell>
+                        <TableCell>{contact.estado_cliente}</TableCell>
                     </TableRow>
                   ))
                 ) : (
@@ -233,7 +423,7 @@ export default function PhoneBasePage() {
         </CardContent>
         <CardFooter>
             <div className="text-xs text-muted-foreground">
-                Mostrando <strong>{filteredClients.length}</strong> de <strong>{mockPhoneBaseClients.length}</strong> contactos.
+                Mostrando <strong>{filteredContacts.length}</strong> de <strong>{phoneContacts.length}</strong> contactos.
             </div>
         </CardFooter>
       </Card>

@@ -39,6 +39,24 @@ export type Client = {
 };
 
 /**
+ * Representa un contacto en la base telefónica del CRM.
+ */
+export type PhoneContact = {
+    id: string;
+    cedula: string;
+    nombre_cliente: string;
+    nombre_comercial: string;
+    ciudad: string;
+    regional: string;
+    nombre_vendedor: string;
+    direccion_cliente: string;
+    telefono1: string;
+    estado_cliente: 'Activo' | 'Inactivo';
+    observacion: string;
+};
+
+
+/**
  * Representa un cliente dentro de una ruta, con sus valores específicos.
  */
 export type ClientInRoute = {

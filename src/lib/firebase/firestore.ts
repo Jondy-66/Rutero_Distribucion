@@ -8,7 +8,7 @@
 
 import { db } from './config';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp } from 'firebase/firestore';
-import type { User, Client, RoutePlan, ClientInRoute, Notification } from '@/lib/types';
+import type { User, Client, RoutePlan, ClientInRoute, Notification, PhoneContact } from '@/lib/types';
 
 // --- COLECCIÓN DE USUARIOS ---
 
@@ -478,3 +478,42 @@ export const markAllNotificationsAsRead = async (userId: string) => {
     });
     return batch.commit();
 };
+
+
+// --- COLECCIÓN DE CONTACTOS TELEFÓNICOS (CRM) ---
+const phoneContactsCollection = collection(db, 'phoneContacts');
+
+/**
+ * Obtiene todos los contactos telefónicos de la base de datos.
+ * @returns {Promise<PhoneContact[]>} Una promesa que se resuelve con un array de objetos PhoneContact.
+ */
+export const getPhoneContacts = async (): Promise<PhoneContact[]> => {
+    const snapshot = await getDocs(phoneContactsCollection);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as PhoneContact[];
+};
+
+/**
+ * Añade un nuevo contacto telefónico a la colección.
+ * @param {Omit<PhoneContact, 'id'>} contactData - Los datos del contacto a añadir.
+ * @returns {Promise<void>} Una promesa que se resuelve cuando el contacto ha sido añadido.
+ */
+export const addPhoneContact = async (contactData: Omit<PhoneContact, 'id'>): Promise<void> => {
+    await addDoc(phoneContactsCollection, contactData);
+};
+
+
+/**
+ * Añade múltiples contactos telefónicos en un lote (batch).
+ * @param {Omit<PhoneContact, 'id'>[]} contactsData - Un array de objetos de contacto a añadir.
+ * @returns {Promise<void>}
+ */
+export const addPhoneContactsBatch = async (contactsData: Omit<PhoneContact, 'id'>[]) => {
+    const batch = writeBatch(db);
+    
+    for (const contact of contactsData) {
+        const newContactRef = doc(phoneContactsCollection);
+        batch.set(newContactRef, contact);
+    }
+
+    await batch.commit();
+}
