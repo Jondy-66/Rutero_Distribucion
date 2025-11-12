@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -19,6 +20,8 @@ import {
   GitCommitHorizontal,
   Lock,
   HeartHandshake,
+  Database,
+  Phone,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -86,6 +89,9 @@ export function DashboardNav() {
   const [isPlanningOpen, setIsPlanningOpen] = useState(
     pathname.startsWith('/dashboard/routes')
   );
+   const [isCrmOpen, setIsCrmOpen] = useState(
+    pathname.startsWith('/dashboard/crm')
+  );
   const [isUsersOpen, setIsUsersOpen] = useState(
     pathname.startsWith('/dashboard/users')
   );
@@ -111,6 +117,8 @@ export function DashboardNav() {
     user?.role && usersNavItem.roles.includes(user.role);
   
   const canSeeTeamRoutes = user?.role === 'Administrador' || user?.role === 'Supervisor';
+  
+  const canSeeCrm = user?.role === 'Administrador' || user?.role === 'Supervisor' || user?.role === 'Telemercaderista';
 
   return (
     <nav>
@@ -236,18 +244,46 @@ export function DashboardNav() {
             </CollapsibleContent>
           </Collapsible>
         )}
-        <SidebarMenuItem>
-          <SidebarMenuButton
-            asChild
-            isActive={pathname === '/dashboard/crm'}
-            tooltip="CRM"
-          >
-            <Link href="/dashboard/crm">
-              <HeartHandshake className="h-5 w-5" />
-              <span>CRM</span>
-            </Link>
-          </SidebarMenuButton>
-        </SidebarMenuItem>
+        {canSeeCrm && (
+           <Collapsible open={isCrmOpen} onOpenChange={setIsCrmOpen}>
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton tooltip="CRM">
+                  <HeartHandshake className="h-5 w-5" />
+                  <span>CRM</span>
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+            </SidebarMenuItem>
+            <CollapsibleContent>
+              <SidebarMenuSub>
+                <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/prediction'}>
+                      <Link href="/dashboard/crm/prediction">
+                        <Wand2 />
+                        <span>Predicción Crm</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/phone-base'}>
+                      <Link href="/dashboard/crm/phone-base">
+                        <Database />
+                        <span>Base Telefónica</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                 <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/management'}>
+                      <Link href="/dashboard/crm/management">
+                        <Phone />
+                        <span>Gestión Crm</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
         {canSeeUsers && (
           <Collapsible open={isUsersOpen} onOpenChange={setIsUsersOpen}>
             <SidebarMenuItem>
