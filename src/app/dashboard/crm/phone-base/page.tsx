@@ -96,7 +96,7 @@ export default function PhoneBasePage() {
   }
   
   const processImportedData = async (data: ContactCsvData[], fields: string[] | undefined) => {
-    const requiredColumns = ['cedula', 'nombredelcliente', 'nombrecomercial', 'ciudad', 'regional', 'nombredelvendedor', 'direcciondelcliente', 'telefono1', 'estadocliente', 'observacion'];
+    const requiredColumns = ['cedula', 'nombredelcliente', 'nombrecomercial', 'ciudad', 'regional', 'nombredelvendedor', 'direcciondelcliente', 'telefono1', 'estadocliente'];
     
     // Normalize headers for validation
     const headers = (fields || []).map(h => h.toString().trim().toLowerCase().replace(/ /g, '').replace(/_/g, ''));
@@ -329,7 +329,7 @@ export default function PhoneBasePage() {
                     <DialogHeader>
                         <DialogTitle>Importar desde CSV o Excel</DialogTitle>
                         <DialogDescription>
-                            Sube un archivo para añadir o actualizar la Base Telefónica. Columnas requeridas: CEDULA, NOMBRE DEL CLIENTE, NOMBRE COMERCIAL, CIUDAD, REGIONAL, NOMBRE DEL VENDEDOR, DIRECCION DEL CLIENTE, TELEFONO 1, ESTADO CLIENTE, OBSERVACION.
+                            Sube un archivo para añadir o actualizar la Base Telefónica. Columnas requeridas: CEDULA, NOMBRE DEL CLIENTE, NOMBRE COMERCIAL, CIUDAD, REGIONAL, NOMBRE DEL VENDEDOR, DIRECCION DEL CLIENTE, TELEFONO 1, ESTADO CLIENTE. La columna OBSERVACION es opcional.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="py-4">
