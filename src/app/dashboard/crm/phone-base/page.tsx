@@ -40,6 +40,7 @@ export default function PhoneBasePage() {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   
   const [newContact, setNewContact] = useState<Omit<PhoneContact, 'id'>>({
       cedula: '',
@@ -172,6 +173,7 @@ export default function PhoneBasePage() {
       });
     } finally {
       setIsUploading(false);
+      setSelectedFile(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -179,15 +181,21 @@ export default function PhoneBasePage() {
     }
   }
 
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0] || null;
+    setSelectedFile(file);
+  };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  const handleImport = () => {
+    if (!selectedFile) {
+        toast({ title: 'Sin archivo', description: 'Por favor, selecciona un archivo primero.', variant: 'destructive'});
+        return;
+    };
 
     setIsUploading(true);
     
-     if (file.name.endsWith('.csv')) {
-        Papa.parse<ContactCsvData>(file, {
+     if (selectedFile.name.endsWith('.csv')) {
+        Papa.parse<ContactCsvData>(selectedFile, {
         header: true,
         skipEmptyLines: true,
         complete: async (results) => {
@@ -203,7 +211,7 @@ export default function PhoneBasePage() {
             setIsUploading(false);
         }
         });
-    } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+    } else if (selectedFile.name.endsWith('.xlsx') || selectedFile.name.endsWith('.xls')) {
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
@@ -229,7 +237,7 @@ export default function PhoneBasePage() {
             toast({ title: 'Error', description: 'No se pudo leer el archivo.', variant: 'destructive' });
             setIsUploading(false);
         };
-        reader.readAsBinaryString(file);
+        reader.readAsBinaryString(selectedFile);
     } else {
         toast({ title: 'Formato no soportado', description: 'Por favor, sube un archivo CSV o Excel.', variant: 'destructive' });
         setIsUploading(false);
@@ -337,14 +345,14 @@ export default function PhoneBasePage() {
                         type="file"
                         accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
                         ref={fileInputRef}
-                        onChange={handleFileUpload}
+                        onChange={handleFileSelect}
                         disabled={isUploading}
                     />
                     </div>
                     <DialogFooter className="sm:justify-between">
-                        <span className="text-sm text-muted-foreground">{isUploading ? 'Procesando archivo...' : 'Selecciona un archivo para empezar.'}</span>
+                        <span className="text-sm text-muted-foreground">{isUploading ? 'Procesando archivo...' : (selectedFile ? `Archivo listo: ${selectedFile.name}` : 'Selecciona un archivo para empezar.')}</span>
                         <div className="flex gap-2">
-                             <Button type="button" onClick={handleFileUpload as any} disabled={isUploading}>
+                             <Button type="button" onClick={handleImport} disabled={isUploading || !selectedFile}>
                                 {isUploading ? 'Importando...' : 'Importar'}
                             </Button>
                             <DialogClose asChild>
