@@ -27,6 +27,7 @@ import type { PhoneContact } from '@/lib/types';
 import { addPhoneContact, addPhoneContactsBatch } from '@/lib/firebase/firestore';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
+import { Badge } from '@/components/ui/badge';
 
 
 type ContactCsvData = {
@@ -425,7 +426,11 @@ export default function PhoneBasePage() {
                         <TableCell className="hidden lg:table-cell">{contact.telefono1}</TableCell>
                         <TableCell>{contact.ciudad}</TableCell>
                         <TableCell>{contact.nombre_vendedor}</TableCell>
-                        <TableCell>{contact.estado_cliente}</TableCell>
+                        <TableCell>
+                          <Badge variant={contact.estado_cliente === 'Activo' ? 'success' : 'destructive'}>
+                            {contact.estado_cliente}
+                          </Badge>
+                        </TableCell>
                     </TableRow>
                   ))
                 ) : (
