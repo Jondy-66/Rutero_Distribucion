@@ -398,7 +398,7 @@ export default function PhoneBasePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre Cliente</TableHead>
+                  <TableHead>Cliente</TableHead>
                   <TableHead className="hidden sm:table-cell">Cédula</TableHead>
                   <TableHead className="hidden lg:table-cell">Teléfono</TableHead>
                   <TableHead>Ciudad</TableHead>
@@ -421,7 +421,10 @@ export default function PhoneBasePage() {
                 ) : paginatedContacts.length > 0 ? (
                   paginatedContacts.map((contact) => (
                     <TableRow key={contact.id}>
-                        <TableCell>{contact.nombre_cliente}</TableCell>
+                        <TableCell>
+                            <div className="font-medium">{contact.nombre_comercial}</div>
+                            <div className="text-sm text-muted-foreground">{contact.nombre_cliente}</div>
+                        </TableCell>
                         <TableCell className="hidden sm:table-cell">{contact.cedula}</TableCell>
                         <TableCell className="hidden lg:table-cell">{contact.telefono1}</TableCell>
                         <TableCell>{contact.ciudad}</TableCell>
