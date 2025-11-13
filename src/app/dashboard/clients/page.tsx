@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { addClientsBatch, deleteClient, updateClient } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
-import { PlusCircle, UploadCloud, File, Search, MoreHorizontal } from 'lucide-react';
+import { PlusCircle, UploadCloud, File, Search, MoreHorizontal, Download } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
@@ -282,48 +282,80 @@ export default function ClientsPage() {
 
   const totalPages = Math.ceil(filteredClients.length / ITEMS_PER_PAGE);
 
+  const handleDownloadExcel = () => {
+    if (filteredClients.length === 0) {
+      toast({ title: "Sin Datos", description: "No hay clientes para exportar.", variant: "destructive" });
+      return;
+    }
+
+    const dataToExport = filteredClients.map(client => ({
+      'Ejecutivo': client.ejecutivo,
+      'RUC': client.ruc,
+      'Nombre Cliente': client.nombre_cliente,
+      'Nombre Comercial': client.nombre_comercial,
+      'Provincia': client.provincia,
+      'Cantón': client.canton,
+      'Dirección': client.direccion,
+      'Estado': client.status,
+      'Latitud': client.latitud,
+      'Longitud': client.longitud,
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Clientes");
+    XLSX.writeFile(workbook, "reporte_clientes.xlsx");
+    toast({ title: "Descarga Iniciada", description: "Tu reporte de clientes se está descargando." });
+  };
+
   return (
     <>
       <PageHeader title="Clientes" description="Visualiza, gestiona e importa los datos de tus clientes.">
-        <Link href="/dashboard/clients/new">
-          <Button>
-            <PlusCircle className="mr-2 h-4 w-4" />
-            Añadir Cliente
-          </Button>
-        </Link>
-        <Dialog>
-            <DialogTrigger asChild>
-                <Button variant="outline">
-                    <UploadCloud className="mr-2 h-4 w-4" />
-                    Importar
-                </Button>
-            </DialogTrigger>
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Importar Clientes desde CSV o Excel</DialogTitle>
-                    <DialogDescription>
-                        Sube un archivo para añadir o actualizar clientes. Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia. Opcionales: latitud, longitud.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="py-4">
-                <Input
-                    type="file"
-                    accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-                    ref={fileInputRef}
-                    onChange={handleFileUpload}
-                    disabled={isUploading}
-                />
-                </div>
-                <DialogFooter className="sm:justify-between">
-                    <span className="text-sm text-muted-foreground">{isUploading ? 'Procesando archivo...' : 'Selecciona un archivo para empezar.'}</span>
-                    <DialogClose asChild>
-                        <Button type="button" variant="secondary" id="close-dialog-clients">
-                            Cerrar
-                        </Button>
-                    </DialogClose>
-                </DialogFooter>
-            </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+            <Link href="/dashboard/clients/new">
+            <Button>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Añadir Cliente
+            </Button>
+            </Link>
+            <Dialog>
+                <DialogTrigger asChild>
+                    <Button variant="outline">
+                        <UploadCloud className="mr-2 h-4 w-4" />
+                        Importar
+                    </Button>
+                </DialogTrigger>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Importar Clientes desde CSV o Excel</DialogTitle>
+                        <DialogDescription>
+                            Sube un archivo para añadir o actualizar clientes. Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia. Opcionales: latitud, longitud.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                    <Input
+                        type="file"
+                        accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                        ref={fileInputRef}
+                        onChange={handleFileUpload}
+                        disabled={isUploading}
+                    />
+                    </div>
+                    <DialogFooter className="sm:justify-between">
+                        <span className="text-sm text-muted-foreground">{isUploading ? 'Procesando archivo...' : 'Selecciona un archivo para empezar.'}</span>
+                        <DialogClose asChild>
+                            <Button type="button" variant="secondary" id="close-dialog-clients">
+                                Cerrar
+                            </Button>
+                        </DialogClose>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            <Button variant="outline" onClick={handleDownloadExcel}>
+                <Download className="mr-2 h-4 w-4" />
+                Descargar Excel
+            </Button>
+        </div>
       </PageHeader>
       
       <Card>
@@ -460,7 +492,3 @@ export default function ClientsPage() {
     </>
   );
 }
-
-    
-    
-
