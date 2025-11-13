@@ -33,9 +33,12 @@ type ContactCsvData = {
     [key: string]: string;
 }
 
+const ITEMS_PER_PAGE = 10;
+
 export default function PhoneBasePage() {
   const { phoneContacts, loading, refetchData } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
@@ -63,6 +66,13 @@ export default function PhoneBasePage() {
       )
     );
   }, [searchTerm, phoneContacts]);
+
+  const paginatedContacts = useMemo(() => {
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredContacts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+  }, [filteredContacts, currentPage]);
+
+  const totalPages = Math.ceil(filteredContacts.length / ITEMS_PER_PAGE);
   
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       const { id, value } = e.target;
@@ -407,8 +417,8 @@ export default function PhoneBasePage() {
                       <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
                     </TableRow>
                   ))
-                ) : filteredContacts.length > 0 ? (
-                  filteredContacts.map((contact) => (
+                ) : paginatedContacts.length > 0 ? (
+                  paginatedContacts.map((contact) => (
                     <TableRow key={contact.id}>
                         <TableCell>{contact.nombre_cliente}</TableCell>
                         <TableCell className="hidden sm:table-cell">{contact.cedula}</TableCell>
@@ -430,8 +440,31 @@ export default function PhoneBasePage() {
           </div>
         </CardContent>
         <CardFooter>
-            <div className="text-xs text-muted-foreground">
-                Mostrando <strong>{filteredContacts.length}</strong> de <strong>{phoneContacts.length}</strong> contactos.
+            <div className="flex items-center justify-between w-full">
+                <div className="text-xs text-muted-foreground">
+                    Mostrando <strong>{paginatedContacts.length}</strong> de <strong>{filteredContacts.length}</strong> contactos.
+                </div>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                    >
+                        Anterior
+                    </Button>
+                    <span className="text-sm font-medium">
+                        Página {currentPage} de {totalPages}
+                    </span>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                    >
+                        Siguiente
+                    </Button>
+                </div>
             </div>
         </CardFooter>
       </Card>
