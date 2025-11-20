@@ -31,6 +31,11 @@ import { isFinite } from "lodash";
 export default function PrediccionesPage() {
   const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dias, setDias] = useState(7);
+  const [latBase, setLatBase] = useState("");
+  const [lonBase, setLonBase] = useState("");
+  const [maxKm, setMaxKm] = useState(10);
+  const [token, setToken] = useState("MI-CODIGO-SECRETO-132");
+  
   const [predicciones, setPredicciones] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -62,7 +67,14 @@ export default function PrediccionesPage() {
     setLoading(true);
     setPredicciones([]); // Limpiar predicciones anteriores
     try {
-      const data = await getPredicciones({ fecha_inicio: fechaInicio, dias });
+      const data = await getPredicciones({ 
+          dias,
+          fecha_inicio: fechaInicio,
+          lat_base: latBase,
+          lon_base: lonBase,
+          max_km: maxKm,
+          token
+      });
       
       setPredicciones(data);
 
@@ -251,9 +263,9 @@ export default function PrediccionesPage() {
         <Card>
             <CardHeader>
                 <CardTitle>Parámetros de Predicción</CardTitle>
-                <CardDescription>Selecciona la fecha de inicio y el número de días para generar las predicciones.</CardDescription>
+                <CardDescription>Selecciona los parámetros para generar las predicciones.</CardDescription>
             </CardHeader>
-            <CardContent className="grid sm:grid-cols-3 gap-4">
+            <CardContent className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
                     <Label htmlFor="fecha-inicio">Fecha de Inicio</Label>
                     <Input
@@ -274,6 +286,22 @@ export default function PrediccionesPage() {
                         min="1"
                         disabled={loading}
                     />
+                </div>
+                 <div className="space-y-2">
+                    <Label htmlFor="latBase">Latitud Base</Label>
+                    <Input id="latBase" value={latBase} onChange={(e) => setLatBase(e.target.value)} disabled={loading} placeholder="-0.180653" />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="lonBase">Longitud Base</Label>
+                    <Input id="lonBase" value={lonBase} onChange={(e) => setLonBase(e.target.value)} disabled={loading} placeholder="-78.469498" />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="maxKm">Radio Máximo (km)</Label>
+                    <Input id="maxKm" type="number" value={maxKm} onChange={(e) => setMaxKm(Number(e.target.value))} disabled={loading} />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="token">Token de Seguridad</Label>
+                    <Input id="token" type="password" value={token} onChange={(e) => setToken(e.target.value)} disabled={loading} />
                 </div>
             </CardContent>
             <CardFooter>

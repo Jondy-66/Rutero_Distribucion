@@ -11,15 +11,28 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const fecha_inicio = searchParams.get('fecha_inicio');
     const dias = searchParams.get('dias');
+    const lat_base = searchParams.get('lat_base');
+    const lon_base = searchParams.get('lon_base');
+    const max_km = searchParams.get('max_km');
+    const token = request.headers.get('X-API-Key');
 
     const externalApiUrl = new URL("https://api-distribucion-rutas.onrender.com/predecir");
     if (fecha_inicio) externalApiUrl.searchParams.append("fecha_inicio", fecha_inicio);
     if (dias) externalApiUrl.searchParams.append("dias", String(dias));
+    if (lat_base) externalApiUrl.searchParams.append("lat_base", lat_base);
+    if (lon_base) externalApiUrl.searchParams.append("lon_base", lon_base);
+    if (max_km) externalApiUrl.searchParams.append("max_km", max_km);
+
+    const headers: HeadersInit = {
+        'Accept': 'application/json',
+    };
+
+    if (token) {
+        headers['X-API-Key'] = token;
+    }
 
     const response = await fetch(externalApiUrl.toString(), {
-      headers: {
-        'Accept': 'application/json',
-      },
+      headers,
     });
 
     if (!response.ok) {

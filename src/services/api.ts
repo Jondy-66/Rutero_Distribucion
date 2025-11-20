@@ -11,6 +11,10 @@ import type { Prediction } from '@/lib/types';
 type GetPrediccionesParams = {
   fecha_inicio?: string;
   dias?: number;
+  lat_base?: string;
+  lon_base?: string;
+  max_km?: number;
+  token?: string;
 };
 
 /**
@@ -19,13 +23,21 @@ type GetPrediccionesParams = {
  * @param {GetPrediccionesParams} params - Los parámetros para la consulta de predicción.
  * @returns {Promise<Prediction[]>} Una promesa que se resuelve con un array de objetos de predicción.
  */
-export async function getPredicciones({ fecha_inicio, dias }: GetPrediccionesParams): Promise<Prediction[]> {
+export async function getPredicciones({ fecha_inicio, dias, lat_base, lon_base, max_km, token }: GetPrediccionesParams): Promise<Prediction[]> {
   // Apunta a la ruta de API local que actúa como proxy.
   const url = new URL("/api/predicciones", window.location.origin);
   if (fecha_inicio) url.searchParams.append("fecha_inicio", fecha_inicio);
   if (dias) url.searchParams.append("dias", String(dias));
+  if (lat_base) url.searchParams.append("lat_base", lat_base);
+  if (lon_base) url.searchParams.append("lon_base", lon_base);
+  if (max_km) url.searchParams.append("max_km", String(max_km));
   
-  const response = await fetch(url);
+  const headers: HeadersInit = {};
+  if (token) {
+    headers['X-API-Key'] = token;
+  }
+
+  const response = await fetch(url, { headers });
   
   if (!response.ok) {
     // Intenta parsear el error del cuerpo de la respuesta para dar más detalles.
