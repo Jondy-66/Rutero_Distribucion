@@ -9,8 +9,9 @@ import {
   signOut,
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
+  getAuth,
 } from 'firebase/auth';
-import { auth } from './config';
+import { auth, createSecondaryApp, deleteSecondaryApp } from './config';
 
 /**
  * Inicia sesión de un usuario con su correo electrónico y contraseña.
@@ -32,6 +33,8 @@ export const handleSignOut = () => {
 
 /**
  * Registra un nuevo usuario con un correo electrónico y una contraseña.
+ * Importante: Esta función inicia sesión con el usuario recién creado,
+ * por lo que solo debe usarse en flujos de registro de autoservicio.
  * @param {string} email - El correo electrónico para el nuevo usuario.
  * @param {string} password - La contraseña para el nuevo usuario.
  * @returns {Promise<UserCredential>} Una promesa que se resuelve con las credenciales del nuevo usuario si el registro es exitoso.
@@ -39,6 +42,35 @@ export const handleSignOut = () => {
 export const handleSignUp = (email, password) => {
   return createUserWithEmailAndPassword(auth, email, password);
 };
+
+
+/**
+ * Registra un nuevo usuario por un administrador sin afectar la sesión actual.
+ * Crea una instancia de app secundaria temporal para este propósito.
+ * @param {string} email - El correo electrónico del nuevo usuario.
+ * @param {string} password - La contraseña del nuevo usuario.
+ * @returns {Promise<import('firebase/auth').UserCredential>} Las credenciales del usuario creado.
+ */
+export const handleSignUpAsAdmin = async (email, password) => {
+    const appName = `secondary-app-${Date.now()}`;
+    const secondaryApp = createSecondaryApp(appName);
+    const secondaryAuth = getAuth(secondaryApp);
+
+    try {
+        const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+        // Es importante cerrar sesión de la instancia secundaria para no dejar estados de auth colgados.
+        await signOut(secondaryAuth);
+        return userCredential;
+    } catch (error) {
+        // En caso de error, asegurarse de que la sesión secundaria se cierre también.
+        await signOut(secondaryAuth);
+        throw error;
+    } finally {
+        // Limpiar la app secundaria después de la operación.
+        await deleteSecondaryApp(secondaryApp);
+    }
+}
+
 
 /**
  * Envía un correo electrónico para restablecer la contraseña a una dirección de correo electrónico específica.

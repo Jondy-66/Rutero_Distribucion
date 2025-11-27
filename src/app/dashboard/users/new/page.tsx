@@ -19,7 +19,7 @@ import { PasswordInput } from '@/components/password-input';
 import Link from 'next/link';
 import { ArrowLeft, LoaderCircle, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { handleSignUp } from '@/lib/firebase/auth';
+import { handleSignUpAsAdmin } from '@/lib/firebase/auth';
 import { addUser, getSupervisors } from '@/lib/firebase/firestore';
 import type { User } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
@@ -56,7 +56,7 @@ export default function NewUserPage() {
 
     setIsLoading(true);
     try {
-      const userCredential = await handleSignUp(email, password);
+      const userCredential = await handleSignUpAsAdmin(email, password);
       const uid = userCredential.user.uid;
 
       const newUser: Omit<User, 'id' | 'status'> = {

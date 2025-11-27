@@ -4,7 +4,7 @@
  * para ser utilizadas en toda la aplicación.
  */
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
+import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
@@ -31,6 +31,28 @@ const firebaseConfig = {
  * Esto es importante en entornos de Next.js donde el código puede ejecutarse varias veces.
  */
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
+
+/**
+ * Crea una instancia secundaria de la app de Firebase.
+ * Esto es útil para tareas administrativas como crear usuarios sin afectar
+ * la sesión de autenticación del administrador actual.
+ * @param {string} appName - El nombre para la nueva instancia de la app.
+ * @returns {import('firebase/app').FirebaseApp} La instancia de la app secundaria.
+ */
+export const createSecondaryApp = (appName: string) => {
+    const secondaryApp = initializeApp(firebaseConfig, appName);
+    return secondaryApp;
+};
+
+/**
+ * Elimina una instancia secundaria de la app de Firebase.
+ * @param {import('firebase/app').FirebaseApp} appInstance - La instancia de la app a eliminar.
+ * @returns {Promise<void>}
+ */
+export const deleteSecondaryApp = (appInstance) => {
+    return deleteApp(appInstance);
+}
+
 
 /**
  * Instancia del servicio Firestore.
