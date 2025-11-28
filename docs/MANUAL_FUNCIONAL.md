@@ -1,6 +1,6 @@
 # Manual Funcional del Aplicativo "Rutero"
 
-**Versión:** 1.0
+**Versión:** 1.2
 **Fecha:** Octubre 2025
 **Autor(es):** Jonathan Diaz
 **Departamento:** Distribución 
@@ -83,12 +83,13 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
 - **Módulo de Clientes:** Permite la visualización y gestión de la base de datos de clientes.
   - **Funcionalidades:** Crear, editar, eliminar (solo Admin), buscar y filtrar clientes.
   - **Importación Masiva (Admin):** Permite subir un archivo (CSV/Excel) para crear o actualizar clientes en lote, agilizando la carga de datos.
+  - **Exportación a Excel (Admin/Supervisor):** Permite descargar la lista de clientes filtrada a un archivo Excel.
 
 - **Módulo de Ubicaciones (Admin):** Facilita la geolocalización de los clientes.
   - **Funcionalidades:** Actualización masiva de coordenadas (latitud/longitud) mediante un archivo CSV y previsualización de los clientes en un mapa.
 
 - **Módulo de Rutas:** El corazón de la aplicación, donde se planifica y ejecuta el trabajo de campo.
-  - **Predicción de Ruta (IA):** Sugiere una lista de clientes a visitar basándose en un modelo de predicción.
+  - **Predicción de Ruta (IA):** Sugiere una lista de clientes a visitar basándose en un modelo de predicción que ahora incluye parámetros como la ubicación base y un radio en kilómetros.
   - **Planificación Manual:** Permite crear una ruta desde cero seleccionando clientes.
   - **Gestión de Ruta:** Permite a los vendedores iniciar una ruta aprobada, registrar el check-in, los datos de la visita (ventas, cobros) y el check-out.
   - **Ruta Óptima (IA):** Calcula el orden de visita más eficiente para un conjunto de paradas.
@@ -96,6 +97,11 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
 - **Módulo de Usuarios (Admin):** Permite la gestión completa de los usuarios del sistema.
   - **Funcionalidades:** Crear nuevos usuarios (con asignación de rol y contraseña), editar perfiles, activar/desactivar y eliminar usuarios.
   - **Permisos:** Una sección dedicada ("Permisos") para configurar el acceso de los usuarios a los distintos módulos del sistema.
+
+- **Módulo CRM:** Gestiona las interacciones y la base de datos para telemercadeo.
+  - **Base Telefónica:** Permite añadir y consultar una base de datos de contactos telefónicos. Admite la importación masiva de contactos desde archivos CSV/Excel.
+  - **Gestión CRM:** Interfaz para registrar llamadas, correos y otras interacciones.
+  - **Predicción CRM:** Herramientas de IA para analizar y predecir necesidades de clientes.
 
 - **Módulo de Reportes (Supervisor/Admin):** Proporciona herramientas para el seguimiento del rendimiento.
   - **Funcionalidades:** Visualizar y descargar en Excel los reportes de rutas completadas por los vendedores a cargo.
@@ -143,12 +149,16 @@ La navegación principal se realiza a través de una barra lateral que contiene 
 - **Clientes:** Lista y gestión de la cartera de clientes.
 - **Ubicaciones (Admin):** Gestión masiva de geolocalización.
 - **Mapa:** Visualización de todos los clientes en un mapa.
+- **Reportes (Supervisor/Admin):** Menú desplegable con acceso a los reportes de rutas asignadas y de vendedores.
 - **Rutas:** Menú desplegable con sub-secciones:
   - **Planificación de Ruta:** Incluye "Predicción de Ruta" y "Ruta Óptima".
   - **Mis Rutas:** Lista de las rutas creadas por el propio usuario.
   - **Gestión Ruta:** Interfaz para ejecutar la ruta del día.
   - **Rutas de Equipo (Supervisor/Admin):** Lista de rutas enviadas por otros para aprobación.
-- **Reportes (Supervisor/Admin):** Menú desplegable con acceso a los reportes de rutas asignadas y de vendedores.
+- **CRM:** Menú desplegable con sub-secciones:
+  - **Predicción CRM:** Herramientas de IA para análisis.
+  - **Base Telefónica:** Gestión de la base de datos de contactos para telemercadeo.
+  - **Gestión CRM:** Interfaz para registrar interacciones con clientes.
 - **Usuarios (Admin):** Menú desplegable para gestionar "Todos los Usuarios", "Supervisores" y "Permisos".
 
 ## 7. Reportes y Consultas
@@ -188,7 +198,7 @@ El sistema utiliza notificaciones "toast" para comunicar el resultado de las ope
 |---------|---------------|----------------|--------------------------------------------------------|
 | 1.0     | Octubre 2025  | Jonathan Diaz  | Creación inicial del documento con la funcionalidad base. |
 | 1.1     | Octubre 2025  | Asistente AI   | Añadido rol Telemercaderista, flujo de bloqueo de cuenta y validación de correo en recuperación. |
-| 1.2     | Octubre 2025  | Asistente AI   | Implementación de la sección de Anexos. |
+| 1.2     | Octubre 2025  | Asistente AI   | Implementación de la sección de Anexos, documentación de exportación a Excel y nuevo módulo CRM. |
 
 ## 12. Anexos
 
@@ -239,4 +249,27 @@ Maria Garcia,0992233445001,Corporación El Rosado,Mi Comisariato,Guayas,Guayaqui
 RUC,Provincia,Canton,Direccion,Latitud,Longitud
 1792233445001,Pichincha,Quito,Av. Eloy Alfaro N30-380,-0.1875,-78.4831
 0992233445001,Guayas,Guayaquil,Centro Comercial Policentro, -2.1709,-79.9005
+```
+
+#### Formato para Importación de Base Telefónica (CRM)
+- **Ruta:** `Dashboard > CRM > Base Telefónica > Importar`
+- **Formato:** CSV o Excel (.xlsx)
+- **Columnas Requeridas:**
+  - `cedula`: Cédula del contacto.
+  - `nombre del cliente`: Nombre completo del contacto.
+  - `nombre comercial`: Nombre del negocio o comercio.
+  - `ciudad`: Ciudad del contacto.
+  - `regional`: Regional a la que pertenece.
+  - `nombre del vendedor`: Vendedor asignado.
+  - `direccion del cliente`: Dirección del contacto.
+  - `telefono1`: Número de teléfono principal.
+  - `estado cliente`: Debe ser 'Activo' o 'Inactivo'.
+- **Columna Opcional:**
+  - `observacion`: Cualquier nota adicional sobre el contacto.
+
+**Ejemplo (formato CSV):**
+```csv
+cedula,nombre del cliente,nombre comercial,ciudad,regional,nombre del vendedor,direccion del cliente,telefono1,estado cliente,observacion
+1712345678,Rosa Martinez,Tienda Rosita,Quito,Sierra,Carlos Gomez,Calle de las Flores 123,0987654321,Activo,Cliente frecuente
+0912345678,Luis Zambrano,Ferretería El Tornillo,Guayaquil,Costa,Ana Lopez,Av. Principal 456,0991234567,Inactivo,
 ```
