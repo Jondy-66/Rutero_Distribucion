@@ -1,3 +1,4 @@
+
 Versión: 1.0
 Fecha: __________________
 Autor(es): __________________
@@ -134,17 +135,22 @@ La aplicación estará disponible en `http://localhost:9002`.
     - `clients`: Contiene la información de todos los clientes (RUC, nombre, dirección, coordenadas, etc.).
     - `routes`: Guarda todos los planes de ruta, su estado (`Planificada`, `En Progreso`, etc.), los clientes asociados y el supervisor asignado.
     - `notifications`: Almacena notificaciones para los usuarios, con suscripción en tiempo real.
+    - `phoneContacts`: Almacena la base de contactos telefónicos para el módulo CRM.
 - **Seguridad:** El acceso a los datos está controlado por las **Reglas de Seguridad de Firestore**, que validan las operaciones de lectura y escritura basándose en el rol y el ID del usuario autenticado.
 
 ### 7. Funcionalidades Clave (Vista Técnica)
 - **Autenticación y Sesión:** Gestionada por Firebase Authentication y el `AuthProvider` (`src/contexts/auth-context.tsx`), que se suscribe a los cambios de estado (`onAuthStateChanged`) y carga el perfil del usuario desde Firestore.
 - **Gestión de Datos con Firestore:** Centralizada en `src/lib/firebase/firestore.ts`. Se utiliza una estrategia de carga única para datos globales (usuarios, clientes) para optimizar el uso de cuota, con recargas manuales (`refetchData`) después de operaciones CRUD.
 - **Notificaciones en Tiempo Real:** El `AuthProvider` se suscribe a la colección `notifications` del usuario logueado usando `onSnapshot`, mostrando alertas y actualizando el contador de no leídas en la `UserNav`.
-- **Integración con APIs Externas:** Se utilizan rutas de API de Next.js como proxies (`/api/predicciones`, `/api/ruta-optima`) para evitar problemas de CORS y proteger las URLs de los servicios externos.
+- **Integración con APIs Externas:** Se utilizan rutas de API de Next.js como proxies (`/api/predicciones`, `/api/ruta-optima`) para evitar problemas de CORS y proteger las URLs y tokens de los servicios externos. Los nuevos parámetros para la predicción (`lat_base`, `lon_base`, `max_km`, `token`) se gestionan a través de este proxy.
 - **Mapas y Geolocalización:** Se centraliza en el componente `src/components/map-view.tsx`, utilizando `@vis.gl/react-google-maps` para renderizar el mapa, `AdvancedMarker` para los marcadores y el `DirectionsService` de Google Maps para dibujar rutas.
+- **Importación y Exportación de Datos:**
+    - **Importación:** Los módulos de Clientes y Base Telefónica permiten la carga masiva de datos desde archivos CSV o Excel. La lógica de parseo se realiza en el cliente con `papaparse` y `xlsx`, y los datos se envían en lotes a Firestore.
+    - **Exportación:** El módulo de Clientes permite descargar la lista filtrada en formato Excel (`.xlsx`).
 
 ### 8. Seguridad y Cumplimiento
 - **Autenticación:** Realizada por Firebase Authentication, que utiliza tokens (JWT) para gestionar las sesiones de forma segura.
+- **Creación Segura de Usuarios (Admin):** Para evitar que un administrador sea deslogueado al crear un nuevo usuario, se utiliza una instancia secundaria y temporal de la aplicación de Firebase. Esta instancia se usa para llamar a `createUserWithEmailAndPassword` y se destruye inmediatamente después, aislando la operación de la sesión principal del administrador.
 - **Bloqueo Inteligente:** Se ha implementado un mecanismo de bloqueo de cuentas en `src/app/(auth)/login/page.tsx`. Tras 5 intentos de inicio de sesión fallidos, la cuenta del usuario se marca como `inactive` en Firestore y se bloquea el acceso. El desbloqueo debe ser realizado por un `Administrador`.
 - **Recuperación de Contraseña:** El flujo en `src/app/(auth)/forgot-password/page.tsx` ha sido modificado para validar la existencia del correo electrónico en Firestore antes de invocar el envío del correo de recuperación, mostrando un error si el usuario no existe.
 - **Autorización:** Implementada en el frontend (mostrando/ocultando UI según el rol) y reforzada en el backend con Reglas de Seguridad de Firestore. Por ejemplo, un `Usuario` solo puede modificar las rutas que ha creado (`request.auth.uid == resource.data.createdBy`).
@@ -215,3 +221,5 @@ La estrategia de calidad del software se centra en garantizar la fiabilidad, fun
 
 ### 13. Anexos
 *(Esta sección puede incluir diagramas de flujo de datos detallados, un glosario de términos, ejemplos de código clave, etc.)*
+
+    
