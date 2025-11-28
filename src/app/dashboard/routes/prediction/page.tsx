@@ -34,7 +34,6 @@ export default function PrediccionesPage() {
   const [latBase, setLatBase] = useState("");
   const [lonBase, setLonBase] = useState("");
   const [maxKm, setMaxKm] = useState(10);
-  const [token, setToken] = useState("MI-CODIGO-SECRETO-132");
   
   const [predicciones, setPredicciones] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -73,7 +72,6 @@ export default function PrediccionesPage() {
           lat_base: latBase,
           lon_base: lonBase,
           max_km: maxKm,
-          token
       });
       
       setPredicciones(data);
@@ -298,10 +296,6 @@ export default function PrediccionesPage() {
                 <div className="space-y-2">
                     <Label htmlFor="maxKm">Radio Máximo (km)</Label>
                     <Input id="maxKm" type="number" value={maxKm} onChange={(e) => setMaxKm(Number(e.target.value))} disabled={loading} />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="token">Token de Seguridad</Label>
-                    <Input id="token" type="password" value={token} onChange={(e) => setToken(e.target.value)} disabled={loading} />
                 </div>
             </CardContent>
             <CardFooter>

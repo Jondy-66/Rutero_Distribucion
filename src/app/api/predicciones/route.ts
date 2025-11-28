@@ -14,7 +14,15 @@ export async function GET(request: Request) {
     const lat_base = searchParams.get('lat_base');
     const lon_base = searchParams.get('lon_base');
     const max_km = searchParams.get('max_km');
-    const token = request.headers.get('X-API-Key');
+    const token = process.env.API_PREDICCION_TOKEN; // Leer el token desde las variables de entorno del servidor
+
+    if (!token) {
+      console.error("Proxy API route error: API_PREDICCION_TOKEN is not set in .env.local");
+      return NextResponse.json(
+          { message: 'Error de configuración del servidor: El token de la API no está configurado.' }, 
+          { status: 500 }
+      );
+    }
 
     const externalApiUrl = new URL("https://api-distribucion-rutas.onrender.com/predecir");
     if (fecha_inicio) externalApiUrl.searchParams.append("fecha_inicio", fecha_inicio);
@@ -25,11 +33,8 @@ export async function GET(request: Request) {
 
     const headers: HeadersInit = {
         'Accept': 'application/json',
+        'X-API-Key': token
     };
-
-    if (token) {
-        headers['X-API-Key'] = token;
-    }
 
     const response = await fetch(externalApiUrl.toString(), {
       headers,
