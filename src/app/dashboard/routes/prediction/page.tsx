@@ -107,10 +107,12 @@ export default function PrediccionesPage() {
  
   const filteredPredicciones = useMemo(() => {
     return predicciones.filter(p => {
-        const matchesSearch = !searchTerm || (p.Ejecutivo && p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase()));
-        return matchesSearch;
+        if (isSupervisorOrAdmin) {
+            return (p.Ejecutivo && p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase()));
+        }
+        return true; // No filtrar por búsqueda si no es admin/supervisor
     });
-  }, [predicciones, searchTerm]);
+}, [predicciones, searchTerm, isSupervisorOrAdmin]);
 
 
   const handleSavePredictionRoute = async () => {
@@ -371,8 +373,8 @@ export default function PrediccionesPage() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Ejecutivo</TableHead>
-                                <TableHead>RUC</TableHead>
-                                <TableHead>Cliente</TableHead>
+                                <TableHead>ID Cliente</TableHead>
+                                <TableHead>Tipo Cliente</TableHead>
                                 <TableHead>Fecha Predicha</TableHead>
                                 <TableHead className="text-right">Probabilidad</TableHead>
                                 <TableHead className="text-right">Ventas</TableHead>
@@ -389,14 +391,12 @@ export default function PrediccionesPage() {
                                     </TableCell>
                                 </TableRow>
                             ) : filteredPredicciones.length > 0 ? (
-                                filteredPredicciones.map((pred, i) => {
-                                    const ruc = (pred as any).ruc || (pred as any).RUC;
-                                    const client = clients.find(c => c.ruc === ruc);
+                                filteredPredicciones.map((pred: any, i) => {
                                     return (
                                         <TableRow key={i}>
                                             <TableCell>{pred.Ejecutivo}</TableCell>
-                                            <TableCell>{ruc}</TableCell>
-                                            <TableCell>{client ? client.nombre_comercial : 'No encontrado'}</TableCell>
+                                            <TableCell>{pred.cliente_id}</TableCell>
+                                            <TableCell>{pred.tipo_cliente}</TableCell>
                                             <TableCell>{pred.fecha_predicha ? format(parseISO(pred.fecha_predicha), 'PPP', { locale: es }) : 'N/A'}</TableCell>
                                             <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
                                             <TableCell className="text-right">{formatCurrency(pred.ventas)}</TableCell>
