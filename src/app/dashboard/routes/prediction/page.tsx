@@ -107,7 +107,7 @@ export default function PrediccionesPage() {
   const filteredPredicciones = useMemo(() => {
     return predicciones.filter(p => {
       const matchesEjecutivo = selectedEjecutivo === 'todos' || p.Ejecutivo === selectedEjecutivo;
-      const matchesSearch = isSupervisorOrAdmin ? p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase()) : true;
+      const matchesSearch = isSupervisorOrAdmin && p.Ejecutivo ? p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase()) : true;
       return matchesEjecutivo && matchesSearch;
     });
   }, [predicciones, selectedEjecutivo, searchTerm, isSupervisorOrAdmin]);
