@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Search, Save, MapPin, Download, Route } from "lucide-react";
+import { LoaderCircle, Search, Save, MapPin, Download, Route, Users } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from 'date-fns';
@@ -49,6 +49,13 @@ export default function PrediccionesPage() {
   const router = useRouter();
 
   const isSupervisorOrAdmin = currentUser?.role === 'Administrador' || currentUser?.role === 'Supervisor';
+  
+  const availableEjecutivos = useMemo(() => {
+    if (!isSupervisorOrAdmin && currentUser) {
+        return [currentUser];
+    }
+    return users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
+  }, [users, currentUser, isSupervisorOrAdmin]);
 
   useEffect(() => {
     if (!isSupervisorOrAdmin && currentUser) {
@@ -98,18 +105,13 @@ export default function PrediccionesPage() {
     setLoading(false);
   };
  
-  const ejecutivos = useMemo(() => {
-    const ejecutivoSet = new Set(predicciones.map(p => p.Ejecutivo));
-    return ['todos', ...Array.from(ejecutivoSet)];
-  }, [predicciones]);
-
   const filteredPredicciones = useMemo(() => {
     return predicciones.filter(p => {
-      const matchesEjecutivo = selectedEjecutivo === 'todos' || p.Ejecutivo === selectedEjecutivo;
-      const matchesSearch = isSupervisorOrAdmin && p.Ejecutivo ? p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase()) : true;
-      return matchesEjecutivo && matchesSearch;
+        const matchesSearch = !searchTerm || (p.Ejecutivo && p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase()));
+        return matchesSearch;
     });
-  }, [predicciones, selectedEjecutivo, searchTerm, isSupervisorOrAdmin]);
+  }, [predicciones, searchTerm]);
+
 
   const handleSavePredictionRoute = async () => {
     if (selectedEjecutivo === 'todos' || !currentUser) {
@@ -274,7 +276,24 @@ export default function PrediccionesPage() {
                 <CardTitle>Parámetros de Predicción</CardTitle>
                 <CardDescription>Selecciona los parámetros para generar las predicciones.</CardDescription>
             </CardHeader>
-            <CardContent className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <CardContent className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                 <div className="space-y-2">
+                    <Label htmlFor="ejecutivo">Ejecutivo</Label>
+                    <Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo} disabled={!isSupervisorOrAdmin}>
+                        <SelectTrigger id="ejecutivo">
+                            <Users className="inline-block mr-2 h-4 w-4" />
+                            <SelectValue placeholder="Seleccionar ejecutivo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {isSupervisorOrAdmin && <SelectItem value="todos">Todos los Ejecutivos</SelectItem>}
+                            {availableEjecutivos.map(ejecutivo => (
+                                <SelectItem key={ejecutivo.id} value={ejecutivo.name}>
+                                    {ejecutivo.name}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
                 <div className="space-y-2">
                     <Label htmlFor="fecha-inicio">Fecha de Inicio</Label>
                     <Input
@@ -339,18 +358,6 @@ export default function PrediccionesPage() {
                                 onChange={(e) => setSearchTerm(e.target.value)}
                             />
                         </div>
-                        <Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo}>
-                            <SelectTrigger className="w-full sm:max-w-xs">
-                                <SelectValue placeholder="Filtrar por ejecutivo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {ejecutivos.map(ejecutivo => (
-                                    <SelectItem key={ejecutivo} value={ejecutivo}>
-                                        {ejecutivo === 'todos' ? 'Todos los Ejecutivos' : ejecutivo}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
                     </div>
                 )}
                  <div className="border rounded-lg">
