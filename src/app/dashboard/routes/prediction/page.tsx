@@ -66,13 +66,19 @@ export default function PrediccionesPage() {
     setLoading(true);
     setPredicciones([]); // Limpiar predicciones anteriores
     try {
-      const data = await getPredicciones({ 
+      const params: Parameters<typeof getPredicciones>[0] = { 
           dias,
           fecha_inicio: fechaInicio,
           lat_base: latBase,
           lon_base: lonBase,
           max_km: maxKm,
-      });
+      };
+
+      if (selectedEjecutivo !== 'todos') {
+        params.ejecutivo = selectedEjecutivo;
+      }
+      
+      const data = await getPredicciones(params);
       
       setPredicciones(data);
 

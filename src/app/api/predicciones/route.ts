@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const ejecutivo = searchParams.get('ejecutivo');
     const fecha_inicio = searchParams.get('fecha_inicio');
     const dias = searchParams.get('dias');
     const lat_base = searchParams.get('lat_base');
@@ -24,7 +25,8 @@ export async function GET(request: Request) {
       );
     }
 
-    const externalApiUrl = new URL("https://api-distribucion-rutas.onrender.com/predecir");
+    const externalApiUrl = new URL("https://api-distribucion-rutas.onrender.com/predecir_ejecutivo");
+    if (ejecutivo) externalApiUrl.searchParams.append("ejecutivo", ejecutivo);
     if (fecha_inicio) externalApiUrl.searchParams.append("fecha_inicio", fecha_inicio);
     if (dias) externalApiUrl.searchParams.append("dias", String(dias));
     if (lat_base) externalApiUrl.searchParams.append("lat_base", lat_base);

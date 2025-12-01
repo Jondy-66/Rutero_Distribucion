@@ -14,7 +14,7 @@ type GetPrediccionesParams = {
   lat_base?: string;
   lon_base?: string;
   max_km?: number;
-  token?: string; // Token ya no se usa desde el cliente, pero se mantiene por compatibilidad de tipo.
+  ejecutivo?: string;
 };
 
 /**
@@ -23,7 +23,7 @@ type GetPrediccionesParams = {
  * @param {GetPrediccionesParams} params - Los parámetros para la consulta de predicción.
  * @returns {Promise<Prediction[]>} Una promesa que se resuelve con un array de objetos de predicción.
  */
-export async function getPredicciones({ fecha_inicio, dias, lat_base, lon_base, max_km }: GetPrediccionesParams): Promise<Prediction[]> {
+export async function getPredicciones({ fecha_inicio, dias, lat_base, lon_base, max_km, ejecutivo }: GetPrediccionesParams): Promise<Prediction[]> {
   // Apunta a la ruta de API local que actúa como proxy.
   const url = new URL("/api/predicciones", window.location.origin);
   if (fecha_inicio) url.searchParams.append("fecha_inicio", fecha_inicio);
@@ -31,6 +31,7 @@ export async function getPredicciones({ fecha_inicio, dias, lat_base, lon_base, 
   if (lat_base) url.searchParams.append("lat_base", lat_base);
   if (lon_base) url.searchParams.append("lon_base", lon_base);
   if (max_km) url.searchParams.append("max_km", String(max_km));
+  if (ejecutivo) url.searchParams.append("ejecutivo", ejecutivo);
   
   // El token ahora se maneja en el servidor, por lo que no se envía desde el cliente.
   const headers: HeadersInit = {};
