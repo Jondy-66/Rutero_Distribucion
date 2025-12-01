@@ -241,16 +241,13 @@ export default function PrediccionesPage() {
     }
 
     const dataToExport = filteredPredicciones.map(p => {
-        const ruc = (p as any).ruc || (p as any).RUC || (p as any).cliente_id;
-        const client = clients.find(c => c.ruc === ruc);
+        const clientId = (p as any).cliente_id || (p as any).RUC || (p as any).ruc;
+        const client = clients.find(c => c.ruc === clientId);
         return {
-            'Ejecutivo': p.Ejecutivo,
-            'RUC': ruc,
-            'Cliente': client ? client.nombre_comercial : 'No encontrado',
+            'ID Cliente': clientId,
+            'Cliente': client ? client.nombre_comercial : (p.Cliente || 'No encontrado'),
             'Fecha Predicha': p.fecha_predicha ? format(parseISO(p.fecha_predicha), 'PPP', { locale: es }) : 'N/A',
-            'Probabilidad de Visita (%)': (p.probabilidad_visita * 100).toFixed(2),
-            'Latitud': p.LatitudTrz,
-            'Longitud': p.LongitudTrz,
+            'Probabilidad': (p.probabilidad_visita * 100).toFixed(2) + '%',
             'Ventas': p.ventas || 0,
             'Cobros': p.cobros || 0,
             'Promociones': p.promociones || 0,
