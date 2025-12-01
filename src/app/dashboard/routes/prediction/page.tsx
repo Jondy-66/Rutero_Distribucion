@@ -69,10 +69,11 @@ export default function PrediccionesPage() {
       const params: Parameters<typeof getPredicciones>[0] = { 
           dias,
           fecha_inicio: fechaInicio,
-          lat_base: latBase,
-          lon_base: lonBase,
-          max_km: maxKm,
       };
+
+      if (latBase) params.lat_base = latBase;
+      if (lonBase) params.lon_base = lonBase;
+      if (maxKm) params.max_km = maxKm;
 
       if (selectedEjecutivo !== 'todos') {
         params.ejecutivo = selectedEjecutivo;
@@ -292,11 +293,11 @@ export default function PrediccionesPage() {
                     />
                 </div>
                  <div className="space-y-2">
-                    <Label htmlFor="latBase">Latitud Base</Label>
+                    <Label htmlFor="latBase">Latitud Base (Opcional)</Label>
                     <Input id="latBase" value={latBase} onChange={(e) => setLatBase(e.target.value)} disabled={loading} placeholder="-0.180653" />
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="lonBase">Longitud Base</Label>
+                    <Label htmlFor="lonBase">Longitud Base (Opcional)</Label>
                     <Input id="lonBase" value={lonBase} onChange={(e) => setLonBase(e.target.value)} disabled={loading} placeholder="-78.469498" />
                 </div>
                 <div className="space-y-2">
