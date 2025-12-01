@@ -53,8 +53,6 @@ export default function PrediccionesPage() {
   useEffect(() => {
     if (!isSupervisorOrAdmin && currentUser) {
       setSelectedEjecutivo(currentUser.name);
-    } else {
-      setSelectedEjecutivo('todos');
     }
   }, [isSupervisorOrAdmin, currentUser]);
 
@@ -149,7 +147,7 @@ export default function PrediccionesPage() {
         const routeClients: ClientInRoute[] = [];
         for (const prediction of filteredPredicciones) {
             const client = clients.find(c => c.ruc === prediction.RUC);
-            if (client) {
+            if (client && prediction.fecha_predicha) {
                 routeClients.push({
                     ruc: client.ruc,
                     nombre_comercial: client.nombre_comercial,
@@ -161,8 +159,14 @@ export default function PrediccionesPage() {
                 });
             }
         }
+        
+        if (routeClients.length === 0) {
+            toast({title: "Sin clientes válidos", description: "No se encontraron clientes con fechas válidas en la predicción.", variant: "destructive"});
+            setIsSaving(false);
+            return;
+        }
 
-        const routeDate = parseISO(filteredPredicciones[0].fecha_predicha);
+        const routeDate = routeClients[0].date;
         
         const newRoute: Omit<RoutePlan, 'id' | 'createdAt'> = {
             routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`,
@@ -234,7 +238,7 @@ export default function PrediccionesPage() {
     const dataToExport = filteredPredicciones.map(p => ({
       'Ejecutivo': p.Ejecutivo,
       'RUC': p.RUC,
-      'Fecha Predicha': format(parseISO(p.fecha_predicha), 'PPP', { locale: es }),
+      'Fecha Predicha': p.fecha_predicha ? format(parseISO(p.fecha_predicha), 'PPP', { locale: es }) : 'N/A',
       'Probabilidad de Visita (%)': (p.probabilidad_visita * 100).toFixed(2),
       'Latitud': p.LatitudTrz,
       'Longitud': p.LongitudTrz,
@@ -379,7 +383,7 @@ export default function PrediccionesPage() {
                                             <TableCell>{pred.Ejecutivo}</TableCell>
                                             <TableCell>{pred.RUC}</TableCell>
                                             <TableCell>{client ? client.nombre_comercial : 'No encontrado'}</TableCell>
-                                            <TableCell>{format(parseISO(pred.fecha_predicha), 'PPP', { locale: es })}</TableCell>
+                                            <TableCell>{pred.fecha_predicha ? format(parseISO(pred.fecha_predicha), 'PPP', { locale: es }) : 'N/A'}</TableCell>
                                             <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
                                             <TableCell className="text-right">{formatCurrency(pred.ventas)}</TableCell>
                                             <TableCell className="text-right">{formatCurrency(pred.cobros)}</TableCell>
