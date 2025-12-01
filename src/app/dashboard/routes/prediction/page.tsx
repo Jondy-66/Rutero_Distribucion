@@ -150,7 +150,7 @@ export default function PrediccionesPage() {
         
         const routeClients: ClientInRoute[] = [];
         for (const prediction of filteredPredicciones) {
-            const ruc = (prediction as any).ruc || (prediction as any).RUC;
+            const ruc = (prediction as any).ruc || (prediction as any).RUC || (prediction as any).cliente_id;
             const client = clients.find(c => c.ruc === ruc);
             if (client && prediction.fecha_predicha) {
                 routeClients.push({
@@ -216,7 +216,7 @@ export default function PrediccionesPage() {
       return;
     }
     
-    const predictedRucs = new Set(filteredPredicciones.map(p => (p as any).ruc || (p as any).RUC));
+    const predictedRucs = new Set(filteredPredicciones.map(p => (p as any).ruc || (p as any).RUC || (p as any).cliente_id));
 
     const clientsFromRucs = clients
       .filter(client => predictedRucs.has(client.ruc) && isFinite(client.latitud) && isFinite(client.longitud));
@@ -241,7 +241,7 @@ export default function PrediccionesPage() {
     }
 
     const dataToExport = filteredPredicciones.map(p => {
-        const ruc = (p as any).ruc || (p as any).RUC;
+        const ruc = (p as any).ruc || (p as any).RUC || (p as any).cliente_id;
         const client = clients.find(c => c.ruc === ruc);
         return {
             'Ejecutivo': p.Ejecutivo,
@@ -374,7 +374,7 @@ export default function PrediccionesPage() {
                             <TableRow>
                                 <TableHead>Ejecutivo</TableHead>
                                 <TableHead>ID Cliente</TableHead>
-                                <TableHead>Tipo Cliente</TableHead>
+                                <TableHead>Cliente</TableHead>
                                 <TableHead>Fecha Predicha</TableHead>
                                 <TableHead className="text-right">Probabilidad</TableHead>
                                 <TableHead className="text-right">Ventas</TableHead>
@@ -392,11 +392,13 @@ export default function PrediccionesPage() {
                                 </TableRow>
                             ) : filteredPredicciones.length > 0 ? (
                                 filteredPredicciones.map((pred: any, i) => {
+                                    const clientId = pred.cliente_id || pred.RUC || pred.ruc;
+                                    const client = clients.find(c => c.ruc === clientId);
                                     return (
                                         <TableRow key={i}>
                                             <TableCell>{pred.Ejecutivo}</TableCell>
-                                            <TableCell>{pred.cliente_id}</TableCell>
-                                            <TableCell>{pred.tipo_cliente}</TableCell>
+                                            <TableCell>{clientId}</TableCell>
+                                            <TableCell>{client ? client.nombre_comercial : (pred.Cliente || 'No encontrado')}</TableCell>
                                             <TableCell>{pred.fecha_predicha ? format(parseISO(pred.fecha_predicha), 'PPP', { locale: es }) : 'N/A'}</TableCell>
                                             <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
                                             <TableCell className="text-right">{formatCurrency(pred.ventas)}</TableCell>
