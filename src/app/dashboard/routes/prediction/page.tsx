@@ -148,7 +148,8 @@ export default function PrediccionesPage() {
         
         const routeClients: ClientInRoute[] = [];
         for (const prediction of filteredPredicciones) {
-            const client = clients.find(c => c.ruc === prediction.RUC);
+            const ruc = (prediction as any).ruc || (prediction as any).RUC;
+            const client = clients.find(c => c.ruc === ruc);
             if (client && prediction.fecha_predicha) {
                 routeClients.push({
                     ruc: client.ruc,
@@ -213,7 +214,7 @@ export default function PrediccionesPage() {
       return;
     }
     
-    const predictedRucs = new Set(filteredPredicciones.map(p => p.RUC));
+    const predictedRucs = new Set(filteredPredicciones.map(p => (p as any).ruc || (p as any).RUC));
 
     const clientsFromRucs = clients
       .filter(client => predictedRucs.has(client.ruc) && isFinite(client.latitud) && isFinite(client.longitud));
@@ -237,17 +238,22 @@ export default function PrediccionesPage() {
       return;
     }
 
-    const dataToExport = filteredPredicciones.map(p => ({
-      'Ejecutivo': p.Ejecutivo,
-      'RUC': p.RUC,
-      'Fecha Predicha': p.fecha_predicha ? format(parseISO(p.fecha_predicha), 'PPP', { locale: es }) : 'N/A',
-      'Probabilidad de Visita (%)': (p.probabilidad_visita * 100).toFixed(2),
-      'Latitud': p.LatitudTrz,
-      'Longitud': p.LongitudTrz,
-      'Ventas': p.ventas || 0,
-      'Cobros': p.cobros || 0,
-      'Promociones': p.promociones || 0,
-    }));
+    const dataToExport = filteredPredicciones.map(p => {
+        const ruc = (p as any).ruc || (p as any).RUC;
+        const client = clients.find(c => c.ruc === ruc);
+        return {
+            'Ejecutivo': p.Ejecutivo,
+            'RUC': ruc,
+            'Cliente': client ? client.nombre_comercial : 'No encontrado',
+            'Fecha Predicha': p.fecha_predicha ? format(parseISO(p.fecha_predicha), 'PPP', { locale: es }) : 'N/A',
+            'Probabilidad de Visita (%)': (p.probabilidad_visita * 100).toFixed(2),
+            'Latitud': p.LatitudTrz,
+            'Longitud': p.LongitudTrz,
+            'Ventas': p.ventas || 0,
+            'Cobros': p.cobros || 0,
+            'Promociones': p.promociones || 0,
+        };
+    });
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
@@ -384,11 +390,12 @@ export default function PrediccionesPage() {
                                 </TableRow>
                             ) : filteredPredicciones.length > 0 ? (
                                 filteredPredicciones.map((pred, i) => {
-                                    const client = clients.find(c => c.ruc === pred.RUC);
+                                    const ruc = (pred as any).ruc || (pred as any).RUC;
+                                    const client = clients.find(c => c.ruc === ruc);
                                     return (
                                         <TableRow key={i}>
                                             <TableCell>{pred.Ejecutivo}</TableCell>
-                                            <TableCell>{pred.RUC}</TableCell>
+                                            <TableCell>{ruc}</TableCell>
                                             <TableCell>{client ? client.nombre_comercial : 'No encontrado'}</TableCell>
                                             <TableCell>{pred.fecha_predicha ? format(parseISO(pred.fecha_predicha), 'PPP', { locale: es }) : 'N/A'}</TableCell>
                                             <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
