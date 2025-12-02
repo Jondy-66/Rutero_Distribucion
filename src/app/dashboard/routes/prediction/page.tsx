@@ -30,7 +30,7 @@ import { isFinite } from "lodash";
  */
 export default function PrediccionesPage() {
   const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
-  const [dias, setDias] = useState(7);
+  const [dias, setDias] = useState<number | ''>(7);
   const [latBase, setLatBase] = useState("");
   const [lonBase, setLonBase] = useState("");
   const [maxKm, setMaxKm] = useState(10);
@@ -72,7 +72,7 @@ export default function PrediccionesPage() {
     setPredicciones([]); // Limpiar predicciones anteriores
     try {
       const params: Parameters<typeof getPredicciones>[0] = { 
-          dias,
+          dias: Number(dias) || 7,
           fecha_inicio: fechaInicio,
       };
 
@@ -235,12 +235,12 @@ export default function PrediccionesPage() {
 
   const handleDownloadExcel = () => {
     if (filteredPredicciones.length === 0) {
-      toast({
-        title: "Sin Datos",
-        description: "No hay predicciones para descargar.",
-        variant: "destructive"
-      });
-      return;
+        toast({
+            title: "Sin Datos",
+            description: "No hay predicciones para descargar.",
+            variant: "destructive"
+        });
+        return;
     }
 
     const dataToExport = filteredPredicciones.map(p => {
@@ -248,7 +248,7 @@ export default function PrediccionesPage() {
         const client = clients.find(c => c.ruc === clientId);
         return {
             'ID Cliente': clientId,
-            'Cliente': client ? client.nombre_comercial : (p.Cliente || 'No encontrado'),
+            'Cliente': client ? client.nombre_comercial : 'No encontrado',
             'Fecha Predicha': p.fecha_predicha ? format(parseISO(p.fecha_predicha), 'PPP', { locale: es }) : 'N/A',
             'Probabilidad': (p.probabilidad_visita * 100).toFixed(2) + '%',
             'Ventas': p.ventas || 0,
@@ -262,7 +262,7 @@ export default function PrediccionesPage() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Predicciones");
     XLSX.writeFile(workbook, "predicciones_de_visitas.xlsx");
     toast({ title: "Descarga Iniciada", description: "Tu reporte en Excel se está descargando." });
-  };
+};
   
    const formatCurrency = (value: number | string | undefined | null) => {
     if (value === undefined || value === null) return '$0.00';
@@ -318,7 +318,7 @@ export default function PrediccionesPage() {
                         id="dias"
                         type="number"
                         value={dias}
-                        onChange={(e) => setDias(Number(e.target.value))}
+                        onChange={(e) => setDias(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                         min="1"
                         disabled={loading}
                     />
@@ -481,3 +481,4 @@ export default function PrediccionesPage() {
     </>
   );
 }
+
