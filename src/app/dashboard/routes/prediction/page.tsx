@@ -33,7 +33,7 @@ export default function PrediccionesPage() {
   const [dias, setDias] = useState<number | ''>(7);
   const [latBase, setLatBase] = useState("");
   const [lonBase, setLonBase] = useState("");
-  const [maxKm, setMaxKm] = useState(10);
+  const [maxKm, setMaxKm] = useState<number | ''>(10);
   
   const [predicciones, setPredicciones] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -78,7 +78,7 @@ export default function PrediccionesPage() {
 
       if (latBase) params.lat_base = latBase;
       if (lonBase) params.lon_base = lonBase;
-      if (maxKm) params.max_km = maxKm;
+      if (maxKm) params.max_km = Number(maxKm);
 
       if (selectedEjecutivo !== 'todos') {
         params.ejecutivo = selectedEjecutivo;
@@ -333,7 +333,7 @@ export default function PrediccionesPage() {
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="maxKm">Radio Máximo (km)</Label>
-                    <Input id="maxKm" type="number" value={maxKm} onChange={(e) => setMaxKm(Number(e.target.value))} disabled={loading} />
+                    <Input id="maxKm" type="number" value={maxKm} onChange={(e) => setMaxKm(e.target.value === '' ? '' : Number(e.target.value))} disabled={loading} />
                 </div>
             </CardContent>
             <CardFooter>
@@ -481,4 +481,5 @@ export default function PrediccionesPage() {
     </>
   );
 }
+
 
