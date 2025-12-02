@@ -108,7 +108,10 @@ export default function PrediccionesPage() {
   const filteredPredicciones = useMemo(() => {
     return predicciones.filter(p => {
         if (isSupervisorOrAdmin) {
-            return (p.Ejecutivo && p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase()));
+             if (p.Ejecutivo && typeof p.Ejecutivo === 'string') {
+                return p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase());
+            }
+            return false;
         }
         return true; // No filtrar por búsqueda si no es admin/supervisor
     });
