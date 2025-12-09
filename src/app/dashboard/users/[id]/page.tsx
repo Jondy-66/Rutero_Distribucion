@@ -116,7 +116,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       setIsChangingPassword(true);
       try {
           await updateUserPassword(user.id, newPassword);
-          toast({ title: "Éxito", description: "La contraseña del usuario ha sido cambiada." });
+          toast({ title: "Éxito (Simulado)", description: "La contraseña del usuario ha sido cambiada. La funcionalidad real requiere una implementación de backend." });
           setNewPassword('');
           setConfirmPassword('');
       } catch (error: any) {

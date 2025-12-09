@@ -9,7 +9,7 @@
 import { db } from './config';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp } from 'firebase/firestore';
 import type { User, Client, RoutePlan, ClientInRoute, Notification, PhoneContact } from '@/lib/types';
-import { updateUserPassword as updateUserPasswordInAuth } from './auth';
+import { updateUserPasswordAsAdmin } from './auth';
 
 // --- COLECCIÓN DE USUARIOS ---
 
@@ -123,19 +123,9 @@ export const updateUser = (id: string, userData: Partial<User>) => {
  * @returns {Promise<void>}
  */
 export const updateUserPassword = async (uid: string, newPassword: string): Promise<void> => {
-  // Esta es una simulación. En un proyecto real, esto debería invocar
-  // una Cloud Function que use el Admin SDK para cambiar la contraseña.
-  // La función 'updateUserPasswordInAuth' es una aproximación local.
-  try {
-    // Por ahora, no tenemos una forma directa desde el cliente sin privilegios
-    // de cambiar la contraseña de otro usuario. Dejamos el placeholder.
-    // En un escenario real, aquí se llamaría a la función de backend.
-    console.log(`(Simulación) Contraseña cambiada para el usuario ${uid}`);
-    return Promise.resolve();
-  } catch (error) {
-    console.error("Error al intentar cambiar la contraseña (simulado):", error);
-    throw new Error("La funcionalidad de cambio de contraseña no está implementada en el backend.");
-  }
+  // Llama a la función de ayuda de autenticación.
+  // Esta función debe manejar la lógica de backend necesaria.
+  return updateUserPasswordAsAdmin(uid, newPassword);
 };
 
 
