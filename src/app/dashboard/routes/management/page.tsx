@@ -79,13 +79,16 @@ export default function RouteManagementPage() {
   // State for the active client being managed
   const [activeClient, setActiveClient] = useState<RouteClient | null>(null);
   const [checkInTime, setCheckInTime] = useState<string | null>(null);
-  const [checkOutTime, setCheckOutTime] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
   const [callObservation, setCallObservation] = useState('');
 
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
+
+  const [confirmationDialogOpen, setConfirmationDialogOpen] = useState(false);
+  const [confirmationAction, setConfirmationAction] = useState<'checkIn' | 'checkOut' | null>(null);
+  const [currentTime, setCurrentTime] = useState('');
 
 
   const loading = authLoading;
@@ -119,7 +122,7 @@ export default function RouteManagementPage() {
     });
   };
 
-  const handleGetLocation = (forDialog: boolean = false) => {
+  const handleGetLocation = useCallback((forDialog: boolean = false) => {
     if (!navigator.geolocation) {
       toast({
         title: "Geolocalización no soportada",
@@ -157,12 +160,29 @@ export default function RouteManagementPage() {
         });
       }
     );
-  };
+  }, [toast]);
   
-  const handleCheckIn = () => {
-    setCheckInTime(format(new Date(), 'HH:mm:ss'));
+  const openConfirmationDialog = (action: 'checkIn' | 'checkOut') => {
     handleGetLocation(true);
-    toast({ title: "Entrada Marcada", description: `Hora de entrada registrada a las ${format(new Date(), 'HH:mm:ss')}` });
+    setCurrentTime(format(new Date(), 'HH:mm:ss'));
+    setConfirmationAction(action);
+    setConfirmationDialogOpen(true);
+  };
+
+  const handleConfirmAction = () => {
+    if (confirmationAction === 'checkIn') {
+        handleCheckIn();
+    } else if (confirmationAction === 'checkOut') {
+        handleConfirmCheckOut();
+    }
+    setConfirmationDialogOpen(false);
+    setConfirmationAction(null);
+  };
+
+  const handleCheckIn = () => {
+    const time = format(new Date(), 'HH:mm:ss');
+    setCheckInTime(time);
+    toast({ title: "Entrada Marcada", description: `Hora de entrada registrada a las ${time}` });
   }
 
   const handleConfirmCheckOut = async () => {
@@ -535,7 +555,7 @@ export default function RouteManagementPage() {
                                                         <p className="text-sm font-mono">{checkInTime}</p>
                                                     </div>
                                                 ) : (
-                                                    <Button onClick={handleCheckIn} disabled={isRouteExpired}>
+                                                    <Button onClick={() => openConfirmationDialog('checkIn')} disabled={isRouteExpired}>
                                                         <LogIn className="mr-2" />
                                                         Marcar Entrada
                                                     </Button>
@@ -621,29 +641,10 @@ export default function RouteManagementPage() {
                                                     <h4 className="font-semibold">Marcar Salida</h4>
                                                     <p className="text-sm text-muted-foreground">Finaliza y guarda la visita a este cliente.</p>
                                                 </div>
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                         <Button disabled={isFormDisabled || isSaving}>
-                                                            <LogOut className="mr-2" />
-                                                            Marcar y Guardar Salida
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                        <AlertDialogTitle>¿Confirmar Salida?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            Estás a punto de finalizar la visita a <strong>{activeClient.nombre_comercial}</strong>. Se guardarán los datos ingresados y se marcará la visita como completada.
-                                                        </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                            <AlertDialogAction onClick={handleConfirmCheckOut} disabled={isSaving}>
-                                                                {isSaving && <LoaderCircle className="animate-spin mr-2" />}
-                                                                Confirmar
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
+                                                <Button onClick={() => openConfirmationDialog('checkOut')} disabled={isFormDisabled || isSaving}>
+                                                    <LogOut className="mr-2" />
+                                                    Marcar y Guardar Salida
+                                                </Button>
                                             </div>
                                         </div>
                                     </div>
@@ -672,10 +673,38 @@ export default function RouteManagementPage() {
             </div>
         </DialogContent>
     </Dialog>
+     <Dialog open={confirmationDialogOpen} onOpenChange={setConfirmationDialogOpen}>
+        <DialogContent className="max-w-md p-0 overflow-hidden">
+            <div className="h-48 w-full">
+                 <MapView 
+                    key={confirmationAction}
+                    center={markerPosition || undefined}
+                    markerPosition={markerPosition}
+                    containerClassName="h-full w-full"
+                />
+            </div>
+            <div className="p-6 space-y-4 text-center">
+                <DialogTitle className="text-xl">
+                   Se marcará evento de <br/>
+                    <span className="font-bold text-2xl text-primary">
+                        {confirmationAction === 'checkIn' ? 'Entrada a Cliente' : 'Salida de Cliente'}
+                    </span>
+                </DialogTitle>
+                <DialogDescription className="text-base">
+                    con fecha hoy a las <span className="font-semibold text-foreground">{currentTime}</span>
+                    <br />
+                    en la ubicación mostrada. ¿Desea continuar?
+                </DialogDescription>
+            </div>
+            <DialogFooter className="bg-muted/50 p-4 flex justify-end gap-2">
+                <Button variant="ghost" onClick={() => setConfirmationDialogOpen(false)}>Cancelar</Button>
+                <Button onClick={handleConfirmAction} disabled={isSaving}>
+                    {isSaving && <LoaderCircle className="animate-spin" />}
+                    Confirmar
+                </Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     </>
   );
 }
-
-    
-
-    
