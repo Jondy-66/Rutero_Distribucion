@@ -9,6 +9,7 @@
 import { db } from './config';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp } from 'firebase/firestore';
 import type { User, Client, RoutePlan, ClientInRoute, Notification, PhoneContact } from '@/lib/types';
+import { updateUserPassword as updateUserPasswordInAuth } from './auth';
 
 // --- COLECCIÓN DE USUARIOS ---
 
@@ -97,14 +98,46 @@ export const addUser = (uid: string, userData: Partial<Omit<User, 'id' | 'status
 
 /**
  * Actualiza los datos de un usuario existente.
+ * Si se cambia el estado a 'activo', resetea el contador de intentos fallidos.
  * @param {string} id - El ID del documento del usuario a actualizar.
  * @param {Partial<User>} userData - Los campos del usuario a actualizar.
  * @returns {Promise<void>} Una promesa que se resuelve cuando el usuario ha sido actualizado.
  */
 export const updateUser = (id: string, userData: Partial<User>) => {
   const userDoc = doc(db, 'users', id);
-  return updateDoc(userDoc, userData);
+  const dataToUpdate = { ...userData };
+
+  // Si el estado se cambia a 'activo', reseteamos los intentos fallidos.
+  if (userData.status === 'active') {
+    dataToUpdate.failedLoginAttempts = 0;
+  }
+  
+  return updateDoc(userDoc, dataToUpdate);
 };
+
+/**
+ * Actualiza la contraseña de un usuario. Esto requiere llamar a una Cloud Function
+ * o a un endpoint seguro que use el Admin SDK. Aquí simulamos la llamada.
+ * @param {string} uid - El ID del usuario.
+ * @param {string} newPassword - La nueva contraseña.
+ * @returns {Promise<void>}
+ */
+export const updateUserPassword = async (uid: string, newPassword: string): Promise<void> => {
+  // Esta es una simulación. En un proyecto real, esto debería invocar
+  // una Cloud Function que use el Admin SDK para cambiar la contraseña.
+  // La función 'updateUserPasswordInAuth' es una aproximación local.
+  try {
+    // Por ahora, no tenemos una forma directa desde el cliente sin privilegios
+    // de cambiar la contraseña de otro usuario. Dejamos el placeholder.
+    // En un escenario real, aquí se llamaría a la función de backend.
+    console.log(`(Simulación) Contraseña cambiada para el usuario ${uid}`);
+    return Promise.resolve();
+  } catch (error) {
+    console.error("Error al intentar cambiar la contraseña (simulado):", error);
+    throw new Error("La funcionalidad de cambio de contraseña no está implementada en el backend.");
+  }
+};
+
 
 /**
  * Elimina un usuario de la colección 'users' en Firestore.

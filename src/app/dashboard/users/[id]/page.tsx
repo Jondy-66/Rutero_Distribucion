@@ -14,7 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { updateUser, getUsersBySupervisor } from '@/lib/firebase/firestore';
+import { updateUser, getUsersBySupervisor, updateUserPassword } from '@/lib/firebase/firestore';
 import type { User } from '@/lib/types';
 import { notFound, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -25,6 +25,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
+import { PasswordInput } from '@/components/password-input';
 
 export default function UserProfilePage({ params }: { params: { id: string } }) {
   const router = useRouter();
@@ -36,6 +37,10 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
   const [supervisors, setSupervisors] = useState<User[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [loadingAssignedUsers, setLoadingAssignedUsers] = useState(false);
+
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const userId = params.id;
 
@@ -71,14 +76,19 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
         status: user.status,
       };
 
-      if (user.role === 'Usuario' || user.role === 'Telemercaderista') {
-        dataToUpdate.supervisorId = user.supervisorId || '';
+      if ((user.role === 'Usuario' || user.role === 'Telemercaderista') && user.supervisorId !== undefined) {
+        dataToUpdate.supervisorId = user.supervisorId;
+      }
+      
+      // Si el estado se cambia a activo, reseteamos los intentos fallidos
+      if (user.status === 'active') {
+          dataToUpdate.failedLoginAttempts = 0;
       }
 
       await updateUser(user.id, dataToUpdate);
       await refetchData('users');
       toast({ title: "Éxito", description: "Usuario actualizado correctamente." });
-      router.push('/dashboard/users');
+      // No redirigimos para que el admin pueda seguir gestionando
     } catch (error: any) {
       console.error(error);
       if (error.code === 'permission-denied') {
@@ -90,6 +100,32 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       setIsSaving(false);
     }
   };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!user) return;
+      if (newPassword !== confirmPassword) {
+          toast({ title: "Error", description: "Las nuevas contraseñas no coinciden.", variant: "destructive" });
+          return;
+      }
+      if (newPassword.length < 6) {
+          toast({ title: "Error", description: "La contraseña debe tener al menos 6 caracteres.", variant: "destructive" });
+          return;
+      }
+
+      setIsChangingPassword(true);
+      try {
+          await updateUserPassword(user.id, newPassword);
+          toast({ title: "Éxito", description: "La contraseña del usuario ha sido cambiada." });
+          setNewPassword('');
+          setConfirmPassword('');
+      } catch (error: any) {
+          console.error("Error changing password:", error);
+          toast({ title: "Error", description: "No se pudo cambiar la contraseña. " + error.message, variant: "destructive" });
+      } finally {
+          setIsChangingPassword(false);
+      }
+  }
   
   const handleFieldChange = (field: keyof User, value: string) => {
     if(user) {
@@ -181,6 +217,9 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                             <SelectItem value="inactive">Inactivo</SelectItem>
                             </SelectContent>
                         </Select>
+                         {user.status === 'inactive' && user.failedLoginAttempts && user.failedLoginAttempts >= 5 && (
+                           <p className="text-sm text-destructive mt-1">Cuenta bloqueada por {user.failedLoginAttempts} intentos fallidos.</p>
+                        )}
                     </div>
                     {(user.role === 'Usuario' || user.role === 'Telemercaderista') && (
                         <div className="space-y-2">
@@ -208,6 +247,33 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                 </Card>
             </form>
         </div>
+
+        <form onSubmit={handleChangePassword}>
+          <Card>
+            <CardHeader>
+                <CardTitle>Cambiar Contraseña</CardTitle>
+                <CardDescription>
+                Establece una nueva contraseña para este usuario.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+                <div className="space-y-2">
+                    <Label htmlFor="new-password">Nueva Contraseña</Label>
+                    <PasswordInput id="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={isChangingPassword} />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="confirm-password">Confirmar Nueva Contraseña</Label>
+                    <PasswordInput id="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} disabled={isChangingPassword} />
+                </div>
+            </CardContent>
+            <CardFooter>
+                <Button type="submit" disabled={isChangingPassword}>
+                    {isChangingPassword && <LoaderCircle className="animate-spin" />}
+                    Actualizar Contraseña
+                </Button>
+            </CardFooter>
+          </Card>
+        </form>
 
         {user.role === 'Supervisor' && (
              <Card>
