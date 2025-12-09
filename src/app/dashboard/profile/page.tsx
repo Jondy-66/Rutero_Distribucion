@@ -24,20 +24,33 @@ import { LoaderCircle } from 'lucide-react';
 
 
 export default function ProfilePage() {
-  const { user, firebaseUser } = useAuth();
+  const { user, firebaseUser, refetchData } = useAuth();
   const { toast } = useToast();
   const [currentUser, setCurrentUser] = useState<User | null>(user);
   const [isSaving, setIsSaving] = useState(false);
+  
+  const canEditName = currentUser?.role === 'Administrador';
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser) return;
     setIsSaving(true);
     try {
-        await updateUser(currentUser.id, {
-            name: currentUser.name
-        });
-        toast({ title: "Éxito", description: "Perfil actualizado." });
+        const dataToUpdate: Partial<User> = {};
+        if (canEditName) {
+            dataToUpdate.name = currentUser.name;
+        }
+        
+        // Asumiendo que otras propiedades podrían ser editables en el futuro.
+        // Por ahora, solo se actualiza el nombre si está permitido.
+        if (Object.keys(dataToUpdate).length > 0) {
+            await updateUser(currentUser.id, dataToUpdate);
+            await refetchData('users'); // Recargar los datos para que se reflejen en toda la app
+            toast({ title: "Éxito", description: "Perfil actualizado." });
+        } else {
+             toast({ title: "Sin cambios", description: "No hay campos editables para guardar." });
+        }
+        
     } catch (error: any) {
         console.error(error);
         if (error.code === 'permission-denied') {
@@ -91,7 +104,7 @@ export default function ProfilePage() {
             <CardContent className="space-y-4">
                 <div className="space-y-2">
                 <Label htmlFor="name">Nombre Completo</Label>
-                <Input id="name" value={currentUser.name} onChange={(e) => handleFieldChange('name', e.target.value)} disabled={isSaving} />
+                <Input id="name" value={currentUser.name} onChange={(e) => handleFieldChange('name', e.target.value)} disabled={isSaving || !canEditName} />
                 </div>
                 <div className="space-y-2">
                 <Label htmlFor="email">Correo Electrónico</Label>
@@ -103,7 +116,7 @@ export default function ProfilePage() {
                 </div>
             </CardContent>
             <CardFooter>
-                <Button type="submit" disabled={isSaving}>
+                <Button type="submit" disabled={isSaving || !canEditName}>
                     {isSaving && <LoaderCircle className="animate-spin" />}
                     Guardar Cambios
                 </Button>
@@ -140,4 +153,3 @@ export default function ProfilePage() {
     </>
   );
 }
-
