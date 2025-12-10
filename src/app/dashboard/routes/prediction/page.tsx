@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Search, Save, MapPin, Download, Route, Users } from "lucide-react";
+import { LoaderCircle, Search, Save, MapPin, Download, Route, Users, LocateFixed } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO } from 'date-fns';
@@ -105,6 +105,26 @@ export default function PrediccionesPage() {
     setLoading(false);
   };
  
+  const handleGetLocation = () => {
+    if (!navigator.geolocation) {
+        toast({ title: "Geolocalización no soportada", description: "Tu navegador no permite obtener la ubicación.", variant: "destructive" });
+        return;
+    }
+    setLoading(true);
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            setLatBase(String(position.coords.latitude));
+            setLonBase(String(position.coords.longitude));
+            toast({ title: "Ubicación Obtenida", description: "Latitud y Longitud actualizadas." });
+            setLoading(false);
+        },
+        (error) => {
+            toast({ title: "Error de Ubicación", description: "No se pudo obtener la ubicación. " + error.message, variant: "destructive" });
+            setLoading(false);
+        }
+    );
+  };
+
   const filteredPredicciones = useMemo(() => {
     return predicciones.filter(p => {
         if (isSupervisorOrAdmin) {
@@ -284,57 +304,67 @@ export default function PrediccionesPage() {
                 <CardTitle>Parámetros de Predicción</CardTitle>
                 <CardDescription>Selecciona los parámetros para generar las predicciones.</CardDescription>
             </CardHeader>
-            <CardContent className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                 <div className="space-y-2">
-                    <Label htmlFor="ejecutivo">Ejecutivo</Label>
-                    <Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo} disabled={!isSupervisorOrAdmin}>
-                        <SelectTrigger id="ejecutivo">
-                            <Users className="inline-block mr-2 h-4 w-4" />
-                            <SelectValue placeholder="Seleccionar ejecutivo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {isSupervisorOrAdmin && <SelectItem value="todos">Todos los Ejecutivos</SelectItem>}
-                            {availableEjecutivos.map(ejecutivo => (
-                                <SelectItem key={ejecutivo.id} value={ejecutivo.name}>
-                                    {ejecutivo.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+            <CardContent>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="space-y-2">
+                        <Label htmlFor="ejecutivo">Ejecutivo</Label>
+                        <Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo} disabled={!isSupervisorOrAdmin}>
+                            <SelectTrigger id="ejecutivo">
+                                <Users className="inline-block mr-2 h-4 w-4" />
+                                <SelectValue placeholder="Seleccionar ejecutivo" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {isSupervisorOrAdmin && <SelectItem value="todos">Todos los Ejecutivos</SelectItem>}
+                                {availableEjecutivos.map(ejecutivo => (
+                                    <SelectItem key={ejecutivo.id} value={ejecutivo.name}>
+                                        {ejecutivo.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="fecha-inicio">Fecha de Inicio</Label>
+                        <Input
+                            id="fecha-inicio"
+                            type="date"
+                            value={fechaInicio}
+                            onChange={(e) => setFechaInicio(e.target.value)}
+                            disabled={loading}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="dias">Días a Predecir</Label>
+                        <Input
+                            id="dias"
+                            type="number"
+                            value={dias}
+                            onChange={(e) => setDias(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                            min="1"
+                            disabled={loading}
+                        />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="maxKm">Radio Máximo (km)</Label>
+                        <Input id="maxKm" type="number" value={maxKm} onChange={(e) => setMaxKm(e.target.value === '' ? '' : Number(e.target.value))} disabled={loading} />
+                    </div>
                 </div>
-                <div className="space-y-2">
-                    <Label htmlFor="fecha-inicio">Fecha de Inicio</Label>
-                    <Input
-                        id="fecha-inicio"
-                        type="date"
-                        value={fechaInicio}
-                        onChange={(e) => setFechaInicio(e.target.value)}
-                        disabled={loading}
-                    />
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="dias">Días a Predecir</Label>
-                    <Input
-                        id="dias"
-                        type="number"
-                        value={dias}
-                        onChange={(e) => setDias(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-                        min="1"
-                        disabled={loading}
-                    />
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="latBase">Latitud Base (Opcional)</Label>
-                    <Input id="latBase" value={latBase} onChange={(e) => setLatBase(e.target.value)} disabled={loading} placeholder="-0.180653" />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="lonBase">Longitud Base (Opcional)</Label>
-                    <Input id="lonBase" value={lonBase} onChange={(e) => setLonBase(e.target.value)} disabled={loading} placeholder="-78.469498" />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="maxKm">Radio Máximo (km)</Label>
-                    <Input id="maxKm" type="number" value={maxKm} onChange={(e) => setMaxKm(e.target.value === '' ? '' : Number(e.target.value))} disabled={loading} />
-                </div>
+                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 items-end">
+                    <div className="space-y-2">
+                        <Label htmlFor="latBase">Latitud Base (Opcional)</Label>
+                        <Input id="latBase" value={latBase} onChange={(e) => setLatBase(e.target.value)} disabled={loading} placeholder="-0.180653" />
+                    </div>
+                    <div className="space-y-2">
+                        <Label htmlFor="lonBase">Longitud Base (Opcional)</Label>
+                        <Input id="lonBase" value={lonBase} onChange={(e) => setLonBase(e.target.value)} disabled={loading} placeholder="-78.469498" />
+                    </div>
+                    <div className="space-y-2">
+                        <Button onClick={handleGetLocation} variant="outline" disabled={loading}>
+                            <LocateFixed className="mr-2 h-4 w-4" />
+                            Obtener mi Ubicación
+                        </Button>
+                    </div>
+                 </div>
             </CardContent>
             <CardFooter>
                 <Button onClick={obtenerPredicciones} disabled={loading}>
@@ -481,5 +511,6 @@ export default function PrediccionesPage() {
     </>
   );
 }
+
 
 
