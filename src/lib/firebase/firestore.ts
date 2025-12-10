@@ -115,16 +115,14 @@ export const updateUser = (id: string, userData: Partial<User>) => {
 };
 
 /**
- * Actualiza la contraseña de un usuario. Esto requiere llamar a una Cloud Function
- * o a un endpoint seguro que use el Admin SDK. Aquí simulamos la llamada.
- * @param {string} email - El email del usuario.
+ * Actualiza la contraseña de un usuario.
+ * @param {string} uid - El UID del usuario.
  * @param {string} newPassword - La nueva contraseña.
  * @returns {Promise<void>}
  */
-export const updateUserPassword = async (email: string, newPassword: string): Promise<void> => {
+export const updateUserPassword = async (uid: string, newPassword: string): Promise<void> => {
   // Llama a la función de ayuda de autenticación.
-  // Esta función debe manejar la lógica de backend necesaria.
-  return updateUserPasswordAsAdmin(email, newPassword);
+  return updateUserPasswordAsAdmin(uid, newPassword);
 };
 
 

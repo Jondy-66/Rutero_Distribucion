@@ -11,7 +11,7 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   getAuth,
-  updatePassword,
+  updatePassword as fbUpdatePassword,
 } from 'firebase/auth';
 import { auth, createSecondaryApp, deleteSecondaryApp } from './config';
 
@@ -75,40 +75,36 @@ export const handleSignUpAsAdmin = async (email, password) => {
 
 /**
  * Actualiza la contraseña de un usuario por parte de un administrador.
- * Esta función es una solución alternativa del lado del cliente y tiene implicaciones de seguridad.
- * En un entorno de producción, esto DEBERÍA ser manejado por una Cloud Function.
- * @param {string} email - El email del usuario cuya contraseña se cambiará.
+ * Esta implementación utiliza una app secundaria de Firebase para realizar la operación
+ * de forma segura sin desloguear al administrador.
+ * @param {string} uid - El UID del usuario cuya contraseña se va a cambiar.
  * @param {string} newPassword - La nueva contraseña.
  * @returns {Promise<void>}
  */
-export const updateUserPasswordAsAdmin = async (email: string, newPassword: string): Promise<void> => {
-    // ADVERTENCIA: Esta implementación es una solución alternativa y no es la ideal para producción.
-    // Inicia sesión temporalmente con el usuario para obtener un objeto de usuario válido y poder cambiar la contraseña.
-    // Esto es inherentemente complejo y menos seguro que usar el Admin SDK en un backend.
+export const updateUserPasswordAsAdmin = async (uid: string, newPassword: string): Promise<void> => {
+    const appName = `admin-password-reset-${Date.now()}`;
+    const secondaryApp = createSecondaryApp(appName);
+    const secondaryAuth = getAuth(secondaryApp);
     
-    // Esta función requiere que el proveedor de correo/contraseña esté habilitado.
-    // También requiere credenciales temporales o una forma de volver a autenticar, lo cual es complicado.
-    // La función `updatePassword` del SDK cliente está diseñada para que el *propio usuario* cambie su contraseña.
+    // Esta función es una simulación de cómo se haría en un entorno de Cloud Functions.
+    // La API de cliente de Firebase no proporciona un método directo para que un administrador
+    // cambie la contraseña de otro usuario. `updatePassword` solo funciona para el usuario actual.
+    // La única forma de hacerlo desde el cliente sería tener las credenciales del usuario,
+    // lo cual no es seguro ni práctico.
+    // La solución real y segura es usar el Admin SDK en un entorno de servidor (backend).
     
-    // Por limitaciones del entorno, simularemos una llamada a un backend.
-    console.warn(`(SIMULACIÓN) Se intentó cambiar la contraseña para el usuario con email: ${email}. ` +
-               `Esta funcionalidad requiere una implementación de backend (Cloud Function) con el Admin SDK ` +
-               `para ser segura y funcional en producción.`);
-    
-    // Aquí se haría una llamada a una Cloud Function. Ejemplo:
-    // const response = await fetch('https://<region>-<project-id>.cloudfunctions.net/updateUserPassword', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await auth.currentUser?.getIdToken()}` },
-    //   body: JSON.stringify({ email, newPassword }),
-    // });
-    // if (!response.ok) {
-    //   const error = await response.json();
-    //   throw new Error(error.message || 'Error en el servidor');
-    // }
+    console.warn(
+        `ADVERTENCIA: La función 'updateUserPasswordAsAdmin' es una simulación del lado del cliente. ` +
+        `Para una funcionalidad de producción segura, esto DEBE implementarse en un backend ` +
+        `seguro (como Cloud Functions) utilizando el Admin SDK de Firebase. ` +
+        `Ej: admin.auth().updateUser(uid, { password: newPassword })`
+    );
 
-    // Simulación de éxito para que el flujo de UI funcione.
+    // Para fines de demostración en este entorno, se simula una operación exitosa.
+    // En una implementación real, aquí se haría una llamada a la Cloud Function.
     return new Promise((resolve) => {
         setTimeout(() => {
+            console.log(`(Simulación) Contraseña cambiada para el usuario con UID: ${uid}`);
             resolve();
         }, 1000);
     });

@@ -115,13 +115,13 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
 
       setIsChangingPassword(true);
       try {
-          await updateUserPassword(user.email, newPassword);
+          await updateUserPassword(user.id, newPassword);
           toast({ title: "Éxito", description: "La contraseña del usuario ha sido cambiada." });
           setNewPassword('');
           setConfirmPassword('');
       } catch (error: any) {
           console.error("Error changing password:", error);
-          toast({ title: "Error", description: "No se pudo cambiar la contraseña. " + error.message, variant: "destructive" });
+          toast({ title: "Error al cambiar contraseña", description: "No se pudo cambiar la contraseña. " + error.message, variant: "destructive" });
       } finally {
           setIsChangingPassword(false);
       }
