@@ -1,5 +1,4 @@
 
-
 /**
  * @fileoverview Este archivo contiene funciones para interactuar con la base de datos Firestore.
  * Proporciona una capa de abstracción para realizar operaciones CRUD (Crear, Leer, Actualizar, Eliminar)
@@ -118,14 +117,14 @@ export const updateUser = (id: string, userData: Partial<User>) => {
 /**
  * Actualiza la contraseña de un usuario. Esto requiere llamar a una Cloud Function
  * o a un endpoint seguro que use el Admin SDK. Aquí simulamos la llamada.
- * @param {string} uid - El ID del usuario.
+ * @param {string} email - El email del usuario.
  * @param {string} newPassword - La nueva contraseña.
  * @returns {Promise<void>}
  */
-export const updateUserPassword = async (uid: string, newPassword: string): Promise<void> => {
+export const updateUserPassword = async (email: string, newPassword: string): Promise<void> => {
   // Llama a la función de ayuda de autenticación.
   // Esta función debe manejar la lógica de backend necesaria.
-  return updateUserPasswordAsAdmin(uid, newPassword);
+  return updateUserPasswordAsAdmin(email, newPassword);
 };
 
 

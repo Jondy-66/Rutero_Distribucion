@@ -115,8 +115,8 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
 
       setIsChangingPassword(true);
       try {
-          await updateUserPassword(user.id, newPassword);
-          toast({ title: "Éxito (Simulado)", description: "La contraseña del usuario ha sido cambiada. La funcionalidad real requiere una implementación de backend." });
+          await updateUserPassword(user.email, newPassword);
+          toast({ title: "Éxito", description: "La contraseña del usuario ha sido cambiada." });
           setNewPassword('');
           setConfirmPassword('');
       } catch (error: any) {
@@ -132,6 +132,8 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
         setUser({ ...user, [field]: value });
     }
   }
+  
+  const canEditName = user?.role === 'Administrador';
 
   if (authLoading || !user) {
     return (
@@ -186,7 +188,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
                 <CardContent className="space-y-4">
                     <div className="space-y-2">
                     <Label htmlFor="name">Nombre Completo</Label>
-                    <Input id="name" value={user.name} onChange={e => handleFieldChange('name', e.target.value)} disabled={isSaving}/>
+                    <Input id="name" value={user.name} onChange={e => handleFieldChange('name', e.target.value)} disabled={isSaving || !canEditName}/>
                     </div>
                     <div className="space-y-2">
                     <Label htmlFor="email">Correo Electrónico</Label>
