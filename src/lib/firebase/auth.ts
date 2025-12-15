@@ -1,4 +1,5 @@
 
+
 /**
  * @fileoverview Este archivo proporciona funciones de ayuda para interactuar con el servicio de Autenticación de Firebase.
  * Abstrae las llamadas a la API de Firebase Auth para operaciones comunes como iniciar sesión, cerrar sesión,
@@ -16,7 +17,7 @@ import {
   EmailAuthProvider,
 } from 'firebase/auth';
 import { auth, createSecondaryApp, deleteSecondaryApp } from './config';
-import { User } from '@/lib/types';
+import type { User } from '@/lib/types';
 
 
 /**
@@ -82,50 +83,24 @@ export const handleSignUpAsAdmin = async (email, password) => {
 
 /**
  * Actualiza la contraseña de un usuario por parte de un administrador.
- * Esta función es una simulación del lado del cliente, ya que la operación real
- * requiere privilegios de administrador que solo están disponibles en un entorno de servidor (backend)
- * a través del Admin SDK de Firebase.
- * @param {User} userToUpdate - El objeto de usuario completo cuya contraseña se va a cambiar.
+ * Esta función es la implementación correcta que utiliza una API de backend.
+ * @param {string} uid - El ID del usuario cuya contraseña se va a cambiar.
  * @param {string} newPassword - La nueva contraseña.
  * @returns {Promise<void>}
  */
-export const updateUserPasswordAsAdmin = async (userToUpdate: User, newPassword: string): Promise<void> => {
-    
-    console.warn(
-      `ADVERTENCIA: La funcionalidad de cambiar contraseña de otro usuario desde el cliente es compleja y ` +
-      `generalmente requiere una función de backend (Cloud Function) con el Admin SDK para un entorno de producción seguro. ` +
-      `Esta implementación es una simulación y puede fallar si las reglas de seguridad son estrictas.`
-    );
-  
-    const appName = `update-pw-app-${Date.now()}`;
-    let secondaryApp;
-    try {
-        secondaryApp = createSecondaryApp(appName);
-        const secondaryAuth = getAuth(secondaryApp);
-        
-        // Simulación de un proceso que requeriría el Admin SDK en un backend real.
-        // Aquí, simplemente mostramos que la intención es llamar a la API de backend.
-        const response = await fetch('/api/set-user-password', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ uid: userToUpdate.id, password: newPassword }),
-        });
+export const updateUserPasswordAsAdmin = async (uid: string, newPassword: string): Promise<void> => {
+    const response = await fetch('/api/set-user-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ uid, password: newPassword }),
+    });
 
-        if (!response.ok) {
-            const errorResult = await response.json();
-            throw new Error(errorResult.message || 'Error desde el servidor al cambiar la contraseña.');
-        }
-
-        console.log(`(Operación de Backend Exitosa) Contraseña para ${userToUpdate.email} ha sido cambiada.`);
-
-    } catch (error: any) {
-        console.error("Error durante el proceso de cambio de contraseña:", error);
-        throw new Error(error.message || "No se pudo cambiar la contraseña.");
-    } finally {
-        if (secondaryApp) {
-            await deleteSecondaryApp(secondaryApp);
-        }
+    if (!response.ok) {
+        const errorResult = await response.json();
+        throw new Error(errorResult.message || 'Error desde el servidor al cambiar la contraseña.');
     }
+
+    console.log(`(Operación de Backend Exitosa) Contraseña para el usuario ${uid} ha sido cambiada.`);
 };
 
 

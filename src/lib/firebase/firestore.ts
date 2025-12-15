@@ -9,6 +9,7 @@
 import { db } from './config';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp } from 'firebase/firestore';
 import type { User, Client, RoutePlan, ClientInRoute, Notification, PhoneContact } from '@/lib/types';
+import { updateUserPasswordAsAdmin } from './auth';
 
 // --- COLECCIÓN DE USUARIOS ---
 
@@ -121,18 +122,7 @@ export const updateUser = (id: string, userData: Partial<User>) => {
  * @returns {Promise<void>}
  */
 export const updateUserPassword = async (uid: string, newPassword: string): Promise<void> => {
-  const response = await fetch('/api/set-user-password', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ uid, password: newPassword }),
-  });
-
-  if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.message || 'Error al cambiar la contraseña.');
-  }
+  return updateUserPasswordAsAdmin(uid, newPassword);
 };
 
 

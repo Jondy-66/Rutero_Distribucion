@@ -10,9 +10,13 @@ import { getAuth } from 'firebase-admin/auth';
 import { initializeAdminApp } from '@/lib/firebase/admin-config';
 
 // Initialize the Firebase Admin App
-initializeAdminApp();
+const adminApp = initializeAdminApp();
 
 export async function POST(request: Request) {
+  if (!adminApp) {
+    return NextResponse.json({ message: 'Error de configuración del servidor: La inicialización del Admin SDK de Firebase falló. Revisa las variables de entorno.' }, { status: 500 });
+  }
+
   try {
     const { uid, password } = await request.json();
 
@@ -21,7 +25,7 @@ export async function POST(request: Request) {
     }
 
     // Use the Firebase Admin SDK to update the user's password
-    await getAuth().updateUser(uid, {
+    await getAuth(adminApp).updateUser(uid, {
       password: password,
     });
 

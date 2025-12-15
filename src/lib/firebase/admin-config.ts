@@ -13,18 +13,21 @@ const serviceAccount = {
 let adminApp: App;
 
 export function initializeAdminApp() {
-  if (getApps().length > 0) {
-    adminApp = getApps()[0];
-    return adminApp;
+  // Check if the app is already initialized
+  if (getApps().some(app => app.name === 'admin')) {
+    return getApps().find(app => app.name === 'admin');
   }
 
   if (!serviceAccount.projectId || !serviceAccount.privateKey || !serviceAccount.clientEmail) {
-    throw new Error('Firebase Admin SDK service account credentials are not set in environment variables.');
+    console.error('Firebase Admin SDK service account credentials are not set in environment variables.');
+    // No lanzar un error aquí para evitar que el servidor falle al construir si las variables no están presentes.
+    // La ruta de la API que lo usa manejará el error si la app no está inicializada.
+    return null;
   }
 
   adminApp = initializeApp({
     credential: credential.cert(serviceAccount),
-  });
+  }, 'admin');
 
   return adminApp;
 }

@@ -46,7 +46,7 @@ graph TD
     end
 
     subgraph "Servidor Next.js (Vercel/Host)"
-        B[API Routes (Proxy)]
+        B[API Routes (Proxy & Admin)]
     end
 
     subgraph "Google Cloud Platform"
@@ -67,13 +67,14 @@ graph TD
 
     B --"Llama a API de predicción"--> E
     B --"Llama a API de ruta óptima"--> F
+    B --"Usa Admin SDK para cambiar pass"--> C
 ```
 **Descripción de Componentes:**
 
-- **Frontend (Next.js/React):** Aplicación de página única (SPA) que se ejecuta en el navegador del usuario. Utiliza el App Router de Next.js para una combinación de Server y Client Components. La UI está construida con ShadCN/UI y Tailwind CSS. Se comunica directamente con Firebase para autenticación y datos, y con su propio backend (API Routes) para las llamadas a servicios de IA.
-- **Servidor Next.js (BFF):** Actúa como un Backend For Frontend, sirviendo como un proxy seguro para las llamadas a las APIs externas. Esto evita problemas de CORS y protege las claves de API.
+- **Frontend (Next.js/React):** Aplicación de página única (SPA) que se ejecuta en el navegador del usuario. Utiliza el App Router de Next.js para una combinación de Server y Client Components. La UI está construida con ShadCN/UI y Tailwind CSS. Se comunica directamente con Firebase para autenticación y datos, y con su propio backend (API Routes) para las llamadas a servicios de IA y operaciones de administrador.
+- **Servidor Next.js (BFF):** Actúa como un Backend For Frontend. Sirve como un proxy seguro para las llamadas a las APIs externas (evitando problemas de CORS y protegiendo claves) y aloja lógica de servidor para operaciones privilegiadas, como el cambio de contraseña de un usuario por parte de un administrador, utilizando el **Firebase Admin SDK**.
 - **Firebase (Google Cloud):**
-    - **Authentication:** Gestiona el inicio de sesión con correo/contraseña.
+    - **Authentication:** Gestiona el inicio de sesión con correo/contraseña. El Admin SDK en el backend le permite realizar operaciones de gestión de usuarios.
     - **Firestore:** Base de datos NoSQL donde se almacena toda la información de usuarios, clientes, rutas y notificaciones. Las reglas de seguridad de Firestore garantizan la integridad y el acceso a los datos.
 - **Servicios de Terceros:**
     - **APIs Externas:** Servicios de Machine Learning para predecir visitas y optimizar rutas.
@@ -85,14 +86,18 @@ El proyecto sigue la estructura estándar de una aplicación Next.js con el App 
 
 - **`app/`**: Contiene todas las rutas y páginas de la aplicación.
   - **`(auth)/`**: Rutas de autenticación (`login`, `forgot-password`).
-  - **`api/`**: Endpoints proxy de Next.js para interactuar con servicios externos.
+  - **`api/`**: Endpoints de Next.js. Incluye los proxies para servicios externos y la lógica de backend para operaciones de administrador (ej. `set-user-password`).
   - **`dashboard/`**: Layout y páginas protegidas del panel de control.
     - **`users/permissions`**: Nueva página para la gestión de permisos por módulo.
 - **`components/`**: Componentes de React reutilizables (UI de ShadCN y componentes personalizados).
 - **`contexts/`**: Proveedores de contexto, principalmente `auth-context.tsx` para el estado global.
 - **`hooks/`**: Hooks personalizados como `use-auth.ts`.
 - **`lib/`**: Lógica de negocio, tipos y utilidades.
-  - **`firebase/`**: Configuración de Firebase y funciones de ayuda (auth y firestore).
+  - **`firebase/`**: Configuración de Firebase y funciones de ayuda.
+    - **`config.ts`**: Configuración del SDK de cliente de Firebase.
+    - **`admin-config.ts`**: Configuración del SDK de Administrador de Firebase (para el backend).
+    - **`auth.ts`**: Funciones de ayuda para autenticación (login, logout, etc.).
+    - **`firestore.ts`**: Funciones para interactuar con Firestore.
   - **`types.ts`**: Definiciones de tipos de TypeScript para los datos principales, incluyendo `failedLoginAttempts`.
 - **`services/`**: Funciones para interactuar con las API proxy.
 - **`docs/`**: Documentación del proyecto.
@@ -113,13 +118,18 @@ Crear un archivo `.env.local` en la raíz del proyecto con las siguientes variab
 # Clave de API de Google Maps para el frontend
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIza...
 
-# Configuración de Firebase (obtenida desde la consola de Firebase)
+# Configuración de Firebase (obtenida desde la consola de Firebase) - LADO DEL CLIENTE
 NEXT_PUBLIC_FIREBASE_API_KEY=AIza...
 NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
 NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
 NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
 NEXT_PUBLIC_FIREBASE_APP_ID=...
+
+# Credenciales de la Cuenta de Servicio de Firebase (para el Admin SDK) - LADO DEL SERVIDOR
+# Estas deben configurarse en el entorno de despliegue (ej. Vercel)
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-...@...iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
 **Ejecución en Desarrollo:**
@@ -151,6 +161,7 @@ La aplicación estará disponible en `http://localhost:9002`.
 ### 8. Seguridad y Cumplimiento
 - **Autenticación:** Realizada por Firebase Authentication, que utiliza tokens (JWT) para gestionar las sesiones de forma segura.
 - **Creación Segura de Usuarios (Admin):** Para evitar que un administrador sea deslogueado al crear un nuevo usuario, se utiliza una instancia secundaria y temporal de la aplicación de Firebase. Esta instancia se usa para llamar a `createUserWithEmailAndPassword` y se destruye inmediatamente después, aislando la operación de la sesión principal del administrador.
+- **Cambio de Contraseña por Admin:** Se realiza a través de un endpoint seguro en el backend (`/api/set-user-password`) que utiliza el **Firebase Admin SDK**, el cual sí tiene los permisos para modificar la contraseña de otro usuario. El frontend nunca tiene acceso a esta lógica privilegiada.
 - **Bloqueo Inteligente:** Se ha implementado un mecanismo de bloqueo de cuentas en `src/app/(auth)/login/page.tsx`. Tras 5 intentos de inicio de sesión fallidos, la cuenta del usuario se marca como `inactive` en Firestore y se bloquea el acceso. El desbloqueo debe ser realizado por un `Administrador`.
 - **Recuperación de Contraseña:** El flujo en `src/app/(auth)/forgot-password/page.tsx` ha sido modificado para validar la existencia del correo electrónico en Firestore antes de invocar el envío del correo de recuperación, mostrando un error si el usuario no existe.
 - **Autorización:** Implementada en el frontend (mostrando/ocultando UI según el rol) y reforzada en el backend con Reglas de Seguridad de Firestore. Por ejemplo, un `Usuario` solo puede modificar las rutas que ha creado (`request.auth.uid == resource.data.createdBy`).
@@ -214,6 +225,7 @@ La estrategia de calidad del software se centra en garantizar la fiabilidad, fun
 | :--- | :--- | :--- |
 | El usuario no puede iniciar sesión. | Credenciales incorrectas o el usuario no existe. | Verificar correo/contraseña. Utilizar la función "Recuperar Contraseña". Si persiste, verificar en Firebase Auth. |
 | El usuario reporta cuenta bloqueada. | El usuario ha superado los 5 intentos fallidos de inicio de sesión. | Un `Administrador` debe acceder al perfil del usuario en la sección "Usuarios", cambiar su estado de `inactive` a `active` y guardar los cambios. |
+| No se puede cambiar la contraseña de otro usuario. | Las variables de entorno del Admin SDK (`FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`) no están configuradas en el entorno de despliegue. | El administrador del sistema debe configurar las variables de entorno de la cuenta de servicio de Firebase en la configuración del hosting (ej. Vercel). |
 | El usuario no puede ver datos (clientes, rutas). | Error en las reglas de seguridad de Firestore o el usuario no tiene el rol correcto. | Verificar los logs de Firestore y las reglas de seguridad. Asegurarse de que el `user.role` sea el adecuado. |
 | El mapa no se carga. | La `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY` no está configurada o es incorrecta. | Revisar el archivo `.env.local` y asegurarse de que la clave de API de Google Maps sea válida. |
 | Las predicciones de ruta fallan. | El servicio externo `api-distribucion-rutas.onrender.com` está caído o hay un problema de red. | Verificar el estado del servicio externo y los logs de la ruta proxy en `/api/predicciones`. |
@@ -221,5 +233,3 @@ La estrategia de calidad del software se centra en garantizar la fiabilidad, fun
 
 ### 13. Anexos
 *(Esta sección puede incluir diagramas de flujo de datos detallados, un glosario de términos, ejemplos de código clave, etc.)*
-
-    
