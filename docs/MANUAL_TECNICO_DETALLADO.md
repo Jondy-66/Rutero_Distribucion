@@ -68,6 +68,7 @@ graph TD
     B --"Llama a API de predicción"--> E
     B --"Llama a API de ruta óptima"--> F
     B --"Usa Admin SDK para cambiar pass"--> C
+
 ```
 **Descripción de Componentes:**
 
