@@ -1,4 +1,5 @@
 // src/lib/firebase/admin-config.ts
+import 'dotenv/config';
 import { initializeApp, getApps, App } from 'firebase-admin/app';
 import { credential } from 'firebase-admin';
 
