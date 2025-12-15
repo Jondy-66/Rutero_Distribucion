@@ -121,8 +121,12 @@ export const updateUser = (id: string, userData: Partial<User>) => {
  * @returns {Promise<void>}
  */
 export const updateUserPassword = async (uid: string, newPassword: string): Promise<void> => {
+  const userToUpdate = await getUser(uid);
+  if (!userToUpdate) {
+    throw new Error("Usuario no encontrado para actualizar la contraseña.");
+  }
   // Llama a la función de ayuda de autenticación.
-  return updateUserPasswordAsAdmin(uid, newPassword);
+  return updateUserPasswordAsAdmin(userToUpdate, newPassword);
 };
 
 
