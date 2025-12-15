@@ -14,7 +14,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { updateUser, getUsersBySupervisor, updateUserPassword } from '@/lib/firebase/firestore';
+import { updateUser, getUsersBySupervisor } from '@/lib/firebase/firestore';
+import { updateUserPasswordAsAdmin as updateUserPasswordInAuth } from '@/lib/firebase/auth';
+
 import type { User } from '@/lib/types';
 import { notFound, useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -114,7 +116,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
 
       setIsChangingPassword(true);
       try {
-          await updateUserPassword(user.id, newPassword);
+          await updateUserPasswordInAuth(user.id, newPassword);
           toast({ title: "Éxito", description: "La contraseña del usuario ha sido cambiada." });
           setNewPassword('');
           setConfirmPassword('');
@@ -330,3 +332,5 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     </>
   );
 }
+
+    
