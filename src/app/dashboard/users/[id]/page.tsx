@@ -31,6 +31,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
   const router = useRouter();
   const { toast } = useToast();
   const { users, loading: authLoading, refetchData } = useAuth();
+  const userId = params.id;
 
   const [user, setUser] = useState<User | null>(null);
   const [assignedUsers, setAssignedUsers] = useState<User[]>([]);
@@ -41,8 +42,6 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
-
-  const userId = params.id;
 
   useEffect(() => {
     if (users.length > 0 && userId) {

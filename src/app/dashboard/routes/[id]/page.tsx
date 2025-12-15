@@ -52,6 +52,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
   const { user: currentUser, users, clients, loading: authLoading, refetchData } = useAuth();
+  const routeId = params.id;
 
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [originalClients, setOriginalClients] = useState<ClientInRoute[]>([]);
@@ -69,7 +70,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   const [clientToRemove, setClientToRemove] = useState<ClientInRoute | null>(null);
   const [removalObservation, setRemovalObservation] = useState('');
 
-  const routeId = params.id;
   
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
@@ -258,7 +258,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     }
 
     setClientsInRoute(prev => prev.map(c => 
-        c.ruc === clientToRemove.ruc ? { ...c, removalObservation: removalObservation, status: 'Removed' } : c
+        c.ruc === clientToRemove.ruc ? { ...c, status: 'Removed', removalObservation: removalObservation } : c
     ).filter(c => c.ruc !== clientToRemove.ruc));
     
     toast({ title: 'Cliente Eliminado', description: `${clientToRemove.nombre_comercial} ha sido quitado de la ruta.`});
