@@ -9,7 +9,6 @@
 import { db } from './config';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp } from 'firebase/firestore';
 import type { User, Client, RoutePlan, ClientInRoute, Notification, PhoneContact } from '@/lib/types';
-import { updateUserPasswordAsAdmin } from './auth';
 
 // --- COLECCIÓN DE USUARIOS ---
 
