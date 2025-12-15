@@ -1,4 +1,5 @@
 
+
 /**
  * @fileoverview Este archivo contiene funciones para interactuar con la base de datos Firestore.
  * Proporciona una capa de abstracción para realizar operaciones CRUD (Crear, Leer, Actualizar, Eliminar)
@@ -115,18 +116,24 @@ export const updateUser = (id: string, userData: Partial<User>) => {
 };
 
 /**
- * Actualiza la contraseña de un usuario.
+ * Llama al endpoint de la API para actualizar la contraseña de un usuario.
  * @param {string} uid - El UID del usuario.
  * @param {string} newPassword - La nueva contraseña.
  * @returns {Promise<void>}
  */
 export const updateUserPassword = async (uid: string, newPassword: string): Promise<void> => {
-  const userToUpdate = await getUser(uid);
-  if (!userToUpdate) {
-    throw new Error("Usuario no encontrado para actualizar la contraseña.");
+  const response = await fetch('/api/set-user-password', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ uid, password: newPassword }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.message || 'Error al cambiar la contraseña.');
   }
-  // Llama a la función de ayuda de autenticación.
-  return updateUserPasswordAsAdmin(userToUpdate, newPassword);
 };
 
 
