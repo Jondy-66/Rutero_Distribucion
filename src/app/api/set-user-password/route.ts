@@ -5,6 +5,7 @@
  *
  * DO NOT ATTEMPT TO USE THE ADMIN SDK IN CLIENT-SIDE CODE.
  */
+import 'dotenv/config'; // Asegura que las variables de entorno se carguen
 import { NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { initializeAdminApp } from '@/lib/firebase/admin-config';
