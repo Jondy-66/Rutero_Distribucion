@@ -11,7 +11,6 @@ import {
   createUserWithEmailAndPassword,
   sendPasswordResetEmail,
   getAuth,
-  updatePassword as fbUpdatePassword,
 } from 'firebase/auth';
 import { auth, createSecondaryApp, deleteSecondaryApp } from './config';
 
@@ -75,38 +74,28 @@ export const handleSignUpAsAdmin = async (email, password) => {
 
 /**
  * Actualiza la contraseña de un usuario por parte de un administrador.
- * Esta implementación utiliza una app secundaria de Firebase para realizar la operación
- * de forma segura sin desloguear al administrador.
+ * Esta implementación es una SIMULACIÓN del lado del cliente.
+ * Para una funcionalidad de producción segura, esto DEBE implementarse en un backend
+ * (como Cloud Functions) utilizando el Admin SDK de Firebase.
  * @param {string} uid - El UID del usuario cuya contraseña se va a cambiar.
  * @param {string} newPassword - La nueva contraseña.
  * @returns {Promise<void>}
  */
 export const updateUserPasswordAsAdmin = async (uid: string, newPassword: string): Promise<void> => {
-    const appName = `admin-password-reset-${Date.now()}`;
-    const secondaryApp = createSecondaryApp(appName);
-    const secondaryAuth = getAuth(secondaryApp);
-    
-    // Esta función es una simulación de cómo se haría en un entorno de Cloud Functions.
-    // La API de cliente de Firebase no proporciona un método directo para que un administrador
-    // cambie la contraseña de otro usuario. `updatePassword` solo funciona para el usuario actual.
-    // La única forma de hacerlo desde el cliente sería tener las credenciales del usuario,
-    // lo cual no es seguro ni práctico.
-    // La solución real y segura es usar el Admin SDK en un entorno de servidor (backend).
-    
     console.warn(
         `ADVERTENCIA: La función 'updateUserPasswordAsAdmin' es una simulación del lado del cliente. ` +
         `Para una funcionalidad de producción segura, esto DEBE implementarse en un backend ` +
         `seguro (como Cloud Functions) utilizando el Admin SDK de Firebase. ` +
-        `Ej: admin.auth().updateUser(uid, { password: newPassword })`
+        `Ejemplo de código de backend: admin.auth().updateUser(uid, { password: newPassword })`
     );
 
-    // Para fines de demostración en este entorno, se simula una operación exitosa.
-    // En una implementación real, aquí se haría una llamada a la Cloud Function.
+    // Para fines de demostración en este entorno, se simula una operación exitosa
+    // sin realizar ningún cambio real en la autenticación de Firebase.
     return new Promise((resolve) => {
         setTimeout(() => {
-            console.log(`(Simulación) Contraseña cambiada para el usuario con UID: ${uid}`);
+            console.log(`(Simulación) La solicitud para cambiar la contraseña para el usuario con UID: ${uid} ha sido procesada.`);
             resolve();
-        }, 1000);
+        }, 500);
     });
 };
 
