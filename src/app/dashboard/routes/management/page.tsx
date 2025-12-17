@@ -328,11 +328,12 @@ export default function RouteManagementPage() {
         const currentRucs = new Set(routeClients.map(c => c.ruc));
         return availableClients.filter(c => 
             !currentRucs.has(c.ruc) &&
+            (user?.role !== 'Usuario' || c.ejecutivo === user.name) &&
             (String(c.nombre_cliente).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
              String(c.nombre_comercial).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
              String(c.ruc).includes(dialogSearchTerm))
         );
-    }, [availableClients, routeClients, dialogSearchTerm]);
+    }, [availableClients, routeClients, dialogSearchTerm, user]);
 
   const getNumericValueClass = (value: string) => {
     const numericValue = parseFloat(value);
