@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/table';
 import { addClientsBatch, deleteClient, updateClient } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
-import { PlusCircle, UploadCloud, File, Search, MoreHorizontal, Download } from 'lucide-react';
+import { PlusCircle, UploadCloud, File, Search, MoreHorizontal, Download, Users } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
@@ -46,6 +46,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/use-auth';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type ClientCsvData = {
     [key: string]: string;
@@ -57,6 +58,7 @@ export default function ClientsPage() {
   const { user, clients, loading, refetchData } = useAuth();
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedEjecutivo, setSelectedEjecutivo] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
@@ -65,7 +67,7 @@ export default function ClientsPage() {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [filter, searchTerm]);
+  }, [filter, searchTerm, selectedEjecutivo]);
 
   const handleEdit = (clientId: string) => {
     router.push(`/dashboard/clients/${clientId}`);
@@ -250,6 +252,11 @@ export default function ClientsPage() {
     }
   };
 
+  const uniqueEjecutivos = useMemo(() => {
+    const ejecutivos = new Set(clients.map(c => c.ejecutivo).filter(Boolean));
+    return ['all', ...Array.from(ejecutivos)];
+  }, [clients]);
+
   const filteredClients = useMemo(() => {
     return clients
       .filter(client => {
@@ -263,6 +270,10 @@ export default function ClientsPage() {
         return (client.status || 'active') === filter;
       })
       .filter(client => {
+        if (selectedEjecutivo === 'all') return true;
+        return client.ejecutivo === selectedEjecutivo;
+      })
+      .filter(client => {
         const search = searchTerm.toLowerCase();
         return (
           String(client.nombre_cliente).toLowerCase().includes(search) ||
@@ -272,7 +283,7 @@ export default function ClientsPage() {
           String(client.provincia).toLowerCase().includes(search)
         );
       });
-  }, [clients, filter, searchTerm, user]);
+  }, [clients, filter, searchTerm, user, selectedEjecutivo]);
   
   const paginatedClients = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
@@ -307,6 +318,8 @@ export default function ClientsPage() {
     XLSX.writeFile(workbook, "reporte_clientes.xlsx");
     toast({ title: "Descarga Iniciada", description: "Tu reporte de clientes se está descargando." });
   };
+  
+  const canSeeEjecutivoFilter = user?.role === 'Administrador' || user?.role === 'Supervisor';
 
   return (
     <>
@@ -372,14 +385,31 @@ export default function ClientsPage() {
                 <TabsTrigger value="inactive">Inactivos</TabsTrigger>
               </TabsList>
             </Tabs>
-            <div className="relative w-full sm:max-w-xs">
-              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input 
-                placeholder="Buscar clientes..." 
-                className="w-full pl-8" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
+            <div className="flex flex-col sm:flex-row w-full sm:w-auto sm:items-center gap-2">
+                {canSeeEjecutivoFilter && (
+                    <Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo}>
+                        <SelectTrigger className="w-full sm:w-[180px]">
+                            <Users className="mr-2 h-4 w-4" />
+                            <SelectValue placeholder="Filtrar por ejecutivo" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {uniqueEjecutivos.map(ejecutivo => (
+                                <SelectItem key={ejecutivo} value={ejecutivo}>
+                                    {ejecutivo === 'all' ? 'Todos los ejecutivos' : ejecutivo}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                )}
+              <div className="relative w-full sm:max-w-xs">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                  placeholder="Buscar clientes..." 
+                  className="w-full pl-8" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
             </div>
           </div>
           <div className="border rounded-lg mt-4 overflow-x-auto">
