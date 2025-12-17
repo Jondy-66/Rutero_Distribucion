@@ -30,10 +30,10 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { PasswordInput } from '@/components/password-input';
 
-export default function UserProfilePage({ params: { id: userId } }: { params: { id: string } }) {
+export default function UserProfilePage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
-  const { users, loading: authLoading, refetchData } = useAuth();
+  const { user: currentUser, users, loading: authLoading, refetchData } = useAuth();
   
   const [user, setUser] = useState<User | null>(null);
   const [assignedUsers, setAssignedUsers] = useState<User[]>([]);
@@ -46,8 +46,8 @@ export default function UserProfilePage({ params: { id: userId } }: { params: { 
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
-    if (users.length > 0 && userId) {
-        const userData = users.find(u => u.id === userId);
+    if (users.length > 0 && params.id) {
+        const userData = users.find(u => u.id === params.id);
         if (!userData) {
             notFound();
             return;
@@ -63,7 +63,7 @@ export default function UserProfilePage({ params: { id: userId } }: { params: { 
             });
         }
     }
-  }, [userId, users]);
+  }, [params.id, users]);
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,11 +71,15 @@ export default function UserProfilePage({ params: { id: userId } }: { params: { 
     setIsSaving(true);
     try {
       const dataToUpdate: Partial<User> = {
-        name: user.name,
-        email: user.email,
         role: user.role,
         status: user.status,
       };
+
+      // Solo un admin puede cambiar nombre y correo
+      if(currentUser?.role === 'Administrador') {
+        dataToUpdate.name = user.name;
+        dataToUpdate.email = user.email;
+      }
 
       if ((user.role === 'Usuario' || user.role === 'Telemercaderista') && user.supervisorId !== undefined) {
         dataToUpdate.supervisorId = user.supervisorId;
@@ -134,7 +138,7 @@ export default function UserProfilePage({ params: { id: userId } }: { params: { 
     }
   }
   
-  const canEditName = user?.role === 'Administrador';
+  const canEditNameAndEmail = currentUser?.role === 'Administrador';
 
   if (authLoading || !user) {
     return (
@@ -189,11 +193,11 @@ export default function UserProfilePage({ params: { id: userId } }: { params: { 
                 <CardContent className="space-y-4">
                     <div className="space-y-2">
                     <Label htmlFor="name">Nombre Completo</Label>
-                    <Input id="name" value={user.name} onChange={e => handleFieldChange('name', e.target.value)} disabled={isSaving || !canEditName}/>
+                    <Input id="name" value={user.name} onChange={e => handleFieldChange('name', e.target.value)} disabled={isSaving || !canEditNameAndEmail}/>
                     </div>
                     <div className="space-y-2">
                     <Label htmlFor="email">Correo Electrónico</Label>
-                    <Input id="email" type="email" value={user.email} disabled />
+                    <Input id="email" type="email" value={user.email} onChange={e => handleFieldChange('email', e.target.value)} disabled={isSaving || !canEditNameAndEmail} />
                     </div>
                     <div className="space-y-2">
                     <Label htmlFor="role">Rol</Label>
