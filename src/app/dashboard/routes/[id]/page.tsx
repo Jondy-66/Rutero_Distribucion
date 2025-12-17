@@ -2,7 +2,7 @@
 
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter, notFound } from 'next/navigation';
+import { useRouter, notFound, useParams } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -48,10 +48,11 @@ const generateTimeSlots = (startHour: number, endHour: number, interval: number,
 const startTimeSlots = generateTimeSlots(8, 18, 30);
 const endTimeSlots = generateTimeSlots(8, 18, 30, 30);
 
-export default function EditRoutePage({ params: { id: routeId } }: { params: { id: string } }) {
+export default function EditRoutePage({ params }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
   const { user: currentUser, users, clients, loading: authLoading, refetchData } = useAuth();
+  const routeId = params.id;
 
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [originalClients, setOriginalClients] = useState<ClientInRoute[]>([]);
@@ -266,12 +267,21 @@ export default function EditRoutePage({ params: { id: routeId } }: { params: { i
   }
   
   const filteredAvailableClients = useMemo(() => {
-    return clients.filter(c => 
-        String(c.nombre_cliente).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
-        String(c.nombre_comercial).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
-        String(c.ruc).includes(dialogSearchTerm)
-    );
-  }, [clients, dialogSearchTerm]);
+    return clients.filter(c => {
+      // Filter by user role first
+      if (currentUser?.role === 'Usuario' && c.ejecutivo !== currentUser.name) {
+          return false;
+      }
+      
+      // Then filter by search term
+      const searchTermLower = dialogSearchTerm.toLowerCase();
+      return (
+          String(c.nombre_cliente).toLowerCase().includes(searchTermLower) ||
+          String(c.nombre_comercial).toLowerCase().includes(searchTermLower) ||
+          String(c.ruc).includes(dialogSearchTerm)
+      );
+    });
+  }, [clients, dialogSearchTerm, currentUser]);
   
   const originalClientRucs = useMemo(() => new Set(originalClients.map(c => c.ruc)), [originalClients]);
 
