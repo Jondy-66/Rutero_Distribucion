@@ -48,11 +48,10 @@ const generateTimeSlots = (startHour: number, endHour: number, interval: number,
 const startTimeSlots = generateTimeSlots(8, 18, 30);
 const endTimeSlots = generateTimeSlots(8, 18, 30, 30);
 
-export default function EditRoutePage({ params }: { params: { id: string } }) {
+export default function EditRoutePage({ params: { id: routeId } }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
   const { user: currentUser, users, clients, loading: authLoading, refetchData } = useAuth();
-  const routeId = params.id;
 
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [originalClients, setOriginalClients] = useState<ClientInRoute[]>([]);

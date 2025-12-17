@@ -30,6 +30,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 
 
 type RouteClient = Client & {
@@ -359,6 +360,28 @@ export default function RouteManagementPage() {
     }
   }
 
+  const onDragEnd = (result: DropResult) => {
+    const { destination, source } = result;
+
+    if (!destination) {
+      return;
+    }
+
+    if (
+      destination.droppableId === source.droppableId &&
+      destination.index === source.index
+    ) {
+      return;
+    }
+
+    const newRouteClients = Array.from(routeClients);
+    const [removed] = newRouteClients.splice(source.index, 1);
+    newRouteClients.splice(destination.index, 0, removed);
+
+    setRouteClients(newRouteClients);
+  };
+
+
   const esFarmacia = activeClient?.nombre_comercial?.toLowerCase().includes('farmacia');
   const isFormDisabled = isRouteExpired || !checkInTime || !visitType;
 
@@ -460,30 +483,51 @@ export default function RouteManagementPage() {
                                     </DialogContent>
                                 </Dialog>
                             </div>
-                            <div className="mt-2 space-y-2 max-h-[calc(100vh-20rem)] overflow-y-auto pr-2 rounded-md border p-2">
-                                {routeClients.length > 0 ? routeClients.map((client, index) => (
-                                    <div 
-                                        key={client.ruc} 
-                                        className={cn(
-                                            "flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md relative",
-                                            activeClient?.ruc === client.ruc && "bg-primary/10 border-primary/50 border",
-                                            client.visitStatus === 'Completado' && 'opacity-60'
-                                        )}
+                            <DragDropContext onDragEnd={onDragEnd}>
+                                <Droppable droppableId="clients">
+                                {(provided) => (
+                                    <div
+                                    {...provided.droppableProps}
+                                    ref={provided.innerRef}
+                                    className="mt-2 space-y-2 max-h-[calc(100vh-20rem)] overflow-y-auto pr-2 rounded-md border p-2"
                                     >
-                                        {client.origin === 'manual' && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
-                                        <div className="flex items-center gap-3">
-                                            <span className={cn("font-semibold", activeClient?.ruc === client.ruc && "text-primary")}>{index + 1}.</span>
-                                            <span className="truncate flex-1" title={client.nombre_comercial}>{client.nombre_comercial}</span>
-                                        </div>
-                                        <div className="flex items-center">
-                                            {client.visitStatus === 'Completado' && <CheckCircle className="h-4 w-4 text-green-500 mr-2" />}
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); handleViewClientOnMap(client)}}>
-                                                <MapPin className="h-4 w-4" />
-                                            </Button>
-                                        </div>
+                                    {routeClients.length > 0 ? routeClients.map((client, index) => (
+                                        <Draggable key={client.ruc} draggableId={client.ruc} index={index} isDragDisabled={client.visitStatus === 'Completado'}>
+                                        {(provided, snapshot) => (
+                                            <div
+                                            ref={provided.innerRef}
+                                            {...provided.draggableProps}
+                                            
+                                            className={cn(
+                                                "flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md relative",
+                                                activeClient?.ruc === client.ruc && "bg-primary/10 border-primary/50 border",
+                                                client.visitStatus === 'Completado' && 'opacity-60',
+                                                snapshot.isDragging && "shadow-lg"
+                                            )}
+                                            >
+                                            {client.origin === 'manual' && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
+                                            <div className="flex items-center gap-3 flex-1">
+                                                <div {...provided.dragHandleProps} className={cn("cursor-grab", client.visitStatus === 'Completado' && 'cursor-not-allowed')}>
+                                                  <GripVertical className="h-5 w-5 text-muted-foreground" />
+                                                </div>
+                                                <span className={cn("font-semibold", activeClient?.ruc === client.ruc && "text-primary")}>{index + 1}.</span>
+                                                <span className="truncate flex-1" title={client.nombre_comercial}>{client.nombre_comercial}</span>
+                                            </div>
+                                            <div className="flex items-center">
+                                                {client.visitStatus === 'Completado' && <CheckCircle className="h-4 w-4 text-green-500 mr-2" />}
+                                                <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => {e.stopPropagation(); handleViewClientOnMap(client)}}>
+                                                    <MapPin className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                            </div>
+                                        )}
+                                        </Draggable>
+                                    )) : <p className="text-sm text-muted-foreground text-center py-4">No hay clientes en esta ruta.</p>}
+                                    {provided.placeholder}
                                     </div>
-                                )) : <p className="text-sm text-muted-foreground text-center py-4">No hay clientes en esta ruta.</p>}
-                            </div>
+                                )}
+                                </Droppable>
+                            </DragDropContext>
                         </div>
                     )}
                 </CardContent>

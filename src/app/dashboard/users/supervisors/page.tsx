@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -40,33 +41,16 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function SupervisorsPage() {
   const router = useRouter();
   const { toast } = useToast();
-  const [supervisors, setSupervisors] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const {users, loading: authLoading, refetchData} = useAuth();
+  
+  const supervisors = users.filter(u => u.role === 'Supervisor');
+  const loading = authLoading;
 
-  const fetchSupervisors = async () => {
-    setLoading(true);
-    try {
-      const supervisorsData = await getSupervisors();
-      setSupervisors(supervisorsData);
-    } catch (error: any) {
-      console.error("Failed to fetch supervisors:", error);
-      if (error.code === 'permission-denied') {
-        toast({ title: "Error de Permisos", description: "No tienes permiso para ver supervisores.", variant: "destructive" });
-      } else {
-        toast({ title: "Error", description: "No se pudieron cargar los supervisores.", variant: "destructive" });
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchSupervisors();
-  }, []);
 
   const getBadgeVariantForRole = (role: string) => {
     if (role === 'Administrador') return 'default';
@@ -86,7 +70,7 @@ export default function SupervisorsPage() {
     try {
       await deleteUser(userId);
       toast({ title: "Éxito", description: "Usuario eliminado correctamente." });
-      fetchSupervisors(); // Refresh the list
+      refetchData('users'); // Refresh the list
     } catch (error: any) {
       console.error("Failed to delete user:", error);
       if (error.code === 'permission-denied') {

@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useEffect, useState, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -29,12 +30,11 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { PasswordInput } from '@/components/password-input';
 
-export default function UserProfilePage({ params }: { params: { id: string } }) {
+export default function UserProfilePage({ params: { id: userId } }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
   const { users, loading: authLoading, refetchData } = useAuth();
-  const userId = params.id;
-
+  
   const [user, setUser] = useState<User | null>(null);
   const [assignedUsers, setAssignedUsers] = useState<User[]>([]);
   const [supervisors, setSupervisors] = useState<User[]>([]);

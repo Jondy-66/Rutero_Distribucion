@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -20,7 +21,7 @@ import Link from 'next/link';
 import { ArrowLeft, LoaderCircle, Users } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { handleSignUpAsAdmin } from '@/lib/firebase/auth';
-import { addUser, getSupervisors } from '@/lib/firebase/firestore';
+import { addUser } from '@/lib/firebase/firestore';
 import type { User } from '@/lib/types';
 import { useAuth } from '@/hooks/use-auth';
 

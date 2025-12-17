@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useEffect, useState } from 'react';
 import { notFound, useRouter } from 'next/navigation';
@@ -22,14 +23,13 @@ import { getClient, updateClient } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 
-export default function EditClientPage({ params }: { params: { id: string } }) {
+export default function EditClientPage({ params: { id: clientId } }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const clientId = params.id;
-
+  
   useEffect(() => {
     const fetchClient = async () => {
       try {
