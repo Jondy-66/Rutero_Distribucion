@@ -2,7 +2,7 @@
 
 'use client';
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter, notFound, useParams } from 'next/navigation';
+import { useRouter, notFound } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
@@ -266,19 +266,22 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     setRemovalObservation('');
   }
   
-  const filteredAvailableClients = useMemo(() => {
-    return clients.filter(c => {
-      // Filter by user role first
-      if (currentUser?.role === 'Usuario' && c.ejecutivo !== currentUser.name) {
-          return false;
+    const filteredAvailableClients = useMemo(() => {
+    // Return all clients that belong to the user (if 'Usuario') or all clients (if 'Admin'/'Supervisor')
+    const userClients = clients.filter(c => {
+      if (currentUser?.role === 'Usuario') {
+        return c.ejecutivo === currentUser.name;
       }
-      
-      // Then filter by search term
+      return true; // Admin/Supervisor can see all
+    });
+
+    // Then, filter by search term
+    return userClients.filter(c => {
       const searchTermLower = dialogSearchTerm.toLowerCase();
       return (
-          String(c.nombre_cliente).toLowerCase().includes(searchTermLower) ||
-          String(c.nombre_comercial).toLowerCase().includes(searchTermLower) ||
-          String(c.ruc).includes(dialogSearchTerm)
+        String(c.nombre_cliente).toLowerCase().includes(searchTermLower) ||
+        String(c.nombre_comercial).toLowerCase().includes(searchTermLower) ||
+        String(c.ruc).includes(dialogSearchTerm)
       );
     });
   }, [clients, dialogSearchTerm, currentUser]);
