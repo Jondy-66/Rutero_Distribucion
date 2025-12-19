@@ -206,7 +206,6 @@ export default function RouteManagementPage() {
         const existingClientInPlan = fullRoutePlanClients.find(c => c.ruc === activeClient.ruc);
 
         const completedClientData: ClientInRoute = {
-            // Base properties from existing data or safe defaults
             ruc: activeClient.ruc,
             nombre_comercial: activeClient.nombre_comercial,
             date: existingClientInPlan?.date ?? activeClient.date ?? new Date(),
@@ -214,8 +213,6 @@ export default function RouteManagementPage() {
             startTime: existingClientInPlan?.startTime,
             endTime: existingClientInPlan?.endTime,
             origin: existingClientInPlan?.origin ?? activeClient.origin,
-            
-            // Updated properties from the form
             visitStatus: 'Completado',
             visitType: visitType,
             callObservation: visitType === 'telefonica' ? callObservation : undefined,
@@ -226,7 +223,6 @@ export default function RouteManagementPage() {
             medicacionFrecuente: parseFloat(activeClient.medicacionFrecuente) || 0,
         };
 
-        // Clean up any undefined properties before saving to Firestore
         Object.keys(completedClientData).forEach(key => {
             if (completedClientData[key as keyof ClientInRoute] === undefined) {
                 delete completedClientData[key as keyof ClientInRoute];
@@ -243,7 +239,6 @@ export default function RouteManagementPage() {
 
         await updateRoute(selectedRoute.id, { clients: fullRoutePlanClients });
         
-        // Update local state to reflect the change immediately
         const updatedLocalRouteClients = routeClients.map(c => 
             c.ruc === activeClient.ruc ? { ...c, visitStatus: 'Completado' as const } : c
         );
@@ -252,19 +247,19 @@ export default function RouteManagementPage() {
         toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
         
         // Check if all clients are now completed
-        const allClientsCompleted = updatedLocalRouteClients.every(
+        const allClientsNowCompleted = updatedLocalRouteClients.every(
             c => c.visitStatus === 'Completado'
         );
 
-        if (allClientsCompleted) {
+        if (allClientsNowCompleted) {
             await updateRoute(selectedRoute.id, { status: 'Completada' });
             toast({ title: "¡Ruta Finalizada!", description: "Todos los clientes han sido gestionados." });
-            // Update the selected route state locally
             setSelectedRoute(prev => prev ? { ...prev, status: 'Completada' } : undefined);
+            await refetchData('routes');
+        } else {
+            // Refetch routes to update the context in the background
+            await refetchData('routes');
         }
-
-        // Refetch all routes data in the background to keep context updated
-        await refetchData('routes');
 
     } catch(error: any) {
         console.error("Error updating route on checkout:", error);
@@ -340,8 +335,9 @@ export default function RouteManagementPage() {
         return availableClients.filter(c => {
           if (currentRucs.has(c.ruc)) return false;
           
-          const matchesUser = user?.role !== 'Usuario' || (c.ejecutivo?.trim().toLowerCase() === user.name?.trim().toLowerCase());
-          if (!matchesUser) return false;
+          if (user?.role === 'Usuario') {
+            return (c.ejecutivo?.trim().toLowerCase() === user.name?.trim().toLowerCase());
+          }
 
           const searchTermLower = dialogSearchTerm.toLowerCase();
           return (
