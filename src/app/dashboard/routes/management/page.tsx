@@ -268,16 +268,11 @@ export default function RouteManagementPage() {
       if (route) {
           setSelectedRoute(route);
           setIsRouteStarted(route.status === 'En Progreso');
-          setActiveClient(null); // Reset selected client when route changes
+          
           if (availableClients) {
             const today = startOfDay(new Date());
 
             const clientsData = route.clients
-            .filter(clientInRoute => {
-              if (!clientInRoute.date) return false;
-              const visitDate = startOfDay(clientInRoute.date instanceof Date ? clientInRoute.date : clientInRoute.date.toDate());
-              return visitDate.getTime() === today.getTime();
-            })
             .map(clientInRoute => {
                 const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
                 return {
@@ -290,7 +285,7 @@ export default function RouteManagementPage() {
                     promociones: String(clientInRoute.promociones || '0.00'),
                     medicacionFrecuente: String(clientInRoute.medicacionFrecuente || '0.00'),
                 } as RouteClient;
-            }).filter(c => c.id);
+            }).filter(c => c.id); // Filter out clients that weren't found in availableClients
             setRouteClients(clientsData);
           }
       }
@@ -330,13 +325,19 @@ export default function RouteManagementPage() {
     
     const availableClientsForDialog = useMemo(() => {
         const currentRucs = new Set(routeClients.map(c => c.ruc));
-        return availableClients.filter(c => 
-            !currentRucs.has(c.ruc) &&
-            (user?.role !== 'Usuario' || c.ejecutivo.trim().toLowerCase() === user.name.trim().toLowerCase()) &&
-            (String(c.nombre_cliente).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
-             String(c.nombre_comercial).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
-             String(c.ruc).includes(dialogSearchTerm))
-        );
+        return availableClients.filter(c => {
+          if (currentRucs.has(c.ruc)) return false;
+          
+          const matchesUser = user?.role !== 'Usuario' || (c.ejecutivo?.trim().toLowerCase() === user.name?.trim().toLowerCase());
+          if (!matchesUser) return false;
+
+          const searchTermLower = dialogSearchTerm.toLowerCase();
+          return (
+            String(c.nombre_cliente).toLowerCase().includes(searchTermLower) ||
+            String(c.nombre_comercial).toLowerCase().includes(searchTermLower) ||
+            String(c.ruc).includes(dialogSearchTerm)
+          );
+        });
     }, [availableClients, routeClients, dialogSearchTerm, user]);
 
   const getNumericValueClass = (value: string) => {
@@ -385,7 +386,7 @@ export default function RouteManagementPage() {
   };
 
 
-  const esFarmacia = activeClient?.nombre_comercial?.toLowerCase().includes('farmacia');
+  const hasDescuento = activeClient?.nombre_comercial?.toLowerCase().includes('descuento');
   const isFormDisabled = isRouteExpired || !checkInTime || !visitType;
 
 
@@ -667,7 +668,7 @@ export default function RouteManagementPage() {
                                                         <Label htmlFor={`devoluciones-${activeClient.ruc}`}>Devoluciones ($)</Label>
                                                         <Input id={`devoluciones-${activeClient.ruc}`} type="number" value={activeClient.devoluciones} onChange={(e) => handleClientValueChange(activeClient.ruc, 'devoluciones', e.target.value)} disabled={isFormDisabled} />
                                                     </div>
-                                                    {esFarmacia && (
+                                                    {hasDescuento && (
                                                         <>
                                                             <div className="space-y-1">
                                                                 <Label htmlFor={`promociones-${activeClient.ruc}`}>Promociones ($)</Label>
