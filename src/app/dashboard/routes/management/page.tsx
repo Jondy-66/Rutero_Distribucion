@@ -243,10 +243,14 @@ export default function RouteManagementPage() {
 
         await updateRoute(selectedRoute.id, { clients: fullRoutePlanClients });
         
+        // Update local state to reflect the change immediately
         const updatedLocalRouteClients = routeClients.map(c => 
             c.ruc === activeClient.ruc ? { ...c, visitStatus: 'Completado' as const } : c
         );
         setRouteClients(updatedLocalRouteClients);
+        
+        // Update the route in the global context
+        await refetchData('routes');
 
         toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
 
@@ -271,15 +275,14 @@ export default function RouteManagementPage() {
             const clientsData = route.clients
             .filter(clientInRoute => {
               if (!clientInRoute.date) return false;
-              // Ensure date is a Date object before comparing
               const visitDate = startOfDay(clientInRoute.date instanceof Date ? clientInRoute.date : clientInRoute.date.toDate());
               return visitDate.getTime() === today.getTime();
             })
             .map(clientInRoute => {
                 const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
                 return {
-                    ...(clientDetails || {}), // Detalle completo del cliente
-                    ...clientInRoute, // Datos específicos de la ruta
+                    ...(clientDetails || {}),
+                    ...clientInRoute,
                     visitStatus: clientInRoute.visitStatus || 'Pendiente',
                     valorVenta: String(clientInRoute.valorVenta || '0.00'),
                     valorCobro: String(clientInRoute.valorCobro || '0.00'),
@@ -287,7 +290,7 @@ export default function RouteManagementPage() {
                     promociones: String(clientInRoute.promociones || '0.00'),
                     medicacionFrecuente: String(clientInRoute.medicacionFrecuente || '0.00'),
                 } as RouteClient;
-            }).filter(c => c.id); // Ensure only valid clients are added
+            }).filter(c => c.id);
             setRouteClients(clientsData);
           }
       }
@@ -329,7 +332,7 @@ export default function RouteManagementPage() {
         const currentRucs = new Set(routeClients.map(c => c.ruc));
         return availableClients.filter(c => 
             !currentRucs.has(c.ruc) &&
-            (user?.role !== 'Usuario' || c.ejecutivo === user.name) &&
+            (user?.role !== 'Usuario' || c.ejecutivo.trim().toLowerCase() === user.name.trim().toLowerCase()) &&
             (String(c.nombre_cliente).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
              String(c.nombre_comercial).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
              String(c.ruc).includes(dialogSearchTerm))
