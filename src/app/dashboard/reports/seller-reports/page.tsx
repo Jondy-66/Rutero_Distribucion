@@ -46,9 +46,10 @@ export default function SellerReportsPage() {
   }, [currentUser, allUsers]);
 
   const filteredRoutes = useMemo(() => {
-    if (!currentUser) return [];
+    if (!currentUser || !allRoutes) return [];
     
     const managedSellerIds = managedSellers.map(s => s.id);
+
     let routesToConsider = allRoutes.filter(route => 
         managedSellerIds.includes(route.createdBy) && route.status === 'Completada'
     );
