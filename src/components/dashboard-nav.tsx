@@ -105,7 +105,8 @@ export function DashboardNav() {
     return item.roles.includes(user.role);
   });
 
-  const canSeeReports = user?.role === 'Supervisor' || user?.role === 'Administrador';
+  const canSeeReports = user?.role === 'Supervisor' || user?.role === 'Administrador' || user?.role === 'Usuario' || user?.role === 'Telemercaderista';
+  const isSupervisorOrAdmin = user?.role === 'Supervisor' || user?.role === 'Administrador';
 
   const canSeeRoutes =
     user?.role === 'Administrador' ||
@@ -152,22 +153,43 @@ export function DashboardNav() {
             </SidebarMenuItem>
             <CollapsibleContent>
               <SidebarMenuSub>
-                <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-reports'}>
-                      <Link href="/dashboard/reports/my-reports">
-                        <FileText />
-                        <span>Mis Rutas Asignadas</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/seller-reports'}>
-                      <Link href="/dashboard/reports/seller-reports">
-                        <Users />
-                        <span>Reportes Vendedores</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
+                {isSupervisorOrAdmin ? (
+                  <>
+                    <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-reports'}>
+                          <Link href="/dashboard/reports/my-reports">
+                            <FileText />
+                            <span>Rutas Asignadas</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/seller-reports'}>
+                          <Link href="/dashboard/reports/seller-reports">
+                            <Users />
+                            <span>Reportes Vendedores</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                     <SidebarMenuSubItem>
+                        <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-completed-routes'}>
+                          <Link href="/dashboard/reports/my-completed-routes">
+                            <List />
+                            <span>Rutas Completadas</span>
+                          </Link>
+                        </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  </>
+                ) : (
+                  <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-completed-routes'}>
+                        <Link href="/dashboard/reports/my-completed-routes">
+                          <List />
+                          <span>Mis Rutas Completadas</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                )}
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>
