@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle, AlertTriangle, ChevronRight, Save, Phone, User, PlusCircle } from 'lucide-react';
+import { CalendarIcon, Clock, Plus, Route, Search, GripVertical, Trash2, MapPin, LoaderCircle, LogIn, LogOut, Building2, CheckCircle, AlertTriangle, ChevronRight, Save, Phone, User, PlusCircle, Download } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { getClients, getRoutes, updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan, ClientInRoute } from '@/lib/types';
@@ -31,6 +31,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
+import * as XLSX from 'xlsx';
 
 
 type RouteClient = Client & {
@@ -237,12 +238,9 @@ export default function RouteManagementPage() {
             fullRoutePlanClients.push(completedClientData);
         }
 
-        await updateRoute(selectedRoute.id, { clients: fullRoutePlanClients });
-        
         const updatedLocalRouteClients = routeClients.map(c => 
             c.ruc === activeClient.ruc ? { ...c, visitStatus: 'Completado' as const } : c
         );
-        setRouteClients(updatedLocalRouteClients);
         
         toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
         
@@ -252,14 +250,19 @@ export default function RouteManagementPage() {
         );
 
         if (allClientsNowCompleted) {
-            await updateRoute(selectedRoute.id, { status: 'Completada' });
+            await updateRoute(selectedRoute.id, { status: 'Completada', clients: fullRoutePlanClients });
             toast({ title: "¡Ruta Finalizada!", description: "Todos los clientes han sido gestionados." });
             setSelectedRoute(prev => prev ? { ...prev, status: 'Completada' } : undefined);
             await refetchData('routes');
         } else {
+            await updateRoute(selectedRoute.id, { clients: fullRoutePlanClients });
             // Refetch routes to update the context in the background
             await refetchData('routes');
         }
+
+        // IMPORTANT: Update local state after DB operations to reflect changes
+        setRouteClients(updatedLocalRouteClients);
+
 
     } catch(error: any) {
         console.error("Error updating route on checkout:", error);
@@ -392,6 +395,39 @@ export default function RouteManagementPage() {
 
     setRouteClients(newRouteClients);
   };
+  
+  const handleDownloadReport = () => {
+    if (!selectedRoute) return;
+
+    const completedClients = routeClients.filter(c => c.visitStatus === 'Completado');
+    
+    if (completedClients.length === 0) {
+        toast({ title: "Sin Datos", description: "No hay clientes gestionados para generar un reporte.", variant: "destructive" });
+        return;
+    }
+
+    const dataToExport = completedClients.map(client => {
+      const fullClient = availableClients.find(c => c.ruc === client.ruc);
+      return {
+        'RUC': client.ruc,
+        'Nombre Comercial': client.nombre_comercial,
+        'Nombre Cliente': fullClient?.nombre_cliente || '',
+        'Tipo de Visita': client.visitType === 'presencial' ? 'Presencial' : 'Telefónica',
+        'Observación Llamada': client.callObservation || '',
+        'Valor Venta ($)': parseFloat(client.valorVenta) || 0,
+        'Valor Cobro ($)': parseFloat(client.valorCobro) || 0,
+        'Devoluciones ($)': parseFloat(client.devoluciones) || 0,
+        'Promociones ($)': parseFloat(client.promociones) || 0,
+        'Medicación Frecuente ($)': parseFloat(client.medicacionFrecuente) || 0,
+      }
+    });
+    
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Gestión de Ruta");
+    XLSX.writeFile(workbook, `reporte_gestion_${selectedRoute.routeName.replace(/ /g, '_')}.xlsx`);
+    toast({ title: "Reporte Generado", description: "El reporte de gestión se ha descargado." });
+  };
 
 
   const hasDescuento = activeClient?.nombre_comercial?.toLowerCase().includes('descuento');
@@ -454,7 +490,7 @@ export default function RouteManagementPage() {
                                 <Label>Clientes en Ruta ({routeClients.length})</Label>
                                 <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
                                     <DialogTrigger asChild>
-                                        <Button variant="ghost" size="sm">
+                                        <Button variant="ghost" size="sm" disabled={!activeClient || isRouteExpired}>
                                             <PlusCircle className="mr-2 h-4 w-4"/>
                                             Añadir
                                         </Button>
@@ -578,11 +614,15 @@ export default function RouteManagementPage() {
                             </div>
                         </div>
                     ) : !activeClient ? (
-                        <div className="flex items-center justify-center min-h-[60vh] rounded-lg border-2 border-dashed border-green-500/50 bg-green-500/10 p-8 text-center text-green-900">
+                        <div className="flex flex-col items-center justify-center min-h-[60vh] rounded-lg border-2 border-dashed border-green-500/50 bg-green-500/10 p-8 text-center text-green-900">
                             <div>
                                 <CheckCircle className="h-12 w-12 mx-auto mb-4" />
                                 <p className="font-semibold text-xl">¡Ruta Completada!</p>
                                 <p>Has gestionado todos los clientes de esta ruta. ¡Buen trabajo!</p>
+                                <Button onClick={handleDownloadReport} className="mt-4">
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Generar Reporte
+                                </Button>
                             </div>
                         </div>
                     ) : (
