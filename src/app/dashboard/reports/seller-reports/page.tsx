@@ -29,26 +29,32 @@ import { Skeleton } from '@/components/ui/skeleton';
 import * as XLSX from 'xlsx';
 
 export default function SellerReportsPage() {
-  const { user: supervisor, users: allUsers, routes: allRoutes, loading: authLoading } = useAuth();
+  const { user: currentUser, users: allUsers, routes: allRoutes, loading: authLoading } = useAuth();
   const { toast } = useToast();
   
   const [selectedSellerId, setSelectedSellerId] = useState<string>('all');
 
   const managedSellers = useMemo(() => {
-    if (supervisor?.role !== 'Supervisor') return [];
-    return allUsers.filter(u => u.supervisorId === supervisor.id);
-  }, [supervisor, allUsers]);
+    if (currentUser?.role === 'Administrador') {
+      return allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
+    }
+    if (currentUser?.role === 'Supervisor') {
+      return allUsers.filter(u => u.supervisorId === currentUser.id);
+    }
+    return [];
+  }, [currentUser, allUsers]);
 
   const filteredRoutes = useMemo(() => {
-    if (selectedSellerId === 'all') {
-      const managedSellerIds = managedSellers.map(s => s.id);
-      return allRoutes.filter(route => 
+    const managedSellerIds = managedSellers.map(s => s.id);
+    const routesToConsider = allRoutes.filter(route => 
         managedSellerIds.includes(route.createdBy) && route.status === 'Completada'
-      );
-    }
-    return allRoutes.filter(route => 
-      route.createdBy === selectedSellerId && route.status === 'Completada'
     );
+    
+    if (selectedSellerId === 'all') {
+      return routesToConsider;
+    }
+    
+    return routesToConsider.filter(route => route.createdBy === selectedSellerId);
   }, [selectedSellerId, allRoutes, managedSellers]);
   
   const handleDownloadExcel = () => {
@@ -88,11 +94,11 @@ export default function SellerReportsPage() {
     )
   }
 
-  if (supervisor?.role !== 'Supervisor') {
+  if (currentUser?.role !== 'Supervisor' && currentUser?.role !== 'Administrador') {
     return (
       <PageHeader
         title="Acceso Denegado"
-        description="Esta página solo está disponible para supervisores."
+        description="Esta página solo está disponible para supervisores y administradores."
       />
     )
   }
