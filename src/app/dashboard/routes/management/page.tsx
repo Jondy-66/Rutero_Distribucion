@@ -249,10 +249,22 @@ export default function RouteManagementPage() {
         );
         setRouteClients(updatedLocalRouteClients);
         
-        // Update the route in the global context
-        await refetchData('routes');
-
         toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
+        
+        // Check if all clients are now completed
+        const allClientsCompleted = updatedLocalRouteClients.every(
+            c => c.visitStatus === 'Completado'
+        );
+
+        if (allClientsCompleted) {
+            await updateRoute(selectedRoute.id, { status: 'Completada' });
+            toast({ title: "¡Ruta Finalizada!", description: "Todos los clientes han sido gestionados." });
+            // Update the selected route state locally
+            setSelectedRoute(prev => prev ? { ...prev, status: 'Completada' } : undefined);
+        }
+
+        // Refetch all routes data in the background to keep context updated
+        await refetchData('routes');
 
     } catch(error: any) {
         console.error("Error updating route on checkout:", error);
