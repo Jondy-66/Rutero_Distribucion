@@ -35,27 +35,30 @@ export default function SellerReportsPage() {
   const [selectedSellerId, setSelectedSellerId] = useState<string>('all');
 
   const managedSellers = useMemo(() => {
-    if (currentUser?.role === 'Administrador') {
+    if (!currentUser) return [];
+    if (currentUser.role === 'Administrador') {
       return allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
     }
-    if (currentUser?.role === 'Supervisor') {
+    if (currentUser.role === 'Supervisor') {
       return allUsers.filter(u => u.supervisorId === currentUser.id);
     }
     return [];
   }, [currentUser, allUsers]);
 
   const filteredRoutes = useMemo(() => {
+    if (!currentUser) return [];
+    
     const managedSellerIds = managedSellers.map(s => s.id);
-    const routesToConsider = allRoutes.filter(route => 
+    let routesToConsider = allRoutes.filter(route => 
         managedSellerIds.includes(route.createdBy) && route.status === 'Completada'
     );
     
-    if (selectedSellerId === 'all') {
-      return routesToConsider;
+    if (selectedSellerId !== 'all') {
+      routesToConsider = routesToConsider.filter(route => route.createdBy === selectedSellerId);
     }
     
-    return routesToConsider.filter(route => route.createdBy === selectedSellerId);
-  }, [selectedSellerId, allRoutes, managedSellers]);
+    return routesToConsider;
+  }, [selectedSellerId, allRoutes, managedSellers, currentUser]);
   
   const handleDownloadExcel = () => {
     if (filteredRoutes.length === 0) {
