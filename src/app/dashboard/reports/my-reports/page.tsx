@@ -1,6 +1,6 @@
 
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,11 +19,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
-import { getRoutesBySupervisor } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
 import { Download } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import jsPDF from 'jspdf';
@@ -32,34 +31,29 @@ import * as XLSX from 'xlsx';
 import { Timestamp } from 'firebase/firestore';
 
 export default function MyReportsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, routes: allRoutes, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  
   const [routes, setRoutes] = useState<RoutePlan[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(true);
 
   useEffect(() => {
-    if (user?.role === 'Supervisor') {
-        const fetchRoutes = async () => {
-            setLoadingRoutes(true);
-            try {
-                const supervisorRoutes = await getRoutesBySupervisor(user.id);
-                setRoutes(supervisorRoutes);
-            } catch (error) {
-                console.error("Failed to fetch routes for supervisor:", error);
-                toast({
-                    title: "Error al Cargar Rutas",
-                    description: "No se pudieron cargar las rutas asignadas.",
-                    variant: "destructive"
-                });
-            } finally {
-                setLoadingRoutes(false);
+    if (user && (user.role === 'Supervisor' || user.role === 'Administrador')) {
+        setLoadingRoutes(true);
+        if (allRoutes) {
+            let supervisorRoutes;
+            if (user.role === 'Supervisor') {
+                supervisorRoutes = allRoutes.filter(route => route.supervisorId === user.id);
+            } else { // Administrador
+                supervisorRoutes = allRoutes;
             }
-        };
-        fetchRoutes();
+            setRoutes(supervisorRoutes);
+        }
+        setLoadingRoutes(false);
     } else {
         setLoadingRoutes(false);
     }
-  }, [user, toast]);
+  }, [user, allRoutes]);
 
   const handleDownloadExcel = () => {
     if (routes.length === 0) {

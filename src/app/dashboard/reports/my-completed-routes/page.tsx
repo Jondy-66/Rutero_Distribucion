@@ -182,14 +182,16 @@ export default function MyCompletedRoutesPage() {
                                 </TableRow>
                             ))
                         ) : filteredRoutes.length > 0 ? (
-                            filteredRoutes.map((route) => (
+                            filteredRoutes.map((route) => {
+                                const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
+                                return (
                                 <TableRow key={route.id}>
                                     <TableCell className="font-medium">{route.routeName}</TableCell>
-                                    <TableCell>{format(route.date, 'PPP', { locale: es })}</TableCell>
+                                    <TableCell>{format(routeDate, 'PPP', { locale: es })}</TableCell>
                                     <TableCell>{route.clients.length}</TableCell>
                                     <TableCell>{route.status}</TableCell>
                                 </TableRow>
-                            ))
+                            )})
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={4} className="text-center h-24">

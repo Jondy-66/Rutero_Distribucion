@@ -23,7 +23,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
 import { Download, Users } from 'lucide-react';
-import { format } from 'date-fns';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as XLSX from 'xlsx';
