@@ -1,6 +1,6 @@
 # Manual Funcional del Aplicativo "Rutero"
 
-**Versión:** 1.2
+**Versión:** 1.3
 **Fecha:** Octubre 2025
 **Autor(es):** Jonathan Diaz
 **Departamento:** Distribución 
@@ -42,6 +42,7 @@ Está orientado a usuarios clave, supervisores, analistas funcionales y personal
 - Visualización de clientes y rutas en un mapa interactivo.
 - Generación de reportes de gestión.
 - Seguridad reforzada con bloqueo de cuentas por intentos fallidos.
+- Módulo de CRM para gestión de bases telefónicas.
 
 **Objetivos de Negocio:**
 - Optimizar los tiempos y costos de desplazamiento.
@@ -72,16 +73,17 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
   - **Envío a Aprobación:** Envía sus rutas planificadas a su supervisor asignado para que sean aprobadas.
   - **Gestión de Ruta Diaria:** Inicia la ruta del día, registra las visitas a cada cliente (check-in/check-out), e ingresa los datos de la gestión (ventas, cobros, etc.).
   - **Gestión de su Cartera:** Solo puede ver los clientes que tiene asignados a su nombre (ejecutivo).
+  - **Reportes Propios:** Puede visualizar y descargar un reporte de sus propias rutas completadas.
 
 - **Telemercaderista:**
-  - Rol con funcionalidades similares al **Usuario (Vendedor)**, pero orientado a la gestión remota o telefónica de clientes. Su flujo de trabajo en la gestión de ruta incluye la opción de registrar la visita como "Llamada Telefónica".
+  - Rol con funcionalidades similares al **Usuario (Vendedor)**, pero orientado a la gestión remota o telefónica de clientes. Su flujo de trabajo en la gestión de ruta incluye la opción de registrar la visita como "Llamada Telefónica". Puede gestionar bases de datos para telemercadeo.
 
 ## 4. Módulos Funcionales del Sistema
 
 - **Panel de Control (Dashboard):** Pantalla principal que ofrece un resumen visual del estado de las operaciones, incluyendo clientes totales, estado de la ruta actual (si está en progreso), y gráficos de rendimiento.
 
 - **Módulo de Clientes:** Permite la visualización y gestión de la base de datos de clientes.
-  - **Funcionalidades:** Crear, editar, eliminar (solo Admin), buscar y filtrar clientes.
+  - **Funcionalidades:** Crear, editar, eliminar (solo Admin), buscar y filtrar clientes por estado y por ejecutivo (solo Admin/Supervisor).
   - **Importación Masiva (Admin):** Permite subir un archivo (CSV/Excel) para crear o actualizar clientes en lote, agilizando la carga de datos.
   - **Exportación a Excel (Admin/Supervisor):** Permite descargar la lista de clientes filtrada a un archivo Excel.
 
@@ -91,11 +93,11 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
 - **Módulo de Rutas:** El corazón de la aplicación, donde se planifica y ejecuta el trabajo de campo.
   - **Predicción de Ruta (IA):** Sugiere una lista de clientes a visitar basándose en un modelo de predicción que ahora incluye parámetros como la ubicación base y un radio en kilómetros.
   - **Planificación Manual:** Permite crear una ruta desde cero seleccionando clientes.
-  - **Gestión de Ruta:** Permite a los vendedores iniciar una ruta aprobada, registrar el check-in, los datos de la visita (ventas, cobros) y el check-out.
+  - **Gestión de Ruta:** Permite a los vendedores iniciar una ruta aprobada, registrar el check-in, los datos de la visita (ventas, cobros) y el check-out. El estado de la ruta cambia a "Completada" automáticamente al finalizar el último cliente.
   - **Ruta Óptima (IA):** Calcula el orden de visita más eficiente para un conjunto de paradas.
 
 - **Módulo de Usuarios (Admin):** Permite la gestión completa de los usuarios del sistema.
-  - **Funcionalidades:** Crear nuevos usuarios (con asignación de rol y contraseña), editar perfiles, activar/desactivar y eliminar usuarios.
+  - **Funcionalidades:** Crear nuevos usuarios (con asignación de rol y contraseña), editar perfiles (con restricciones), activar/desactivar y eliminar usuarios.
   - **Permisos:** Una sección dedicada ("Permisos") para configurar el acceso de los usuarios a los distintos módulos del sistema.
 
 - **Módulo CRM:** Gestiona las interacciones y la base de datos para telemercadeo.
@@ -103,8 +105,9 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
   - **Gestión CRM:** Interfaz para registrar llamadas, correos y otras interacciones.
   - **Predicción CRM:** Herramientas de IA para analizar y predecir necesidades de clientes.
 
-- **Módulo de Reportes (Supervisor/Admin):** Proporciona herramientas para el seguimiento del rendimiento.
-  - **Funcionalidades:** Visualizar y descargar en Excel los reportes de rutas completadas por los vendedores a cargo.
+- **Módulo de Reportes (Supervisor/Admin/Usuario):** Proporciona herramientas para el seguimiento del rendimiento.
+  - **Funcionalidades (Supervisor/Admin):** Visualizar y descargar en Excel los reportes de rutas completadas por los vendedores a cargo.
+  - **Funcionalidades (Usuario):** Visualizar y descargar en Excel el reporte de sus propias rutas completadas, filtrado por fecha.
 
 ## 5. Flujo de Procesos
 
@@ -131,7 +134,8 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
     *   En el día correspondiente, el vendedor accede a **"Gestión de Ruta"**, selecciona la ruta aprobada y la **inicia**. El estado cambia a **"En Progreso"**.
     *   Para cada cliente, el usuario realiza el check-in, selecciona el tipo de visita (presencial o telefónica), registra los datos de la gestión (venta, cobro, etc.) y realiza el check-out.
     *   El cliente visitado se marca como "Completado".
-    *   Si es necesario, puede añadir clientes no planificados sobre la marcha.
+    *   Al completar el último cliente, la ruta cambia automáticamente a estado **"Completada"**.
+    *   Si es necesario, puede añadir clientes no planificados sobre la marcha (mientras la ruta está "En Progreso").
 
 ### 5.2. Flujo de Acceso y Seguridad
 
@@ -148,8 +152,8 @@ La navegación principal se realiza a través de una barra lateral que contiene 
 - **Panel:** Vista principal con métricas clave.
 - **Clientes:** Lista y gestión de la cartera de clientes.
 - **Ubicaciones (Admin):** Gestión masiva de geolocalización.
-- **Mapa:** Visualización de todos los clientes en un mapa.
-- **Reportes (Supervisor/Admin):** Menú desplegable con acceso a los reportes de rutas asignadas y de vendedores.
+- **Mapa:** Visualización de clientes en un mapa. Para Supervisores, muestra solo los clientes de su equipo.
+- **Reportes:** Menú desplegable con acceso a los reportes. Para Supervisores/Admins, incluye reportes de vendedores. Para Vendedores, muestra su reporte de rutas completadas.
 - **Rutas:** Menú desplegable con sub-secciones:
   - **Planificación de Ruta:** Incluye "Predicción de Ruta" y "Ruta Óptima".
   - **Mis Rutas:** Lista de las rutas creadas por el propio usuario.
@@ -167,7 +171,12 @@ La navegación principal se realiza a través de una barra lateral que contiene 
   - **Resultados:** Muestra una tabla con las rutas completadas por el vendedor, incluyendo nombre de la ruta, fecha y número de clientes.
   - **Exportación:** Los datos filtrados pueden ser exportados a un archivo **Excel (.xlsx)** para un análisis más profundo.
 
-- **Reporte de Mis Rutas Asignadas (para Supervisores):**
+- **Reporte de Mis Rutas Completadas (para Vendedores):**
+  - **Filtros:** Se puede filtrar por rango de fechas.
+  - **Resultados:** Muestra una tabla con las rutas completadas por el propio usuario.
+  - **Exportación:** Permite descargar los datos en formato **Excel (.xlsx)**.
+
+- **Reporte de Rutas Asignadas (para Supervisores):**
   - **Resultados:** Muestra una tabla con todas las rutas que el supervisor tiene asignadas para aprobar o que ha gestionado.
   - **Exportación:** Permite descargar los datos en formato **Excel (.xlsx)** y **PDF**.
 
@@ -175,7 +184,7 @@ La navegación principal se realiza a través de una barra lateral que contiene 
 ## 8. Reglas de Negocio Globales
 - Un usuario con rol "Usuario" o "Telemercaderista" debe tener siempre un supervisor asignado para que el flujo de aprobación funcione.
 - Las rutas solo pueden ser iniciadas si están en estado "Planificada" y corresponden al día actual.
-- Una vez una ruta está "En Progreso" o "Completada", ya no puede ser editada por ningún rol (salvo para registrar la gestión del día).
+- Una vez una ruta está "Completada", ya no puede ser editada por ningún rol.
 - El sistema de notificaciones es automático y se dispara en los eventos clave del flujo de aprobación (envío, aprobación, rechazo).
 - Una cuenta de usuario se bloquea automáticamente tras 5 intentos fallidos de inicio de sesión.
 - El módulo de permisos (accesible por Administradores) permite visualizar los accesos predeterminados de cada rol. La funcionalidad para guardar cambios personalizados está en desarrollo.
@@ -199,6 +208,7 @@ El sistema utiliza notificaciones "toast" para comunicar el resultado de las ope
 | 1.0     | Octubre 2025  | Jonathan Diaz  | Creación inicial del documento con la funcionalidad base. |
 | 1.1     | Octubre 2025  | Asistente AI   | Añadido rol Telemercaderista, flujo de bloqueo de cuenta y validación de correo en recuperación. |
 | 1.2     | Octubre 2025  | Asistente AI   | Implementación de la sección de Anexos, documentación de exportación a Excel y nuevo módulo CRM. |
+| 1.3     | Octubre 2025  | Asistente AI   | Actualización de módulos CRM, Reportes para Vendedores y flujos de gestión de ruta. |
 
 ## 12. Anexos
 
@@ -206,6 +216,7 @@ El sistema utiliza notificaciones "toast" para comunicar el resultado de las ope
 - **Check-in/Check-out:** Acción de marcar el inicio y fin de una visita a un cliente durante la gestión de una ruta.
 - **Ruta Planificada:** Estado de una ruta que ha sido creada (manual o por predicción) y está lista para ser enviada a aprobación o, si ya fue aprobada, para ser ejecutada.
 - **Ruta en Progreso:** Estado de una ruta que ha sido iniciada por un vendedor y se está ejecutando en el día actual.
+- **Ruta Completada:** Estado de una ruta en la que todos los clientes asignados han sido gestionados.
 - **Waypoint:** Una parada o punto intermedio en una ruta, que corresponde a la ubicación de un cliente.
 - **Proxy de API:** Un servidor intermedio (en este caso, una API de Next.js) que recibe peticiones del cliente y las reenvía a un servicio externo, protegiendo las credenciales y evitando problemas de CORS.
 

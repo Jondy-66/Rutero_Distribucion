@@ -145,6 +145,7 @@ La aplicación estará disponible en `http://localhost:9002`.
     - `users`: Almacena los perfiles de usuario, incluyendo su rol (`Administrador`, `Supervisor`, `Usuario`, `Telemercaderista`), estado (`active`, `inactive`) y `failedLoginAttempts`. El ID del documento corresponde al UID de Firebase Authentication.
     - `clients`: Contiene la información de todos los clientes (RUC, nombre, dirección, coordenadas, etc.).
     - `routes`: Guarda todos los planes de ruta, su estado (`Planificada`, `En Progreso`, etc.), los clientes asociados y el supervisor asignado.
+        - Dentro de cada ruta, la lista `clients` contiene objetos con campos como `visitStatus`, `visitType`, `callObservation` para registrar la gestión.
     - `notifications`: Almacena notificaciones para los usuarios, con suscripción en tiempo real.
     - `phoneContacts`: Almacena la base de contactos telefónicos para el módulo CRM.
 - **Seguridad:** El acceso a los datos está controlado por las **Reglas de Seguridad de Firestore**, que validan las operaciones de lectura y escritura basándose en el rol y el ID del usuario autenticado.
@@ -157,7 +158,7 @@ La aplicación estará disponible en `http://localhost:9002`.
 - **Mapas y Geolocalización:** Se centraliza en el componente `src/components/map-view.tsx`, utilizando `@vis.gl/react-google-maps` para renderizar el mapa, `AdvancedMarker` para los marcadores y el `DirectionsService` de Google Maps para dibujar rutas.
 - **Importación y Exportación de Datos:**
     - **Importación:** Los módulos de Clientes y Base Telefónica permiten la carga masiva de datos desde archivos CSV o Excel. La lógica de parseo se realiza en el cliente con `papaparse` y `xlsx`, y los datos se envían en lotes a Firestore.
-    - **Exportación:** El módulo de Clientes permite descargar la lista filtrada en formato Excel (`.xlsx`).
+    - **Exportación:** El módulo de Clientes y los módulos de Reportes permiten descargar la lista filtrada en formato Excel (`.xlsx`).
 
 ### 8. Seguridad y Cumplimiento
 - **Autenticación:** Realizada por Firebase Authentication, que utiliza tokens (JWT) para gestionar las sesiones de forma segura.

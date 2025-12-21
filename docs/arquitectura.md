@@ -42,7 +42,7 @@ graph TD
 - **Tecnología**: Aplicación de página única (SPA) construida con **Next.js** y **React**.
 - **Renderizado**: Utiliza el **App Router** de Next.js, lo que permite una combinación de Server Components (para renderizado inicial rápido y seguro) y Client Components (para interactividad).
 - **UI**: La interfaz de usuario está construida con componentes de **ShadCN/UI** y estilizada con **Tailwind CSS**, lo que garantiza una apariencia moderna y un desarrollo ágil.
-- **Manejo de Estado**: El estado global, especialmente la información del usuario y los datos compartidos como clientes y usuarios, se gestiona a través del **React Context API** (`AuthProvider`).
+- **Manejo de Estado**: El estado global, especialmente la información del usuario y los datos compartidos como clientes, usuarios y rutas, se gestiona a través del **React Context API** (`AuthProvider`).
 - **Interacción con Servicios**:
     - Se comunica directamente con **Firebase Authentication** para el manejo de sesiones (inicio de sesión, cierre de sesión, etc.).
     - Realiza todas las operaciones de lectura y escritura (CRUD) directamente contra **Firestore**, aprovechando las reglas de seguridad para proteger los datos.
@@ -72,6 +72,7 @@ graph TD
         - `clients`: Información detallada de cada cliente.
         - `routes`: Todos los planes de ruta creados, con su estado y clientes asociados.
         - `notifications`: Notificaciones generadas para los usuarios.
+        - `phoneContacts`: Nueva colección para almacenar la base de datos de contactos del módulo CRM.
     - **Reglas de Seguridad**: La integridad y seguridad de los datos están garantizadas por las reglas de seguridad de Firestore, que definen quién puede leer, escribir, actualizar o eliminar documentos en cada colección, basándose en el rol y el ID del usuario autenticado.
 
 ### 2.4. Servicios de Terceros
