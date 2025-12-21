@@ -75,18 +75,19 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     if (!currentUser || !route) return false;
     // Admin can edit unless it's completed
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
-    // The user who created it can edit if it's 'Planificada' and it's a predicted route (no createdAt yet or very recent), or if it's 'Rechazada'
-    if (currentUser.id === route.createdBy && route.status === 'Rechazada') return true;
-    if (currentUser.id === route.createdBy && route.status === 'Planificada' && route.origin === 'predicted' && route.isNew) return true;
     
-    return false;
-  }, [currentUser, route]);
+    // The user who created it can edit if it's 'Planificada' (and it's a predicted route or a normal draft) or 'Rechazada'
+    const isOwner = currentUser.id === route.createdBy;
+    const isEditableStatus = route.status === 'Planificada' || route.status === 'Rechazada';
+    
+    return isOwner && isEditableStatus;
+}, [currentUser, route]);
 
 
   const canApprove = useMemo(() => {
      if (!currentUser || !route) return false;
      // Admin can always approve/reject.
-     if (currentUser.role === 'Administrador') return true;
+     if (currentUser.role === 'Administrador' && route.status === 'Pendiente de Aprobación') return true;
      // Supervisor can approve/reject if they are the assigned supervisor.
      return currentUser.id === route.supervisorId && route.status === 'Pendiente de Aprobación';
   }, [currentUser, route]);
@@ -98,7 +99,9 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       try {
         const routeData = await getRoute(routeId);
         if (routeData) {
-          const isNew = !routeData.createdAt || (Timestamp.now().toMillis() - (routeData.createdAt as Timestamp).toMillis()) < 5 * 60 * 1000;
+          // A route is considered "new" if it was just created from prediction.
+          // This flag is used to allow initial editing before the first save.
+          const isNew = routeData.origin === 'predicted' && (!routeData.createdAt || (Timestamp.now().toMillis() - (routeData.createdAt as Timestamp).toMillis()) < 5 * 60 * 1000);
           setRoute({ ...routeData, isNew });
           setClientsInRoute(routeData.clients || []);
           setOriginalClients(routeData.clients || []); // Store the initial list
@@ -183,6 +186,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
           medicacionFrecuente: parseFloat(String(c.medicacionFrecuente)) || 0,
           date: c.date ? Timestamp.fromDate(c.date) : null
         })),
+        isNew: false, // After the first save/action, it's no longer "new"
       };
       
       if(newStatus) {
@@ -195,7 +199,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                 message: `${currentUser.name} ha enviado la ruta "${route.routeName}" para tu aprobación.`,
                 link: `/dashboard/routes/${routeId}`
             });
-        } else {
+        } else if (newStatus === 'Planificada' || newStatus === 'Rechazada') {
             // Send notification to the user who created the route for approval/rejection
             await addNotification({
                 userId: route.createdBy,
@@ -207,13 +211,22 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       }
 
       delete (dataToUpdate as any).id;
-      delete (dataToUpdate as any).isNew;
+      // delete (dataToUpdate as any).isNew; // This is now explicitly set to false
 
       await updateRoute(routeId, dataToUpdate);
       await refetchData('routes');
 
-      toast({ title: 'Éxito', description: `Ruta ${newStatus ? 'revisada' : 'actualizada'} correctamente.` });
-      router.push('/dashboard/routes');
+      const successMessage = newStatus ? 'revisada' : 'actualizada';
+      toast({ title: 'Éxito', description: `Ruta ${successMessage} correctamente.` });
+      
+      // Only redirect if a status change occurred (approval, rejection, sent for approval)
+      if (newStatus) {
+        router.push('/dashboard/routes');
+      } else {
+        // If just saving, stay on the page and update the local state
+        setRoute(prev => prev ? { ...prev, ...dataToUpdate, isNew: false } : null);
+      }
+
     } catch (error: any) {
       console.error(error);
       toast({ title: 'Error', description: 'No se pudo actualizar la ruta.', variant: 'destructive' });
@@ -460,9 +473,11 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                                 {clientsInRoute.map((client, index) => {
                                     const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
                                     const isNew = client.origin === 'manual';
+                                    const isFromPrediction = client.origin === 'predicted';
                                     return (
-                                    <Card key={client.ruc} className={cn("p-4 bg-muted/50 relative", isNew && "border-green-500 border-2")}>
-                                        {isNew && <Badge className="absolute -top-2 -right-2">Nuevo</Badge>}
+                                    <Card key={client.ruc} className={cn("p-4 bg-muted/50 relative", isNew && "border-green-500", isFromPrediction && "border-blue-500")}>
+                                        {isNew && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
+                                        {isFromPrediction && <Badge variant="secondary" className="absolute -top-2 -right-2 z-10">Predicción</Badge>}
                                         <div className="flex justify-between items-start">
                                             <div>
                                                 <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
