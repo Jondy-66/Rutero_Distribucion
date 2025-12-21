@@ -49,15 +49,17 @@ export default function MyCompletedRoutesPage() {
     );
     
     if (dateRange?.from) {
+      const fromDate = startOfDay(dateRange.from);
       userRoutes = userRoutes.filter(route => {
         const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
-        return routeDate >= dateRange.from!;
+        return routeDate >= fromDate;
       });
     }
      if (dateRange?.to) {
+      const toDate = endOfDay(dateRange.to);
       userRoutes = userRoutes.filter(route => {
         const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
-        return routeDate <= dateRange.to!;
+        return routeDate <= toDate;
       });
     }
     
@@ -75,9 +77,10 @@ export default function MyCompletedRoutesPage() {
     }
 
     const dataToExport = filteredRoutes.map(route => {
+      const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
       return {
         'Nombre de Ruta': route.routeName,
-        'Fecha de Ruta': format(route.date, 'PPP', { locale: es }),
+        'Fecha de Ruta': format(routeDate, 'PPP', { locale: es }),
         'Clientes en Ruta': route.clients.length,
         'Estado': route.status,
       };

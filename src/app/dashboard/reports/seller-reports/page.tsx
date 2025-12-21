@@ -1,6 +1,6 @@
 
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,12 +21,13 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import type { RoutePlan, User } from '@/lib/types';
+import type { RoutePlan } from '@/lib/types';
 import { Download, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as XLSX from 'xlsx';
+import { Timestamp } from 'firebase/firestore';
 
 export default function SellerReportsPage() {
   const { user: currentUser, users: allUsers, routes: allRoutes, loading: authLoading } = useAuth();
@@ -73,10 +74,11 @@ export default function SellerReportsPage() {
 
     const dataToExport = filteredRoutes.map(route => {
       const seller = allUsers.find(u => u.id === route.createdBy);
+      const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
       return {
         'Vendedor': seller?.name || 'Desconocido',
         'Nombre de Ruta': route.routeName,
-        'Fecha de Ruta': format(route.date, 'PPP', { locale: es }),
+        'Fecha de Ruta': format(routeDate, 'PPP', { locale: es }),
         'Clientes en Ruta': route.clients.length,
         'Estado': route.status,
       };
@@ -162,14 +164,16 @@ export default function SellerReportsPage() {
                                 </TableRow>
                             ))
                         ) : filteredRoutes.length > 0 ? (
-                            filteredRoutes.map((route) => (
+                            filteredRoutes.map((route) => {
+                                const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
+                                return (
                                 <TableRow key={route.id}>
                                     <TableCell className="font-medium">{route.routeName}</TableCell>
                                     <TableCell>{allUsers.find(u => u.id === route.createdBy)?.name || 'Desconocido'}</TableCell>
-                                    <TableCell>{format(route.date, 'PPP', { locale: es })}</TableCell>
+                                    <TableCell>{format(routeDate, 'PPP', { locale: es })}</TableCell>
                                     <TableCell>{route.clients.length}</TableCell>
                                 </TableRow>
-                            ))
+                            )})
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={4} className="text-center h-24">

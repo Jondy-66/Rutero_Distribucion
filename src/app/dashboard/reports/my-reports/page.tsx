@@ -29,9 +29,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
+import { Timestamp } from 'firebase/firestore';
 
 export default function MyReportsPage() {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const [routes, setRoutes] = useState<RoutePlan[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(true);
@@ -61,12 +62,19 @@ export default function MyReportsPage() {
   }, [user, toast]);
 
   const handleDownloadExcel = () => {
-    // TODO: Implement actual data export
-    const worksheet = XLSX.utils.json_to_sheet(routes.map(r => ({
-        Nombre: r.routeName,
-        Fecha: format(r.date, 'PPP', {locale: es}),
-        Estado: r.status
-    })));
+    if (routes.length === 0) {
+      toast({ title: "Sin Datos", description: "No hay rutas para exportar.", variant: "destructive" });
+      return;
+    }
+    const dataToExport = routes.map(r => {
+        const routeDate = r.date instanceof Timestamp ? r.date.toDate() : r.date;
+        return {
+            Nombre: r.routeName,
+            Fecha: format(routeDate, 'PPP', {locale: es}),
+            Estado: r.status
+        }
+    });
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rutas");
     XLSX.writeFile(workbook, "reporte_rutas.xlsx");
@@ -74,22 +82,33 @@ export default function MyReportsPage() {
   };
 
   const handleDownloadPdf = () => {
-    // TODO: Implement actual data export
+    if (routes.length === 0) {
+      toast({ title: "Sin Datos", description: "No hay rutas para exportar.", variant: "destructive" });
+      return;
+    }
     const doc = new jsPDF();
+    const tableData = routes.map(r => {
+        const routeDate = r.date instanceof Timestamp ? r.date.toDate() : r.date;
+        return [r.routeName, format(routeDate, 'PPP', {locale: es}), r.status];
+    });
     autoTable(doc, {
       head: [['Nombre', 'Fecha', 'Estado']],
-      body: routes.map(r => [r.routeName, format(r.date, 'PPP', {locale: es}), r.status]),
+      body: tableData,
     });
     doc.save('reporte_rutas.pdf');
     toast({ title: "Descarga iniciada", description: "Tu reporte en PDF se está descargando." });
   };
   
-  if (user?.role !== 'Supervisor' && !loadingRoutes) {
+  if (authLoading) {
+    return <PageHeader title="Mis Rutas Asignadas" description="Cargando..." />
+  }
+
+  if (user?.role !== 'Supervisor' && user?.role !== 'Administrador' && !authLoading) {
     return (
         <div>
             <PageHeader
                 title="Acceso Denegado"
-                description="Esta página solo está disponible para supervisores."
+                description="Esta página solo está disponible para supervisores y administradores."
             />
         </div>
     )
@@ -142,14 +161,16 @@ export default function MyReportsPage() {
                                 </TableRow>
                             ))
                         ) : routes.length > 0 ? (
-                            routes.map((route) => (
+                            routes.map((route) => {
+                                const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
+                                return (
                                 <TableRow key={route.id}>
                                     <TableCell className="font-medium">{route.routeName}</TableCell>
-                                    <TableCell>{format(route.date, 'PPP', { locale: es })}</TableCell>
+                                    <TableCell>{format(routeDate, 'PPP', { locale: es })}</TableCell>
                                     <TableCell>{route.status}</TableCell>
                                     <TableCell>{route.clients.length}</TableCell>
                                 </TableRow>
-                            ))
+                            )})
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={4} className="text-center h-24">
