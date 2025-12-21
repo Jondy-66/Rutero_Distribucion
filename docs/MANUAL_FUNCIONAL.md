@@ -1,3 +1,4 @@
+
 # Manual Funcional del Aplicativo "Rutero"
 
 **Versión:** 1.3
@@ -55,7 +56,7 @@ Está orientado a usuarios clave, supervisores, analistas funcionales y personal
 El sistema contempla perfiles de usuario, cada uno con responsabilidades y accesos definidos para garantizar la seguridad y la correcta operación del flujo de trabajo.
 
 - **Administrador:**
-  - **Gestión Total de Usuarios:** Puede crear, editar y eliminar usuarios de cualquier rol. Es el único que puede desbloquear cuentas bloqueadas por intentos fallidos de inicio de sesión.
+  - **Gestión Total de Usuarios:** Puede crear, editar y eliminar usuarios de cualquier rol. Es el único que puede desbloquear cuentas bloqueadas por intentos fallidos de inicio de sesión. El nombre y correo solo pueden ser cambiados por este rol.
   - **Gestión Total de Clientes:** Tiene control absoluto sobre la creación, lectura, actualización y eliminación (CRUD) de clientes. Puede realizar cargas masivas de datos.
   - **Gestión de Ubicaciones:** Puede actualizar masivamente las coordenadas geográficas de los clientes.
   - **Visibilidad Completa:** Tiene acceso a todas las rutas, reportes y dashboards del sistema.
@@ -133,7 +134,7 @@ El sistema contempla perfiles de usuario, cada uno con responsabilidades y acces
 4.  **Gestión en Campo (Vendedor/Telemercaderista):**
     *   En el día correspondiente, el vendedor accede a **"Gestión de Ruta"**, selecciona la ruta aprobada y la **inicia**. El estado cambia a **"En Progreso"**.
     *   Para cada cliente, el usuario realiza el check-in, selecciona el tipo de visita (presencial o telefónica), registra los datos de la gestión (venta, cobro, etc.) y realiza el check-out.
-    *   El cliente visitado se marca como "Completado".
+    *   El cliente visitado se marca como "Completado". El progreso se guarda incluso si el usuario sale de la aplicación.
     *   Al completar el último cliente, la ruta cambia automáticamente a estado **"Completada"**.
     *   Si es necesario, puede añadir clientes no planificados sobre la marcha (mientras la ruta está "En Progreso").
 
@@ -180,18 +181,22 @@ La navegación principal se realiza a través de una barra lateral que contiene 
   - **Resultados:** Muestra una tabla con todas las rutas que el supervisor tiene asignadas para aprobar o que ha gestionado.
   - **Exportación:** Permite descargar los datos en formato **Excel (.xlsx)** y **PDF**.
 
+- **Reporte de Gestión de Ruta (para Vendedores):**
+  - **Disponibilidad:** Se puede generar al finalizar una ruta en la pantalla de "Gestión de Ruta".
+  - **Resultados:** Descarga un archivo **Excel (.xlsx)** con el detalle de la gestión de cada cliente en la ruta completada (valores de venta, cobro, etc.).
+
 
 ## 8. Reglas de Negocio Globales
 - Un usuario con rol "Usuario" o "Telemercaderista" debe tener siempre un supervisor asignado para que el flujo de aprobación funcione.
 - Las rutas solo pueden ser iniciadas si están en estado "Planificada" y corresponden al día actual.
-- Una vez una ruta está "Completada", ya no puede ser editada por ningún rol.
+- Una vez una ruta está "Completada", ya no puede ser editada ni se le pueden añadir más clientes.
 - El sistema de notificaciones es automático y se dispara en los eventos clave del flujo de aprobación (envío, aprobación, rechazo).
 - Una cuenta de usuario se bloquea automáticamente tras 5 intentos fallidos de inicio de sesión.
 - El módulo de permisos (accesible por Administradores) permite visualizar los accesos predeterminados de cada rol. La funcionalidad para guardar cambios personalizados está en desarrollo.
 
 ## 9. Excepciones y Mensajes del Sistema
 El sistema utiliza notificaciones "toast" para comunicar el resultado de las operaciones:
-- **Éxito:** "Cliente creado correctamente", "Ruta guardada exitosamente".
+- **Éxito:** "Cliente creado correctamente", "Ruta guardada exitosamente", "¡Ruta Finalizada!".
 - **Error:** "Las contraseñas no coinciden", "Faltan campos obligatorios", "No se encontró ningún usuario con ese correo electrónico.".
 - **Error de Seguridad:** "Cuenta bloqueada por demasiados intentos fallidos. Contacta al administrador."
 - **Informativo:** "Correo de recuperación enviado", "Tienes notificaciones sin leer".

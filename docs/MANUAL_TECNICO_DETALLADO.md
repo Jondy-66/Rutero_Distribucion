@@ -49,7 +49,7 @@ graph TD
         B[API Routes (Proxy & Admin)]
     end
 
-    subgraph "Google Cloud Platform"
+    subgraph "Google Cloud Platform (Proyecto: rutero-fed)"
         C[Firebase Authentication]
         D[Firestore Database]
     end
@@ -74,7 +74,7 @@ graph TD
 
 - **Frontend (Next.js/React):** Aplicación de página única (SPA) que se ejecuta en el navegador del usuario. Utiliza el App Router de Next.js para una combinación de Server y Client Components. La UI está construida con ShadCN/UI y Tailwind CSS. Se comunica directamente con Firebase para autenticación y datos, y con su propio backend (API Routes) para las llamadas a servicios de IA y operaciones de administrador.
 - **Servidor Next.js (BFF):** Actúa como un Backend For Frontend. Sirve como un proxy seguro para las llamadas a las APIs externas (evitando problemas de CORS y protegiendo claves) y aloja lógica de servidor para operaciones privilegiadas, como el cambio de contraseña de un usuario por parte de un administrador, utilizando el **Firebase Admin SDK**.
-- **Firebase (Google Cloud):**
+- **Firebase (Google Cloud - Proyecto `rutero-fed`):**
     - **Authentication:** Gestiona el inicio de sesión con correo/contraseña. El Admin SDK en el backend le permite realizar operaciones de gestión de usuarios.
     - **Firestore:** Base de datos NoSQL donde se almacena toda la información de usuarios, clientes, rutas y notificaciones. Las reglas de seguridad de Firestore garantizan la integridad y el acceso a los datos.
 - **Servicios de Terceros:**
@@ -120,16 +120,16 @@ Crear un archivo `.env.local` en la raíz del proyecto con las siguientes variab
 NEXT_PUBLIC_GOOGLE_MAPS_API_KEY=AIza...
 
 # Configuración de Firebase (obtenida desde la consola de Firebase) - LADO DEL CLIENTE
-NEXT_PUBLIC_FIREBASE_API_KEY=AIza...
-NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-NEXT_PUBLIC_FIREBASE_APP_ID=...
+NEXT_PUBLIC_FIREBASE_API_KEY=AIzaSyBf28yfROnTCqwgLpXY-GJqIhwC7zIbQMo
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=rutero-fed.firebaseapp.com
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=rutero-fed
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=rutero-fed.appspot.com
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=938904325205
+NEXT_PUBLIC_FIREBASE_APP_ID=1:938904325205:web:1e8a2b471eff36f4d118dc
 
 # Credenciales de la Cuenta de Servicio de Firebase (para el Admin SDK) - LADO DEL SERVIDOR
 # Estas deben configurarse en el entorno de despliegue (ej. Vercel)
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-...@...iam.gserviceaccount.com
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-...@rutero-fed.iam.gserviceaccount.com
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
 ```
 
@@ -140,14 +140,20 @@ npm run dev
 La aplicación estará disponible en `http://localhost:9002`.
 
 ### 6. Base de Datos
-- **Motor:** Google Firestore (NoSQL).
+- **Motor:** Google Firestore (NoSQL) en el proyecto `rutero-fed`.
 - **Colecciones Principales:**
-    - `users`: Almacena los perfiles de usuario, incluyendo su rol (`Administrador`, `Supervisor`, `Usuario`, `Telemercaderista`), estado (`active`, `inactive`) y `failedLoginAttempts`. El ID del documento corresponde al UID de Firebase Authentication.
-    - `clients`: Contiene la información de todos los clientes (RUC, nombre, dirección, coordenadas, etc.).
-    - `routes`: Guarda todos los planes de ruta, su estado (`Planificada`, `En Progreso`, etc.), los clientes asociados y el supervisor asignado.
-        - Dentro de cada ruta, la lista `clients` contiene objetos con campos como `visitStatus`, `visitType`, `callObservation` para registrar la gestión.
-    - `notifications`: Almacena notificaciones para los usuarios, con suscripción en tiempo real.
+    - `users`: Almacena los perfiles de usuario.
+        - **Campos:** `id (string, UID de Auth)`, `name (string)`, `email (string)`, `role (string: 'Administrador' | 'Supervisor' | 'Usuario' | 'Telemercaderista')`, `avatar (string, URL)`, `status (string: 'active' | 'inactive')`, `supervisorId (string, opcional)`, `failedLoginAttempts (number, opcional)`.
+    - `clients`: Contiene la información de todos los clientes.
+        - **Campos:** `id (string, autogenerado)`, `ejecutivo (string)`, `ruc (string)`, `nombre_cliente (string)`, `nombre_comercial (string)`, `provincia (string)`, `canton (string)`, `direccion (string)`, `latitud (number)`, `longitud (number)`, `status (string: 'active' | 'inactive')`.
+    - `routes`: Guarda todos los planes de ruta y su estado.
+        - **Campos:** `id (string, autogenerado)`, `routeName (string)`, `date (timestamp)`, `status (string: 'Planificada' | ... )`, `supervisorId (string)`, `supervisorName (string)`, `createdBy (string)`, `createdAt (timestamp)`.
+        - **Sub-colección/Array `clients`:** Contiene objetos `ClientInRoute`.
+            - **Campos:** `ruc (string)`, `nombre_comercial (string)`, `date (timestamp)`, `dayOfWeek (string)`, `startTime (string)`, `endTime (string)`, `visitStatus (string: 'Pendiente' | 'Completado')`, `visitType (string: 'presencial' | 'telefonica')`, `callObservation (string, opcional)`, `valorVenta (number)`, `valorCobro (number)`, `tipoCobro (string)`, `devoluciones (number)`, `promociones (number, opcional)`, `medicacionFrecuente (number, opcional)`.
+    - `notifications`: Almacena notificaciones para los usuarios.
+        - **Campos:** `id (string, autogenerado)`, `userId (string)`, `title (string)`, `message (string)`, `link (string)`, `read (boolean)`, `createdAt (timestamp)`.
     - `phoneContacts`: Almacena la base de contactos telefónicos para el módulo CRM.
+        - **Campos:** `id (string, autogenerado)`, `cedula (string)`, `nombre_cliente (string)`, `nombre_comercial (string)`, `ciudad (string)`, `regional (string)`, `nombre_vendedor (string)`, `direccion_cliente (string)`, `telefono1 (string)`, `estado_cliente (string: 'Activo' | 'Inactivo')`, `observacion (string)`.
 - **Seguridad:** El acceso a los datos está controlado por las **Reglas de Seguridad de Firestore**, que validan las operaciones de lectura y escritura basándose en el rol y el ID del usuario autenticado.
 
 ### 7. Funcionalidades Clave (Vista Técnica)

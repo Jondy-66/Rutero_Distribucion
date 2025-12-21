@@ -15,7 +15,7 @@ graph TD
         B[API Routes (Proxy)]
     end
 
-    subgraph "Google Cloud Platform"
+    subgraph "Google Cloud Platform (Proyecto: rutero-fed)"
         C[Firebase Authentication]
         D[Firestore Database]
     end
@@ -59,7 +59,7 @@ graph TD
     - **Evita Problemas de CORS**: Al hacer las llamadas de servidor a servidor, se eliminan los errores de Cross-Origin Resource Sharing (CORS) que ocurrirían si el navegador llamara directamente a una API en un dominio diferente.
     - **Seguridad**: Oculta las URLs reales de las APIs externas y permite añadir una capa de autenticación o manejo de claves de API en el servidor, sin exponerlas en el cliente.
 
-### 2.3. Servicios de Google Cloud (Firebase)
+### 2.3. Servicios de Google Cloud (Firebase - Proyecto `rutero-fed`)
 
 - **Firebase Authentication**:
     - Proporciona un sistema completo y seguro para la gestión de usuarios, incluyendo inicio de sesión con correo/contraseña y restablecimiento de contraseña.
@@ -67,12 +67,12 @@ graph TD
     - Gestiona el mecanismo de bloqueo de cuentas, aunque la lógica (contador de intentos) se maneja en la aplicación.
 
 - **Firestore Database**:
-    - Es la base de datos NoSQL donde se almacena toda la información persistente de la aplicación, organizada en colecciones:
-        - `users`: Perfiles de los usuarios, incluyendo su rol (`Administrador`, `Supervisor`, `Usuario`, `Telemercaderista`), estado (`active`/`inactive`), `supervisorId` y el contador `failedLoginAttempts`.
-        - `clients`: Información detallada de cada cliente.
-        - `routes`: Todos los planes de ruta creados, con su estado y clientes asociados.
+    - Es la base de datos NoSQL donde se almacena toda la información persistente de la aplicación, organizada en las siguientes colecciones:
+        - `users`: Perfiles de los usuarios (`role`, `status`, `supervisorId`, `failedLoginAttempts`, etc.).
+        - `clients`: Información detallada de cada cliente (RUC, dirección, coordenadas, etc.).
+        - `routes`: Todos los planes de ruta creados, con su estado y un array de los clientes que la componen (`clients`).
         - `notifications`: Notificaciones generadas para los usuarios.
-        - `phoneContacts`: Nueva colección para almacenar la base de datos de contactos del módulo CRM.
+        - `phoneContacts`: Base de datos de contactos para el módulo CRM.
     - **Reglas de Seguridad**: La integridad y seguridad de los datos están garantizadas por las reglas de seguridad de Firestore, que definen quién puede leer, escribir, actualizar o eliminar documentos en cada colección, basándose en el rol y el ID del usuario autenticado.
 
 ### 2.4. Servicios de Terceros
