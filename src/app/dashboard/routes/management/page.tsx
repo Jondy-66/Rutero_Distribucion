@@ -486,6 +486,7 @@ export default function RouteManagementPage() {
                        <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <Label>Clientes en Ruta ({routeClients.length})</Label>
+                                {!routeClients.every(c => c.visitStatus === 'Completado') && (
                                 <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
                                     <DialogTrigger asChild>
                                         <Button variant="ghost" size="sm" disabled={isRouteExpired}>
@@ -528,6 +529,7 @@ export default function RouteManagementPage() {
                                         </ScrollArea>
                                     </DialogContent>
                                 </Dialog>
+                                )}
                             </div>
                             <DragDropContext onDragEnd={onDragEnd}>
                                 <Droppable droppableId="clients">
@@ -543,7 +545,7 @@ export default function RouteManagementPage() {
                                             <div
                                             ref={provided.innerRef}
                                             {...provided.draggableProps}
-                                            
+                                            {...provided.dragHandleProps}
                                             className={cn(
                                                 "flex items-center justify-between text-sm p-2 bg-muted/50 rounded-md relative",
                                                 activeClient?.ruc === client.ruc && "bg-primary/10 border-primary/50 border",
@@ -553,7 +555,7 @@ export default function RouteManagementPage() {
                                             >
                                             {client.origin === 'manual' && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
                                             <div className="flex items-center gap-3 flex-1">
-                                                <div {...provided.dragHandleProps} className={cn("cursor-grab", client.visitStatus === 'Completado' && 'cursor-not-allowed')}>
+                                                <div className={cn("cursor-grab", client.visitStatus === 'Completado' && 'cursor-not-allowed')}>
                                                   <GripVertical className="h-5 w-5 text-muted-foreground" />
                                                 </div>
                                                 <span className={cn("font-semibold", activeClient?.ruc === client.ruc && "text-primary")}>{index + 1}.</span>
