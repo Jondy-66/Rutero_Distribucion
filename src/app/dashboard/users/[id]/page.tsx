@@ -72,7 +72,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     try {
       const dataToUpdate: Partial<User> = {
         role: user.role,
-        status: user.status,
+        status: user.status || 'active', // Ensure status is never undefined
       };
 
       // Solo un admin puede cambiar nombre y correo
