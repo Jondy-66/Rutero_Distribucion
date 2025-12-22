@@ -376,24 +376,22 @@ export default function RouteManagementPage() {
   }
 
   const onDragEnd = (result: DropResult) => {
-    const { destination, source } = result;
+    const { source, destination } = result;
 
-    if (!destination) {
-      return;
-    }
+    if (!destination) return;
 
     if (
-      destination.droppableId === source.droppableId &&
-      destination.index === source.index
+        destination.droppableId === source.droppableId &&
+        destination.index === source.index
     ) {
-      return;
+        return;
     }
 
-    const newRouteClients = Array.from(routeClients);
-    const [removed] = newRouteClients.splice(source.index, 1);
-    newRouteClients.splice(destination.index, 0, removed);
+    const items = Array.from(routeClients);
+    const [reorderedItem] = items.splice(source.index, 1);
+    items.splice(destination.index, 0, reorderedItem);
 
-    setRouteClients(newRouteClients);
+    setRouteClients(items);
   };
   
   const handleDownloadReport = () => {
@@ -490,7 +488,7 @@ export default function RouteManagementPage() {
                                 <Label>Clientes en Ruta ({routeClients.length})</Label>
                                 <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
                                     <DialogTrigger asChild>
-                                        <Button variant="ghost" size="sm" disabled={!activeClient || isRouteExpired}>
+                                        <Button variant="ghost" size="sm" disabled={isRouteExpired}>
                                             <PlusCircle className="mr-2 h-4 w-4"/>
                                             Añadir
                                         </Button>
