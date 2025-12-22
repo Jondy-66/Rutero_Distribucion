@@ -553,7 +553,6 @@ export default function RouteManagementPage() {
                                                 snapshot.isDragging && "shadow-lg"
                                             )}
                                             >
-                                            {client.origin === 'manual' && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
                                             <div className="flex items-center gap-3 flex-1">
                                                 <div className={cn("cursor-grab", client.visitStatus === 'Completado' && 'cursor-not-allowed')}>
                                                   <GripVertical className="h-5 w-5 text-muted-foreground" />
@@ -567,6 +566,7 @@ export default function RouteManagementPage() {
                                                     <MapPin className="h-4 w-4" />
                                                 </Button>
                                             </div>
+                                            {client.origin === 'manual' && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
                                             </div>
                                         )}
                                         </Draggable>
