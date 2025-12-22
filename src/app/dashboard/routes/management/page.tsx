@@ -335,18 +335,23 @@ export default function RouteManagementPage() {
     
     const availableClientsForDialog = useMemo(() => {
         const currentRucs = new Set(routeClients.map(c => c.ruc));
-        return availableClients.filter(c => {
+        
+        let clientsToFilter = availableClients;
+
+        if (user?.role === 'Usuario') {
+            clientsToFilter = availableClients.filter(c => 
+                c.ejecutivo?.trim().toLowerCase() === user.name?.trim().toLowerCase()
+            );
+        }
+
+        return clientsToFilter.filter(c => {
           if (currentRucs.has(c.ruc)) return false;
           
-          if (user?.role === 'Usuario') {
-            return (c.ejecutivo?.trim().toLowerCase() === user.name?.trim().toLowerCase());
-          }
-
           const searchTermLower = dialogSearchTerm.toLowerCase();
           return (
             String(c.nombre_cliente).toLowerCase().includes(searchTermLower) ||
             String(c.nombre_comercial).toLowerCase().includes(searchTermLower) ||
-            String(c.ruc).includes(dialogSearchTerm)
+            String(c.ruc).includes(searchTermLower)
           );
         });
     }, [availableClients, routeClients, dialogSearchTerm, user]);
@@ -486,7 +491,7 @@ export default function RouteManagementPage() {
                        <div className="space-y-4">
                             <div className="flex items-center justify-between">
                                 <Label>Clientes en Ruta ({routeClients.length})</Label>
-                                {!routeClients.every(c => c.visitStatus === 'Completado') && (
+                                {(!routeClients.every(c => c.visitStatus === 'Completado') && selectedRoute?.status !== 'Completada') && (
                                 <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
                                     <DialogTrigger asChild>
                                         <Button variant="ghost" size="sm" disabled={isRouteExpired}>
