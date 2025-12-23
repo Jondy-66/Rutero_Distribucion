@@ -32,6 +32,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import * as XLSX from 'xlsx';
+import { Timestamp } from 'firebase/firestore';
 
 
 type RouteClient = Client & {
@@ -105,7 +106,7 @@ export default function RouteManagementPage() {
 
   useEffect(() => {
     if (selectedRoute && selectedRoute.status === 'En Progreso') {
-        const expirationDate = new Date(selectedRoute.date);
+        const expirationDate = new Date();
         expirationDate.setHours(18, 0, 0, 0); // 6 PM on the route's date
         if (new Date() > expirationDate) {
             setIsRouteExpired(true);
@@ -458,11 +459,14 @@ export default function RouteManagementPage() {
                         <SelectContent>
                             {loading && <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>}
                             {allRoutes && allRoutes
-                                .filter(r => 
-                                    r.createdBy === user?.id &&
-                                    (r.status === 'Planificada' || r.status === 'En Progreso') && 
-                                    r.date && isToday(r.date)
-                                )
+                                .filter(r => {
+                                    const routeDate = r.date instanceof Timestamp ? r.date.toDate() : r.date;
+                                    return (
+                                        r.createdBy === user?.id &&
+                                        (r.status === 'Planificada' || r.status === 'En Progreso') && 
+                                        routeDate && isToday(routeDate)
+                                    )
+                                })
                                 .map(route => (
                                     <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
                             ))}
