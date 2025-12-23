@@ -31,6 +31,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
+import { Badge } from '@/components/ui/badge';
 
 export default function MyCompletedRoutesPage() {
   const { user: currentUser, routes: allRoutes, loading: authLoading } = useAuth();
@@ -45,7 +46,7 @@ export default function MyCompletedRoutesPage() {
     if (!currentUser || !allRoutes) return [];
     
     let userRoutes = allRoutes.filter(route => 
-        route.createdBy === currentUser.id && route.status === 'Completada'
+        route.createdBy === currentUser.id
     );
     
     if (dateRange?.from) {
@@ -70,7 +71,7 @@ export default function MyCompletedRoutesPage() {
     if (filteredRoutes.length === 0) {
       toast({
         title: "Sin Datos",
-        description: "No hay rutas completadas en el rango de fechas seleccionado.",
+        description: "No hay rutas en el rango de fechas seleccionado.",
         variant: "destructive"
       });
       return;
@@ -88,15 +89,15 @@ export default function MyCompletedRoutesPage() {
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Rutas Completadas");
-    XLSX.writeFile(workbook, `reporte_rutas_completadas.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Historial de Rutas");
+    XLSX.writeFile(workbook, `reporte_historial_rutas.xlsx`);
     toast({ title: "Descarga Iniciada", description: "Tu reporte en Excel se está descargando." });
   };
 
   if (authLoading) {
     return (
       <>
-        <PageHeader title="Mis Rutas Completadas" description="Cargando reportes..." />
+        <PageHeader title="Historial de Mis Rutas" description="Cargando reportes..." />
         <Skeleton className="w-full h-96" />
       </>
     )
@@ -105,8 +106,8 @@ export default function MyCompletedRoutesPage() {
   return (
     <>
       <PageHeader
-        title="Mis Rutas Completadas"
-        description="Visualiza y descarga el reporte de tus rutas completadas."
+        title="Historial de Mis Rutas"
+        description="Visualiza y descarga el reporte de todas tus rutas."
       >
         <Button onClick={handleDownloadExcel} disabled={authLoading || filteredRoutes.length === 0}>
           <Download className="mr-2" />
@@ -116,9 +117,9 @@ export default function MyCompletedRoutesPage() {
       
       <Card>
         <CardHeader>
-            <CardTitle>Rutas Completadas</CardTitle>
+            <CardTitle>Historial de Rutas</CardTitle>
             <CardDescription>
-                Selecciona un rango de fechas para ver tus rutas completadas.
+                Selecciona un rango de fechas para ver todas tus rutas.
             </CardDescription>
         </CardHeader>
         <CardContent>
@@ -189,13 +190,17 @@ export default function MyCompletedRoutesPage() {
                                     <TableCell className="font-medium">{route.routeName}</TableCell>
                                     <TableCell>{format(routeDate, 'PPP', { locale: es })}</TableCell>
                                     <TableCell>{route.clients.length}</TableCell>
-                                    <TableCell>{route.status}</TableCell>
+                                    <TableCell>
+                                      <Badge variant={route.status === 'Completada' ? 'success' : (route.status === 'Rechazada' ? 'destructive' : 'secondary')}>
+                                        {route.status}
+                                      </Badge>
+                                    </TableCell>
                                 </TableRow>
                             )})
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={4} className="text-center h-24">
-                                    No hay rutas completadas para el rango de fechas seleccionado.
+                                    No hay rutas para el rango de fechas seleccionado.
                                 </TableCell>
                             </TableRow>
                         )}
