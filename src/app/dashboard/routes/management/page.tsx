@@ -103,30 +103,32 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // This effect synchronizes the local routeClients state with the global `allRoutes` from context.
-  // It ensures that any updates from the backend (like a completed visit) are reflected here.
   useEffect(() => {
     if (selectedRoute) {
-      const clientsData = selectedRoute.clients
-        .filter(client => client.status !== 'Eliminado')
-        .map(clientInRoute => {
-          const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
-          return {
-            ...(clientDetails || {}),
-            ...clientInRoute,
-            visitStatus: clientInRoute.visitStatus || 'Pendiente',
-            valorVenta: String(clientInRoute.valorVenta || '0.00'),
-            valorCobro: String(clientInRoute.valorCobro || '0.00'),
-            devoluciones: String(clientInRoute.devoluciones || '0.00'),
-            promociones: String(clientInRoute.promociones || '0.00'),
-            medicacionFrecuente: String(clientInRoute.medicacionFrecuente || '0.00'),
-          } as RouteClient;
-        }).filter(c => c.id);
-      
-      setRouteClients(clientsData);
-      setIsRouteStarted(selectedRoute.status === 'En Progreso');
+        const clientsData = selectedRoute.clients
+            .filter(client => client.status !== 'Eliminado')
+            .map(clientInRoute => {
+                const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
+                return {
+                    ...(clientDetails || {}),
+                    ...clientInRoute,
+                    visitStatus: clientInRoute.visitStatus || 'Pendiente',
+                    valorVenta: String(clientInRoute.valorVenta || '0.00'),
+                    valorCobro: String(clientInRoute.valorCobro || '0.00'),
+                    devoluciones: String(clientInRoute.devoluciones || '0.00'),
+                    promociones: String(clientInRoute.promociones || '0.00'),
+                    medicacionFrecuente: String(clientInRoute.medicacionFrecuente || '0.00'),
+                } as RouteClient;
+            }).filter(c => c.id);
+
+        setRouteClients(clientsData);
+        setIsRouteStarted(selectedRoute.status === 'En Progreso');
+    } else {
+        // Clear local state if no route is selected
+        setRouteClients([]);
+        setIsRouteStarted(false);
     }
-  }, [selectedRoute, availableClients]);
+  }, [selectedRouteId, allRoutes, availableClients]);
 
 
    useEffect(() => {
@@ -237,9 +239,8 @@ export default function RouteManagementPage() {
         );
 
         await updateRoute(selectedRoute.id, { clients: updatedClients });
-        await refetchData('routes'); // Refresh data from source
+        await refetchData('routes');
         
-        // The local state will be updated by the useEffect that listens to `selectedRoute` changes.
         setCheckInTime(time);
 
         toast({ title: "Entrada Marcada", description: `Hora de entrada registrada a las ${time}` });
