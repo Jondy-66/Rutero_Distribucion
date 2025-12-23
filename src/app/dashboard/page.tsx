@@ -82,18 +82,24 @@ export default function DashboardPage() {
   }, [activeRoute]);
 
 
+  const activeClientsInRoute = useMemo(() => {
+      if (!activeRoute) return [];
+      return activeRoute.clients.filter(c => c.status !== 'Eliminado');
+  }, [activeRoute]);
+
+
   const progress = useMemo(() => {
     if (!activeRoute) return 0;
-    const completedClients = activeRoute.clients.filter(c => c.visitStatus === 'Completado').length;
-    const totalClients = activeRoute.clients.length;
+    const completedClients = activeClientsInRoute.filter(c => c.visitStatus === 'Completado').length;
+    const totalClients = activeClientsInRoute.length;
     if (totalClients === 0) return 0;
     return (completedClients / totalClients) * 100;
-  }, [activeRoute]);
+  }, [activeRoute, activeClientsInRoute]);
 
   const completedCount = useMemo(() => {
       if (!activeRoute) return 0;
-      return activeRoute.clients.filter(c => c.visitStatus === 'Completado').length;
-  }, [activeRoute]);
+      return activeClientsInRoute.filter(c => c.visitStatus === 'Completado').length;
+  }, [activeRoute, activeClientsInRoute]);
 
 
   return (
@@ -120,7 +126,7 @@ export default function DashboardPage() {
                     <Route className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{completedCount} de {activeRoute.clients.length}</div>
+                    <div className="text-2xl font-bold">{completedCount} de {activeClientsInRoute.length}</div>
                     <p className="text-xs text-muted-foreground mb-2">clientes gestionados</p>
                     <Progress value={progress} aria-label={`${progress.toFixed(0)}% completado`} />
                 </CardContent>
