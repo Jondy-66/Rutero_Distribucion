@@ -22,10 +22,12 @@ import { useToast } from '@/hooks/use-toast';
 import { getClient, updateClient } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function EditClientPage({ params: { id: clientId } }: { params: { id: string } }) {
   const router = useRouter();
   const { toast } = useToast();
+  const { refetchData } = useAuth();
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -78,9 +80,11 @@ export default function EditClientPage({ params: { id: clientId } }: { params: {
       };
 
       await updateClient(client.id, clientDataToUpdate);
-
+      
+      await refetchData('clients');
       toast({ title: "Éxito", description: "Cliente actualizado correctamente." });
       router.push('/dashboard/clients');
+
     } catch (error: any) {
       console.error(error);
       toast({ title: "Error", description: "No se pudo actualizar el cliente.", variant: "destructive" });

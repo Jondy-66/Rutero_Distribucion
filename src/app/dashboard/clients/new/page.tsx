@@ -17,10 +17,12 @@ import Link from 'next/link';
 import { ArrowLeft, LoaderCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { addClient } from '@/lib/firebase/firestore';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function NewClientPage() {
   const router = useRouter();
   const { toast } = useToast();
+  const { refetchData } = useAuth();
   const [formData, setFormData] = useState({
     ejecutivo: '',
     ruc: '',
@@ -53,9 +55,11 @@ export default function NewClientPage() {
         longitud: parseFloat(formData.longitud) || 0,
         status: 'active',
       });
-
+      
+      await refetchData('clients');
       toast({ title: "Éxito", description: "Cliente creado correctamente." });
       router.push('/dashboard/clients');
+
     } catch (error: any) {
       console.error(error);
       if (error.code === 'permission-denied') {
