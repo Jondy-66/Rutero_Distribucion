@@ -67,7 +67,7 @@ const timeSlots = generateTimeSlots(8, 18, 30);
 export default function RouteManagementPage() {
   const { user, clients: availableClients, routes: allRoutes, loading: authLoading, refetchData } = useAuth();
   
-  const [selectedRoute, setSelectedRoute] = useState<RoutePlan | undefined>();
+  const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
   const [isRouteStarted, setIsRouteStarted] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isRouteExpired, setIsRouteExpired] = useState(false);
@@ -97,7 +97,38 @@ export default function RouteManagementPage() {
 
 
   const loading = authLoading;
+
+  const selectedRoute = useMemo(() => {
+    if (!selectedRouteId) return undefined;
+    return allRoutes.find(r => r.id === selectedRouteId);
+  }, [selectedRouteId, allRoutes]);
   
+  // This effect synchronizes the local routeClients state with the global `allRoutes` from context.
+  // It ensures that any updates from the backend (like a completed visit) are reflected here.
+  useEffect(() => {
+    if (selectedRoute) {
+      const clientsData = selectedRoute.clients
+        .filter(client => client.status !== 'Eliminado')
+        .map(clientInRoute => {
+          const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
+          return {
+            ...(clientDetails || {}),
+            ...clientInRoute,
+            visitStatus: clientInRoute.visitStatus || 'Pendiente',
+            valorVenta: String(clientInRoute.valorVenta || '0.00'),
+            valorCobro: String(clientInRoute.valorCobro || '0.00'),
+            devoluciones: String(clientInRoute.devoluciones || '0.00'),
+            promociones: String(clientInRoute.promociones || '0.00'),
+            medicacionFrecuente: String(clientInRoute.medicacionFrecuente || '0.00'),
+          } as RouteClient;
+        }).filter(c => c.id);
+      
+      setRouteClients(clientsData);
+      setIsRouteStarted(selectedRoute.status === 'En Progreso');
+    }
+  }, [selectedRoute, availableClients]);
+
+
    useEffect(() => {
     const currentClient = routeClients.find(c => c.visitStatus !== 'Completado');
     setActiveClient(currentClient || null);
@@ -208,12 +239,7 @@ export default function RouteManagementPage() {
         await updateRoute(selectedRoute.id, { clients: updatedClients });
         await refetchData('routes'); // Refresh data from source
         
-        // Update local state to reflect the change immediately
-        setRouteClients(prev => prev.map(c => 
-            c.ruc === activeClient.ruc 
-            ? { ...c, checkInTime: time, checkInLocation: location }
-            : c
-        ));
+        // The local state will be updated by the useEffect that listens to `selectedRoute` changes.
         setCheckInTime(time);
 
         toast({ title: "Entrada Marcada", description: `Hora de entrada registrada a las ${time}` });
@@ -237,11 +263,7 @@ export default function RouteManagementPage() {
     setIsSaving(true);
 
     try {
-        const originalRoutePlan = allRoutes.find(r => r.id === selectedRoute.id);
-        if (!originalRoutePlan) {
-            throw new Error("No se pudo encontrar el plan de ruta original.");
-        }
-        let fullRoutePlanClients = [...originalRoutePlan.clients];
+        let fullRoutePlanClients = [...selectedRoute.clients];
 
         const existingClientInPlan = fullRoutePlanClients.find(c => c.ruc === activeClient.ruc);
 
@@ -279,31 +301,20 @@ export default function RouteManagementPage() {
             fullRoutePlanClients.push(completedClientData);
         }
 
-        const updatedLocalRouteClients = routeClients.map(c => 
-            c.ruc === activeClient.ruc ? { ...c, visitStatus: 'Completado' as const } : c
-        );
+        const allClientsNowCompleted = fullRoutePlanClients
+            .filter(c => c.status !== 'Eliminado')
+            .every(c => c.visitStatus === 'Completado');
         
-        toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
-        
-        // Check if all clients are now completed
-        const allClientsNowCompleted = updatedLocalRouteClients.every(
-            c => c.visitStatus === 'Completado'
-        );
-
+        let newStatus = selectedRoute.status;
         if (allClientsNowCompleted) {
-            await updateRoute(selectedRoute.id, { status: 'Completada', clients: fullRoutePlanClients });
+            newStatus = 'Completada';
             toast({ title: "¡Ruta Finalizada!", description: "Todos los clientes han sido gestionados." });
-            setSelectedRoute(prev => prev ? { ...prev, status: 'Completada' } : undefined);
-            await refetchData('routes');
         } else {
-            await updateRoute(selectedRoute.id, { clients: fullRoutePlanClients });
-            // Refetch routes to update the context in the background
-            await refetchData('routes');
+            toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
         }
-
-        // IMPORTANT: Update local state after DB operations to reflect changes
-        setRouteClients(updatedLocalRouteClients);
-
+        
+        await updateRoute(selectedRoute.id, { clients: fullRoutePlanClients, status: newStatus });
+        await refetchData('routes');
 
     } catch(error: any) {
         console.error("Error updating route on checkout:", error);
@@ -314,33 +325,7 @@ export default function RouteManagementPage() {
   }
   
   const handleRouteSelect = (routeId: string) => {
-      if (!allRoutes) return;
-      const route = allRoutes.find(r => r.id === routeId);
-      if (route) {
-          setSelectedRoute(route);
-          setIsRouteStarted(route.status === 'En Progreso');
-          
-          if (availableClients) {
-            const today = startOfDay(new Date());
-
-            const clientsData = route.clients
-            .filter(client => client.status !== 'Eliminado') // No mostrar clientes eliminados en gestión
-            .map(clientInRoute => {
-                const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
-                return {
-                    ...(clientDetails || {}),
-                    ...clientInRoute,
-                    visitStatus: clientInRoute.visitStatus || 'Pendiente',
-                    valorVenta: String(clientInRoute.valorVenta || '0.00'),
-                    valorCobro: String(clientInRoute.valorCobro || '0.00'),
-                    devoluciones: String(clientInRoute.devoluciones || '0.00'),
-                    promociones: String(clientInRoute.promociones || '0.00'),
-                    medicacionFrecuente: String(clientInRoute.medicacionFrecuente || '0.00'),
-                } as RouteClient;
-            }).filter(c => c.id); // Filter out clients that weren't found in availableClients
-            setRouteClients(clientsData);
-          }
-      }
+      setSelectedRouteId(routeId);
   }
 
   const handleStartRoute = async () => {
@@ -359,20 +344,30 @@ export default function RouteManagementPage() {
       }
   }
 
-    const handleAddClientToRoute = (client: Client) => {
-        const newRouteClient: RouteClient = {
-            ...client,
+    const handleAddClientToRoute = async (client: Client) => {
+        if (!selectedRoute) return;
+
+        const newRouteClient: ClientInRoute = {
+            ruc: client.ruc,
+            nombre_comercial: client.nombre_comercial,
+            date: new Date(),
             visitStatus: 'Pendiente',
-            valorVenta: '0.00',
-            valorCobro: '0.00',
-            devoluciones: '0.00',
-            promociones: '0.00',
-            medicacionFrecuente: '0.00',
             origin: 'manual',
         };
-        setRouteClients(prev => [...prev, newRouteClient]);
-        toast({ title: 'Cliente Añadido', description: `${client.nombre_comercial} ha sido añadido a la ruta de hoy.` });
-        setIsAddClientDialogOpen(false);
+        
+        setIsSaving(true);
+        try {
+            const updatedClients = [...selectedRoute.clients, newRouteClient];
+            await updateRoute(selectedRoute.id, { clients: updatedClients });
+            await refetchData('routes');
+            toast({ title: 'Cliente Añadido', description: `${client.nombre_comercial} ha sido añadido a la ruta de hoy.` });
+            setIsAddClientDialogOpen(false);
+        } catch (error: any) {
+            console.error("Error adding client to route:", error);
+            toast({ title: "Error", description: "No se pudo añadir el cliente a la ruta.", variant: "destructive" });
+        } finally {
+            setIsSaving(false);
+        }
     }
     
     const availableClientsForDialog = useMemo(() => {
@@ -422,23 +417,50 @@ export default function RouteManagementPage() {
     }
   }
 
-  const onDragEnd = (result: DropResult) => {
+  const onDragEnd = async (result: DropResult) => {
     const { source, destination } = result;
 
-    if (!destination) return;
-
-    if (
-        destination.droppableId === source.droppableId &&
-        destination.index === source.index
-    ) {
-        return;
-    }
+    if (!destination || !selectedRoute) return;
 
     const items = Array.from(routeClients);
     const [reorderedItem] = items.splice(source.index, 1);
     items.splice(destination.index, 0, reorderedItem);
 
-    setRouteClients(items);
+    setRouteClients(items); // Optimistic UI update
+
+    // Now, update the order in Firestore
+    try {
+        const fullOriginalClients = [...selectedRoute.clients];
+        const reorderedRucs = items.map(item => item.ruc);
+        
+        // Create a map for quick lookup
+        const originalClientMap = new Map(fullOriginalClients.map(c => [c.ruc, c]));
+        
+        const newClientsOrder: ClientInRoute[] = [];
+        reorderedRucs.forEach(ruc => {
+            const client = originalClientMap.get(ruc);
+            if (client) {
+                newClientsOrder.push(client);
+                originalClientMap.delete(ruc);
+            }
+        });
+
+        // Add back any clients that were not in the draggable list (e.g., completed ones)
+        // in their original relative order.
+        const remainingClients = fullOriginalClients.filter(c => originalClientMap.has(c.ruc));
+        
+        const finalClients = [...remainingClients, ...newClientsOrder];
+
+        await updateRoute(selectedRoute.id, { clients: finalClients });
+        await refetchData('routes'); // Refresh to ensure sync
+        toast({ title: "Orden de Ruta Actualizado" });
+
+    } catch (error) {
+        console.error("Failed to update route order:", error);
+        toast({ title: "Error", description: "No se pudo guardar el nuevo orden.", variant: "destructive" });
+        // Revert UI if update fails
+        setRouteClients(Array.from(routeClients));
+    }
   };
   
   const handleDownloadReport = () => {
@@ -492,7 +514,7 @@ export default function RouteManagementPage() {
             <CardContent className="space-y-4">
                 <div className="space-y-2">
                     <Label>Ruta</Label>
-                    <Select onValueChange={handleRouteSelect} value={selectedRoute?.id} disabled={loading}>
+                    <Select onValueChange={handleRouteSelect} value={selectedRouteId} disabled={loading}>
                         <SelectTrigger>
                             <Route className="mr-2 h-4 w-4" />
                             <SelectValue placeholder="Elige una ruta planificada para hoy" />
@@ -501,7 +523,7 @@ export default function RouteManagementPage() {
                             {loading && <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>}
                             {allRoutes && allRoutes
                                 .filter(r => {
-                                    const routeDate = r.date instanceof Timestamp ? r.date.toDate() : r.date;
+                                    const routeDate = r.date;
                                     return (
                                         r.createdBy === user?.id &&
                                         (r.status === 'Planificada' || r.status === 'En Progreso') && 
