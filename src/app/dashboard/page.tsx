@@ -60,7 +60,7 @@ export default function DashboardPage() {
 
     const interval = setInterval(() => {
       const now = new Date();
-      const expirationDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 0, 0); // 18:00 del día de hoy
+      const expirationDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 30, 0); // 18:30 del día de hoy
       const diff = expirationDate.getTime() - now.getTime();
 
       if (diff <= 0) {
@@ -143,7 +143,7 @@ export default function DashboardPage() {
                            : `${String(remainingTime.hours).padStart(2, '0')}:${String(remainingTime.minutes).padStart(2, '0')}:${String(remainingTime.seconds).padStart(2, '0')}`
                        }
                    </div>
-                   <p className="text-xs text-muted-foreground">Para finalizar la ruta de hoy (18:00)</p>
+                   <p className="text-xs text-muted-foreground">Para finalizar la ruta de hoy (18:30)</p>
                 </CardContent>
             </Card>
             </>
