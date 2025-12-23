@@ -36,6 +36,16 @@ interface AuthContextType {
   markAllNotificationsAsRead: () => Promise<void>;
 }
 
+const transformRouteDates = (route: RoutePlan): RoutePlan => ({
+    ...route,
+    date: route.date instanceof Timestamp ? route.date.toDate() : route.date,
+    clients: route.clients.map(client => ({
+        ...client,
+        date: client.date instanceof Timestamp ? client.date.toDate() : (client.date || undefined)
+    }))
+});
+
+
 /**
  * Creación del contexto de autenticación.
  */
@@ -78,16 +88,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         const [usersData, clientsData, routesData, phoneContactsData] = await Promise.all([getUsers(), getClients(), getRoutes(), getPhoneContacts()]);
         setUsers(usersData);
         setClients(clientsData);
-        // Correctly transform route dates upon fetching
-        const transformedRoutes = routesData.map(route => ({
-            ...route,
-            date: route.date instanceof Timestamp ? route.date.toDate() : route.date,
-            clients: route.clients.map(client => ({
-                ...client,
-                date: client.date instanceof Timestamp ? client.date.toDate() : client.date
-            }))
-        }));
+        
+        const transformedRoutes = routesData.map(transformRouteDates);
         setRoutes(transformedRoutes);
+
         setPhoneContacts(phoneContactsData);
     } catch(error) {
         console.error("Failed to fetch initial data:", error);
@@ -113,14 +117,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
           if (dataType === 'routes') {
               const routesData = await getRoutes();
-               const transformedRoutes = routesData.map(route => ({
-                    ...route,
-                    date: route.date instanceof Timestamp ? route.date.toDate() : route.date,
-                    clients: route.clients.map(client => ({
-                        ...client,
-                        date: client.date instanceof Timestamp ? client.date.toDate() : client.date
-                    }))
-                }));
+              const transformedRoutes = routesData.map(transformRouteDates);
               setRoutes(transformedRoutes);
           }
            if (dataType === 'phoneContacts') {
