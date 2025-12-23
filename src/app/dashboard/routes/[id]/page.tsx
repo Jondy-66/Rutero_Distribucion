@@ -135,7 +135,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     if (isClientDialogOpen) {
-      const currentSelectedClientsFromMainList = clients.filter(c => clientsInRoute.some(sc => sc.ruc === c.ruc));
+      const currentSelectedClientsFromMainList = clients.filter(c => clientsInRoute.some(sc => sc.ruc === c.ruc && sc.status !== 'Eliminado'));
       setDialogSelectedClients(currentSelectedClientsFromMainList);
     }
   }, [isClientDialogOpen, clients, clientsInRoute]);
@@ -159,8 +159,8 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     if (!route || !currentUser) return;
 
     if (!newStatus) { // Only validate if saving, not when approving/rejecting
-        if (!route.routeName || clientsInRoute.length === 0 || !route.supervisorId) {
-            toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente.', variant: 'destructive' });
+        if (!route.routeName || clientsInRoute.filter(c => c.status !== 'Eliminado').length === 0 || !route.supervisorId) {
+            toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente activo.', variant: 'destructive' });
             return;
         }
     }
@@ -250,16 +250,22 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     const newClientsInRoute: ClientInRoute[] = dialogSelectedClients.map(client => {
         const existingClient = clientsInRoute.find(c => c.ruc === client.ruc);
         if (existingClient) {
-            return existingClient;
+            // If client exists, make sure its status is not 'Eliminado'
+            return { ...existingClient, status: 'Activo' };
         }
         return {
             ruc: client.ruc,
             nombre_comercial: client.nombre_comercial,
             date: new Date(),
-            origin: 'manual' // Mark as manually added
+            origin: 'manual', // Mark as manually added
+            status: 'Activo',
         };
     });
-    setClientsInRoute(newClientsInRoute);
+
+    const currentRucs = new Set(newClientsInRoute.map(c => c.ruc));
+    const allClients = [...newClientsInRoute, ...clientsInRoute.filter(c => !currentRucs.has(c.ruc))];
+
+    setClientsInRoute(allClients);
     setIsClientDialogOpen(false);
   };
   
@@ -271,10 +277,10 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     }
 
     setClientsInRoute(prev => prev.map(c => 
-        c.ruc === clientToRemove.ruc ? { ...c, status: 'Removed', removalObservation: removalObservation } : c
-    ).filter(c => c.ruc !== clientToRemove.ruc));
+        c.ruc === clientToRemove.ruc ? { ...c, status: 'Eliminado', removalObservation: removalObservation } : c
+    ));
     
-    toast({ title: 'Cliente Eliminado', description: `${clientToRemove.nombre_comercial} ha sido quitado de la ruta.`});
+    toast({ title: 'Cliente Marcado', description: `${clientToRemove.nombre_comercial} ha sido marcado como eliminado.`});
     setClientToRemove(null);
     setRemovalObservation('');
   }
@@ -415,7 +421,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                         <DialogTrigger asChild>
                             <Button variant="outline" className="w-full justify-start" disabled={isFormDisabled}>
                                 <PlusCircle className="mr-2 h-4 w-4"/>
-                                Añadir o Quitar Clientes ({clientsInRoute.length} seleccionados)
+                                Añadir o Quitar Clientes ({clientsInRoute.filter(c => c.status !== 'Eliminado').length} seleccionados)
                             </Button>
                         </DialogTrigger>
                         <DialogContent className="max-w-2xl">
@@ -474,21 +480,36 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                                     const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
                                     const isNew = client.origin === 'manual';
                                     const isFromPrediction = client.origin === 'predicted';
+                                    const isRemoved = client.status === 'Eliminado';
+
                                     return (
-                                    <Card key={client.ruc} className={cn("p-4 bg-muted/50 relative", isNew && "border-green-500", isFromPrediction && "border-blue-500")}>
-                                        {isNew && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
-                                        {isFromPrediction && <Badge variant="secondary" className="absolute -top-2 -right-2 z-10">Predicción</Badge>}
+                                    <Card key={client.ruc} className={cn(
+                                        "p-4 bg-muted/50 relative", 
+                                        isNew && "border-green-500", 
+                                        isFromPrediction && "border-blue-500",
+                                        isRemoved && "bg-red-500/10 border-red-500/50"
+                                    )}>
+                                        {isNew && !isRemoved && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
+                                        {isFromPrediction && !isRemoved && <Badge variant="secondary" className="absolute -top-2 -right-2 z-10">Predicción</Badge>}
+                                        {isRemoved && <Badge variant="destructive" className="absolute -top-2 -right-2 z-10">Eliminado</Badge>}
                                         <div className="flex justify-between items-start">
                                             <div>
-                                                <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
+                                                <p className={cn("font-semibold", isRemoved && "line-through")}>{index + 1}. {client.nombre_comercial}</p>
                                                 <p className="text-xs text-muted-foreground">{client.ruc}</p>
                                             </div>
-                                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientToRemove(client)} disabled={isFormDisabled}>
+                                            <Button type="button" variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientToRemove(client)} disabled={isFormDisabled || isRemoved}>
                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                             </Button>
                                         </div>
                                         <Separator className="my-2" />
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+                                         {isRemoved && client.removalObservation && (
+                                            <Alert variant="destructive" className="mt-2">
+                                                <AlertDescription>
+                                                    <strong>Observación:</strong> {client.removalObservation}
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
+                                        <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2", isRemoved && "hidden")}>
                                             <div className="space-y-2">
                                                 <Label htmlFor={`dayOfWeek-${client.ruc}`}>Día</Label>
                                                 <Select value={client.dayOfWeek} onValueChange={(value) => handleClientValueChange(client.ruc, 'dayOfWeek', value)} disabled={isFormDisabled}>
@@ -528,8 +549,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                                                 </Select>
                                             </div>
                                         </div>
-                                        <Separator className="my-4" />
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
+                                        <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2", isRemoved && "hidden")}>
                                             <div className="space-y-2">
                                                 <Label htmlFor={`valor-venta-${client.ruc}`}>Valor de Venta ($)</Label>
                                                 <Input id={`valor-venta-${client.ruc}`} type="text" placeholder="0.00" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
@@ -624,7 +644,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
             <AlertDialogHeader>
                 <AlertDialogTitle>¿Eliminar a {clientToRemove?.nombre_comercial}?</AlertDialogTitle>
                 <AlertDialogDescription>
-                    Para eliminar a este cliente de la ruta, por favor, introduce una observación.
+                    Para eliminar a este cliente de la ruta, por favor, introduce una observación. El cliente se marcará como eliminado pero no se borrará del historial.
                 </AlertDialogDescription>
             </AlertDialogHeader>
              <div className="py-4">

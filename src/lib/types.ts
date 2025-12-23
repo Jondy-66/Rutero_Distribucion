@@ -75,7 +75,7 @@ export type ClientInRoute = {
   endTime?: string;
   // Nuevo campo para la observación de eliminación
   removalObservation?: string;
-  status?: 'Active' | 'Removed';
+  status?: 'Activo' | 'Eliminado';
   origin?: 'manual' | 'predicted';
   visitStatus?: 'Pendiente' | 'Completado';
   visitType?: 'presencial' | 'telefonica';

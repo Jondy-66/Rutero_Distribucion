@@ -324,6 +324,7 @@ export default function RouteManagementPage() {
             const today = startOfDay(new Date());
 
             const clientsData = route.clients
+            .filter(client => client.status !== 'Eliminado') // No mostrar clientes eliminados en gestión
             .map(clientInRoute => {
                 const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
                 return {
@@ -854,4 +855,3 @@ export default function RouteManagementPage() {
     </>
   );
 }
-
