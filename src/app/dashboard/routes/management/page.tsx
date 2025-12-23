@@ -32,7 +32,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import * as XLSX from 'xlsx';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, GeoPoint } from 'firebase/firestore';
 
 
 type RouteClient = Client & {
@@ -45,6 +45,8 @@ type RouteClient = Client & {
     visitType?: 'presencial' | 'telefonica';
     callObservation?: string;
     origin?: 'manual' | 'predicted';
+    checkInTime?: string | null;
+    checkInLocation?: GeoPoint | null;
 }
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
@@ -96,13 +98,20 @@ export default function RouteManagementPage() {
 
   const loading = authLoading;
   
-  useEffect(() => {
+   useEffect(() => {
     const currentClient = routeClients.find(c => c.visitStatus !== 'Completado');
     setActiveClient(currentClient || null);
-    setCheckInTime(null); // Reset check-in time when client changes
+
+    // If there is a current client, check for persisted check-in data
+    if (currentClient?.checkInTime) {
+      setCheckInTime(currentClient.checkInTime);
+    } else {
+      setCheckInTime(null); // Reset check-in time when client changes
+    }
     setVisitType(undefined); // Reset visit type
     setCallObservation(''); // Reset observation
   }, [routeClients]);
+
 
   useEffect(() => {
     if (selectedRoute && selectedRoute.status === 'En Progreso') {
@@ -182,11 +191,40 @@ export default function RouteManagementPage() {
     setConfirmationAction(null);
   };
 
-  const handleCheckIn = () => {
+  const handleCheckIn = async () => {
+    if (!selectedRoute || !activeClient) return;
+    
     const time = format(new Date(), 'HH:mm:ss');
-    setCheckInTime(time);
-    toast({ title: "Entrada Marcada", description: `Hora de entrada registrada a las ${time}` });
+    const location = markerPosition ? new GeoPoint(markerPosition.lat, markerPosition.lng) : null;
+    
+    setIsSaving(true);
+    try {
+        const updatedClients = selectedRoute.clients.map(c => 
+            c.ruc === activeClient.ruc 
+            ? { ...c, checkInTime: time, checkInLocation: location }
+            : c
+        );
+
+        await updateRoute(selectedRoute.id, { clients: updatedClients });
+        await refetchData('routes'); // Refresh data from source
+        
+        // Update local state to reflect the change immediately
+        setRouteClients(prev => prev.map(c => 
+            c.ruc === activeClient.ruc 
+            ? { ...c, checkInTime: time, checkInLocation: location }
+            : c
+        ));
+        setCheckInTime(time);
+
+        toast({ title: "Entrada Marcada", description: `Hora de entrada registrada a las ${time}` });
+    } catch (error: any) {
+        console.error("Error saving check-in:", error);
+        toast({ title: "Error", description: "No se pudo guardar la entrada.", variant: "destructive" });
+    } finally {
+        setIsSaving(false);
+    }
   }
+
 
   const handleConfirmCheckOut = async () => {
     if (!selectedRoute || !activeClient || !visitType) return;
@@ -215,6 +253,8 @@ export default function RouteManagementPage() {
             startTime: existingClientInPlan?.startTime,
             endTime: existingClientInPlan?.endTime,
             origin: existingClientInPlan?.origin ?? activeClient.origin,
+            checkInTime: activeClient.checkInTime, // Persist check-in time
+            checkInLocation: activeClient.checkInLocation, // Persist check-in location
             visitStatus: 'Completado',
             visitType: visitType,
             callObservation: visitType === 'telefonica' ? callObservation : undefined,
@@ -661,7 +701,7 @@ export default function RouteManagementPage() {
                                                         <p className="text-sm font-mono">{checkInTime}</p>
                                                     </div>
                                                 ) : (
-                                                    <Button onClick={() => openConfirmationDialog('checkIn')} disabled={isRouteExpired}>
+                                                    <Button onClick={() => openConfirmationDialog('checkIn')} disabled={isRouteExpired || isSaving}>
                                                         <LogIn className="mr-2" />
                                                         Marcar Entrada
                                                     </Button>
@@ -814,3 +854,4 @@ export default function RouteManagementPage() {
     </>
   );
 }
+

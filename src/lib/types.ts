@@ -5,7 +5,7 @@
  * Estos tipos aseguran la consistencia de los datos entre los componentes y la base de datos de Firestore.
  */
 
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, GeoPoint } from 'firebase/firestore';
 
 /**
  * Representa la estructura de un objeto de Usuario en el sistema.
@@ -80,6 +80,8 @@ export type ClientInRoute = {
   visitStatus?: 'Pendiente' | 'Completado';
   visitType?: 'presencial' | 'telefonica';
   callObservation?: string;
+  checkInTime?: string | null;
+  checkInLocation?: GeoPoint | null;
 }
 
 
@@ -131,3 +133,4 @@ export type Notification = {
     link: string; // Enlace al que se redirige al hacer clic.
     createdAt: Date | null; // Fecha de creación de la notificación.
 }
+
