@@ -23,8 +23,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { Download, Users, MoreHorizontal, Eye } from 'lucide-react';
-import { format } from 'date-fns';
+import { Download, Users, MoreHorizontal, Eye, Calendar as CalendarIcon } from 'lucide-react';
+import { format, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as XLSX from 'xlsx';
@@ -37,6 +37,10 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { DateRange } from 'react-day-picker';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 
 export default function SellerReportsPage() {
   const { user: currentUser, users: allUsers, routes: allRoutes, loading: authLoading } = useAuth();
@@ -44,6 +48,10 @@ export default function SellerReportsPage() {
   const router = useRouter();
   
   const [selectedSellerId, setSelectedSellerId] = useState<string>('all');
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: startOfDay(new Date()),
+    to: endOfDay(new Date()),
+  });
 
   const managedSellers = useMemo(() => {
     if (!currentUser) return [];
@@ -68,15 +76,30 @@ export default function SellerReportsPage() {
     if (selectedSellerId !== 'all') {
       routesToConsider = routesToConsider.filter(route => route.createdBy === selectedSellerId);
     }
+
+    if (dateRange?.from) {
+      const fromDate = startOfDay(dateRange.from);
+      routesToConsider = routesToConsider.filter(route => {
+        const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
+        return routeDate >= fromDate;
+      });
+    }
+    if (dateRange?.to) {
+        const toDate = endOfDay(dateRange.to);
+        routesToConsider = routesToConsider.filter(route => {
+            const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
+            return routeDate <= toDate;
+        });
+    }
     
     return routesToConsider;
-  }, [selectedSellerId, allRoutes, managedSellers, currentUser]);
+  }, [selectedSellerId, allRoutes, managedSellers, currentUser, dateRange]);
   
   const handleDownloadExcel = () => {
     if (filteredRoutes.length === 0) {
         toast({
             title: "Sin Datos",
-            description: "No hay rutas completadas para descargar.",
+            description: "No hay rutas completadas para descargar con los filtros seleccionados.",
             variant: "destructive"
         });
         return;
@@ -168,11 +191,11 @@ export default function SellerReportsPage() {
         <CardHeader>
             <CardTitle>Rutas Completadas por Vendedor</CardTitle>
             <CardDescription>
-                Selecciona un vendedor para ver sus rutas completadas.
+                Selecciona un vendedor y un rango de fechas para ver sus rutas completadas.
             </CardDescription>
         </CardHeader>
         <CardContent>
-            <div className="mb-4">
+            <div className="flex flex-col sm:flex-row gap-4 mb-4">
                  <Select value={selectedSellerId} onValueChange={setSelectedSellerId}>
                     <SelectTrigger className="w-full sm:max-w-xs">
                         <Users className="mr-2 h-4 w-4" />
@@ -185,6 +208,43 @@ export default function SellerReportsPage() {
                         ))}
                     </SelectContent>
                 </Select>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      id="date"
+                      variant={"outline"}
+                      className={cn(
+                        "w-full sm:w-[300px] justify-start text-left font-normal",
+                        !dateRange && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {dateRange?.from ? (
+                        dateRange.to ? (
+                          <>
+                            {format(dateRange.from, "LLL dd, y", {locale: es})} -{" "}
+                            {format(dateRange.to, "LLL dd, y", {locale: es})}
+                          </>
+                        ) : (
+                          format(dateRange.from, "LLL dd, y", {locale: es})
+                        )
+                      ) : (
+                        <span>Elige un rango de fechas</span>
+                      )}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      initialFocus
+                      mode="range"
+                      defaultMonth={dateRange?.from}
+                      selected={dateRange}
+                      onSelect={setDateRange}
+                      numberOfMonths={2}
+                      locale={es}
+                    />
+                  </PopoverContent>
+                </Popover>
             </div>
              <div className="border rounded-lg">
                 <Table>
@@ -238,7 +298,7 @@ export default function SellerReportsPage() {
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={5} className="text-center h-24">
-                                    No hay rutas completadas para mostrar.
+                                    No hay rutas completadas para mostrar con los filtros seleccionados.
                                 </TableCell>
                             </TableRow>
                         )}
