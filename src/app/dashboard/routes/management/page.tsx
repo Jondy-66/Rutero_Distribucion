@@ -102,6 +102,21 @@ export default function RouteManagementPage() {
     if (!selectedRouteId) return undefined;
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
+
+  // Effect to auto-select the in-progress route for today
+  useEffect(() => {
+    if (!authLoading && user && allRoutes.length > 0) {
+        const inProgressRoute = allRoutes.find(r => {
+            const routeDate = r.date;
+            return r.createdBy === user.id && r.status === 'En Progreso' && routeDate && isToday(routeDate);
+        });
+
+        if (inProgressRoute) {
+            setSelectedRouteId(inProgressRoute.id);
+            setIsRouteStarted(true);
+        }
+    }
+  }, [authLoading, user, allRoutes]);
   
   useEffect(() => {
     if (selectedRoute) {
@@ -149,7 +164,7 @@ export default function RouteManagementPage() {
   useEffect(() => {
     if (selectedRoute && selectedRoute.status === 'En Progreso') {
         const expirationDate = new Date();
-        expirationDate.setHours(18, 0, 0, 0); // 6 PM on the route's date
+        expirationDate.setHours(20, 30, 0, 0); // 8:30 PM on the route's date
         if (new Date() > expirationDate) {
             setIsRouteExpired(true);
         }
@@ -675,7 +690,7 @@ export default function RouteManagementPage() {
                             <AlertTriangle className="h-4 w-4" />
                             <AlertTitle>Ruta Expirada</AlertTitle>
                             <AlertDescription>
-                                El tiempo para gestionar esta ruta ha terminado (18:00). Ya no puedes realizar cambios.
+                                El tiempo para gestionar esta ruta ha terminado (20:30). Ya no puedes realizar cambios.
                             </AlertDescription>
                         </Alert>
                     )}
