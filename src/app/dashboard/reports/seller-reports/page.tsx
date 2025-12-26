@@ -73,32 +73,59 @@ export default function SellerReportsPage() {
   
   const handleDownloadExcel = () => {
     if (filteredRoutes.length === 0) {
-      toast({
-        title: "Sin Datos",
-        description: "No hay rutas completadas para descargar.",
-        variant: "destructive"
-      });
-      return;
+        toast({
+            title: "Sin Datos",
+            description: "No hay rutas completadas para descargar.",
+            variant: "destructive"
+        });
+        return;
     }
 
-    const dataToExport = filteredRoutes.map(route => {
-      const seller = allUsers.find(u => u.id === route.createdBy);
-      const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
-      return {
-        'Vendedor': seller?.name || 'Desconocido',
-        'Nombre de Ruta': route.routeName,
-        'Fecha de Ruta': format(routeDate, 'PPP', { locale: es }),
-        'Clientes en Ruta': route.clients.length,
-        'Estado': route.status,
-      };
-    });
+    const dataToExport = [];
+
+    for (const route of filteredRoutes) {
+        const seller = allUsers.find(u => u.id === route.createdBy);
+        const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
+
+        if (route.clients && route.clients.length > 0) {
+            for (const client of route.clients) {
+                if (client.visitStatus === 'Completado') {
+                    dataToExport.push({
+                        'Vendedor': seller?.name || 'Desconocido',
+                        'Nombre de Ruta': route.routeName,
+                        'Fecha de Ruta': format(routeDate, 'PPP', { locale: es }),
+                        'RUC Cliente': client.ruc,
+                        'Nombre Cliente': client.nombre_comercial,
+                        'Hora de Check-in': client.checkInTime || 'N/A',
+                        'Ubicación de Check-in': client.checkInLocation ? `${client.checkInLocation.latitude}, ${client.checkInLocation.longitude}` : 'N/A',
+                        'Tipo de Visita': client.visitType === 'presencial' ? 'Presencial' : 'Telefónica',
+                        'Observación Llamada': client.callObservation || '',
+                        'Valor Venta ($)': client.valorVenta || 0,
+                        'Valor Cobro ($)': client.valorCobro || 0,
+                        'Devoluciones ($)': client.devoluciones || 0,
+                        'Promociones ($)': client.promociones || 0,
+                        'Medicación Frecuente ($)': client.medicacionFrecuente || 0,
+                    });
+                }
+            }
+        }
+    }
+    
+    if (dataToExport.length === 0) {
+        toast({
+            title: "Sin Datos",
+            description: "No hay visitas completadas en las rutas seleccionadas para exportar.",
+            variant: "destructive"
+        });
+        return;
+    }
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Rutas Completadas");
-    XLSX.writeFile(workbook, `reporte_vendedores_${selectedSellerId === 'all' ? 'todos' : allUsers.find(u=>u.id === selectedSellerId)?.name.replace(' ', '_')}.xlsx`);
-    toast({ title: "Descarga Iniciada", description: "Tu reporte en Excel se está descargando." });
-  };
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Detalle de Rutas");
+    XLSX.writeFile(workbook, `reporte_detallado_vendedores_${selectedSellerId === 'all' ? 'todos' : allUsers.find(u=>u.id === selectedSellerId)?.name.replace(' ', '_')}.xlsx`);
+    toast({ title: "Descarga Iniciada", description: "Tu reporte detallado en Excel se está descargando." });
+};
 
   const handleViewDetails = (routeId: string) => {
     router.push(`/dashboard/routes/${routeId}`);
