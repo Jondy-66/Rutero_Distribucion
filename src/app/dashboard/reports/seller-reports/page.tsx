@@ -208,43 +208,45 @@ export default function SellerReportsPage() {
                         ))}
                     </SelectContent>
                 </Select>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      id="date"
-                      variant={"outline"}
-                      className={cn(
-                        "w-full sm:w-[300px] justify-start text-left font-normal",
-                        !dateRange && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {dateRange?.from ? (
-                        dateRange.to ? (
-                          <>
-                            {format(dateRange.from, "LLL dd, y", {locale: es})} -{" "}
-                            {format(dateRange.to, "LLL dd, y", {locale: es})}
-                          </>
-                        ) : (
-                          format(dateRange.from, "LLL dd, y", {locale: es})
-                        )
-                      ) : (
-                        <span>Elige un rango de fechas</span>
-                      )}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      initialFocus
-                      mode="range"
-                      defaultMonth={dateRange?.from}
-                      selected={dateRange}
-                      onSelect={setDateRange}
-                      numberOfMonths={2}
-                      locale={es}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <div className="flex items-center gap-2">
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          id="date"
+                          variant={"outline"}
+                          className={cn(
+                            "w-[300px] justify-start text-left font-normal",
+                            !dateRange && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          {dateRange?.from ? (
+                            dateRange.to ? (
+                              <>
+                                {format(dateRange.from, "LLL dd, y", {locale: es})} -{" "}
+                                {format(dateRange.to, "LLL dd, y", {locale: es})}
+                              </>
+                            ) : (
+                              format(dateRange.from, "LLL dd, y", {locale: es})
+                            )
+                          ) : (
+                            <span>Elige un rango de fechas</span>
+                          )}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <Calendar
+                          initialFocus
+                          mode="range"
+                          defaultMonth={dateRange?.from}
+                          selected={dateRange}
+                          onSelect={setDateRange}
+                          numberOfMonths={2}
+                          locale={es}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                </div>
             </div>
              <div className="border rounded-lg">
                 <Table>
