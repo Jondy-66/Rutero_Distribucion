@@ -22,16 +22,25 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { Download, Users } from 'lucide-react';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { Download, Users, MoreHorizontal, Eye } from 'lucide-react';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as XLSX from 'xlsx';
 import { Timestamp } from 'firebase/firestore';
+import { useRouter } from 'next/navigation';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export default function SellerReportsPage() {
   const { user: currentUser, users: allUsers, routes: allRoutes, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
   
   const [selectedSellerId, setSelectedSellerId] = useState<string>('all');
 
@@ -89,6 +98,10 @@ export default function SellerReportsPage() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Rutas Completadas");
     XLSX.writeFile(workbook, `reporte_vendedores_${selectedSellerId === 'all' ? 'todos' : allUsers.find(u=>u.id === selectedSellerId)?.name.replace(' ', '_')}.xlsx`);
     toast({ title: "Descarga Iniciada", description: "Tu reporte en Excel se está descargando." });
+  };
+
+  const handleViewDetails = (routeId: string) => {
+    router.push(`/dashboard/routes/${routeId}`);
   };
 
   if (authLoading) {
@@ -151,6 +164,7 @@ export default function SellerReportsPage() {
                         <TableHead>Vendedor</TableHead>
                         <TableHead>Fecha</TableHead>
                         <TableHead>Clientes</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -161,6 +175,7 @@ export default function SellerReportsPage() {
                                     <TableCell><Skeleton className="h-5 w-28" /></TableCell>
                                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                                     <TableCell><Skeleton className="h-5 w-8" /></TableCell>
+                                    <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                                 </TableRow>
                             ))
                         ) : filteredRoutes.length > 0 ? (
@@ -172,11 +187,27 @@ export default function SellerReportsPage() {
                                     <TableCell>{allUsers.find(u => u.id === route.createdBy)?.name || 'Desconocido'}</TableCell>
                                     <TableCell>{format(routeDate, 'PPP', { locale: es })}</TableCell>
                                     <TableCell>{route.clients.length}</TableCell>
+                                    <TableCell className="text-right">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon">
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                <DropdownMenuItem onClick={() => handleViewDetails(route.id)}>
+                                                    <Eye className="mr-2 h-4 w-4" />
+                                                    Ver Detalles
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </TableCell>
                                 </TableRow>
                             )})
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-center h-24">
+                                <TableCell colSpan={5} className="text-center h-24">
                                     No hay rutas completadas para mostrar.
                                 </TableCell>
                             </TableRow>
