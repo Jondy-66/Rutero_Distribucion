@@ -82,6 +82,8 @@ export type ClientInRoute = {
   callObservation?: string;
   checkInTime?: string | null;
   checkInLocation?: GeoPoint | null;
+  checkOutTime?: string | null;
+  checkOutLocation?: GeoPoint | null;
 }
 
 

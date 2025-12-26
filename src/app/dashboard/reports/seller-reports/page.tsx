@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -98,6 +99,8 @@ export default function SellerReportsPage() {
                         'Nombre Cliente': client.nombre_comercial,
                         'Hora de Check-in': client.checkInTime || 'N/A',
                         'Ubicación de Check-in': client.checkInLocation ? `${client.checkInLocation.latitude}, ${client.checkInLocation.longitude}` : 'N/A',
+                        'Hora de Check-out': client.checkOutTime || 'N/A',
+                        'Ubicación de Check-out': client.checkOutLocation ? `${client.checkOutLocation.latitude}, ${client.checkOutLocation.longitude}` : 'N/A',
                         'Tipo de Visita': client.visitType === 'presencial' ? 'Presencial' : 'Telefónica',
                         'Observación Llamada': client.callObservation || '',
                         'Valor Venta ($)': client.valorVenta || 0,

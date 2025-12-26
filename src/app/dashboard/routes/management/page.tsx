@@ -47,6 +47,8 @@ type RouteClient = Client & {
     origin?: 'manual' | 'predicted';
     checkInTime?: string | null;
     checkInLocation?: GeoPoint | null;
+    checkOutTime?: string | null;
+    checkOutLocation?: GeoPoint | null;
 }
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
@@ -279,6 +281,9 @@ export default function RouteManagementPage() {
     setIsSaving(true);
 
     try {
+        const time = format(new Date(), 'HH:mm:ss');
+        const location = markerPosition ? new GeoPoint(markerPosition.lat, markerPosition.lng) : null;
+
         let fullRoutePlanClients = [...selectedRoute.clients];
 
         const existingClientInPlan = fullRoutePlanClients.find(c => c.ruc === activeClient.ruc);
@@ -293,6 +298,8 @@ export default function RouteManagementPage() {
             origin: existingClientInPlan?.origin ?? activeClient.origin,
             checkInTime: activeClient.checkInTime, // Persist check-in time
             checkInLocation: activeClient.checkInLocation, // Persist check-in location
+            checkOutTime: time,
+            checkOutLocation: location,
             visitStatus: 'Completado',
             visitType: visitType,
             callObservation: visitType === 'telefonica' ? callObservation : undefined,
