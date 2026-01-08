@@ -23,16 +23,9 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { isToday } from 'date-fns';
-
-const data = [
-  { name: 'Lun', routes: 4, sales: 2400 },
-  { name: 'Mar', routes: 3, sales: 1398 },
-  { name: 'Mié', routes: 5, sales: 9800 },
-  { name: 'Jue', routes: 2, sales: 3908 },
-  { name: 'Vie', routes: 6, sales: 4800 },
-  { name: 'Sáb', routes: 1, sales: 3800 },
-];
+import { isToday, startOfWeek, endOfWeek, eachDayOfInterval, format, getDay, isWithinInterval } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { Timestamp } from 'firebase/firestore';
 
 
 export default function DashboardPage() {
@@ -60,7 +53,7 @@ export default function DashboardPage() {
 
     const interval = setInterval(() => {
       const now = new Date();
-      const expirationDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 18, 30, 0); // 18:30 del día de hoy
+      const expirationDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 30, 0); // 20:30 del día de hoy
       const diff = expirationDate.getTime() - now.getTime();
 
       if (diff <= 0) {
@@ -100,6 +93,46 @@ export default function DashboardPage() {
       if (!activeRoute) return 0;
       return activeClientsInRoute.filter(c => c.visitStatus === 'Completado').length;
   }, [activeRoute, activeClientsInRoute]);
+
+  const weeklyActivityData = useMemo(() => {
+    const today = new Date();
+    const start = startOfWeek(today, { weekStartsOn: 1 }); // Lunes
+    const end = endOfWeek(today, { weekStartsOn: 1 });   // Domingo
+
+    const weekDays = eachDayOfInterval({ start, end });
+
+    const weekData = weekDays.map(day => ({
+        name: format(day, 'E', { locale: es }).charAt(0).toUpperCase() + format(day, 'E', { locale: es }).slice(1,3),
+        routes: 0,
+        sales: 0,
+    }));
+
+    const relevantRoutes = routes.filter(route => {
+        const routeDate = route.date;
+        return (
+            (user?.role === 'Administrador' || route.createdBy === user?.id) &&
+            route.status === 'Completada' &&
+            routeDate &&
+            isWithinInterval(routeDate, { start, end })
+        );
+    });
+
+    relevantRoutes.forEach(route => {
+        const routeDate = route.date;
+        if (routeDate) {
+            const dayIndex = getDay(routeDate) === 0 ? 6 : getDay(routeDate) - 1; // Lunes = 0, Domingo = 6
+            if (dayIndex >= 0 && dayIndex < 7) {
+                weekData[dayIndex].routes += 1;
+                const totalSales = route.clients
+                    .filter(c => c.visitStatus === 'Completado' && c.valorVenta)
+                    .reduce((sum, c) => sum + (c.valorVenta || 0), 0);
+                weekData[dayIndex].sales += totalSales;
+            }
+        }
+    });
+    
+    return weekData;
+  }, [routes, user]);
 
 
   return (
@@ -143,7 +176,7 @@ export default function DashboardPage() {
                            : `${String(remainingTime.hours).padStart(2, '0')}:${String(remainingTime.minutes).padStart(2, '0')}:${String(remainingTime.seconds).padStart(2, '0')}`
                        }
                    </div>
-                   <p className="text-xs text-muted-foreground">Para finalizar la ruta de hoy (18:30)</p>
+                   <p className="text-xs text-muted-foreground">Para finalizar la ruta de hoy (20:30)</p>
                 </CardContent>
             </Card>
             </>
@@ -189,7 +222,7 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="pl-2">
             <ResponsiveContainer width="100%" height={350}>
-              <RechartsBarChart data={data}>
+              <RechartsBarChart data={weeklyActivityData}>
                 <XAxis
                   dataKey="name"
                   stroke="hsl(var(--muted-foreground))"
@@ -210,6 +243,12 @@ export default function DashboardPage() {
                     backgroundColor: 'hsl(var(--background))', 
                     border: '1px solid hsl(var(--border))',
                     borderRadius: 'var(--radius)'
+                  }}
+                  formatter={(value, name) => {
+                    if (name === 'sales') {
+                      return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value as number);
+                    }
+                    return value;
                   }}
                 />
                 <Legend />
