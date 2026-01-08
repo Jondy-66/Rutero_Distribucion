@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Briefcase, Route, Users, BarChart, Clock } from 'lucide-react';
+import { Briefcase, Route, Users, BarChart, Clock, TrendingUp } from 'lucide-react';
 import {
   Bar,
   BarChart as RechartsBarChart,
@@ -109,8 +109,9 @@ export default function DashboardPage() {
 
     const relevantRoutes = routes.filter(route => {
         const routeDate = route.date;
+        const isOwnerOrAdmin = user?.role === 'Administrador' || route.createdBy === user?.id;
         return (
-            (user?.role === 'Administrador' || route.createdBy === user?.id) &&
+            isOwnerOrAdmin &&
             route.status === 'Completada' &&
             routeDate &&
             isWithinInterval(routeDate, { start, end })
@@ -133,6 +134,35 @@ export default function DashboardPage() {
     
     return weekData;
   }, [routes, user]);
+  
+  const performanceData = useMemo(() => {
+    const completedRoutes = routes.filter(r => r.status === 'Completada');
+    if (completedRoutes.length === 0) {
+        return { level: 'Sin datos', message: 'No hay rutas completadas para analizar.' };
+    }
+
+    let totalPlanned = 0;
+    let totalVisited = 0;
+
+    completedRoutes.forEach(route => {
+        const plannedInRoute = route.clients.filter(c => c.status !== 'Eliminado').length;
+        const visitedInRoute = route.clients.filter(c => c.visitStatus === 'Completado').length;
+        totalPlanned += plannedInRoute;
+        totalVisited += visitedInRoute;
+    });
+
+    if (totalPlanned === 0) {
+         return { level: 'Sin datos', message: 'Las rutas completadas no tienen clientes planificados.' };
+    }
+
+    const percentage = (totalVisited / totalPlanned) * 100;
+
+    if (percentage > 95) return { level: 'Excelente', message: 'Has superado el 95% de efectividad.' };
+    if (percentage >= 80) return { level: 'Bueno', message: 'Más del 80% de visitas completadas.' };
+    if (percentage >= 60) return { level: 'Regular', message: 'Entre 60% y 79% de visitas completadas.' };
+    return { level: 'Bajo', message: 'Menos del 60% de efectividad.' };
+
+  }, [routes]);
 
 
   return (
@@ -206,12 +236,12 @@ export default function DashboardPage() {
         )}
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Rendimiento</CardTitle>
-            <BarChart className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Rendimiento General</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">Bueno</div>
-            <p className="text-xs text-muted-foreground">Cumpliendo todos los objetivos</p>
+            <div className="text-2xl font-bold">{performanceData.level}</div>
+            <p className="text-xs text-muted-foreground">{performanceData.message}</p>
           </CardContent>
         </Card>
       </div>
