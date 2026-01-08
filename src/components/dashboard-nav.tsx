@@ -46,7 +46,13 @@ const navItems = [
     href: '/dashboard',
     label: 'Panel',
     icon: LayoutDashboard,
-    roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista'],
+    roles: ['Usuario', 'Telemercaderista'],
+  },
+   {
+    href: '/dashboard/admin-dashboard',
+    label: 'Dashboard Admin',
+    icon: LayoutDashboard,
+    roles: ['Administrador', 'Supervisor'],
   },
   {
     href: '/dashboard/clients',

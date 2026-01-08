@@ -1,15 +1,15 @@
 
 'use client';
 
-import { useEffect, useState, useMemo } from 'react';
-import { PageHeader } from '@/components/page-header';
+import { useAuth } from '@/hooks/use-auth';
+import { redirect } from 'next/navigation';
+import { Briefcase, Route, Users, BarChart, Clock, TrendingUp } from 'lucide-react';
 import {
   Card,
   CardContent,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Briefcase, Route, Users, BarChart, Clock, TrendingUp } from 'lucide-react';
 import {
   Bar,
   BarChart as RechartsBarChart,
@@ -20,19 +20,25 @@ import {
   Legend
 } from 'recharts';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useAuth } from '@/hooks/use-auth';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { isToday, startOfWeek, endOfWeek, eachDayOfInterval, format, getDay, isWithinInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
+import { useMemo, useState, useEffect } from 'react';
+import { PageHeader } from '@/components/page-header';
 
 
 export default function DashboardPage() {
   const { user, clients, users, routes, loading } = useAuth();
+
+  // Redirect Admins and Supervisors to the new dashboard
+  if (user?.role === 'Administrador' || user?.role === 'Supervisor') {
+    redirect('/dashboard/admin-dashboard');
+  }
   
   const clientCount = useMemo(() => {
-    if (user?.role === 'Usuario') {
+    if (user?.role === 'Usuario' || user?.role === 'Telemercaderista') {
       return clients.filter(client => client.ejecutivo === user.name).length;
     }
     return clients.length;
