@@ -22,6 +22,7 @@ import {
   HeartHandshake,
   Database,
   Phone,
+  BarChart,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -31,7 +32,6 @@ import {
   SidebarMenuButton,
   SidebarMenuSub,
   SidebarMenuSubButton,
-  SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/use-auth';
 import {
@@ -47,12 +47,6 @@ const navItems = [
     label: 'Panel',
     icon: LayoutDashboard,
     roles: ['Usuario', 'Telemercaderista'],
-  },
-   {
-    href: '/dashboard/admin-dashboard',
-    label: 'Dashboard Admin',
-    icon: LayoutDashboard,
-    roles: ['Administrador', 'Supervisor'],
   },
   {
     href: '/dashboard/clients',
@@ -104,6 +98,9 @@ export function DashboardNav() {
   const [isReportsOpen, setIsReportsOpen] = useState(
     pathname.startsWith('/dashboard/reports')
   );
+  const [isDashboardOpen, setIsDashboardOpen] = useState(
+    pathname.startsWith('/dashboard/admin-dashboard') || pathname === '/dashboard'
+  );
 
 
   const filteredNavItems = navItems.filter((item) => {
@@ -130,6 +127,39 @@ export function DashboardNav() {
   return (
     <nav>
       <SidebarMenu>
+        {isSupervisorOrAdmin && (
+          <Collapsible open={isDashboardOpen} onOpenChange={setIsDashboardOpen}>
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton tooltip="Dashboard">
+                  <LayoutDashboard className="h-5 w-5" />
+                  <span>Dashboard</span>
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+            </SidebarMenuItem>
+            <CollapsibleContent>
+              <SidebarMenuSub>
+                  <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard'}>
+                        <Link href="/dashboard">
+                          <ClipboardList />
+                          <span>Panel de Control</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/admin-dashboard'}>
+                        <Link href="/dashboard/admin-dashboard">
+                          <BarChart />
+                          <span>KPIs</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+        
         {filteredNavItems.map((item) => (
           <SidebarMenuItem key={item.href}>
             <SidebarMenuButton
@@ -147,6 +177,7 @@ export function DashboardNav() {
             </SidebarMenuButton>
           </SidebarMenuItem>
         ))}
+
          {canSeeReports && (
           <Collapsible open={isReportsOpen} onOpenChange={setIsReportsOpen}>
             <SidebarMenuItem>

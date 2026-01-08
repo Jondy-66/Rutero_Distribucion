@@ -31,11 +31,6 @@ import { PageHeader } from '@/components/page-header';
 
 export default function DashboardPage() {
   const { user, clients, users, routes, loading } = useAuth();
-
-  // Redirect Admins and Supervisors to the new dashboard
-  if (user?.role === 'Administrador' || user?.role === 'Supervisor') {
-    redirect('/dashboard/admin-dashboard');
-  }
   
   const clientCount = useMemo(() => {
     if (user?.role === 'Usuario' || user?.role === 'Telemercaderista') {
