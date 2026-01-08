@@ -1,5 +1,6 @@
 
 'use client';
+import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -19,6 +20,11 @@ import {
 } from 'recharts';
 import { Target, TrendingUp, Users } from 'lucide-react';
 import Image from 'next/image';
+import { useMemo } from 'react';
+import { isWithinInterval, startOfWeek, endOfWeek, eachDayOfInterval, format, getDay } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { Timestamp } from 'firebase/firestore';
+
 
 const executiveData = [
   { name: 'Ana López (99%)', value: 240, fill: '#8884d8' },
@@ -26,15 +32,6 @@ const executiveData = [
   { name: 'Sofía Roig (88%)', value: 290, fill: '#8dd1e1' },
   { name: 'Carlos Mora (79%)', value: 200, fill: '#82ca9d' },
   { name: 'Lorem Gil (69%)', value: 278, fill: '#a4de6c' },
-];
-
-const weeklySalesData = [
-  { name: 'L', value: 120 },
-  { name: 'M', value: 90 },
-  { name: 'X', value: 150 },
-  { name: 'J', value: 140 },
-  { name: 'V', value: 290 },
-  { name: 'S', value: 300 },
 ];
 
 const portfolioData = [
@@ -90,6 +87,42 @@ const CircularProgress = ({ value, label, subLabel, colorClass = 'text-primary' 
 
 
 export default function AdminDashboardPage() {
+    const { user, routes, loading } = useAuth();
+    
+    const weeklySalesData = useMemo(() => {
+        const today = new Date();
+        const start = startOfWeek(today, { weekStartsOn: 1 }); // Lunes
+        const end = endOfWeek(today, { weekStartsOn: 1 });   // Domingo
+
+        const weekDays = eachDayOfInterval({ start, end });
+
+        const weekData = weekDays.map(day => ({
+            name: format(day, 'E', { locale: es }).charAt(0).toUpperCase(),
+            value: 0,
+        }));
+        
+        const relevantRoutes = routes.filter(route => {
+            const routeDate = route.date;
+            return route.status === 'Completada' && routeDate && isWithinInterval(routeDate, { start, end });
+        });
+
+        relevantRoutes.forEach(route => {
+            const routeDate = route.date;
+            if(routeDate){
+                const dayIndex = getDay(routeDate) === 0 ? 6 : getDay(routeDate) - 1; // Lunes = 0, Domingo = 6
+                if (dayIndex >= 0 && dayIndex < 7) {
+                    const totalSales = route.clients
+                        .filter(c => c.visitStatus === 'Completado' && c.valorVenta)
+                        .reduce((sum, c) => sum + (c.valorVenta || 0), 0);
+                    weekData[dayIndex].value += totalSales;
+                }
+            }
+        });
+        
+        return weekData;
+    }, [routes]);
+
+
   return (
     <>
       <div className="relative w-full rounded-xl bg-card p-6 overflow-hidden mb-6 shadow-lg">
@@ -161,15 +194,16 @@ export default function AdminDashboardPage() {
                     <ResponsiveContainer width="100%" height={200}>
                     <LineChart data={weeklySalesData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                         <XAxis dataKey="name" />
-                        <YAxis />
+                        <YAxis tickFormatter={(value) => `$${value/1000}k`}/>
                         <Tooltip 
                          contentStyle={{
                             backgroundColor: 'hsl(var(--background))', 
                             border: '1px solid hsl(var(--border))'
                           }}
                           itemStyle={{ color: 'hsl(var(--foreground))' }}
+                          formatter={(value: number) => [new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value), 'Ventas']}
                         />
-                        <Line type="monotone" dataKey="value" stroke="hsl(var(--primary))" strokeWidth={2} activeDot={{ r: 8 }} />
+                        <Line type="monotone" dataKey="value" name="Ventas" stroke="hsl(var(--primary))" strokeWidth={2} activeDot={{ r: 8 }} />
                     </LineChart>
                     </ResponsiveContainer>
                 </CardContent>
