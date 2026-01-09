@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -140,9 +141,8 @@ export default function TeamRoutesPage() {
   }
 
   const getRouteDate = (route: RoutePlan) => {
-    if (route.clients && route.clients.length > 0 && route.clients[0].date) {
-      // Ensure date is a valid Date object before formatting
-      const date = route.clients[0].date;
+    if (route.date) {
+      const date = route.date;
       if (date instanceof Timestamp) {
         return format(date.toDate(), 'PPP', { locale: es });
       }
