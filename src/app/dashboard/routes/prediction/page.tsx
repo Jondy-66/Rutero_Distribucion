@@ -183,7 +183,8 @@ export default function PrediccionesPage() {
                     valorVenta: parseFloat(String(prediction.ventas)) || 0,
                     valorCobro: parseFloat(String(prediction.cobros)) || 0,
                     promociones: parseFloat(String(prediction.promociones)) || 0,
-                    origin: 'predicted'
+                    origin: 'predicted',
+                    status: 'Activo'
                 });
             }
         }
@@ -199,7 +200,7 @@ export default function PrediccionesPage() {
         const newRoute: Omit<RoutePlan, 'id' | 'createdAt'> = {
             routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`,
             clients: routeClients,
-            status: 'Planificada',
+            status: 'Planificada', // Always start as 'Planificada'
             supervisorId: supervisor.id,
             supervisorName: supervisor.name,
             createdBy: currentUser.id,
@@ -511,5 +512,3 @@ export default function PrediccionesPage() {
     </>
   );
 }
-
-

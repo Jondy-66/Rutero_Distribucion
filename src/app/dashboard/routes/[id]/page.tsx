@@ -99,6 +99,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         const routeData = await getRoute(routeId);
         if (routeData) {
           setRoute(routeData);
+          // Initialize clientsInRoute only once from the fetched route data
           setClientsInRoute(routeData.clients || []);
         } else {
           notFound();
@@ -130,8 +131,11 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     if (isClientDialogOpen) {
-      const currentSelectedClientsFromMainList = clients.filter(c => clientsInRoute.some(sc => sc.ruc === c.ruc && sc.status !== 'Eliminado'));
-      setDialogSelectedClients(currentSelectedClientsFromMainList);
+      // Get RUCs of clients currently in the route list (excluding those marked as 'Eliminado')
+      const currentRucsInRoute = new Set(clientsInRoute.filter(c => c.status !== 'Eliminado').map(c => c.ruc));
+      // Pre-select clients in the dialog if they are already in the main list
+      const clientsToSelect = clients.filter(c => currentRucsInRoute.has(c.ruc));
+      setDialogSelectedClients(clientsToSelect);
     }
   }, [isClientDialogOpen, clients, clientsInRoute]);
 
@@ -215,7 +219,12 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       if (newStatus) {
         router.push('/dashboard/routes');
       } else {
-        setRoute(prev => prev ? { ...prev, ...dataToUpdate } : null);
+        // After a save, refresh the local state from the updated data to avoid inconsistencies
+        const updatedRouteData = await getRoute(routeId);
+        if (updatedRouteData) {
+            setRoute(updatedRouteData);
+            setClientsInRoute(updatedRouteData.clients || []);
+        }
       }
 
     } catch (error: any) {
@@ -238,48 +247,40 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   };
 
   const handleConfirmClientSelection = () => {
-    // Map selected clients to ClientInRoute, keeping existing data if available
-    const updatedClientsFromDialog = dialogSelectedClients.map(client => {
-      const existingClientInRoute = clientsInRoute.find(c => c.ruc === client.ruc);
-      if (existingClientInRoute) {
-        return { ...existingClientInRoute, status: 'Activo' as const };
-      }
-      return {
-        ruc: client.ruc,
-        nombre_comercial: client.nombre_comercial,
-        date: new Date(),
-        origin: 'manual' as const,
-        status: 'Activo' as const,
-      };
+    // Create a map of existing clients in the route for quick lookup
+    const existingClientsMap = new Map(clientsInRoute.map(c => [c.ruc, c]));
+    
+    // Process clients selected in the dialog
+    const newClientsList = dialogSelectedClients.map(selectedClient => {
+        const existingClientData = existingClientsMap.get(selectedClient.ruc);
+        if (existingClientData) {
+            // If client already exists, keep its data but ensure its status is 'Activo'
+            return { ...existingClientData, status: 'Activo' as const };
+        }
+        // If it's a new client, create a default structure
+        return {
+            ruc: selectedClient.ruc,
+            nombre_comercial: selectedClient.nombre_comercial,
+            date: new Date(),
+            origin: 'manual' as const,
+            status: 'Activo' as const,
+        };
     });
 
-    const finalClientRucs = new Set(updatedClientsFromDialog.map(c => c.ruc));
+    // Identify clients that were in the original list but are no longer selected
+    const unselectedClients = clientsInRoute.filter(originalClient => 
+        !dialogSelectedClients.some(selectedClient => selectedClient.ruc === originalClient.ruc)
+    );
 
-    const finalClientList: ClientInRoute[] = [];
-    const addedRucs = new Set<string>();
-
-    // Add updated/existing clients
-    for (const client of updatedClientsFromDialog) {
-        if (!addedRucs.has(client.ruc)) {
-            finalClientList.push(client);
-            addedRucs.add(client.ruc);
-        }
-    }
+    // Mark unselected clients as 'Eliminado' instead of removing them completely
+    const markedAsRemoved = unselectedClients.map(client => ({
+        ...client,
+        status: 'Eliminado' as const,
+        removalObservation: client.removalObservation || 'Eliminado de la lista',
+    }));
     
-    // Add clients that were removed, but keep them in the list with status 'Eliminado'
-    for (const originalClient of clientsInRoute) {
-        if (!finalClientRucs.has(originalClient.ruc) && !addedRucs.has(originalClient.ruc)) {
-             // If a client was unselected, mark it as 'Eliminado' instead of removing it
-             // This might require a different logic based on requirements (e.g. using a different state for unselected)
-             // For now, let's assume unselecting means it's not in the final list, unless it was previously 'Eliminado'
-            if (originalClient.status === 'Eliminado') {
-                finalClientList.push(originalClient);
-                addedRucs.add(originalClient.ruc);
-            }
-        }
-    }
-
-    setClientsInRoute(finalClientList);
+    // Combine the newly confirmed list with the ones marked for removal
+    setClientsInRoute([...newClientsList, ...markedAsRemoved]);
     setIsClientDialogOpen(false);
 };
   
@@ -677,4 +678,3 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     </>
   );
 }
-
