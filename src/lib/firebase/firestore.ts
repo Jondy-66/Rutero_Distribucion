@@ -293,7 +293,7 @@ export const addRoutesBatch = async (routesData: RouteToSave[]): Promise<string[
         
         const clientsWithTimestamps = route.clients.map(client => ({
             ...client,
-            date: client.date ? Timestamp.fromDate(client.date) : null,
+            date: client.date && client.date instanceof Date ? Timestamp.fromDate(client.date) : client.date,
             dayOfWeek: client.dayOfWeek || null,
             startTime: client.startTime || null,
             endTime: client.endTime || null,
@@ -301,7 +301,7 @@ export const addRoutesBatch = async (routesData: RouteToSave[]): Promise<string[
         
         batch.set(newRouteRef, {
             ...route, 
-            date: route.date ? Timestamp.fromDate(route.date) : serverTimestamp(),
+            date: route.date && route.date instanceof Date ? Timestamp.fromDate(route.date) : serverTimestamp(),
             clients: clientsWithTimestamps,
             createdAt: serverTimestamp()
         });
