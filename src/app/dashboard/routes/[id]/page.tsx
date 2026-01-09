@@ -247,27 +247,33 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   };
 
   const handleConfirmClientSelection = () => {
-    const newClientsInRoute: ClientInRoute[] = dialogSelectedClients.map(client => {
-        const existingClient = clientsInRoute.find(c => c.ruc === client.ruc);
-        if (existingClient) {
-            // If client exists, make sure its status is not 'Eliminado'
-            return { ...existingClient, status: 'Activo' };
-        }
-        return {
-            ruc: client.ruc,
-            nombre_comercial: client.nombre_comercial,
-            date: new Date(),
-            origin: 'manual', // Mark as manually added
-            status: 'Activo',
-        };
+    // Map selected clients to ClientInRoute, keeping existing data if available
+    const updatedClientsFromDialog = dialogSelectedClients.map(client => {
+      const existingClientInRoute = clientsInRoute.find(c => c.ruc === client.ruc);
+      if (existingClientInRoute) {
+        // If client already exists, ensure it's marked as active
+        return { ...existingClientInRoute, status: 'Activo' as const };
+      }
+      // If it's a new client for this route
+      return {
+        ruc: client.ruc,
+        nombre_comercial: client.nombre_comercial,
+        date: new Date(),
+        origin: 'manual' as const,
+        status: 'Activo' as const,
+      };
     });
 
-    const currentRucs = new Set(newClientsInRoute.map(c => c.ruc));
-    const allClients = [...newClientsInRoute, ...clientsInRoute.filter(c => !currentRucs.has(c.ruc))];
+    // Get RUCs of clients that should be in the final list
+    const finalClientRucs = new Set(updatedClientsFromDialog.map(c => c.ruc));
 
-    setClientsInRoute(allClients);
+    // Filter the original list to keep clients that were REMOVED in the dialog
+    const removedClients = clientsInRoute.filter(c => !finalClientRucs.has(c.ruc));
+
+    // Combine the updated list with the ones that were removed (to preserve их status: 'Eliminado')
+    setClientsInRoute([...updatedClientsFromDialog, ...removedClients]);
     setIsClientDialogOpen(false);
-  };
+};
   
   const handleConfirmRemoval = () => {
     if (!clientToRemove) return;

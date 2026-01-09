@@ -199,7 +199,7 @@ export default function PrediccionesPage() {
         const newRoute: Omit<RoutePlan, 'id' | 'createdAt'> = {
             routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`,
             clients: routeClients,
-            status: 'Planificada', // Always save as 'Planificada' for review
+            status: 'Planificada',
             supervisorId: supervisor.id,
             supervisorName: supervisor.name,
             createdBy: currentUser.id,
@@ -511,6 +511,4 @@ export default function PrediccionesPage() {
     </>
   );
 }
-
-
 
