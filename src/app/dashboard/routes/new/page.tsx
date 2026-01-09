@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, ChevronsUpDown, LoaderCircle, Clock, Trash2, Save, Search } from 'lucide-react';
+import { PlusCircle, Calendar as CalendarIcon, Users, ChevronsUpDown, LoaderCircle, Clock, Trash2, Save, Search, Send } from 'lucide-react';
 import { addRoutesBatch, addNotification } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -44,7 +44,7 @@ type StagedRoute = Omit<RoutePlan, 'id' | 'createdAt'> & { tempId: number };
 export default function NewRoutePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { user: currentUser, users, clients, loading } = useAuth();
+  const { user: currentUser, users, clients, loading, refetchData } = useAuth();
   
   const [routeName, setRouteName] = useState('');
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
@@ -56,6 +56,7 @@ export default function NewRoutePage() {
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
   const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
+  const [lastSavedRoutes, setLastSavedRoutes] = useState<string[]>([]);
   
   useEffect(() => {
     if (users) {
@@ -79,6 +80,7 @@ export default function NewRoutePage() {
             setRouteName(predictionData.routeName || '');
             setSelectedSupervisorId(predictionData.supervisorId || (currentUser?.supervisorId ?? undefined));
             setSelectedClients(clientsFromPrediction);
+            setDialogSelectedClients(clients.filter(c => clientsFromPrediction.some(pc => pc.ruc === c.ruc)));
 
             toast({
                 title: 'Predicción Cargada',
@@ -96,7 +98,7 @@ export default function NewRoutePage() {
             localStorage.removeItem('predictionRoute');
         }
     }
-  }, [users, currentUser, toast]);
+  }, [users, currentUser, toast, clients]);
 
   useEffect(() => {
     if (isClientDialogOpen) {
@@ -114,6 +116,7 @@ export default function NewRoutePage() {
   const resetForm = () => {
     setRouteName('');
     setSelectedClients([]);
+    setDialogSelectedClients([]);
     if (currentUser?.role !== 'Usuario') {
         setSelectedSupervisorId(undefined);
     }
@@ -136,15 +139,13 @@ export default function NewRoutePage() {
     }
     
     const routeDate = selectedClients[0]?.date || new Date();
-
-    const isUserRole = currentUser.role === 'Usuario';
     
     const newStagedRoute: StagedRoute = {
         tempId: Date.now(),
         routeName,
         date: routeDate,
         clients: selectedClients,
-        status: isUserRole ? 'Pendiente de Aprobación' : 'Planificada',
+        status: 'Planificada', // Siempre se planifica primero
         supervisorId: selectedSupervisorId,
         supervisorName: supervisor.name,
         createdBy: currentUser.id,
@@ -156,14 +157,22 @@ export default function NewRoutePage() {
   }
   
   const handleRemoveFromStage = (tempId: number) => {
+    const routeToEdit = stagedRoutes.find(r => r.tempId === tempId);
+    if (routeToEdit) {
+      setRouteName(routeToEdit.routeName);
+      setSelectedSupervisorId(routeToEdit.supervisorId);
+      setSelectedClients(routeToEdit.clients);
+      setDialogSelectedClients(clients.filter(c => routeToEdit.clients.some(sc => sc.ruc === c.ruc)));
+    }
     setStagedRoutes(prev => prev.filter(r => r.tempId !== tempId));
   }
   
   const handleRemoveClient = (ruc: string) => {
     setSelectedClients(prev => prev.filter(c => c.ruc !== ruc));
+    setDialogSelectedClients(prev => prev.filter(c => c.ruc !== ruc));
   };
 
-  const handleSaveAllRoutes = async () => {
+  const handleSaveAllRoutes = async (sendForApproval: boolean = false) => {
     if (stagedRoutes.length === 0) {
         toast({ title: 'Lista Vacía', description: 'No hay rutas planificadas para guardar.', variant: 'destructive' });
         return;
@@ -181,15 +190,16 @@ export default function NewRoutePage() {
             return {
                 ...rest,
                 clients: clientsWithTimestamps,
+                status: sendForApproval ? 'Pendiente de Aprobación' : 'Planificada'
             };
         });
 
         const routeIds = await addRoutesBatch(routesToSave);
         
-        for (let i = 0; i < stagedRoutes.length; i++) {
-            const route = stagedRoutes[i];
-            const routeId = routeIds[i];
-            if (route.status === 'Pendiente de Aprobación') {
+        if (sendForApproval) {
+            for (let i = 0; i < stagedRoutes.length; i++) {
+                const route = stagedRoutes[i];
+                const routeId = routeIds[i];
                 await addNotification({
                     userId: route.supervisorId,
                     title: 'Nueva ruta para aprobar',
@@ -199,8 +209,9 @@ export default function NewRoutePage() {
             }
         }
         
-        toast({ title: 'Rutas Guardadas', description: `${stagedRoutes.length} rutas han sido guardadas exitosamente.` });
+        toast({ title: 'Rutas Guardadas', description: `${stagedRoutes.length} rutas han sido ${sendForApproval ? 'enviadas a aprobación' : 'guardadas como planificadas'}.` });
         setStagedRoutes([]);
+        setLastSavedRoutes(routeIds);
         router.push('/dashboard/routes');
     } catch(error: any) {
         console.error("Error saving routes:", error);
@@ -232,6 +243,7 @@ export default function NewRoutePage() {
             ruc: client.ruc,
             nombre_comercial: client.nombre_comercial,
             date: new Date(),
+            origin: 'manual'
         };
     });
     setSelectedClients(newClientsInRoute);
@@ -239,12 +251,17 @@ export default function NewRoutePage() {
   };
   
   const filteredAvailableClients = useMemo(() => {
-    return clients.filter(c => 
+    let userClients = clients;
+    if (currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista') {
+      userClients = clients.filter(c => c.ejecutivo === currentUser.name);
+    }
+    
+    return userClients.filter(c => 
         String(c.nombre_cliente).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
         String(c.nombre_comercial).toLowerCase().includes(dialogSearchTerm.toLowerCase()) ||
         String(c.ruc).includes(dialogSearchTerm)
     );
-  }, [clients, dialogSearchTerm]);
+  }, [clients, dialogSearchTerm, currentUser]);
 
   const isLoading = loading;
 
@@ -330,7 +347,7 @@ export default function NewRoutePage() {
                     <DialogFooter>
                         <span className="text-sm text-muted-foreground mr-auto">{dialogSelectedClients.length} cliente(s) seleccionados</span>
                         <Button variant="ghost" onClick={() => setIsClientDialogOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleConfirmClientSelection}>Añadir Clientes</Button>
+                        <Button onClick={handleConfirmClientSelection}>Actualizar Clientes</Button>
                     </DialogFooter>
                 </DialogContent>
                </Dialog>
@@ -489,10 +506,14 @@ export default function NewRoutePage() {
             )}
           </CardContent>
             {stagedRoutes.length > 0 && (
-                <CardFooter className="border-t pt-6">
-                    <Button onClick={handleSaveAllRoutes} disabled={isSaving} className="w-full">
+                <CardFooter className="flex-col items-stretch gap-2 border-t pt-6">
+                    <Button onClick={() => handleSaveAllRoutes(false)} disabled={isSaving} className="w-full">
                         {isSaving ? <LoaderCircle className="animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                         Guardar Todas las Rutas
+                    </Button>
+                    <Button onClick={() => handleSaveAllRoutes(true)} disabled={isSaving} className="w-full" variant="secondary">
+                        {isSaving ? <LoaderCircle className="animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Guardar y Enviar a Aprobación
                     </Button>
                 </CardFooter>
             )}
