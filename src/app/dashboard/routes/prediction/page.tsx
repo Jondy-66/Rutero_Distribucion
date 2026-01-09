@@ -1,7 +1,7 @@
 
-
 'use client';
 import React, { useState, useMemo, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { getPredicciones } from "@/services/api";
 import type { Prediction, RoutePlan, Client, ClientInRoute } from "@/lib/types";
 import { PageHeader } from "@/components/page-header";
@@ -16,8 +16,6 @@ import { format, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
-import { addRoute, addNotification } from "@/lib/firebase/firestore";
-import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
 import { MapView } from "@/components/map-view";
 import * as XLSX from 'xlsx';
@@ -29,6 +27,7 @@ import { isFinite } from "lodash";
  * @returns {React.ReactElement} El componente de la página de predicciones.
  */
 export default function PrediccionesPage() {
+  const router = useRouter();
   const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [dias, setDias] = useState<number | ''>(7);
   const [latBase, setLatBase] = useState("");
@@ -46,7 +45,6 @@ export default function PrediccionesPage() {
   const [clientsForMap, setClientsForMap] = useState<Client[]>([]);
   const { toast } = useToast();
   const { users, clients, user: currentUser } = useAuth();
-  const router = useRouter();
 
   const isSupervisorOrAdmin = currentUser?.role === 'Administrador' || currentUser?.role === 'Supervisor';
   
@@ -138,91 +136,58 @@ export default function PrediccionesPage() {
 }, [predicciones, searchTerm, isSupervisorOrAdmin]);
 
 
-  const handleSavePredictionRoute = async () => {
-    if (selectedEjecutivo === 'todos' || !currentUser) {
-      toast({ title: 'Error', description: 'Por favor, selecciona un ejecutivo para guardar la ruta.', variant: 'destructive' });
+  const handlePlanPredictionRoute = () => {
+    if (selectedEjecutivo === 'todos') {
+      toast({ title: 'Error', description: 'Por favor, selecciona un ejecutivo para planificar la ruta.', variant: 'destructive' });
       return;
     }
     if (filteredPredicciones.length === 0) {
-        toast({ title: 'Error', description: 'No hay predicciones para guardar para este ejecutivo.', variant: 'destructive' });
+        toast({ title: 'Error', description: 'No hay predicciones para planificar para este ejecutivo.', variant: 'destructive' });
         return;
     }
 
-    setIsSaving(true);
-    try {
-        const executiveUser = users.find(u => u.name === selectedEjecutivo);
-        if (!executiveUser) {
-            throw new Error(`No se pudo encontrar al usuario ejecutivo: ${selectedEjecutivo}`);
-        }
-        
-        let supervisor;
-        if(executiveUser.role === 'Supervisor') {
-            supervisor = executiveUser;
-        } else if (executiveUser.supervisorId) {
-            supervisor = users.find(u => u.id === executiveUser.supervisorId);
-        } else if (currentUser.role === 'Supervisor') {
-            supervisor = currentUser;
-        } else if (currentUser.role === 'Administrador') {
-             const availableSupervisors = users.filter(u => u.role === 'Supervisor');
-             if(availableSupervisors.length > 0) supervisor = availableSupervisors[0];
-        }
-
-        if (!supervisor) {
-            throw new Error(`El ejecutivo ${selectedEjecutivo} no tiene un supervisor asignado y no se pudo determinar uno.`);
-        }
-        
-        const routeClients: ClientInRoute[] = [];
-        for (const prediction of filteredPredicciones) {
-            const ruc = (prediction as any).ruc || (prediction as any).RUC || (prediction as any).cliente_id;
-            const client = clients.find(c => c.ruc === ruc);
-            if (client && prediction.fecha_predicha) {
-                routeClients.push({
-                    ruc: client.ruc,
-                    nombre_comercial: client.nombre_comercial,
-                    date: parseISO(prediction.fecha_predicha),
-                    valorVenta: parseFloat(String(prediction.ventas)) || 0,
-                    valorCobro: parseFloat(String(prediction.cobros)) || 0,
-                    promociones: parseFloat(String(prediction.promociones)) || 0,
-                    origin: 'predicted',
-                    status: 'Activo'
-                });
-            }
-        }
-        
-        if (routeClients.length === 0) {
-            toast({title: "Sin clientes válidos", description: "No se encontraron clientes con fechas válidas en la predicción.", variant: "destructive"});
-            setIsSaving(false);
-            return;
-        }
-
-        const routeDate = routeClients[0].date;
-        
-        const newRoute: Omit<RoutePlan, 'id' | 'createdAt'> = {
-            routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`,
-            clients: routeClients,
-            status: 'Planificada', // Always start as 'Planificada'
-            supervisorId: supervisor.id,
-            supervisorName: supervisor.name,
-            createdBy: currentUser.id,
-            date: routeDate,
-            origin: 'predicted',
-        };
-
-        const newRouteId = await addRoute(newRoute);
-        
-        toast({ title: 'Ruta Creada', description: `Serás redirigido para revisar la ruta para ${selectedEjecutivo}.`});
-        router.push(`/dashboard/routes/${newRouteId}`);
-
-    } catch (error: any) {
-        console.error("Error saving prediction route:", error);
-        toast({
-            title: "Error al Guardar",
-            description: error.message || "No se pudo guardar la ruta de predicción.",
-            variant: "destructive"
-        });
-    } finally {
-        setIsSaving(false);
+    const executiveUser = users.find(u => u.name === selectedEjecutivo);
+    if (!executiveUser) {
+        toast({ title: 'Error', description: `No se pudo encontrar al usuario ejecutivo: ${selectedEjecutivo}`, variant: 'destructive' });
+        return;
     }
+
+    const supervisor = users.find(u => u.id === executiveUser.supervisorId);
+
+    const routeClients: ClientInRoute[] = [];
+    for (const prediction of filteredPredicciones) {
+        const ruc = (prediction as any).ruc || (prediction as any).RUC || (prediction as any).cliente_id;
+        const client = clients.find(c => c.ruc === ruc);
+        if (client && prediction.fecha_predicha) {
+            routeClients.push({
+                ruc: client.ruc,
+                nombre_comercial: client.nombre_comercial,
+                date: new Date(prediction.fecha_predicha),
+                valorVenta: parseFloat(String(prediction.ventas)) || 0,
+                valorCobro: parseFloat(String(prediction.cobros)) || 0,
+                promociones: parseFloat(String(prediction.promociones)) || 0,
+                origin: 'predicted',
+                status: 'Activo'
+            });
+        }
+    }
+    
+    if (routeClients.length === 0) {
+        toast({title: "Sin clientes válidos", description: "No se encontraron clientes con fechas válidas en la predicción.", variant: "destructive"});
+        return;
+    }
+
+    const routeDate = routeClients[0].date;
+    const routeName = `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`;
+    
+    const predictionData = {
+      routeName,
+      supervisorId: supervisor?.id,
+      clients: routeClients.map(c => ({...c, date: c.date?.toISOString()})),
+    };
+    
+    localStorage.setItem('predictionRoute', JSON.stringify(predictionData));
+    router.push('/dashboard/routes/new');
   }
 
   const handleViewOnMap = (prediction: Prediction) => {
@@ -455,10 +420,10 @@ export default function PrediccionesPage() {
                 </div>
             </CardContent>
             <CardFooter className="flex-col sm:flex-row gap-2 items-start sm:items-center">
-                 <Button onClick={handleSavePredictionRoute} disabled={loading || isSaving || selectedEjecutivo === 'todos'}>
+                 <Button onClick={handlePlanPredictionRoute} disabled={loading || isSaving || selectedEjecutivo === 'todos'}>
                     {(loading || isSaving) && <LoaderCircle className="animate-spin mr-2" />}
                     <Save className="mr-2 h-4 w-4" />
-                    Guardar Ruta de Predicción
+                    Planificar Ruta con Predicción
                 </Button>
                  <Button onClick={handleViewOptimizedRoute} variant="outline" disabled={loading || filteredPredicciones.length === 0}>
                     <Route className="mr-2 h-4 w-4" />

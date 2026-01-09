@@ -1,12 +1,13 @@
 
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, Save, Search } from 'lucide-react';
+import { PlusCircle, Calendar as CalendarIcon, Users, ChevronsUpDown, LoaderCircle, Clock, Trash2, Save, Search } from 'lucide-react';
 import { addRoutesBatch, addNotification } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -42,6 +43,7 @@ const endTimeSlots = generateTimeSlots(8, 18, 30, 30);
 type StagedRoute = Omit<RoutePlan, 'id' | 'createdAt'> & { tempId: number };
 
 export default function NewRoutePage() {
+  const router = useRouter();
   const { toast } = useToast();
   const { user: currentUser, users, clients, loading } = useAuth();
   
@@ -64,7 +66,38 @@ export default function NewRoutePage() {
     if (currentUser?.role === 'Usuario' && currentUser.supervisorId) {
         setSelectedSupervisorId(currentUser.supervisorId);
     }
-  }, [users, currentUser]);
+    
+    // Cargar datos de predicción desde localStorage
+    const predictionDataStr = localStorage.getItem('predictionRoute');
+    if (predictionDataStr) {
+        try {
+            const predictionData = JSON.parse(predictionDataStr);
+            const clientsFromPrediction: ClientInRoute[] = predictionData.clients.map((c: any) => ({
+                ...c,
+                date: c.date ? new Date(c.date) : new Date(),
+            }));
+            
+            setRouteName(predictionData.routeName || '');
+            setSelectedSupervisorId(predictionData.supervisorId || (currentUser?.supervisorId ?? undefined));
+            setSelectedClients(clientsFromPrediction);
+
+            toast({
+                title: 'Predicción Cargada',
+                description: 'Los datos de la predicción se han cargado en el formulario.'
+            });
+
+        } catch (error) {
+            console.error("Error parsing prediction data from localStorage:", error);
+            toast({
+                title: 'Error de Carga',
+                description: 'No se pudieron cargar los datos de la predicción.',
+                variant: 'destructive'
+            });
+        } finally {
+            localStorage.removeItem('predictionRoute');
+        }
+    }
+  }, [users, currentUser, toast]);
 
   useEffect(() => {
     if (isClientDialogOpen) {
@@ -169,6 +202,7 @@ export default function NewRoutePage() {
         
         toast({ title: 'Rutas Guardadas', description: `${stagedRoutes.length} rutas han sido guardadas exitosamente.` });
         setStagedRoutes([]);
+        router.push('/dashboard/routes');
     } catch(error: any) {
         console.error("Error saving routes:", error);
         if (error.code === 'permission-denied') {
