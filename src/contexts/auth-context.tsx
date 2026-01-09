@@ -38,10 +38,10 @@ interface AuthContextType {
 
 const transformRouteDates = (route: RoutePlan): RoutePlan => ({
     ...route,
-    date: route.date instanceof Timestamp ? route.date.toDate() : route.date,
+    date: route.date instanceof Timestamp ? route.date.toDate() : (route.date instanceof Date ? route.date : new Date()),
     clients: route.clients.map(client => ({
         ...client,
-        date: client.date instanceof Timestamp ? client.date.toDate() : (client.date || undefined)
+        date: client.date instanceof Timestamp ? client.date.toDate() : (client.date instanceof Date ? client.date : undefined)
     }))
 });
 
