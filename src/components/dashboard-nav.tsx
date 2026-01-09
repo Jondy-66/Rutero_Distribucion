@@ -48,24 +48,28 @@ const navItems = [
     label: 'Panel',
     icon: LayoutDashboard,
     roles: ['Usuario', 'Telemercaderista'],
+    id: 'dashboard',
   },
   {
     href: '/dashboard/clients',
     label: 'Clientes',
     icon: Briefcase,
     roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista'],
+    id: 'clients',
   },
   {
     href: '/dashboard/locations',
     label: 'Ubicaciones',
     icon: MapPin,
     roles: ['Administrador'],
+    id: 'locations',
   },
   {
     href: '/dashboard/map',
     label: 'Mapa',
     icon: Map,
     roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista'],
+    id: 'map',
   },
 ];
 
@@ -74,6 +78,7 @@ const usersNavItem = {
   label: 'Usuarios',
   icon: Users,
   roles: ['Administrador'],
+  id: 'users',
 };
 
 /**

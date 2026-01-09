@@ -17,6 +17,7 @@ import type { User } from '@/lib/types';
 
 const modules = [
     { id: 'dashboard', label: 'Panel' },
+    { id: 'admin-dashboard', label: 'KPIs' },
     { id: 'clients', label: 'Clientes' },
     { id: 'locations', label: 'Ubicaciones' },
     { id: 'map', label: 'Mapa' },
@@ -26,8 +27,8 @@ const modules = [
 ];
 
 const permissionsByRole: Record<User['role'], string[]> = {
-    'Administrador': ['dashboard', 'clients', 'locations', 'map', 'reports', 'routes', 'users'],
-    'Supervisor': ['dashboard', 'clients', 'map', 'reports', 'routes'],
+    'Administrador': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'routes', 'users'],
+    'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'map', 'reports', 'routes'],
     'Usuario': ['dashboard', 'clients', 'map', 'routes'],
     'Telemercaderista': ['dashboard', 'clients', 'map', 'routes'],
 };
