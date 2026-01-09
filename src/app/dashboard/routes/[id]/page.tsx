@@ -55,7 +55,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   const routeId = params.id;
 
   const [route, setRoute] = useState<RoutePlan | null>(null);
-  const [originalClients, setOriginalClients] = useState<ClientInRoute[]>([]);
   const [clientsInRoute, setClientsInRoute] = useState<ClientInRoute[]>([]);
   const [supervisors, setSupervisors] = useState<User[]>([]);
 
@@ -99,12 +98,8 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       try {
         const routeData = await getRoute(routeId);
         if (routeData) {
-          // A route is considered "new" if it was just created from prediction.
-          // This flag is used to allow initial editing before the first save.
-          const isNew = routeData.origin === 'predicted' && (!routeData.createdAt || (Timestamp.now().toMillis() - (routeData.createdAt as Timestamp).toMillis()) < 5 * 60 * 1000);
-          setRoute({ ...routeData, isNew });
+          setRoute(routeData);
           setClientsInRoute(routeData.clients || []);
-          setOriginalClients(routeData.clients || []); // Store the initial list
         } else {
           notFound();
         }
@@ -186,7 +181,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
           medicacionFrecuente: parseFloat(String(c.medicacionFrecuente)) || 0,
           date: c.date ? Timestamp.fromDate(c.date) : null
         })),
-        isNew: false, // After the first save/action, it's no longer "new"
       };
       
       if(newStatus) {
@@ -211,20 +205,17 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       }
 
       delete (dataToUpdate as any).id;
-      // delete (dataToUpdate as any).isNew; // This is now explicitly set to false
-
+      
       await updateRoute(routeId, dataToUpdate);
       await refetchData('routes');
 
       const successMessage = newStatus ? 'revisada' : 'actualizada';
       toast({ title: 'Éxito', description: `Ruta ${successMessage} correctamente.` });
       
-      // Only redirect if a status change occurred (approval, rejection, sent for approval)
       if (newStatus) {
         router.push('/dashboard/routes');
       } else {
-        // If just saving, stay on the page and update the local state
-        setRoute(prev => prev ? { ...prev, ...dataToUpdate, isNew: false } : null);
+        setRoute(prev => prev ? { ...prev, ...dataToUpdate } : null);
       }
 
     } catch (error: any) {
@@ -251,10 +242,8 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     const updatedClientsFromDialog = dialogSelectedClients.map(client => {
       const existingClientInRoute = clientsInRoute.find(c => c.ruc === client.ruc);
       if (existingClientInRoute) {
-        // If client already exists, ensure it's marked as active
         return { ...existingClientInRoute, status: 'Activo' as const };
       }
-      // If it's a new client for this route
       return {
         ruc: client.ruc,
         nombre_comercial: client.nombre_comercial,
@@ -264,14 +253,33 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       };
     });
 
-    // Get RUCs of clients that should be in the final list
     const finalClientRucs = new Set(updatedClientsFromDialog.map(c => c.ruc));
 
-    // Filter the original list to keep clients that were REMOVED in the dialog
-    const removedClients = clientsInRoute.filter(c => !finalClientRucs.has(c.ruc));
+    const finalClientList: ClientInRoute[] = [];
+    const addedRucs = new Set<string>();
 
-    // Combine the updated list with the ones that were removed (to preserve их status: 'Eliminado')
-    setClientsInRoute([...updatedClientsFromDialog, ...removedClients]);
+    // Add updated/existing clients
+    for (const client of updatedClientsFromDialog) {
+        if (!addedRucs.has(client.ruc)) {
+            finalClientList.push(client);
+            addedRucs.add(client.ruc);
+        }
+    }
+    
+    // Add clients that were removed, but keep them in the list with status 'Eliminado'
+    for (const originalClient of clientsInRoute) {
+        if (!finalClientRucs.has(originalClient.ruc) && !addedRucs.has(originalClient.ruc)) {
+             // If a client was unselected, mark it as 'Eliminado' instead of removing it
+             // This might require a different logic based on requirements (e.g. using a different state for unselected)
+             // For now, let's assume unselecting means it's not in the final list, unless it was previously 'Eliminado'
+            if (originalClient.status === 'Eliminado') {
+                finalClientList.push(originalClient);
+                addedRucs.add(originalClient.ruc);
+            }
+        }
+    }
+
+    setClientsInRoute(finalClientList);
     setIsClientDialogOpen(false);
 };
   
@@ -294,7 +302,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     const filteredAvailableClients = useMemo(() => {
     // Return all clients that belong to the user (if 'Usuario') or all clients (if 'Admin'/'Supervisor')
     const userClients = clients.filter(c => {
-      if (currentUser?.role === 'Usuario') {
+      if (currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista') {
         return c.ejecutivo === currentUser.name;
       }
       return true; // Admin/Supervisor can see all
@@ -311,8 +319,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     });
   }, [clients, dialogSearchTerm, currentUser]);
   
-  const originalClientRucs = useMemo(() => new Set(originalClients.map(c => c.ruc)), [originalClients]);
-
   const canSendForApproval = useMemo(() => {
       if (!currentUser || !route) return false;
       return currentUser.id === route.createdBy && (route.status === 'Planificada' || route.status === 'Rechazada');
@@ -671,3 +677,4 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     </>
   );
 }
+
