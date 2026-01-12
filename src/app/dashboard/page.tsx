@@ -1,9 +1,10 @@
 
+
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
 import { redirect } from 'next/navigation';
-import { Briefcase, Route, Users, BarChart, Clock, TrendingUp } from 'lucide-react';
+import { Briefcase, Route, Users, BarChart, Clock, TrendingUp, CheckCircle, Percent, Timer } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -165,6 +166,47 @@ export default function DashboardPage() {
 
   }, [routes]);
 
+  const {
+    totalProgrammedRoutes,
+    completedRoutesCount,
+    compliancePercentage,
+    averageManagementTime
+  } = useMemo(() => {
+    const programmedRoutes = routes.filter(r => r.status !== 'Rechazada');
+    const completedRoutes = programmedRoutes.filter(r => r.status === 'Completada');
+
+    let totalManagementSeconds = 0;
+    let managedClientsCount = 0;
+
+    completedRoutes.forEach(route => {
+        route.clients.forEach(client => {
+            if (client.visitStatus === 'Completado' && client.checkInTime && client.checkOutTime) {
+                const [inHours, inMinutes, inSeconds] = client.checkInTime.split(':').map(Number);
+                const [outHours, outMinutes, outSeconds] = client.checkOutTime.split(':').map(Number);
+
+                const checkInDate = new Date();
+                checkInDate.setHours(inHours, inMinutes, inSeconds);
+
+                const checkOutDate = new Date();
+                checkOutDate.setHours(outHours, outMinutes, outSeconds);
+
+                const diff = (checkOutDate.getTime() - checkInDate.getTime()) / 1000;
+                if (diff > 0) {
+                    totalManagementSeconds += diff;
+                    managedClientsCount++;
+                }
+            }
+        });
+    });
+
+    return {
+        totalProgrammedRoutes: programmedRoutes.length,
+        completedRoutesCount: completedRoutes.length,
+        compliancePercentage: programmedRoutes.length > 0 ? (completedRoutes.length / programmedRoutes.length) * 100 : 0,
+        averageManagementTime: managedClientsCount > 0 ? Math.round((totalManagementSeconds / managedClientsCount) / 60) : 0
+    };
+  }, [routes]);
+
 
   return (
     <>
@@ -246,6 +288,52 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+       {(user?.role === 'Administrador' || user?.role === 'Supervisor') && (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mt-4">
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Total de Rutas Programadas</CardTitle>
+                        <Route className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{totalProgrammedRoutes}</div>}
+                        <p className="text-xs text-muted-foreground">Rutas totales en el sistema</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Rutas Completadas con Éxito</CardTitle>
+                        <CheckCircle className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{completedRoutesCount}</div>}
+                        <p className="text-xs text-muted-foreground">Rutas finalizadas correctamente</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Porcentaje de Cumplimiento</CardTitle>
+                        <Percent className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{compliancePercentage.toFixed(2)}%</div>}
+                        <p className="text-xs text-muted-foreground">De las rutas programadas</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                        <CardTitle className="text-sm font-medium">Tiempo Promedio de Gestión</CardTitle>
+                        <Timer className="h-4 w-4 text-muted-foreground" />
+                    </CardHeader>
+                    <CardContent>
+                        {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{averageManagementTime} min</div>}
+                        <p className="text-xs text-muted-foreground">Por cliente gestionado</p>
+                    </CardContent>
+                </Card>
+            </div>
+        )}
+
       <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-1 mt-6">
         <Card>
           <CardHeader>
@@ -293,3 +381,4 @@ export default function DashboardPage() {
     </>
   );
 }
+
