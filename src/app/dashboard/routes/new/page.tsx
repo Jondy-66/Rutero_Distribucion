@@ -240,22 +240,29 @@ export default function NewRoutePage() {
   };
 
   const handleConfirmClientSelection = () => {
-    // Map over the clients selected in the dialog
+    // Create a map of existing clients with their details for quick lookup
+    const existingClientDetails = new Map(selectedClients.map(c => [c.ruc, c]));
+
+    // Build a fresh list of clients based on the dialog selection
     const newClientsInRoute: ClientInRoute[] = dialogSelectedClients.map(client => {
-        // Check if this client already exists in the main `selectedClients` list
-        const existingClient = selectedClients.find(c => c.ruc === client.ruc);
-        // If it exists, keep its existing data. If not, create a new entry.
-        return existingClient || {
+        // If the client was already in the list, keep its details
+        const existingDetails = existingClientDetails.get(client.ruc);
+        if (existingDetails) {
+            return existingDetails;
+        }
+
+        // Otherwise, create a new entry for the newly added client
+        return {
             ruc: client.ruc,
             nombre_comercial: client.nombre_comercial,
             date: new Date(),
             origin: 'manual'
         };
     });
-    // Set the main list to be this newly constructed list, ensuring no duplicates.
+
     setSelectedClients(newClientsInRoute);
     setIsClientDialogOpen(false);
-  };
+};
   
   const filteredAvailableClients = useMemo(() => {
     let userClients = clients;
