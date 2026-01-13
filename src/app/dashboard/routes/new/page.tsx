@@ -184,7 +184,7 @@ export default function NewRoutePage() {
         const routesToSave = stagedRoutes.map(({ tempId, ...rest }) => {
             const clientsWithTimestamps = rest.clients.map(c => ({
                 ...c,
-                date: c.date ? Timestamp.fromDate(c.date) : null,
+                date: c.date && c.date instanceof Date ? Timestamp.fromDate(c.date) : c.date,
             }));
             
             return {
@@ -212,7 +212,10 @@ export default function NewRoutePage() {
         toast({ title: 'Rutas Guardadas', description: `${stagedRoutes.length} rutas han sido ${sendForApproval ? 'enviadas a aprobación' : 'guardadas como planificadas'}.` });
         setStagedRoutes([]);
         setLastSavedRoutes(routeIds);
-        router.push('/dashboard/routes');
+        await refetchData('routes');
+        if (sendForApproval) {
+            router.push('/dashboard/routes');
+        }
     } catch(error: any) {
         console.error("Error saving routes:", error);
         if (error.code === 'permission-denied') {
@@ -237,8 +240,11 @@ export default function NewRoutePage() {
   };
 
   const handleConfirmClientSelection = () => {
+    // Map over the clients selected in the dialog
     const newClientsInRoute: ClientInRoute[] = dialogSelectedClients.map(client => {
+        // Check if this client already exists in the main `selectedClients` list
         const existingClient = selectedClients.find(c => c.ruc === client.ruc);
+        // If it exists, keep its existing data. If not, create a new entry.
         return existingClient || {
             ruc: client.ruc,
             nombre_comercial: client.nombre_comercial,
@@ -246,6 +252,7 @@ export default function NewRoutePage() {
             origin: 'manual'
         };
     });
+    // Set the main list to be this newly constructed list, ensuring no duplicates.
     setSelectedClients(newClientsInRoute);
     setIsClientDialogOpen(false);
   };
@@ -511,10 +518,12 @@ export default function NewRoutePage() {
                         {isSaving ? <LoaderCircle className="animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
                         Guardar Todas las Rutas
                     </Button>
-                    <Button onClick={() => handleSaveAllRoutes(true)} disabled={isSaving} className="w-full" variant="secondary">
-                        {isSaving ? <LoaderCircle className="animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                        Guardar y Enviar a Aprobación
-                    </Button>
+                    {lastSavedRoutes.length > 0 && (
+                        <Button onClick={() => handleSaveAllRoutes(true)} disabled={isSaving} className="w-full" variant="secondary">
+                            {isSaving ? <LoaderCircle className="animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                            Guardar y Enviar a Aprobación
+                        </Button>
+                    )}
                 </CardFooter>
             )}
         </Card>
