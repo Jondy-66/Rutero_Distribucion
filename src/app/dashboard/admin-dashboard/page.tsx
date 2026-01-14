@@ -18,21 +18,13 @@ import {
   Legend,
   Cell,
 } from 'recharts';
-import { Target, TrendingUp, Users } from 'lucide-react';
+import { Target, TrendingUp, Users, Wallet } from 'lucide-react';
 import Image from 'next/image';
 import { useMemo } from 'react';
-import { isWithinInterval, startOfWeek, endOfWeek, eachDayOfInterval, format, getDay } from 'date-fns';
+import { isWithinInterval, startOfWeek, endOfWeek, eachDayOfInterval, format, getDay, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
 
-
-const executiveData = [
-  { name: 'Ana López (99%)', value: 240, fill: '#8884d8' },
-  { name: 'Jana Pérez (96%)', value: 139, fill: '#83a6ed' },
-  { name: 'Sofía Roig (88%)', value: 290, fill: '#8dd1e1' },
-  { name: 'Carlos Mora (79%)', value: 200, fill: '#82ca9d' },
-  { name: 'Lorem Gil (69%)', value: 278, fill: '#a4de6c' },
-];
 
 const portfolioData = [
   { name: 'Al Día', value: 74, fill: '#0088FE' },
@@ -40,9 +32,6 @@ const portfolioData = [
   { name: 'Gma. Fija', value: 10, fill: '#00C49F' },
 ];
 
-const operativeSummaryData = [
-  { executive: 'Juan Pérez', ticketProm: '$250', tasa: '$340', vos: '20%', carlomversion: '15%' },
-];
 
 const CircularProgress = ({ value, label, subLabel, colorClass = 'text-primary' }) => {
   const circumference = 2 * Math.PI * 45;
@@ -74,7 +63,7 @@ const CircularProgress = ({ value, label, subLabel, colorClass = 'text-primary' 
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className={`text-3xl font-bold ${colorClass}`}>{value}%</span>
+          <span className={`text-3xl font-bold ${colorClass}`}>{value.toFixed(0)}%</span>
         </div>
       </div>
       <div className="mt-2">
@@ -87,7 +76,7 @@ const CircularProgress = ({ value, label, subLabel, colorClass = 'text-primary' 
 
 
 export default function AdminDashboardPage() {
-    const { user, routes, loading } = useAuth();
+    const { users, routes, loading } = useAuth();
     
     const weeklySalesData = useMemo(() => {
         const today = new Date();
@@ -122,6 +111,108 @@ export default function AdminDashboardPage() {
         return weekData;
     }, [routes]);
 
+    const {
+        salesGoalPercentage,
+        salesSublabel,
+        collectionEffectiveness,
+        collectionSublabel,
+        routeCompliance,
+        routeSublabel
+    } = useMemo(() => {
+        const today = new Date();
+        const monthStart = startOfMonth(today);
+        const monthEnd = endOfMonth(today);
+
+        const monthlyCompletedRoutes = routes.filter(r =>
+            r.status === 'Completada' && r.date && isWithinInterval(r.date, { start: monthStart, end: monthEnd })
+        );
+
+        let totalSales = 0;
+        let totalCollections = 0;
+        monthlyCompletedRoutes.forEach(route => {
+            route.clients.forEach(c => {
+                if (c.visitStatus === 'Completado') {
+                    totalSales += c.valorVenta || 0;
+                    totalCollections += c.valorCobro || 0;
+                }
+            });
+        });
+
+        const salesGoal = 156000;
+        const collectionGoal = 15000;
+
+        const allProgrammedRoutes = routes.filter(r => r.status !== 'Rechazada');
+        const allCompletedRoutes = allProgrammedRoutes.filter(r => r.status === 'Completada');
+
+        return {
+            salesGoalPercentage: salesGoal > 0 ? (totalSales / salesGoal) * 100 : 0,
+            salesSublabel: `${totalSales.toLocaleString('en-US', { style: 'currency', currency: 'USD' })} / ${salesGoal.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`,
+            collectionEffectiveness: collectionGoal > 0 ? (totalCollections / collectionGoal) * 100 : 0,
+            collectionSublabel: `Monto Recaudado: ${totalCollections.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`,
+            routeCompliance: allProgrammedRoutes.length > 0 ? (allCompletedRoutes.length / allProgrammedRoutes.length) * 100 : 0,
+            routeSublabel: `${allCompletedRoutes.length}/${allProgrammedRoutes.length} Rutas`
+        };
+    }, [routes]);
+
+
+    const executiveData = useMemo(() => {
+        const executiveStats: { [key: string]: { planned: number, visited: number } } = {};
+
+        routes.forEach(route => {
+            if (route.status === 'Completada') {
+                const creatorId = route.createdBy;
+                if (!executiveStats[creatorId]) {
+                    executiveStats[creatorId] = { planned: 0, visited: 0 };
+                }
+                const plannedInRoute = route.clients.filter(c => c.status !== 'Eliminado').length;
+                const visitedInRoute = route.clients.filter(c => c.visitStatus === 'Completado').length;
+                
+                executiveStats[creatorId].planned += plannedInRoute;
+                executiveStats[creatorId].visited += visitedInRoute;
+            }
+        });
+
+        const executivePerformance = Object.entries(executiveStats).map(([userId, stats]) => {
+            const user = users.find(u => u.id === userId);
+            const percentage = stats.planned > 0 ? (stats.visited / stats.planned) * 100 : 0;
+            return {
+                name: user ? `${user.name} (${percentage.toFixed(0)}%)` : `Usuario Desconocido (${percentage.toFixed(0)}%)`,
+                value: percentage
+            };
+        });
+
+        const sortedExecutives = executivePerformance.sort((a, b) => b.value - a.value).slice(0, 5);
+
+        const colors = ['#8884d8', '#83a6ed', '#8dd1e1', '#82ca9d', '#a4de6c'];
+        return sortedExecutives.map((exec, index) => ({ ...exec, fill: colors[index % colors.length] }));
+
+    }, [routes, users]);
+
+    const operativeSummaryData = useMemo(() => {
+        const sellers = users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
+        return sellers.map(seller => {
+            const sellerRoutes = routes.filter(r => r.createdBy === seller.id && r.status === 'Completada');
+            let totalSales = 0;
+            let visitedClientsCount = 0;
+            let plannedClientsCount = 0;
+
+            sellerRoutes.forEach(route => {
+                const visitedInRoute = route.clients.filter(c => c.visitStatus === 'Completado');
+                visitedClientsCount += visitedInRoute.length;
+                plannedClientsCount += route.clients.filter(c => c.status !== 'Eliminado').length;
+                totalSales += visitedInRoute.reduce((sum, c) => sum + (c.valorVenta || 0), 0);
+            });
+            
+            return {
+                executive: seller.name,
+                ticketProm: visitedClientsCount > 0 ? (totalSales / visitedClientsCount) : 0,
+                visitEffectiveness: plannedClientsCount > 0 ? (visitedClientsCount / plannedClientsCount) * 100 : 0,
+                visitedClients: visitedClientsCount
+            };
+        });
+
+    }, [users, routes]);
+
 
   return (
     <>
@@ -149,10 +240,10 @@ export default function AdminDashboardPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 justify-items-center">
-            <CircularProgress value={85} label="META DE VENTAS" subLabel="132,580 / 156,000" colorClass="text-blue-500" />
-            <CircularProgress value={92} label="EFECTIVIDAD DE COBRO" subLabel="Monto Recaudado: $12,580" colorClass="text-orange-500" />
-            <CircularProgress value={95} label="RUTAS" subLabel="17/30 Rutas" colorClass="text-purple-500" />
-            <CircularProgress value={95} label="CUMPLIMIENTO" subLabel="19/30 Rutas" colorClass="text-indigo-500" />
+            <CircularProgress value={salesGoalPercentage} label="META DE VENTAS" subLabel={salesSublabel} colorClass="text-blue-500" />
+            <CircularProgress value={collectionEffectiveness} label="EFECTIVIDAD DE COBRO" subLabel={collectionSublabel} colorClass="text-orange-500" />
+            <CircularProgress value={routeCompliance} label="RUTAS" subLabel={routeSublabel} colorClass="text-purple-500" />
+            <CircularProgress value={routeCompliance} label="CUMPLIMIENTO" subLabel={routeSublabel} colorClass="text-indigo-500" />
           </CardContent>
         </Card>
       </div>
@@ -174,6 +265,7 @@ export default function AdminDashboardPage() {
                     border: '1px solid hsl(var(--border))'
                   }}
                   itemStyle={{ color: 'hsl(var(--foreground))' }}
+                  formatter={(value: number) => [`${value.toFixed(2)}%`, 'Cumplimiento']}
                 />
                 <Bar dataKey="value">
                   {executiveData.map((entry, index) => (
@@ -211,7 +303,7 @@ export default function AdminDashboardPage() {
 
             <Card>
                 <CardHeader>
-                    <CardTitle>Estado de Cartera</CardTitle>
+                    <CardTitle className="flex items-center gap-2"><Wallet />Estado de Cartera (Ejemplo)</CardTitle>
                 </CardHeader>
                 <CardContent>
                     <ResponsiveContainer width="100%" height={200}>
@@ -254,19 +346,17 @@ export default function AdminDashboardPage() {
                           <TableRow>
                               <TableHead>Ejecutivo</TableHead>
                               <TableHead>Ticket Prom.</TableHead>
-                              <TableHead>Tasa</TableHead>
-                              <TableHead>VOS</TableHead>
-                              <TableHead>Carlomversión</TableHead>
+                              <TableHead>Efectividad de Visita</TableHead>
+                              <TableHead>Clientes Visitados</TableHead>
                           </TableRow>
                       </TableHeader>
                       <TableBody>
                           {operativeSummaryData.map((row, i) => (
                             <TableRow key={i}>
                                 <TableCell>{row.executive}</TableCell>
-                                <TableCell>{row.ticketProm}</TableCell>
-                                <TableCell>{row.tasa}</TableCell>
-                                <TableCell>{row.vos}</TableCell>
-                                <TableCell>{row.carlomversion}</TableCell>
+                                <TableCell>{row.ticketProm.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
+                                <TableCell>{row.visitEffectiveness.toFixed(2)}%</TableCell>
+                                <TableCell>{row.visitedClients}</TableCell>
                             </TableRow>
                           ))}
                       </TableBody>
