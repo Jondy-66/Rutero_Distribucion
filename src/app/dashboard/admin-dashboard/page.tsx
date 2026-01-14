@@ -176,7 +176,8 @@ export default function AdminDashboardPage() {
             const user = users.find(u => u.id === userId);
             const percentage = stats.planned > 0 ? (stats.visited / stats.planned) * 100 : 0;
             return {
-                name: user ? `${user.name} (${percentage.toFixed(0)}%)` : `Usuario Desconocido (${percentage.toFixed(0)}%)`,
+                name: user ? user.name : `Usuario Desconocido`,
+                shortName: user ? user.name.split(' ')[0] : 'Desconocido',
                 value: percentage
             };
         });
@@ -257,7 +258,7 @@ export default function AdminDashboardPage() {
           <CardContent>
             <ResponsiveContainer width="100%" height={250}>
               <BarChart data={executiveData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                <XAxis dataKey="name" tick={{ fontSize: 10 }} interval={0} />
+                <XAxis dataKey="shortName" tick={{ fontSize: 10 }} interval={0} />
                 <YAxis />
                 <Tooltip 
                   contentStyle={{
@@ -265,7 +266,7 @@ export default function AdminDashboardPage() {
                     border: '1px solid hsl(var(--border))'
                   }}
                   itemStyle={{ color: 'hsl(var(--foreground))' }}
-                  formatter={(value: number) => [`${value.toFixed(2)}%`, 'Cumplimiento']}
+                  formatter={(value, name, props) => [`${props.payload.name}: ${Number(value).toFixed(2)}%`, 'Cumplimiento']}
                 />
                 <Bar dataKey="value">
                   {executiveData.map((entry, index) => (
