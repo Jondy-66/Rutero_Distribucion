@@ -10,7 +10,7 @@
 'use client';
 
 import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
-import { User as FirebaseAuthUser, onAuthStateChanged } from 'firebase/auth';
+import { User as FirebaseAuthUser, onAuthStateChanged, signOut } from 'firebase/auth';
 import { app, db, auth } from '@/lib/firebase/config';
 import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
 import { collection, doc, onSnapshot, setDoc, query, where, orderBy, Timestamp } from 'firebase/firestore';
@@ -170,22 +170,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               // Cargar datos iniciales una vez que el perfil del usuario está confirmado.
               await fetchInitialData();
             } else {
-              // Auto-reparación: si el documento del usuario no existe, se crea.
-              console.log(`User document not found for UID ${fbUser.uid}, creating one...`);
-              try {
-                const newUser: Omit<User, 'id'> = {
-                    name: fbUser.displayName || 'Usuario',
-                    email: fbUser.email!,
-                    role: 'Usuario',
-                    avatar: fbUser.photoURL || `https://placehold.co/100x100/011688/FFFFFF/png?text=${(fbUser.displayName || 'U').charAt(0)}`
-                };
-                await setDoc(userDocRef, newUser);
-                setUser({ id: fbUser.uid, ...newUser });
-              } catch (error) {
-                console.error("Failed to create self-healing user document:", error);
-                toast({ title: "Error de Cuenta", description: "No se pudo crear tu perfil de usuario. Contacta al administrador.", variant: "destructive"});
-                setUser(null);
-              }
+              // **FIX**: Si el usuario de Auth no tiene perfil en Firestore, es un estado inconsistente.
+              // No creamos un perfil por defecto. En su lugar, cerramos la sesión y notificamos.
+              console.error(`Perfil de usuario no encontrado en Firestore para UID: ${fbUser.uid}. Cerrando sesión.`);
+              toast({
+                title: "Error de Perfil",
+                description: "Tu perfil de usuario no se encontró o está corrupto. Por favor, contacta al administrador.",
+                variant: "destructive",
+                duration: 10000,
+              });
+              await signOut(auth);
+              setUser(null);
             }
             setLoading(false);
           },
