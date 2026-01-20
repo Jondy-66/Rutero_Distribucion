@@ -23,6 +23,10 @@ import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/component
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogHeader, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
     const slots = [];
@@ -58,6 +62,9 @@ export default function NewRoutePage() {
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
   const [lastSavedRoutes, setLastSavedRoutes] = useState<string[]>([]);
   
+  const [clientToRemove, setClientToRemove] = useState<ClientInRoute | null>(null);
+  const [removalObservation, setRemovalObservation] = useState('');
+
   useEffect(() => {
     if (users) {
       const filteredSupervisors = users.filter(u => u.role === 'Supervisor');
@@ -75,6 +82,7 @@ export default function NewRoutePage() {
             const clientsFromPrediction: ClientInRoute[] = predictionData.clients.map((c: any) => ({
                 ...c,
                 date: c.date ? new Date(c.date) : new Date(),
+                origin: 'predicted' // Marcar el origen
             }));
             
             setRouteName(predictionData.routeName || '');
@@ -102,7 +110,7 @@ export default function NewRoutePage() {
 
   useEffect(() => {
     if (isClientDialogOpen) {
-      const currentSelectedClientsFromMainList = clients.filter(c => selectedClients.some(sc => sc.ruc === c.ruc));
+      const currentSelectedClientsFromMainList = clients.filter(c => selectedClients.some(sc => sc.ruc === c.ruc && sc.status !== 'Eliminado'));
       setDialogSelectedClients(currentSelectedClientsFromMainList);
     }
   }, [isClientDialogOpen, clients, selectedClients]);
@@ -123,8 +131,8 @@ export default function NewRoutePage() {
   }
 
   const handleAddToStage = () => {
-    if (!routeName || selectedClients.length === 0 || !selectedSupervisorId) {
-      toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente.', variant: 'destructive' });
+    if (!routeName || selectedClients.filter(c => c.status !== 'Eliminado').length === 0 || !selectedSupervisorId) {
+      toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente activo.', variant: 'destructive' });
       return;
     }
     if (!currentUser) {
@@ -138,7 +146,7 @@ export default function NewRoutePage() {
         return;
     }
     
-    const routeDate = selectedClients[0]?.date || new Date();
+    const routeDate = selectedClients.find(c => c.status !== 'Eliminado')?.date || new Date();
     
     const newStagedRoute: StagedRoute = {
         tempId: Date.now(),
@@ -162,15 +170,26 @@ export default function NewRoutePage() {
       setRouteName(routeToEdit.routeName);
       setSelectedSupervisorId(routeToEdit.supervisorId);
       setSelectedClients(routeToEdit.clients);
-      setDialogSelectedClients(clients.filter(c => routeToEdit.clients.some(sc => sc.ruc === c.ruc)));
+      setDialogSelectedClients(clients.filter(c => routeToEdit.clients.some(sc => sc.ruc === c.ruc && sc.status !== 'Eliminado')));
     }
     setStagedRoutes(prev => prev.filter(r => r.tempId !== tempId));
   }
   
-  const handleRemoveClient = (ruc: string) => {
-    setSelectedClients(prev => prev.filter(c => c.ruc !== ruc));
-    setDialogSelectedClients(prev => prev.filter(c => c.ruc !== ruc));
-  };
+  const handleConfirmRemoval = () => {
+    if (!clientToRemove) return;
+    if (!removalObservation.trim()) {
+        toast({ title: 'Observación requerida', description: 'Debes añadir una observación para eliminar al cliente.', variant: 'destructive'});
+        return;
+    }
+
+    setSelectedClients(prev => prev.map(c => 
+        c.ruc === clientToRemove.ruc ? { ...c, status: 'Eliminado', removalObservation: removalObservation } : c
+    ));
+    
+    toast({ title: 'Cliente Marcado', description: `${clientToRemove.nombre_comercial} ha sido marcado como eliminado.`});
+    setClientToRemove(null);
+    setRemovalObservation('');
+  }
 
   const handleSaveAllRoutes = async (sendForApproval: boolean = false) => {
     if (stagedRoutes.length === 0) {
@@ -181,18 +200,10 @@ export default function NewRoutePage() {
 
     setIsSaving(true);
     try {
-        const routesToSave = stagedRoutes.map(({ tempId, ...rest }) => {
-            const clientsWithTimestamps = rest.clients.map(c => ({
-                ...c,
-                date: c.date && c.date instanceof Date ? Timestamp.fromDate(c.date) : c.date,
-            }));
-            
-            return {
-                ...rest,
-                clients: clientsWithTimestamps,
-                status: sendForApproval ? 'Pendiente de Aprobación' : 'Planificada'
-            };
-        });
+        const routesToSave = stagedRoutes.map(({ tempId, ...rest }) => ({
+            ...rest,
+            status: sendForApproval ? 'Pendiente de Aprobación' : 'Planificada'
+        }));
 
         const routeIds = await addRoutesBatch(routesToSave);
         
@@ -248,7 +259,7 @@ export default function NewRoutePage() {
         // If the client was already in the list, keep its details
         const existingDetails = existingClientDetails.get(client.ruc);
         if (existingDetails) {
-            return existingDetails;
+            return {...existingDetails, status: 'Activo'}; // Ensure status is active if re-selected
         }
 
         // Otherwise, create a new entry for the newly added client
@@ -256,7 +267,8 @@ export default function NewRoutePage() {
             ruc: client.ruc,
             nombre_comercial: client.nombre_comercial,
             date: new Date(),
-            origin: 'manual'
+            origin: 'manual',
+            status: 'Activo'
         };
     });
 
@@ -320,7 +332,7 @@ export default function NewRoutePage() {
                 <DialogTrigger asChild>
                   <Button variant="outline" className="w-full justify-start">
                       <PlusCircle className="mr-2 h-4 w-4"/>
-                      Seleccionar Clientes ({selectedClients.length} seleccionados)
+                      Seleccionar Clientes ({selectedClients.filter(c => c.status !== 'Eliminado').length} seleccionados)
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl">
@@ -378,19 +390,42 @@ export default function NewRoutePage() {
                     <CollapsibleContent className="space-y-4 p-2 pt-0 max-h-[60vh] overflow-y-auto">
                         {selectedClients.map((client, index) => {
                             const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
+                            const isNew = client.origin === 'manual';
+                            const isFromPrediction = client.origin === 'predicted';
+                            const isRemoved = client.status === 'Eliminado';
                             return (
-                                <Card key={client.ruc} className="p-4 bg-muted/50">
+                                <Card key={client.ruc} className={cn(
+                                    "p-4 bg-muted/50 relative", 
+                                    isNew && !isRemoved && "border-green-500", 
+                                    isFromPrediction && !isRemoved && "border-blue-500",
+                                    isRemoved && "bg-red-500/10 border-red-500/50"
+                                )}>
+                                    {isNew && !isRemoved && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
+                                    {isFromPrediction && !isRemoved && <Badge variant="secondary" className="absolute -top-2 -right-2 z-10">Predicción</Badge>}
+                                    {isRemoved && <Badge variant="destructive" className="absolute -top-2 -right-2 z-10">Eliminado</Badge>}
+
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <p className="font-semibold">{index + 1}. {client.nombre_comercial}</p>
+                                            <p className={cn("font-semibold", isRemoved && "line-through")}>{index + 1}. {client.nombre_comercial}</p>
                                             <p className="text-xs text-muted-foreground">{client.ruc}</p>
                                         </div>
-                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleRemoveClient(client.ruc)}>
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
+                                        {!isRemoved && (
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientToRemove(client)}>
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                        )}
                                     </div>
                                     <Separator className="my-2" />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
+
+                                    {isRemoved && client.removalObservation && (
+                                        <Alert variant="destructive" className="mt-2">
+                                            <AlertDescription>
+                                                <strong>Observación:</strong> {client.removalObservation}
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
+
+                                    <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2", isRemoved && "hidden")}>
                                         <div className="space-y-2">
                                             <Label htmlFor={`dayOfWeek-${client.ruc}`}>Día</Label>
                                             <Select value={client.dayOfWeek} onValueChange={(value) => handleClientDetailChange(client.ruc, 'dayOfWeek', value)} >
@@ -430,8 +465,7 @@ export default function NewRoutePage() {
                                             </Select>
                                         </div>
                                     </div>
-                                    <Separator className="my-4" />
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
+                                    <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2", isRemoved && "hidden")}>
                                         <div className="space-y-2">
                                             <Label htmlFor={`valor-venta-${client.ruc}`}>Valor de Venta ($)</Label>
                                             <Input id={`valor-venta-${client.ruc}`} type="text" placeholder="0.00" value={client.valorVenta ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'valorVenta', e.target.value)} />
@@ -500,7 +534,7 @@ export default function NewRoutePage() {
                         <div>
                             <p className="font-semibold text-lg">{route.routeName}</p>
                             <p className="text-sm text-muted-foreground">
-                                {route.clients.length} cliente(s)
+                                {route.clients.filter(c => c.status !== 'Eliminado').length} cliente(s)
                             </p>
                         </div>
                         <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => handleRemoveFromStage(route.tempId)}>
@@ -535,6 +569,30 @@ export default function NewRoutePage() {
             )}
         </Card>
       </div>
+
+       <AlertDialog open={!!clientToRemove} onOpenChange={() => setClientToRemove(null)}>
+        <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>¿Eliminar a {clientToRemove?.nombre_comercial}?</AlertDialogTitle>
+                <AlertDialogDescription>
+                    Para eliminar a este cliente de la ruta, por favor, introduce una observación. El cliente se marcará como eliminado pero no se borrará del historial.
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+             <div className="py-4">
+                <Label htmlFor="removal-observation">Observación (requerido)</Label>
+                <Textarea
+                    id="removal-observation"
+                    value={removalObservation}
+                    onChange={(e) => setRemovalObservation(e.target.value)}
+                    placeholder="Ej: Cliente solicitó no ser visitado esta semana."
+                />
+            </div>
+            <AlertDialogFooter>
+                <AlertDialogCancel onClick={() => setRemovalObservation('')}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction onClick={handleConfirmRemoval}>Confirmar Eliminación</AlertDialogAction>
+            </AlertDialogFooter>
+        </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

@@ -291,13 +291,13 @@ export const addRoutesBatch = async (routesData: RouteToSave[]): Promise<string[
         const newRouteRef = doc(routesCollection);
         newRouteIds.push(newRouteRef.id);
         
-        const clientsWithTimestamps = route.clients.map(client => ({
-            ...client,
-            date: client.date && client.date instanceof Date ? Timestamp.fromDate(client.date) : client.date,
-            dayOfWeek: client.dayOfWeek || null,
-            startTime: client.startTime || null,
-            endTime: client.endTime || null,
-        }));
+        const clientsWithTimestamps = route.clients.map(client => {
+            const dateObj = client.date ? (client.date instanceof Date ? client.date : new Date(client.date as any)) : null;
+            return {
+                ...client,
+                date: dateObj && !isNaN(dateObj.getTime()) ? Timestamp.fromDate(dateObj) : null,
+            };
+        });
         
         batch.set(newRouteRef, {
             ...route, 
@@ -360,9 +360,9 @@ export const getRoutes = async (): Promise<RoutePlan[]> => {
     return routes.sort((a, b) => {
         const dateA = a.date instanceof Date ? a.date : null;
         const dateB = b.date instanceof Date ? b.date : null;
-        if (dateA && dateB) return dateB.getTime() - dateA.getTime();
-        if (dateA) return -1;
-        if (dateB) return 1;
+        if (dateA && dateB && !isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) return dateB.getTime() - dateA.getTime();
+        if (dateA && !isNaN(dateA.getTime())) return -1;
+        if (dateB && !isNaN(dateB.getTime())) return 1;
         return 0;
     });
 };
@@ -431,9 +431,9 @@ export const getRoutesBySupervisor = async (supervisorId: string): Promise<Route
     return routes.sort((a, b) => {
         const dateA = a.date instanceof Date ? a.date : null;
         const dateB = b.date instanceof Date ? b.date : null;
-        if (dateA && dateB) return dateB.getTime() - dateA.getTime();
-        if (dateA) return -1;
-        if (dateB) return 1;
+        if (dateA && dateB && !isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) return dateB.getTime() - dateA.getTime();
+        if (dateA && !isNaN(dateA.getTime())) return -1;
+        if (dateB && !isNaN(dateB.getTime())) return 1;
         return 0;
     });
 };
