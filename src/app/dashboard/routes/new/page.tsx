@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -60,7 +61,6 @@ export default function NewRoutePage() {
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
   const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
-  const [lastSavedRoutes, setLastSavedRoutes] = useState<string[]>([]);
   
   const [clientToRemove, setClientToRemove] = useState<ClientInRoute | null>(null);
   const [removalObservation, setRemovalObservation] = useState('');
@@ -191,7 +191,7 @@ export default function NewRoutePage() {
     setRemovalObservation('');
   }
 
-  const handleSaveAllRoutes = async (sendForApproval: boolean = false) => {
+  const handleSaveAllRoutes = async (sendForApproval: boolean) => {
     if (stagedRoutes.length === 0) {
         toast({ title: 'Lista Vacía', description: 'No hay rutas planificadas para guardar.', variant: 'destructive' });
         return;
@@ -222,7 +222,6 @@ export default function NewRoutePage() {
         
         toast({ title: 'Rutas Guardadas', description: `${stagedRoutes.length} rutas han sido ${sendForApproval ? 'enviadas a aprobación' : 'guardadas como planificadas'}.` });
         setStagedRoutes([]);
-        setLastSavedRoutes(routeIds);
         await refetchData('routes');
         if (sendForApproval) {
             router.push('/dashboard/routes');
@@ -251,18 +250,11 @@ export default function NewRoutePage() {
   };
 
   const handleConfirmClientSelection = () => {
-    // Create a map of existing clients with their details for quick lookup
-    const existingClientDetails = new Map(selectedClients.map(c => [c.ruc, c]));
-
-    // Build a fresh list of clients based on the dialog selection
     const newClientsInRoute: ClientInRoute[] = dialogSelectedClients.map(client => {
-        // If the client was already in the list, keep its details
-        const existingDetails = existingClientDetails.get(client.ruc);
-        if (existingDetails) {
-            return {...existingDetails, status: 'Activo'}; // Ensure status is active if re-selected
+        const existingClient = selectedClients.find(sc => sc.ruc === client.ruc);
+        if (existingClient) {
+            return { ...existingClient, status: 'Activo' };
         }
-
-        // Otherwise, create a new entry for the newly added client
         return {
             ruc: client.ruc,
             nombre_comercial: client.nombre_comercial,
@@ -271,7 +263,6 @@ export default function NewRoutePage() {
             status: 'Activo'
         };
     });
-
     setSelectedClients(newClientsInRoute);
     setIsClientDialogOpen(false);
 };
@@ -555,16 +546,10 @@ export default function NewRoutePage() {
           </CardContent>
             {stagedRoutes.length > 0 && (
                 <CardFooter className="flex-col items-stretch gap-2 border-t pt-6">
-                    <Button onClick={() => handleSaveAllRoutes(false)} disabled={isSaving} className="w-full">
-                        {isSaving ? <LoaderCircle className="animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-                        Guardar Todas las Rutas
+                    <Button onClick={() => handleSaveAllRoutes(true)} disabled={isSaving} className="w-full">
+                        {isSaving ? <LoaderCircle className="animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                        Guardar y Enviar a Aprobación
                     </Button>
-                    {lastSavedRoutes.length > 0 && (
-                        <Button onClick={() => handleSaveAllRoutes(true)} disabled={isSaving} className="w-full" variant="secondary">
-                            {isSaving ? <LoaderCircle className="animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
-                            Guardar y Enviar a Aprobación
-                        </Button>
-                    )}
                 </CardFooter>
             )}
         </Card>
