@@ -52,6 +52,7 @@ export default function NewRoutePage() {
   const { user: currentUser, users, clients, loading, refetchData } = useAuth();
   
   const [routeName, setRouteName] = useState('');
+  const [routeDate, setRouteDate] = useState<Date | undefined>(new Date());
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
   const [selectedClients, setSelectedClients] = useState<ClientInRoute[]>([]);
   const [supervisors, setSupervisors] = useState<User[]>([]);
@@ -74,7 +75,6 @@ export default function NewRoutePage() {
         setSelectedSupervisorId(currentUser.supervisorId);
     }
     
-    // Cargar datos de predicción desde localStorage
     const predictionDataStr = localStorage.getItem('predictionRoute');
     if (predictionDataStr) {
         try {
@@ -82,10 +82,13 @@ export default function NewRoutePage() {
             const clientsFromPrediction: ClientInRoute[] = predictionData.clients.map((c: any) => ({
                 ...c,
                 date: c.date ? new Date(c.date) : new Date(),
-                origin: 'predicted' // Marcar el origen
+                origin: 'predicted'
             }));
             
             setRouteName(predictionData.routeName || '');
+            if (clientsFromPrediction.length > 0 && clientsFromPrediction[0].date) {
+                setRouteDate(clientsFromPrediction[0].date);
+            }
             setSelectedSupervisorId(predictionData.supervisorId || (currentUser?.supervisorId ?? undefined));
             setSelectedClients(clientsFromPrediction);
             setDialogSelectedClients(clients.filter(c => clientsFromPrediction.some(pc => pc.ruc === c.ruc)));
@@ -123,6 +126,7 @@ export default function NewRoutePage() {
   
   const resetForm = () => {
     setRouteName('');
+    setRouteDate(new Date());
     setSelectedClients([]);
     setDialogSelectedClients([]);
     if (currentUser?.role !== 'Usuario') {
@@ -131,8 +135,8 @@ export default function NewRoutePage() {
   }
 
   const handleAddToStage = () => {
-    if (!routeName || selectedClients.filter(c => c.status !== 'Eliminado').length === 0 || !selectedSupervisorId) {
-      toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente activo.', variant: 'destructive' });
+    if (!routeName || !routeDate || selectedClients.filter(c => c.status !== 'Eliminado').length === 0 || !selectedSupervisorId) {
+      toast({ title: 'Faltan datos', description: 'Por favor completa el nombre, fecha, supervisor y añade al menos un cliente activo.', variant: 'destructive' });
       return;
     }
     if (!currentUser) {
@@ -146,14 +150,12 @@ export default function NewRoutePage() {
         return;
     }
     
-    const routeDate = selectedClients.find(c => c.status !== 'Eliminado')?.date || new Date();
-    
     const newStagedRoute: StagedRoute = {
         tempId: Date.now(),
         routeName,
         date: routeDate,
         clients: selectedClients,
-        status: 'Planificada', // Siempre se planifica primero
+        status: 'Planificada',
         supervisorId: selectedSupervisorId,
         supervisorName: supervisor.name,
         createdBy: currentUser.id,
@@ -168,6 +170,7 @@ export default function NewRoutePage() {
     const routeToEdit = stagedRoutes.find(r => r.tempId === tempId);
     if (routeToEdit) {
       setRouteName(routeToEdit.routeName);
+      setRouteDate(routeToEdit.date);
       setSelectedSupervisorId(routeToEdit.supervisorId);
       setSelectedClients(routeToEdit.clients);
       setDialogSelectedClients(clients.filter(c => routeToEdit.clients.some(sc => sc.ruc === c.ruc && sc.status !== 'Eliminado')));
@@ -258,7 +261,7 @@ export default function NewRoutePage() {
         return {
             ruc: client.ruc,
             nombre_comercial: client.nombre_comercial,
-            date: new Date(),
+            date: routeDate || new Date(),
             origin: 'manual',
             status: 'Activo'
         };
@@ -296,23 +299,53 @@ export default function NewRoutePage() {
               <Label htmlFor="routeName">Nombre de la Ruta</Label>
               <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isLoading}/>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="supervisor">Asignar Supervisor</Label>
-               <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isLoading || currentUser?.role === 'Usuario'}>
-                  <SelectTrigger id="supervisor">
-                      <Users className="mr-2 h-4 w-4" />
-                      <SelectValue placeholder="Seleccionar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                      {isLoading ? (
-                          <SelectItem value="loading" disabled>Cargando...</SelectItem>
-                      ) : (
-                          supervisors.map(s => (
-                              <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
-                          ))
-                      )}
-                  </SelectContent>
-              </Select>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                <Label htmlFor="supervisor">Asignar Supervisor</Label>
+                <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isLoading || currentUser?.role === 'Usuario'}>
+                    <SelectTrigger id="supervisor">
+                        <Users className="mr-2 h-4 w-4" />
+                        <SelectValue placeholder="Seleccionar" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {isLoading ? (
+                            <SelectItem value="loading" disabled>Cargando...</SelectItem>
+                        ) : (
+                            supervisors.map(s => (
+                                <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>
+                            ))
+                        )}
+                    </SelectContent>
+                </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="routeDate">Fecha de la Ruta</Label>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button
+                                id="routeDate"
+                                variant={"outline"}
+                                className={cn(
+                                "w-full justify-start text-left font-normal",
+                                !routeDate && "text-muted-foreground"
+                                )}
+                                disabled={isLoading}
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                {routeDate ? format(routeDate, "PPP", {locale: es}) : <span>Elige una fecha</span>}
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-auto p-0">
+                            <Calendar
+                                mode="single"
+                                selected={routeDate}
+                                onSelect={setRouteDate}
+                                initialFocus
+                                locale={es}
+                            />
+                        </PopoverContent>
+                    </Popover>
+                </div>
             </div>
             
             <Separator />
