@@ -191,7 +191,11 @@ export default function MyCompletedRoutesPage() {
                                     <TableCell>{format(routeDate, 'PPP', { locale: es })}</TableCell>
                                     <TableCell>{route.clients.length}</TableCell>
                                     <TableCell>
-                                      <Badge variant={route.status === 'Completada' ? 'success' : (route.status === 'Rechazada' ? 'destructive' : 'secondary')}>
+                                      <Badge variant={
+                                        route.status === 'Completada' ? 'success' :
+                                        (route.status === 'Rechazada' || route.status === 'Incompleta') ? 'destructive' :
+                                        'secondary'
+                                      }>
                                         {route.status}
                                       </Badge>
                                     </TableCell>

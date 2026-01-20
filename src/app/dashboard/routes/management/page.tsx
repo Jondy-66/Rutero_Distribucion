@@ -139,7 +139,7 @@ export default function RouteManagementPage() {
             }).filter(c => c.id);
 
         setRouteClients(clientsData);
-        setIsRouteStarted(selectedRoute.status === 'En Progreso');
+        setIsRouteStarted(selectedRoute.status === 'En Progreso' || selectedRoute.status === 'Incompleta');
     } else {
         // Clear local state if no route is selected
         setRouteClients([]);
@@ -164,16 +164,32 @@ export default function RouteManagementPage() {
 
 
   useEffect(() => {
-    if (selectedRoute && selectedRoute.status === 'En Progreso') {
+    const handleExpiration = async () => {
+      if (selectedRoute && selectedRoute.status === 'En Progreso') {
         const expirationDate = new Date();
         expirationDate.setHours(20, 30, 0, 0); // 8:30 PM on the route's date
         if (new Date() > expirationDate) {
-            setIsRouteExpired(true);
+          setIsRouteExpired(true);
+          try {
+            await updateRoute(selectedRoute.id, { status: 'Incompleta' });
+            await refetchData('routes');
+            toast({
+              title: "Ruta Incompleta",
+              description: `La ruta "${selectedRoute.routeName}" ha sido marcada como incompleta.`,
+              variant: "destructive",
+            });
+          } catch (error) {
+            console.error("Failed to update route to incomplete:", error);
+          }
+        } else {
+          setIsRouteExpired(false);
         }
-    } else {
-        setIsRouteExpired(false);
-    }
-}, [selectedRoute]);
+      } else {
+        setIsRouteExpired(selectedRoute?.status === 'Incompleta');
+      }
+    };
+    handleExpiration();
+  }, [selectedRoute, refetchData, toast]);
 
   const handleClientValueChange = (ruc: string, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
     setActiveClient(prev => {
@@ -688,14 +704,14 @@ export default function RouteManagementPage() {
                                 {activeClient ? `Gestionando a ${activeClient.nombre_comercial}` : 'Selecciona un cliente de la lista para ver sus detalles.'}
                             </CardDescription>
                         </div>
-                         {selectedRoute && <Badge variant="secondary">{selectedRoute.status}</Badge>}
+                         {selectedRoute && <Badge variant={selectedRoute.status === 'Incompleta' ? 'destructive' : 'secondary'}>{selectedRoute.status}</Badge>}
                     </div>
                 </CardHeader>
                 <CardContent>
                      {isRouteExpired && (
                         <Alert variant="destructive" className="mb-4">
                             <AlertTriangle className="h-4 w-4" />
-                            <AlertTitle>Ruta Expirada</AlertTitle>
+                            <AlertTitle>Ruta {selectedRoute?.status === 'Incompleta' ? 'Incompleta' : 'Expirada'}</AlertTitle>
                             <AlertDescription>
                                 El tiempo para gestionar esta ruta ha terminado (20:30). Ya no puedes realizar cambios.
                             </AlertDescription>

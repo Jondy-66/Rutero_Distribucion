@@ -95,7 +95,7 @@ export type RoutePlan = {
   routeName: string; // Nombre descriptivo de la ruta.
   date: Date; // Fecha general de la ruta.
   clients: ClientInRoute[]; // Array de clientes con sus valores específicos para la ruta.
-  status: 'Pendiente de Aprobación' | 'Planificada' | 'En Progreso' | 'Completada' | 'Rechazada'; // Estado actual de la ruta.
+  status: 'Pendiente de Aprobación' | 'Planificada' | 'En Progreso' | 'Completada' | 'Rechazada' | 'Incompleta'; // Estado actual de la ruta.
   supervisorId: string; // ID del supervisor responsable de la ruta.
   supervisorName: string; // Nombre del supervisor (desnormalizado para fácil visualización).
   supervisorObservation?: string; // Observaciones del supervisor al aprobar/rechazar.
@@ -135,4 +135,3 @@ export type Notification = {
     link: string; // Enlace al que se redirige al hacer clic.
     createdAt: Date | null; // Fecha de creación de la notificación.
 }
-

@@ -416,6 +416,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                         <SelectItem value="En Progreso">En Progreso</SelectItem>
                         <SelectItem value="Completada">Completada</SelectItem>
                         <SelectItem value="Rechazada">Rechazada</SelectItem>
+                        <SelectItem value="Incompleta">Incompleta</SelectItem>
                     </SelectContent>
                     </Select>
                 </div>
