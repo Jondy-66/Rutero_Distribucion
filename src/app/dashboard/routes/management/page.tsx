@@ -73,6 +73,8 @@ export default function RouteManagementPage() {
   const [isRouteStarted, setIsRouteStarted] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
   const [isRouteExpired, setIsRouteExpired] = useState(false);
+  const [remainingTime, setRemainingTime] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false });
+
 
   const [routeClients, setRouteClients] = useState<RouteClient[]>([]);
   const [gettingLocation, setGettingLocation] = useState(false);
@@ -164,31 +166,62 @@ export default function RouteManagementPage() {
 
 
   useEffect(() => {
-    const handleExpiration = async () => {
-      if (selectedRoute && selectedRoute.status === 'En Progreso') {
-        const expirationDate = new Date();
-        expirationDate.setHours(20, 30, 0, 0); // 8:30 PM on the route's date
-        if (new Date() > expirationDate) {
-          setIsRouteExpired(true);
-          try {
-            await updateRoute(selectedRoute.id, { status: 'Incompleta' });
-            await refetchData('routes');
-            toast({
-              title: "Ruta Incompleta",
-              description: `La ruta "${selectedRoute.routeName}" ha sido marcada como incompleta.`,
-              variant: "destructive",
-            });
-          } catch (error) {
-            console.error("Failed to update route to incomplete:", error);
-          }
-        } else {
-          setIsRouteExpired(false);
+    if (!selectedRoute) {
+        setIsRouteExpired(false);
+        setRemainingTime({ hours: 0, minutes: 0, seconds: 0, expired: false });
+        return;
+    }
+    
+    if (selectedRoute.status === 'Incompleta') {
+        setIsRouteExpired(true);
+        setRemainingTime({ hours: 0, minutes: 0, seconds: 0, expired: true });
+        return;
+    }
+
+    if (selectedRoute.status !== 'En Progreso') {
+        setIsRouteExpired(false);
+        setRemainingTime({ hours: 0, minutes: 0, seconds: 0, expired: false });
+        return;
+    }
+
+    const interval = setInterval(() => {
+        const now = new Date();
+        const expirationDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 30, 0);
+        const diff = expirationDate.getTime() - now.getTime();
+
+        if (diff <= 0) {
+            setRemainingTime({ hours: 0, minutes: 0, seconds: 0, expired: true });
+            setIsRouteExpired(true);
+            
+            if (selectedRoute.status === 'En Progreso') {
+                (async () => {
+                    try {
+                        await updateRoute(selectedRoute.id, { status: 'Incompleta' });
+                        await refetchData('routes');
+                        toast({
+                          title: "Ruta Incompleta",
+                          description: `La ruta "${selectedRoute.routeName}" ha sido marcada como incompleta.`,
+                          variant: "destructive",
+                        });
+                    } catch (error) {
+                        console.error("Failed to update route to incomplete:", error);
+                    }
+                })();
+            }
+            clearInterval(interval);
+            return;
         }
-      } else {
-        setIsRouteExpired(selectedRoute?.status === 'Incompleta');
-      }
-    };
-    handleExpiration();
+
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+        
+        setRemainingTime({ hours, minutes, seconds, expired: false });
+        setIsRouteExpired(false);
+    }, 1000);
+
+    return () => clearInterval(interval);
+
   }, [selectedRoute, refetchData, toast]);
 
   const handleClientValueChange = (ruc: string, field: keyof Omit<RouteClient, keyof Client>, value: string) => {
@@ -589,8 +622,23 @@ export default function RouteManagementPage() {
         <div className="lg:col-span-1 flex flex-col gap-6">
             <Card>
                 <CardHeader>
-                    <CardTitle>{selectedRoute?.routeName}</CardTitle>
-                    <CardDescription>Ruta actualmente en progreso.</CardDescription>
+                    <div className="flex justify-between items-start">
+                        <div>
+                            <CardTitle>{selectedRoute?.routeName}</CardTitle>
+                            <CardDescription>Ruta actualmente en progreso.</CardDescription>
+                        </div>
+                        {isRouteStarted && (
+                            <div className="text-right">
+                                <p className="text-sm font-medium text-muted-foreground">Tiempo Restante</p>
+                                <div className={cn("text-lg font-bold font-mono", remainingTime.expired && "text-destructive")}>
+                                    {remainingTime.expired 
+                                        ? "Expirado" 
+                                        : `${String(remainingTime.hours).padStart(2, '0')}:${String(remainingTime.minutes).padStart(2, '0')}:${String(remainingTime.seconds).padStart(2, '0')}`
+                                    }
+                                </div>
+                            </div>
+                        )}
+                    </div>
                 </CardHeader>
                 <CardContent className="space-y-6">
                     {selectedRoute && (
