@@ -1,4 +1,5 @@
 
+
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -66,6 +67,9 @@ export default function NewRoutePage() {
   
   const [clientToRemove, setClientToRemove] = useState<ClientInRoute | null>(null);
   const [removalObservation, setRemovalObservation] = useState('');
+
+  const isLoading = loading;
+  const isFormDisabled = isLoading || stagedRoutes.length > 0;
 
   useEffect(() => {
     if (users) {
@@ -269,7 +273,24 @@ export default function NewRoutePage() {
             status: 'Activo'
         };
     });
-    setSelectedClients(newClientsInRoute);
+    // This logic ensures unselected clients are marked as 'Eliminado'
+    const finalClients = selectedClients.map(originalClient => {
+        const isStillSelected = newClientsInRoute.some(nc => nc.ruc === originalClient.ruc);
+        if (isStillSelected) {
+            return newClientsInRoute.find(nc => nc.ruc === originalClient.ruc)!;
+        }
+        // If it's not in the new selection, but was in the old one, mark it
+        return {
+            ...originalClient,
+            status: 'Eliminado' as const,
+            removalObservation: originalClient.removalObservation || 'Eliminado de la selección',
+        };
+    }).concat(
+        // Add clients that are in the new selection but not in the old one
+        newClientsInRoute.filter(nc => !selectedClients.some(oc => oc.ruc === nc.ruc))
+    );
+
+    setSelectedClients(finalClients);
     setIsClientDialogOpen(false);
 };
   
@@ -286,7 +307,6 @@ export default function NewRoutePage() {
     );
   }, [clients, dialogSearchTerm, currentUser]);
 
-  const isLoading = loading;
 
   return (
     <>
@@ -300,12 +320,12 @@ export default function NewRoutePage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="routeName">Nombre de la Ruta</Label>
-              <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isLoading}/>
+              <Input id="routeName" placeholder="ej., Quito Norte - Semana 24" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isFormDisabled}/>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                 <Label htmlFor="supervisor">Asignar Supervisor</Label>
-                <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isLoading || currentUser?.role === 'Usuario'}>
+                <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormDisabled || currentUser?.role === 'Usuario'}>
                     <SelectTrigger id="supervisor">
                         <Users className="mr-2 h-4 w-4" />
                         <SelectValue placeholder="Seleccionar" />
@@ -332,7 +352,7 @@ export default function NewRoutePage() {
                                 "w-full justify-start text-left font-normal",
                                 !routeDate && "text-muted-foreground"
                                 )}
-                                disabled={isLoading}
+                                disabled={isFormDisabled}
                             >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 {routeDate ? format(routeDate, "PPP", {locale: es}) : <span>Elige una fecha</span>}
@@ -362,7 +382,7 @@ export default function NewRoutePage() {
               <Label>Añadir Clientes a la Ruta</Label>
                <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="outline" className="w-full justify-start" disabled={isFormDisabled}>
                       <PlusCircle className="mr-2 h-4 w-4"/>
                       Seleccionar Clientes ({selectedClients.filter(c => c.status !== 'Eliminado').length} seleccionados)
                   </Button>
@@ -414,7 +434,7 @@ export default function NewRoutePage() {
             {selectedClients.length > 0 && (
                 <Collapsible defaultOpen className="space-y-4">
                     <CollapsibleTrigger asChild>
-                        <Button variant="ghost" className="w-full justify-between p-2">
+                        <Button variant="ghost" className="w-full justify-between p-2" disabled={isFormDisabled}>
                             <span>Clientes Seleccionados ({selectedClients.length})</span>
                             <ChevronsUpDown className="h-4 w-4" />
                         </Button>
@@ -442,7 +462,7 @@ export default function NewRoutePage() {
                                             <p className="text-xs text-muted-foreground">{client.ruc}</p>
                                         </div>
                                         {!isRemoved && (
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientToRemove(client)}>
+                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientToRemove(client)} disabled={isFormDisabled}>
                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                             </Button>
                                         )}
@@ -460,7 +480,7 @@ export default function NewRoutePage() {
                                     <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2", isRemoved && "hidden")}>
                                         <div className="space-y-2">
                                             <Label htmlFor={`dayOfWeek-${client.ruc}`}>Día</Label>
-                                            <Select value={client.dayOfWeek} onValueChange={(value) => handleClientDetailChange(client.ruc, 'dayOfWeek', value)} >
+                                            <Select value={client.dayOfWeek} onValueChange={(value) => handleClientDetailChange(client.ruc, 'dayOfWeek', value)} disabled={isFormDisabled} >
                                                 <SelectTrigger id={`dayOfWeek-${client.ruc}`}><CalendarIcon className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar día" /></SelectTrigger>
                                                 <SelectContent>
                                                     <SelectItem value="Lunes">Lunes</SelectItem><SelectItem value="Martes">Martes</SelectItem><SelectItem value="Miércoles">Miércoles</SelectItem><SelectItem value="Jueves">Jueves</SelectItem><SelectItem value="Viernes">Viernes</SelectItem><SelectItem value="Sábado">Sábado</SelectItem><SelectItem value="Domingo">Domingo</SelectItem>
@@ -471,7 +491,7 @@ export default function NewRoutePage() {
                                             <Label>Fecha</Label>
                                             <Popover open={calendarOpen[client.ruc] || false} onOpenChange={(isOpen) => setCalendarOpen(prev => ({ ...prev, [client.ruc]: isOpen }))}>
                                             <PopoverTrigger asChild>
-                                                <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !client.date && 'text-muted-foreground')}>
+                                                <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !client.date && 'text-muted-foreground')} disabled={isFormDisabled}>
                                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                                 {client.date ? format(client.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
                                                 </Button>
@@ -484,14 +504,14 @@ export default function NewRoutePage() {
                                         </div>
                                         <div className="space-y-2">
                                             <Label htmlFor={`start-time-${client.ruc}`}>Hora de Inicio</Label>
-                                            <Select value={client.startTime} onValueChange={(value) => handleClientDetailChange(client.ruc, 'startTime', value)}>
+                                            <Select value={client.startTime} onValueChange={(value) => handleClientDetailChange(client.ruc, 'startTime', value)} disabled={isFormDisabled}>
                                             <SelectTrigger id={`start-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                                             <SelectContent>{startTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
                                             </Select>
                                         </div>
                                         <div className="space-y-2">
                                             <Label htmlFor={`end-time-${client.ruc}`}>Hora de Fin</Label>
-                                            <Select value={client.endTime} onValueChange={(value) => handleClientDetailChange(client.ruc, 'endTime', value)}>
+                                            <Select value={client.endTime} onValueChange={(value) => handleClientDetailChange(client.ruc, 'endTime', value)} disabled={isFormDisabled}>
                                             <SelectTrigger id={`end-time-${client.ruc}`}><Clock className="mr-2 h-4 w-4" /><SelectValue placeholder="Seleccionar" /></SelectTrigger>
                                             <SelectContent>{endTimeSlots.map(time => (<SelectItem key={time} value={time}>{time}</SelectItem>))}</SelectContent>
                                             </Select>
@@ -500,15 +520,15 @@ export default function NewRoutePage() {
                                     <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2", isRemoved && "hidden")}>
                                         <div className="space-y-2">
                                             <Label htmlFor={`valor-venta-${client.ruc}`}>Valor de Venta ($)</Label>
-                                            <Input id={`valor-venta-${client.ruc}`} type="text" placeholder="0.00" value={client.valorVenta ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'valorVenta', e.target.value)} />
+                                            <Input id={`valor-venta-${client.ruc}`} type="text" placeholder="0.00" value={client.valorVenta ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label htmlFor={`valor-cobro-${client.ruc}`}>Valor a Cobrar ($)</Label>
-                                            <Input id={`valor-cobro-${client.ruc}`} type="text" placeholder="0.00" value={client.valorCobro ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'valorCobro', e.target.value)} />
+                                            <Input id={`valor-cobro-${client.ruc}`} type="text" placeholder="0.00" value={client.valorCobro ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label htmlFor={`tipo-cobro-${client.ruc}`}>Tipo de Cobro</Label>
-                                            <Select value={client.tipoCobro} onValueChange={(value: any) => handleClientDetailChange(client.ruc, 'tipoCobro', value)}>
+                                            <Select value={client.tipoCobro} onValueChange={(value: any) => handleClientDetailChange(client.ruc, 'tipoCobro', value)} disabled={isFormDisabled}>
                                             <SelectTrigger id={`tipo-cobro-${client.ruc}`}><SelectValue placeholder="Seleccionar tipo" /></SelectTrigger>
                                             <SelectContent>
                                                 <SelectItem value="Efectivo">Efectivo</SelectItem><SelectItem value="Transferencia">Transferencia</SelectItem><SelectItem value="Cheque">Cheque</SelectItem>
@@ -517,17 +537,17 @@ export default function NewRoutePage() {
                                         </div>
                                         <div className="space-y-2">
                                             <Label htmlFor={`devoluciones-${client.ruc}`}>Devoluciones ($)</Label>
-                                            <Input id={`devoluciones-${client.ruc}`} type="text" placeholder="0.00" value={client.devoluciones ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'devoluciones', e.target.value)} />
+                                            <Input id={`devoluciones-${client.ruc}`} type="text" placeholder="0.00" value={client.devoluciones ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'devoluciones', e.target.value)} disabled={isFormDisabled} />
                                         </div>
                                         {hasDescuento && (
                                             <>
                                                 <div className="space-y-2">
                                                     <Label htmlFor={`promociones-${client.ruc}`}>Promociones ($)</Label>
-                                                    <Input id={`promociones-${client.ruc}`} type="text" placeholder="0.00" value={client.promociones ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'promociones', e.target.value)} />
+                                                    <Input id={`promociones-${client.ruc}`} type="text" placeholder="0.00" value={client.promociones ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'promociones', e.target.value)} disabled={isFormDisabled} />
                                                 </div>
                                                 <div className="space-y-2">
                                                     <Label htmlFor={`medicacionFrecuente-${client.ruc}`}>Medicación Frecuente ($)</Label>
-                                                    <Input id={`medicacionFrecuente-${client.ruc}`} type="text" placeholder="0.00" value={client.medicacionFrecuente ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'medicacionFrecuente', e.target.value)} />
+                                                    <Input id={`medicacionFrecuente-${client.ruc}`} type="text" placeholder="0.00" value={client.medicacionFrecuente ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'medicacionFrecuente', e.target.value)} disabled={isFormDisabled} />
                                                 </div>
                                             </>
                                         )}
@@ -540,7 +560,7 @@ export default function NewRoutePage() {
             )}
           </CardContent>
            <CardFooter>
-            <Button onClick={handleAddToStage} disabled={isLoading} className="w-full">
+            <Button onClick={handleAddToStage} disabled={isFormDisabled} className="w-full">
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Añadir a la Lista de Planificación
             </Button>
