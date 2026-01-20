@@ -58,6 +58,7 @@ export default function NewRoutePage() {
   const [supervisors, setSupervisors] = useState<User[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState<{ [key: string]: boolean }>({});
+  const [isRouteCalendarOpen, setIsRouteCalendarOpen] = useState(false);
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
   const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
@@ -256,8 +257,10 @@ export default function NewRoutePage() {
     const newClientsInRoute: ClientInRoute[] = dialogSelectedClients.map(client => {
         const existingClient = selectedClients.find(sc => sc.ruc === client.ruc);
         if (existingClient) {
-            return { ...existingClient, status: 'Activo' };
+            // Keep existing data, but ensure date is updated if main route date changed
+            return { ...existingClient, status: 'Activo', date: routeDate || existingClient.date };
         }
+        // This is a newly added client
         return {
             ruc: client.ruc,
             nombre_comercial: client.nombre_comercial,
@@ -320,7 +323,7 @@ export default function NewRoutePage() {
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="routeDate">Fecha de la Ruta</Label>
-                    <Popover>
+                    <Popover open={isRouteCalendarOpen} onOpenChange={setIsRouteCalendarOpen}>
                         <PopoverTrigger asChild>
                             <Button
                                 id="routeDate"
@@ -343,6 +346,11 @@ export default function NewRoutePage() {
                                 initialFocus
                                 locale={es}
                             />
+                            <div className="p-2 border-t border-border">
+                                <Button onClick={() => setIsRouteCalendarOpen(false)} className="w-full">
+                                    Seleccionar
+                                </Button>
+                            </div>
                         </PopoverContent>
                     </Popover>
                 </div>
