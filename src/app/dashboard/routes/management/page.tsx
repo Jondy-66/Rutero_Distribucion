@@ -35,21 +35,7 @@ import * as XLSX from 'xlsx';
 import { Timestamp, GeoPoint } from 'firebase/firestore';
 
 
-type RouteClient = Client & {
-    visitStatus?: 'Pendiente' | 'Completado';
-    valorVenta: string;
-    valorCobro: string;
-    devoluciones: string;
-    promociones: string;
-    medicacionFrecuente: string;
-    visitType?: 'presencial' | 'telefonica';
-    callObservation?: string;
-    origin?: 'manual' | 'predicted';
-    checkInTime?: string | null;
-    checkInLocation?: GeoPoint | null;
-    checkOutTime?: string | null;
-    checkOutLocation?: GeoPoint | null;
-}
+type RouteClient = Client & ClientInRoute;
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
     const slots = [];
@@ -74,9 +60,9 @@ export default function RouteManagementPage() {
   const [isStarting, setIsStarting] = useState(false);
   const [isRouteExpired, setIsRouteExpired] = useState(false);
   const [remainingTime, setRemainingTime] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false });
-
-
-  const [routeClients, setRouteClients] = useState<RouteClient[]>([]);
+  
+  const [currentRouteClientsFull, setCurrentRouteClientsFull] = useState<ClientInRoute[]>([]);
+  
   const [gettingLocation, setGettingLocation] = useState(false);
   const [mapCenter, setMapCenter] = useState({ lat: -1.8312, lng: -78.1834 });
   const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number} | null>(null);
@@ -85,9 +71,7 @@ export default function RouteManagementPage() {
   const [clientForMap, setClientForMap] = useState<Client | null>(null);
   const { toast } = useToast();
   
-  // State for the active client being managed
   const [activeClient, setActiveClient] = useState<RouteClient | null>(null);
-  const [checkInTime, setCheckInTime] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
   const [callObservation, setCallObservation] = useState('');
@@ -106,8 +90,35 @@ export default function RouteManagementPage() {
     if (!selectedRouteId) return undefined;
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
+  
+  const toClientInRoutePayload = (uiClient: RouteClient): ClientInRoute => {
+      const {id, ejecutivo, nombre_cliente, provincia, canton, direccion, latitud, longitud, ...rest} = uiClient;
 
-  // Effect to auto-select the in-progress route for today
+      const firestoreClient: ClientInRoute = {
+          ...rest,
+          ruc: uiClient.ruc,
+          nombre_comercial: uiClient.nombre_comercial,
+          status: uiClient.status,
+          visitStatus: uiClient.visitStatus,
+          origin: uiClient.origin,
+          valorVenta: parseFloat(String(uiClient.valorVenta)) || 0,
+          valorCobro: parseFloat(String(uiClient.valorCobro)) || 0,
+          devoluciones: parseFloat(String(uiClient.devoluciones)) || 0,
+          promociones: parseFloat(String(uiClient.promociones)) || 0,
+          medicacionFrecuente: parseFloat(String(uiClient.medicacionFrecuente)) || 0,
+      };
+      
+      Object.keys(firestoreClient).forEach(keyStr => {
+          const key = keyStr as keyof ClientInRoute;
+          if (firestoreClient[key] === undefined || firestoreClient[key] === null) {
+              delete firestoreClient[key];
+          }
+      });
+
+      return firestoreClient;
+  };
+
+
   useEffect(() => {
     if (!authLoading && user && allRoutes.length > 0) {
         const inProgressRoute = allRoutes.find(r => {
@@ -117,51 +128,44 @@ export default function RouteManagementPage() {
 
         if (inProgressRoute) {
             setSelectedRouteId(inProgressRoute.id);
-            setIsRouteStarted(true);
         }
     }
   }, [authLoading, user, allRoutes]);
   
   useEffect(() => {
     if (selectedRoute) {
-        const clientsData = selectedRoute.clients
-            .filter(client => client.status !== 'Eliminado')
-            .map(clientInRoute => {
-                const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
-                return {
-                    ...(clientDetails || {}),
-                    ...clientInRoute,
-                    visitStatus: clientInRoute.visitStatus || 'Pendiente',
-                    valorVenta: String(clientInRoute.valorVenta || '0.00'),
-                    valorCobro: String(clientInRoute.valorCobro || '0.00'),
-                    devoluciones: String(clientInRoute.devoluciones || '0.00'),
-                    promociones: String(clientInRoute.promociones || '0.00'),
-                    medicacionFrecuente: String(clientInRoute.medicacionFrecuente || '0.00'),
-                } as RouteClient;
-            }).filter(c => c.id);
-
-        setRouteClients(clientsData);
+        setCurrentRouteClientsFull(selectedRoute.clients);
         setIsRouteStarted(selectedRoute.status === 'En Progreso' || selectedRoute.status === 'Incompleta');
     } else {
-        // Clear local state if no route is selected
-        setRouteClients([]);
+        setCurrentRouteClientsFull([]);
         setIsRouteStarted(false);
     }
-  }, [selectedRouteId, allRoutes, availableClients]);
+  }, [selectedRoute]);
+  
+  const routeClients = useMemo(() => {
+    return currentRouteClientsFull
+        .filter(clientInRoute => clientInRoute.status !== 'Eliminado')
+        .map(clientInRoute => {
+            const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
+            return {
+                ...(clientDetails || {}),
+                ...clientInRoute,
+                valorVenta: String(clientInRoute.valorVenta || ''),
+                valorCobro: String(clientInRoute.valorCobro || ''),
+                devoluciones: String(clientInRoute.devoluciones || ''),
+                promociones: String(clientInRoute.promociones || ''),
+                medicacionFrecuente: String(clientInRoute.medicacionFrecuente || ''),
+            } as RouteClient;
+        }).filter(c => c.id);
+  }, [currentRouteClientsFull, availableClients]);
 
 
    useEffect(() => {
     const currentClient = routeClients.find(c => c.visitStatus !== 'Completado');
     setActiveClient(currentClient || null);
-
-    // If there is a current client, check for persisted check-in data
-    if (currentClient?.checkInTime) {
-      setCheckInTime(currentClient.checkInTime);
-    } else {
-      setCheckInTime(null); // Reset check-in time when client changes
-    }
-    setVisitType(undefined); // Reset visit type
-    setCallObservation(''); // Reset observation
+    
+    setVisitType(undefined);
+    setCallObservation('');
   }, [routeClients]);
 
 
@@ -298,20 +302,14 @@ export default function RouteManagementPage() {
     
     setIsSaving(true);
     try {
-        const updatedClientsForFirestore = selectedRoute.clients.map(c => 
+        const updatedFullList = currentRouteClientsFull.map(c => 
             c.ruc === activeClient.ruc 
             ? { ...c, checkInTime: time, checkInLocation: location }
             : c
         );
 
-        await updateRoute(selectedRoute.id, { clients: updatedClientsForFirestore });
-        
-        // Update local state instead of refetching
-        setRouteClients(prev => prev.map(c => 
-            c.ruc === activeClient.ruc 
-            ? { ...c, checkInTime: time, checkInLocation: location as any } // Use as any to match local state type if it differs
-            : c
-        ));
+        await updateRoute(selectedRoute.id, { clients: updatedFullList });
+        setCurrentRouteClientsFull(updatedFullList);
         
         toast({ title: "Entrada Marcada", description: `Hora de entrada registrada a las ${time}` });
     } catch (error: any) {
@@ -332,57 +330,30 @@ export default function RouteManagementPage() {
     }
 
     setIsSaving(true);
-
     try {
         const time = format(new Date(), 'HH:mm:ss');
         const location = markerPosition ? new GeoPoint(markerPosition.lat, markerPosition.lng) : null;
 
-        let fullRoutePlanClients = [...selectedRoute.clients];
-
-        const existingClientInPlan = fullRoutePlanClients.find(c => c.ruc === activeClient.ruc);
-
-        const completedClientDataForFirestore: ClientInRoute = {
-            ruc: activeClient.ruc,
-            nombre_comercial: activeClient.nombre_comercial,
-            date: existingClientInPlan?.date ?? activeClient.date ?? new Date(),
-            dayOfWeek: existingClientInPlan?.dayOfWeek,
-            startTime: existingClientInPlan?.startTime,
-            endTime: existingClientInPlan?.endTime,
-            origin: existingClientInPlan?.origin ?? activeClient.origin,
-            checkInTime: activeClient.checkInTime,
-            checkInLocation: activeClient.checkInLocation,
-            checkOutTime: time,
-            checkOutLocation: location,
-            visitStatus: 'Completado',
-            visitType: visitType,
-            callObservation: visitType === 'telefonica' ? callObservation : undefined,
-            valorVenta: parseFloat(activeClient.valorVenta) || 0,
-            valorCobro: parseFloat(activeClient.valorCobro) || 0,
-            devoluciones: parseFloat(activeClient.devoluciones) || 0,
-            promociones: parseFloat(activeClient.promociones) || 0,
-            medicacionFrecuente: parseFloat(activeClient.medicacionFrecuente) || 0,
-        };
-        
-        const completedClientDataForLocalState: RouteClient = {
-            ...activeClient,
-            ...completedClientDataForFirestore
-        }
-
-        Object.keys(completedClientDataForFirestore).forEach(key => {
-            if (completedClientDataForFirestore[key as keyof ClientInRoute] === undefined) {
-                delete completedClientDataForFirestore[key as keyof ClientInRoute];
+        const updatedFullList = currentRouteClientsFull.map(c => {
+            if (c.ruc === activeClient.ruc) {
+                return {
+                    ...c,
+                    checkOutTime: time,
+                    checkOutLocation: location,
+                    visitStatus: 'Completado' as const,
+                    visitType: visitType,
+                    callObservation: visitType === 'telefonica' ? callObservation : undefined,
+                    valorVenta: parseFloat(activeClient.valorVenta) || 0,
+                    valorCobro: parseFloat(activeClient.valorCobro) || 0,
+                    devoluciones: parseFloat(activeClient.devoluciones) || 0,
+                    promociones: parseFloat(activeClient.promociones) || 0,
+                    medicacionFrecuente: parseFloat(activeClient.medicacionFrecuente) || 0,
+                };
             }
+            return c;
         });
-
-        const clientIndex = fullRoutePlanClients.findIndex(c => c.ruc === activeClient.ruc);
-
-        if (clientIndex !== -1) {
-            fullRoutePlanClients[clientIndex] = completedClientDataForFirestore;
-        } else {
-            fullRoutePlanClients.push(completedClientDataForFirestore);
-        }
-
-        const allClientsNowCompleted = fullRoutePlanClients
+        
+        const allClientsNowCompleted = updatedFullList
             .filter(c => c.status !== 'Eliminado')
             .every(c => c.visitStatus === 'Completado');
         
@@ -391,9 +362,9 @@ export default function RouteManagementPage() {
             newStatus = 'Completada';
         }
         
-        await updateRoute(selectedRoute.id, { clients: fullRoutePlanClients, status: newStatus });
+        await updateRoute(selectedRoute.id, { clients: updatedFullList, status: newStatus });
         
-        setRouteClients(prev => prev.map(c => c.ruc === activeClient.ruc ? completedClientDataForLocalState : c));
+        setCurrentRouteClientsFull(updatedFullList);
         
         if (allClientsNowCompleted) {
             toast({ title: "¡Ruta Finalizada!", description: "Todos los clientes han sido gestionados." });
@@ -402,7 +373,6 @@ export default function RouteManagementPage() {
             toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
         }
         
-
     } catch(error: any) {
         console.error("Error updating route on checkout:", error);
         toast({ title: "Error", description: error.message || "No se pudo actualizar el estado de la visita.", variant: "destructive"});
@@ -440,13 +410,17 @@ export default function RouteManagementPage() {
             date: new Date(),
             visitStatus: 'Pendiente',
             origin: 'manual',
+            status: 'Activo'
         };
         
         setIsSaving(true);
         try {
-            const updatedClients = [...selectedRoute.clients, newRouteClient];
+            const updatedClients = [...currentRouteClientsFull, newRouteClient];
             await updateRoute(selectedRoute.id, { clients: updatedClients });
-            await refetchData('routes');
+            
+            // Instead of refetching, update local state
+            setCurrentRouteClientsFull(updatedClients);
+
             toast({ title: 'Cliente Añadido', description: `${client.nombre_comercial} ha sido añadido a la ruta de hoy.` });
             setIsAddClientDialogOpen(false);
         } catch (error: any) {
@@ -506,47 +480,38 @@ export default function RouteManagementPage() {
 
   const onDragEnd = async (result: DropResult) => {
     const { source, destination } = result;
-
     if (!destination || !selectedRoute) return;
+    
+    const activeClientsList = routeClients; // This is the visible, draggable list
+    const [reorderedItem] = activeClientsList.splice(source.index, 1);
+    activeClientsList.splice(destination.index, 0, reorderedItem);
 
-    const items = Array.from(routeClients);
-    const [reorderedItem] = items.splice(source.index, 1);
-    items.splice(destination.index, 0, reorderedItem);
+    // Create a map of the reordered active clients for quick lookup
+    const reorderedRucMap = new Map(activeClientsList.map((client, index) => [client.ruc, index]));
+    
+    // Create the new full list by sorting based on the new order of active clients
+    const newFullList = [...currentRouteClientsFull].sort((a, b) => {
+        const aIsActive = reorderedRucMap.has(a.ruc);
+        const bIsActive = reorderedRucMap.has(b.ruc);
 
-    setRouteClients(items); // Optimistic UI update
-
-    // Now, update the order in Firestore
+        if (aIsActive && bIsActive) {
+            return (reorderedRucMap.get(a.ruc) ?? 0) - (reorderedRucMap.get(b.ruc) ?? 0);
+        }
+        if (aIsActive) return -1; // Keep active items together
+        if (bIsActive) return 1;
+        return 0; // Keep original order for non-active items
+    });
+    
+    setIsSaving(true);
     try {
-        const fullOriginalClients = [...selectedRoute.clients];
-        const reorderedRucs = items.map(item => item.ruc);
-        
-        // Create a map for quick lookup
-        const originalClientMap = new Map(fullOriginalClients.map(c => [c.ruc, c]));
-        
-        const newClientsOrder: ClientInRoute[] = [];
-        reorderedRucs.forEach(ruc => {
-            const client = originalClientMap.get(ruc);
-            if (client) {
-                newClientsOrder.push(client);
-                originalClientMap.delete(ruc);
-            }
-        });
-
-        // Add back any clients that were not in the draggable list (e.g., completed ones)
-        // in their original relative order.
-        const remainingClients = fullOriginalClients.filter(c => originalClientMap.has(c.ruc));
-        
-        const finalClients = [...remainingClients, ...newClientsOrder];
-
-        await updateRoute(selectedRoute.id, { clients: finalClients });
-        await refetchData('routes'); // Refresh to ensure sync
+        await updateRoute(selectedRoute.id, { clients: newFullList });
+        setCurrentRouteClientsFull(newFullList);
         toast({ title: "Orden de Ruta Actualizado" });
-
     } catch (error) {
         console.error("Failed to update route order:", error);
         toast({ title: "Error", description: "No se pudo guardar el nuevo orden.", variant: "destructive" });
-        // Revert UI if update fails
-        setRouteClients(Array.from(routeClients));
+    } finally {
+        setIsSaving(false);
     }
   };
   
@@ -568,11 +533,11 @@ export default function RouteManagementPage() {
         'Nombre Cliente': fullClient?.nombre_cliente || '',
         'Tipo de Visita': client.visitType === 'presencial' ? 'Presencial' : 'Telefónica',
         'Observación Llamada': client.callObservation || '',
-        'Valor Venta ($)': parseFloat(client.valorVenta) || 0,
-        'Valor Cobro ($)': parseFloat(client.valorCobro) || 0,
-        'Devoluciones ($)': parseFloat(client.devoluciones) || 0,
-        'Promociones ($)': parseFloat(client.promociones) || 0,
-        'Medicación Frecuente ($)': parseFloat(client.medicacionFrecuente) || 0,
+        'Valor Venta ($)': parseFloat(String(client.valorVenta)) || 0,
+        'Valor Cobro ($)': parseFloat(String(client.valorCobro)) || 0,
+        'Devoluciones ($)': parseFloat(String(client.devoluciones)) || 0,
+        'Promociones ($)': parseFloat(String(client.promociones)) || 0,
+        'Medicación Frecuente ($)': parseFloat(String(client.medicacionFrecuente)) || 0,
       }
     });
     
@@ -585,7 +550,7 @@ export default function RouteManagementPage() {
 
 
   const hasDescuento = activeClient?.nombre_comercial?.toLowerCase().includes('descuento');
-  const isFormDisabled = isRouteExpired || !checkInTime || !visitType;
+  const isFormDisabled = isRouteExpired || !activeClient?.checkInTime || !visitType;
 
 
   return (
@@ -820,10 +785,10 @@ export default function RouteManagementPage() {
                                                     <h4 className="font-semibold">Marcar Entrada</h4>
                                                     <p className="text-sm text-muted-foreground">Registra tu hora de llegada al cliente.</p>
                                                 </div>
-                                                {checkInTime ? (
+                                                {activeClient.checkInTime ? (
                                                      <div className="text-center">
                                                         <p className="font-bold text-green-600">Entrada Marcada</p>
-                                                        <p className="text-sm font-mono">{checkInTime}</p>
+                                                        <p className="text-sm font-mono">{activeClient.checkInTime}</p>
                                                     </div>
                                                 ) : (
                                                     <Button onClick={() => openConfirmationDialog('checkIn')} disabled={isRouteExpired || isSaving}>
@@ -834,7 +799,7 @@ export default function RouteManagementPage() {
                                             </div>
 
                                             {/* --- VISIT TYPE --- */}
-                                            <div className={cn("space-y-4 pl-14 transition-opacity", !checkInTime && "opacity-50 pointer-events-none")}>
+                                            <div className={cn("space-y-4 pl-14 transition-opacity", !activeClient.checkInTime && "opacity-50 pointer-events-none")}>
                                                  <div className="flex items-center gap-4">
                                                      <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">2</div>
                                                      <div>
