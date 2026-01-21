@@ -322,7 +322,16 @@ export default function RouteManagementPage() {
 
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || !activeClient || !visitType) return;
+    if (!selectedRoute || !activeClient) return;
+
+    if (!visitType) {
+        toast({
+            title: "Acción Requerida",
+            description: "Por favor, selecciona el tipo de visita (Presencial o Telefónica).",
+            variant: "destructive"
+        });
+        return;
+    }
     
     if (visitType === 'telefonica' && !callObservation) {
         toast({ title: "Observación Requerida", description: "Debes añadir un comentario para la gestión telefónica.", variant: "destructive" });
@@ -336,19 +345,23 @@ export default function RouteManagementPage() {
 
         const updatedFullList = currentRouteClientsFull.map(c => {
             if (c.ruc === activeClient.ruc) {
-                return {
-                    ...c,
+                const updatedClientData: Partial<ClientInRoute> = {
                     checkOutTime: time,
                     checkOutLocation: location,
-                    visitStatus: 'Completado' as const,
+                    visitStatus: 'Completado',
                     visitType: visitType,
-                    callObservation: visitType === 'telefonica' ? callObservation : undefined,
                     valorVenta: parseFloat(activeClient.valorVenta) || 0,
                     valorCobro: parseFloat(activeClient.valorCobro) || 0,
                     devoluciones: parseFloat(activeClient.devoluciones) || 0,
                     promociones: parseFloat(activeClient.promociones) || 0,
                     medicacionFrecuente: parseFloat(activeClient.medicacionFrecuente) || 0,
                 };
+                
+                if (visitType === 'telefonica') {
+                    updatedClientData.callObservation = callObservation;
+                }
+
+                return { ...c, ...updatedClientData };
             }
             return c;
         });
