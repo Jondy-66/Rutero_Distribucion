@@ -298,17 +298,21 @@ export default function RouteManagementPage() {
     
     setIsSaving(true);
     try {
-        const updatedClients = selectedRoute.clients.map(c => 
+        const updatedClientsForFirestore = selectedRoute.clients.map(c => 
             c.ruc === activeClient.ruc 
             ? { ...c, checkInTime: time, checkInLocation: location }
             : c
         );
 
-        await updateRoute(selectedRoute.id, { clients: updatedClients });
-        await refetchData('routes');
+        await updateRoute(selectedRoute.id, { clients: updatedClientsForFirestore });
         
-        setCheckInTime(time);
-
+        // Update local state instead of refetching
+        setRouteClients(prev => prev.map(c => 
+            c.ruc === activeClient.ruc 
+            ? { ...c, checkInTime: time, checkInLocation: location as any } // Use as any to match local state type if it differs
+            : c
+        ));
+        
         toast({ title: "Entrada Marcada", description: `Hora de entrada registrada a las ${time}` });
     } catch (error: any) {
         console.error("Error saving check-in:", error);
@@ -316,7 +320,7 @@ export default function RouteManagementPage() {
     } finally {
         setIsSaving(false);
     }
-  }
+  };
 
 
   const handleConfirmCheckOut = async () => {
@@ -337,7 +341,7 @@ export default function RouteManagementPage() {
 
         const existingClientInPlan = fullRoutePlanClients.find(c => c.ruc === activeClient.ruc);
 
-        const completedClientData: ClientInRoute = {
+        const completedClientDataForFirestore: ClientInRoute = {
             ruc: activeClient.ruc,
             nombre_comercial: activeClient.nombre_comercial,
             date: existingClientInPlan?.date ?? activeClient.date ?? new Date(),
@@ -345,8 +349,8 @@ export default function RouteManagementPage() {
             startTime: existingClientInPlan?.startTime,
             endTime: existingClientInPlan?.endTime,
             origin: existingClientInPlan?.origin ?? activeClient.origin,
-            checkInTime: activeClient.checkInTime, // Persist check-in time
-            checkInLocation: activeClient.checkInLocation, // Persist check-in location
+            checkInTime: activeClient.checkInTime,
+            checkInLocation: activeClient.checkInLocation,
             checkOutTime: time,
             checkOutLocation: location,
             visitStatus: 'Completado',
@@ -358,19 +362,24 @@ export default function RouteManagementPage() {
             promociones: parseFloat(activeClient.promociones) || 0,
             medicacionFrecuente: parseFloat(activeClient.medicacionFrecuente) || 0,
         };
+        
+        const completedClientDataForLocalState: RouteClient = {
+            ...activeClient,
+            ...completedClientDataForFirestore
+        }
 
-        Object.keys(completedClientData).forEach(key => {
-            if (completedClientData[key as keyof ClientInRoute] === undefined) {
-                delete completedClientData[key as keyof ClientInRoute];
+        Object.keys(completedClientDataForFirestore).forEach(key => {
+            if (completedClientDataForFirestore[key as keyof ClientInRoute] === undefined) {
+                delete completedClientDataForFirestore[key as keyof ClientInRoute];
             }
         });
 
         const clientIndex = fullRoutePlanClients.findIndex(c => c.ruc === activeClient.ruc);
 
         if (clientIndex !== -1) {
-            fullRoutePlanClients[clientIndex] = completedClientData;
+            fullRoutePlanClients[clientIndex] = completedClientDataForFirestore;
         } else {
-            fullRoutePlanClients.push(completedClientData);
+            fullRoutePlanClients.push(completedClientDataForFirestore);
         }
 
         const allClientsNowCompleted = fullRoutePlanClients
@@ -380,13 +389,19 @@ export default function RouteManagementPage() {
         let newStatus = selectedRoute.status;
         if (allClientsNowCompleted) {
             newStatus = 'Completada';
+        }
+        
+        await updateRoute(selectedRoute.id, { clients: fullRoutePlanClients, status: newStatus });
+        
+        setRouteClients(prev => prev.map(c => c.ruc === activeClient.ruc ? completedClientDataForLocalState : c));
+        
+        if (allClientsNowCompleted) {
             toast({ title: "¡Ruta Finalizada!", description: "Todos los clientes han sido gestionados." });
+            await refetchData('routes');
         } else {
             toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
         }
         
-        await updateRoute(selectedRoute.id, { clients: fullRoutePlanClients, status: newStatus });
-        await refetchData('routes');
 
     } catch(error: any) {
         console.error("Error updating route on checkout:", error);
