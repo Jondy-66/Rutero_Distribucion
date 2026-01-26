@@ -478,55 +478,10 @@ export default function NewRoutePage() {
 
             <div className="space-y-2">
               <Label>Clientes en la Ruta</Label>
-               <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start" disabled={isFormDisabled}>
-                      <PlusCircle className="mr-2 h-4 w-4"/>
-                      Seleccionar Clientes ({selectedClients.filter(c => c.status !== 'Eliminado').length} seleccionados)
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                        <DialogTitle>Seleccionar Clientes</DialogTitle>
-                        <DialogDescription>
-                            Elige los clientes que formarán parte de esta ruta.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="relative">
-                        <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                        <Input 
-                            placeholder="Buscar por nombre, RUC..." 
-                            className="pl-8" 
-                            value={dialogSearchTerm}
-                            onChange={(e) => setDialogSearchTerm(e.target.value)}
-                        />
-                    </div>
-                    <ScrollArea className="h-72">
-                      <div className="space-y-2 p-1">
-                        {filteredAvailableClients.map(client => (
-                          <div key={client.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
-                            <div className="flex items-center space-x-3">
-                              <Checkbox 
-                                id={`client-${client.id}`}
-                                checked={dialogSelectedClients.some(c => c.ruc === client.ruc)}
-                                onCheckedChange={() => handleDialogClientToggle(client)}
-                              />
-                              <Label htmlFor={`client-${client.id}`} className="font-normal cursor-pointer">
-                                <p className="font-medium">{client.nombre_comercial}</p>
-                                <p className="text-xs text-muted-foreground">{client.ruc} - {client.nombre_cliente}</p>
-                              </Label>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                    <DialogFooter>
-                        <span className="text-sm text-muted-foreground mr-auto">{dialogSelectedClients.length} cliente(s) seleccionados</span>
-                        <Button variant="ghost" onClick={() => setIsClientDialogOpen(false)}>Cancelar</Button>
-                        <Button onClick={handleConfirmClientSelection}>Actualizar Clientes</Button>
-                    </DialogFooter>
-                </DialogContent>
-               </Dialog>
+               <div className="flex h-10 w-full items-center rounded-md border border-input bg-background/50 px-3 py-2 text-sm text-muted-foreground">
+                  <Users className="mr-2 h-4 w-4"/>
+                  <span>{selectedClients.filter(c => c.status !== 'Eliminado').length} cliente(s) en la ruta</span>
+              </div>
             </div>
             
             <div className="space-y-2 mt-4 max-h-[60vh] overflow-y-auto pr-2">
@@ -553,7 +508,7 @@ export default function NewRoutePage() {
                                       disabled={isFormDisabled || date === 'Sin Fecha'}
                                   >
                                       <PlusCircle className="h-4 w-4 mr-1" />
-                                      Añadir
+                                      Añadir clientes
                                   </Button>
                                    <div className="p-1.5">
                                       <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
