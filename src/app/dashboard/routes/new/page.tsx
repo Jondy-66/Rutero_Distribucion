@@ -307,6 +307,34 @@ export default function NewRoutePage() {
     );
   }, [clients, dialogSearchTerm, currentUser]);
 
+  const activeClientsWithIndex = useMemo(() => 
+    selectedClients
+      .map((c, i) => ({...c, originalIndex: i})) // keep original index if needed
+      .filter(c => c.status !== 'Eliminado')
+      .map((c, i) => ({...c, globalIndex: i}))
+  , [selectedClients]);
+
+  const groupedClients = useMemo(() => {
+    const groups: { [date: string]: typeof activeClientsWithIndex } = {};
+    
+    activeClientsWithIndex.forEach(client => {
+        const clientDateKey = client.date ? format(client.date, 'yyyy-MM-dd') : 'Sin Fecha';
+        if (!groups[clientDateKey]) {
+          groups[clientDateKey] = [];
+        }
+        groups[clientDateKey].push(client);
+      });
+      
+    return Object.entries(groups).sort(([dateA, dateB]) => {
+        if (dateA === 'Sin Fecha') return 1;
+        if (dateB === 'Sin Fecha') return -1;
+        return new Date(dateA).getTime() - new Date(dateB).getTime();
+    });
+  }, [activeClientsWithIndex]);
+
+  const removedClients = useMemo(() => {
+    return selectedClients.filter(c => c.status === 'Eliminado');
+  }, [selectedClients]);
 
   return (
     <>
@@ -379,7 +407,7 @@ export default function NewRoutePage() {
             <Separator />
 
             <div className="space-y-2">
-              <Label>Añadir Clientes a la Ruta</Label>
+              <Label>Clientes en la Ruta</Label>
                <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" className="w-full justify-start" disabled={isFormDisabled}>
@@ -430,54 +458,53 @@ export default function NewRoutePage() {
                 </DialogContent>
                </Dialog>
             </div>
-
-            {selectedClients.length > 0 && (
-                <Collapsible defaultOpen className="space-y-4">
-                    <CollapsibleTrigger asChild>
-                        <Button variant="ghost" className="w-full justify-between p-2" disabled={isFormDisabled}>
-                            <span>Clientes Seleccionados ({selectedClients.length})</span>
-                            <ChevronsUpDown className="h-4 w-4" />
-                        </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-4 p-2 pt-0 max-h-[60vh] overflow-y-auto">
-                        {selectedClients.map((client, index) => {
-                            const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
-                            const isNew = client.origin === 'manual';
-                            const isFromPrediction = client.origin === 'predicted';
-                            const isRemoved = client.status === 'Eliminado';
-                            return (
+            
+            <div className="space-y-2 mt-4 max-h-[60vh] overflow-y-auto pr-2">
+                {groupedClients.map(([date, clientsInGroup]) => (
+                    <Collapsible key={date} defaultOpen className="border-l-2 pl-4 -ml-4 py-2 border-slate-200">
+                        <CollapsibleTrigger asChild>
+                            <div className="flex w-full items-center justify-between rounded-lg p-2 cursor-pointer hover:bg-muted/50">
+                                <div className="flex items-center gap-3">
+                                    <CalendarIcon className="h-5 w-5 text-muted-foreground" />
+                                    <h4 className="font-semibold">
+                                        {date === 'Sin Fecha' 
+                                            ? 'Clientes Sin Fecha' 
+                                            : format(new Date(date + 'T00:00:00'), 'EEEE, dd \'de\' MMMM', { locale: es })}
+                                    </h4>
+                                    <Badge variant="secondary">{clientsInGroup.length}</Badge>
+                                </div>
+                                <Button variant="ghost" size="sm" className="w-9 p-0">
+                                    <ChevronsUpDown className="h-4 w-4" />
+                                    <span className="sr-only">Toggle</span>
+                                </Button>
+                            </div>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="space-y-4 p-2 pt-2">
+                            {clientsInGroup.map((client) => {
+                                const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
+                                const isNew = client.origin === 'manual';
+                                const isFromPrediction = client.origin === 'predicted';
+                                const isRemoved = client.status === 'Eliminado'; // This should be false here
+                                return (
                                 <Card key={client.ruc} className={cn(
                                     "p-4 bg-muted/50 relative", 
-                                    isNew && !isRemoved && "border-green-500", 
-                                    isFromPrediction && !isRemoved && "border-blue-500",
-                                    isRemoved && "bg-red-500/10 border-red-500/50"
+                                    isNew && "border-green-500", 
+                                    isFromPrediction && "border-blue-500",
                                 )}>
-                                    {isNew && !isRemoved && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
-                                    {isFromPrediction && !isRemoved && <Badge variant="secondary" className="absolute -top-2 -right-2 z-10">Predicción</Badge>}
-                                    {isRemoved && <Badge variant="destructive" className="absolute -top-2 -right-2 z-10">Eliminado</Badge>}
-
+                                    {isNew && <Badge className="absolute -top-2 -right-2 z-10">Nuevo</Badge>}
+                                    {isFromPrediction && <Badge variant="secondary" className="absolute -top-2 -right-2 z-10">Predicción</Badge>}
+                                    
                                     <div className="flex justify-between items-start">
                                         <div>
-                                            <p className={cn("font-semibold", isRemoved && "line-through")}>{index + 1}. {client.nombre_comercial}</p>
+                                            <p className="font-semibold">{client.globalIndex + 1}. {client.nombre_comercial}</p>
                                             <p className="text-xs text-muted-foreground">{client.ruc}</p>
                                         </div>
-                                        {!isRemoved && (
-                                            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientToRemove(client)} disabled={isFormDisabled}>
-                                                <Trash2 className="h-4 w-4 text-destructive" />
-                                            </Button>
-                                        )}
+                                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setClientToRemove(client)} disabled={isFormDisabled}>
+                                            <Trash2 className="h-4 w-4 text-destructive" />
+                                        </Button>
                                     </div>
                                     <Separator className="my-2" />
-
-                                    {isRemoved && client.removalObservation && (
-                                        <Alert variant="destructive" className="mt-2">
-                                            <AlertDescription>
-                                                <strong>Observación:</strong> {client.removalObservation}
-                                            </AlertDescription>
-                                        </Alert>
-                                    )}
-
-                                    <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2", isRemoved && "hidden")}>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
                                         <div className="space-y-2">
                                             <Label htmlFor={`dayOfWeek-${client.ruc}`}>Día</Label>
                                             <Select value={client.dayOfWeek} onValueChange={(value) => handleClientDetailChange(client.ruc, 'dayOfWeek', value)} disabled={isFormDisabled} >
@@ -517,7 +544,7 @@ export default function NewRoutePage() {
                                             </Select>
                                         </div>
                                     </div>
-                                    <div className={cn("grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2", isRemoved && "hidden")}>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
                                         <div className="space-y-2">
                                             <Label htmlFor={`valor-venta-${client.ruc}`}>Valor de Venta ($)</Label>
                                             <Input id={`valor-venta-${client.ruc}`} type="text" placeholder="0.00" value={client.valorVenta ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
@@ -553,11 +580,50 @@ export default function NewRoutePage() {
                                         )}
                                     </div>
                                 </Card>
-                            )
-                        })}
-                    </CollapsibleContent>
-                </Collapsible>
-            )}
+                                )
+                            })}
+                        </CollapsibleContent>
+                    </Collapsible>
+                ))}
+                {removedClients.length > 0 && (
+                    <Collapsible defaultOpen className="border-l-2 pl-4 -ml-4 py-2 border-destructive/30">
+                        <CollapsibleTrigger asChild>
+                            <div className="flex w-full items-center justify-between rounded-lg p-2 cursor-pointer hover:bg-muted/50">
+                                <div className="flex items-center gap-3 text-destructive">
+                                    <Trash2 className="h-5 w-5" />
+                                    <h4 className="font-semibold">Clientes Eliminados</h4>
+                                    <Badge variant="destructive">{removedClients.length}</Badge>
+                                </div>
+                                <Button variant="ghost" size="sm" className="w-9 p-0 text-destructive">
+                                    <ChevronsUpDown className="h-4 w-4" />
+                                    <span className="sr-only">Toggle</span>
+                                </Button>
+                            </div>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent className="space-y-4 p-2 pt-2">
+                            {removedClients.map((client, index) => (
+                                <Card key={client.ruc} className="p-4 bg-red-500/10 border-red-500/50 relative">
+                                    <Badge variant="destructive" className="absolute -top-2 -right-2 z-10">Eliminado</Badge>
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="font-semibold line-through">{index + 1}. {client.nombre_comercial}</p>
+                                            <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                                        </div>
+                                    </div>
+                                    <Separator className="my-2" />
+                                    {client.removalObservation && (
+                                        <Alert variant="destructive" className="mt-2">
+                                            <AlertDescription>
+                                                <strong>Observación:</strong> {client.removalObservation}
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
+                                </Card>
+                            ))}
+                        </CollapsibleContent>
+                    </Collapsible>
+                )}
+            </div>
           </CardContent>
            <CardFooter>
             <Button onClick={handleAddToStage} disabled={isFormDisabled} className="w-full">
