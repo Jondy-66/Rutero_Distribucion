@@ -353,8 +353,16 @@ export default function NewRoutePage() {
   }, [clients, dialogSearchTerm, currentUser]);
 
   const availableClientsForAddDialog = useMemo(() => {
-    const existingRucs = new Set(selectedClients.map(c => c.ruc));
-    let userClients = clients.filter(c => !existingRucs.has(c.ruc));
+    if (!currentAddDate) return [];
+
+    const dateKey = format(currentAddDate, 'yyyy-MM-dd');
+    const existingRucsForDate = new Set(
+      selectedClients
+        .filter(c => c.date && format(c.date, 'yyyy-MM-dd') === dateKey && c.status !== 'Eliminado')
+        .map(c => c.ruc)
+    );
+    
+    let userClients = clients.filter(c => !existingRucsForDate.has(c.ruc));
     
     if (currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista') {
       userClients = userClients.filter(c => c.ejecutivo === currentUser.name);
@@ -367,7 +375,7 @@ export default function NewRoutePage() {
         String(c.nombre_comercial).toLowerCase().includes(addDialogSearchTerm.toLowerCase()) ||
         String(c.ruc).includes(addDialogSearchTerm)
     );
-  }, [clients, selectedClients, addDialogSearchTerm, currentUser]);
+  }, [clients, selectedClients, addDialogSearchTerm, currentUser, currentAddDate]);
 
   const activeClientsWithIndex = useMemo(() => 
     selectedClients
