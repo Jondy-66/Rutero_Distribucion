@@ -144,7 +144,13 @@ export default function RouteManagementPage() {
   
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
-        .filter(clientInRoute => clientInRoute.status !== 'Eliminado')
+        .filter(clientInRoute => {
+            if (clientInRoute.status === 'Eliminado') return false;
+            
+            // Filtro clave: solo incluir clientes programados para hoy.
+            const clientVisitDate = clientInRoute.date;
+            return clientVisitDate ? isToday(clientVisitDate) : false;
+        })
         .map(clientInRoute => {
             const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
             return {
@@ -361,12 +367,24 @@ export default function RouteManagementPage() {
                     updatedClientData.callObservation = callObservation;
                 }
 
+                // Asegúrate de no enviar campos `undefined`
+                Object.keys(updatedClientData).forEach(key => {
+                    const typedKey = key as keyof typeof updatedClientData;
+                    if (updatedClientData[typedKey] === undefined) {
+                        delete updatedClientData[typedKey];
+                    }
+                });
+
                 return { ...c, ...updatedClientData };
             }
             return c;
         });
         
         const allClientsNowCompleted = updatedFullList
+            .filter(c => {
+                const clientDate = c.date;
+                return clientDate ? isToday(clientDate) : false;
+            })
             .filter(c => c.status !== 'Eliminado')
             .every(c => c.visitStatus === 'Completado');
         
@@ -380,7 +398,7 @@ export default function RouteManagementPage() {
         setCurrentRouteClientsFull(updatedFullList);
         
         if (allClientsNowCompleted) {
-            toast({ title: "¡Ruta Finalizada!", description: "Todos los clientes han sido gestionados." });
+            toast({ title: "¡Ruta Finalizada!", description: "Todos los clientes de hoy han sido gestionados." });
             await refetchData('routes');
         } else {
             toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
@@ -722,7 +740,7 @@ export default function RouteManagementPage() {
                                             </div>
                                         )}
                                         </Draggable>
-                                    )) : <p className="text-sm text-muted-foreground text-center py-4">No hay clientes en esta ruta.</p>}
+                                    )) : <p className="text-sm text-muted-foreground text-center py-4">No hay clientes para gestionar hoy.</p>}
                                     {provided.placeholder}
                                     </div>
                                 )}
