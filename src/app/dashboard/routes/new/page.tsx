@@ -68,6 +68,11 @@ export default function NewRoutePage() {
   const [clientToRemove, setClientToRemove] = useState<ClientInRoute | null>(null);
   const [removalObservation, setRemovalObservation] = useState('');
 
+  const [currentAddDate, setCurrentAddDate] = useState<Date | null>(null);
+  const [isAddClientToDateDialogOpen, setIsAddClientToDateDialogOpen] = useState(false);
+  const [addDialogSelectedClients, setAddDialogSelectedClients] = useState<Client[]>([]);
+  const [addDialogSearchTerm, setAddDialogSearchTerm] = useState('');
+
   const isLoading = loading;
   const isFormDisabled = isLoading || stagedRoutes.length > 0;
 
@@ -293,6 +298,46 @@ export default function NewRoutePage() {
     setSelectedClients(finalClients);
     setIsClientDialogOpen(false);
 };
+
+  const handleOpenAddClientToDateDialog = (date: Date) => {
+      setCurrentAddDate(date);
+      setAddDialogSelectedClients([]);
+      setAddDialogSearchTerm('');
+      setIsAddClientToDateDialogOpen(true);
+  }
+
+  const handleConfirmAddClientToDate = () => {
+    if (addDialogSelectedClients.length === 0 || !currentAddDate) {
+        setIsAddClientToDateDialogOpen(false);
+        return;
+    }
+
+    const newClientsToAdd: ClientInRoute[] = addDialogSelectedClients.map(client => ({
+        ruc: client.ruc,
+        nombre_comercial: client.nombre_comercial,
+        date: currentAddDate,
+        origin: 'manual',
+        status: 'Activo'
+    }));
+
+    setSelectedClients(prev => [...prev, ...newClientsToAdd]);
+    setIsAddClientToDateDialogOpen(false);
+    toast({
+        title: `${newClientsToAdd.length} cliente(s) añadido(s)`,
+        description: `Se han añadido a la fecha ${format(currentAddDate, 'PPP', { locale: es })}.`
+    });
+  }
+
+  const handleAddDialogClientToggle = (client: Client) => {
+    setAddDialogSelectedClients(prev => {
+        const isSelected = prev.some(c => c.ruc === client.ruc);
+        if (isSelected) {
+            return prev.filter(c => c.ruc !== client.ruc);
+        } else {
+            return [...prev, client];
+        }
+    });
+  };
   
   const filteredAvailableClients = useMemo(() => {
     let userClients = clients;
@@ -306,6 +351,23 @@ export default function NewRoutePage() {
         String(c.ruc).includes(dialogSearchTerm)
     );
   }, [clients, dialogSearchTerm, currentUser]);
+
+  const availableClientsForAddDialog = useMemo(() => {
+    const existingRucs = new Set(selectedClients.map(c => c.ruc));
+    let userClients = clients.filter(c => !existingRucs.has(c.ruc));
+    
+    if (currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista') {
+      userClients = userClients.filter(c => c.ejecutivo === currentUser.name);
+    }
+    
+    if (!addDialogSearchTerm) return userClients;
+
+    return userClients.filter(c => 
+        String(c.nombre_cliente).toLowerCase().includes(addDialogSearchTerm.toLowerCase()) ||
+        String(c.nombre_comercial).toLowerCase().includes(addDialogSearchTerm.toLowerCase()) ||
+        String(c.ruc).includes(addDialogSearchTerm)
+    );
+  }, [clients, selectedClients, addDialogSearchTerm, currentUser]);
 
   const activeClientsWithIndex = useMemo(() => 
     selectedClients
@@ -473,10 +535,22 @@ export default function NewRoutePage() {
                                     </h4>
                                     <Badge variant="secondary">{clientsInGroup.length}</Badge>
                                 </div>
-                                <Button variant="ghost" size="sm" className="w-9 p-0">
-                                    <ChevronsUpDown className="h-4 w-4" />
-                                    <span className="sr-only">Toggle</span>
-                                </Button>
+                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                                  <Button
+                                      type="button"
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7"
+                                      onClick={() => handleOpenAddClientToDateDialog(new Date(date + 'T00:00:00'))}
+                                      disabled={isFormDisabled || date === 'Sin Fecha'}
+                                  >
+                                      <PlusCircle className="h-4 w-4 mr-1" />
+                                      Añadir
+                                  </Button>
+                                   <div className="p-1.5">
+                                      <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
+                                  </div>
+                                </div>
                             </div>
                         </CollapsibleTrigger>
                         <CollapsibleContent className="space-y-4 p-2 pt-2">
@@ -705,6 +779,50 @@ export default function NewRoutePage() {
             </AlertDialogFooter>
         </AlertDialogContent>
     </AlertDialog>
+     <Dialog open={isAddClientToDateDialogOpen} onOpenChange={setIsAddClientToDateDialogOpen}>
+        <DialogContent className="max-w-2xl">
+            <DialogHeader>
+                <DialogTitle>Añadir Clientes a la Fecha</DialogTitle>
+                <DialogDescription>
+                    {currentAddDate ? `Selecciona clientes para añadir al día ${format(currentAddDate, 'PPP', { locale: es })}.` : ''}
+                </DialogDescription>
+            </DialogHeader>
+            <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input 
+                    placeholder="Buscar clientes no asignados..." 
+                    className="pl-8" 
+                    value={addDialogSearchTerm}
+                    onChange={(e) => setAddDialogSearchTerm(e.target.value)}
+                />
+            </div>
+            <ScrollArea className="h-72">
+                <div className="space-y-2 p-1">
+                {availableClientsForAddDialog.map(client => (
+                    <div key={client.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                        <div className="flex items-center space-x-3">
+                            <Checkbox 
+                                id={`add-client-${client.id}`}
+                                checked={addDialogSelectedClients.some(c => c.ruc === client.ruc)}
+                                onCheckedChange={() => handleAddDialogClientToggle(client)}
+                            />
+                            <Label htmlFor={`add-client-${client.id}`} className="font-normal cursor-pointer">
+                            <p className="font-medium">{client.nombre_comercial}</p>
+                            <p className="text-xs text-muted-foreground">{client.ruc} - {client.nombre_cliente}</p>
+                            </Label>
+                        </div>
+                    </div>
+                ))}
+                {availableClientsForAddDialog.length === 0 && <p className="text-center text-muted-foreground py-4">No hay más clientes disponibles.</p>}
+                </div>
+            </ScrollArea>
+            <DialogFooter>
+                <span className="text-sm text-muted-foreground mr-auto">{addDialogSelectedClients.length} cliente(s) seleccionados</span>
+                <Button variant="ghost" onClick={() => setIsAddClientToDateDialogOpen(false)}>Cancelar</Button>
+                <Button onClick={handleConfirmAddClientToDate}>Añadir Clientes</Button>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
     </>
   );
 }
