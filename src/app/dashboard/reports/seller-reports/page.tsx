@@ -41,6 +41,7 @@ import { DateRange } from 'react-day-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 export default function SellerReportsPage() {
   const { user: currentUser, users: allUsers, routes: allRoutes, loading: authLoading } = useAuth();
@@ -68,9 +69,12 @@ export default function SellerReportsPage() {
     if (!currentUser || !allRoutes) return [];
     
     const managedSellerIds = managedSellers.map(s => s.id);
+    
+    // Include completed and incomplete routes in the reports.
+    const relevantStatuses: RoutePlan['status'][] = ['Completada', 'Incompleta'];
 
     let routesToConsider = allRoutes.filter(route => 
-        managedSellerIds.includes(route.createdBy) && route.status === 'Completada'
+        managedSellerIds.includes(route.createdBy) && relevantStatuses.includes(route.status)
     );
     
     if (selectedSellerId !== 'all') {
@@ -99,7 +103,7 @@ export default function SellerReportsPage() {
     if (filteredRoutes.length === 0) {
         toast({
             title: "Sin Datos",
-            description: "No hay rutas completadas para descargar con los filtros seleccionados.",
+            description: "No hay rutas finalizadas para descargar con los filtros seleccionados.",
             variant: "destructive"
         });
         return;
@@ -179,7 +183,7 @@ export default function SellerReportsPage() {
     <>
       <PageHeader
         title="Reportes de Vendedores"
-        description="Visualiza y descarga los reportes de rutas completadas por los vendedores a tu cargo."
+        description="Visualiza y descarga los reportes de rutas finalizadas por los vendedores a tu cargo."
       >
         <Button onClick={handleDownloadExcel} disabled={authLoading || filteredRoutes.length === 0}>
           <Download className="mr-2" />
@@ -189,9 +193,9 @@ export default function SellerReportsPage() {
       
       <Card>
         <CardHeader>
-            <CardTitle>Rutas Completadas por Vendedor</CardTitle>
+            <CardTitle>Rutas Finalizadas por Vendedor</CardTitle>
             <CardDescription>
-                Selecciona un vendedor y un rango de fechas para ver sus rutas completadas.
+                Selecciona un vendedor y un rango de fechas para ver sus rutas finalizadas (completadas o incompletas).
             </CardDescription>
         </CardHeader>
         <CardContent>
@@ -256,6 +260,7 @@ export default function SellerReportsPage() {
                         <TableHead>Vendedor</TableHead>
                         <TableHead>Fecha</TableHead>
                         <TableHead>Clientes</TableHead>
+                        <TableHead>Estado</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -267,6 +272,7 @@ export default function SellerReportsPage() {
                                     <TableCell><Skeleton className="h-5 w-28" /></TableCell>
                                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                                     <TableCell><Skeleton className="h-5 w-8" /></TableCell>
+                                    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
                                     <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                                 </TableRow>
                             ))
@@ -279,6 +285,11 @@ export default function SellerReportsPage() {
                                     <TableCell>{allUsers.find(u => u.id === route.createdBy)?.name || 'Desconocido'}</TableCell>
                                     <TableCell>{format(routeDate, 'PPP', { locale: es })}</TableCell>
                                     <TableCell>{route.clients.length}</TableCell>
+                                    <TableCell>
+                                        <Badge variant={route.status === 'Completada' ? 'success' : 'destructive'}>
+                                            {route.status}
+                                        </Badge>
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
@@ -299,8 +310,8 @@ export default function SellerReportsPage() {
                             )})
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center h-24">
-                                    No hay rutas completadas para mostrar con los filtros seleccionados.
+                                <TableCell colSpan={6} className="text-center h-24">
+                                    No hay rutas finalizadas para mostrar con los filtros seleccionados.
                                 </TableCell>
                             </TableRow>
                         )}
