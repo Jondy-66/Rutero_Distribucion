@@ -361,12 +361,9 @@ export default function RouteManagementPage() {
                     devoluciones: parseFloat(activeClient.devoluciones) || 0,
                     promociones: parseFloat(activeClient.promociones) || 0,
                     medicacionFrecuente: parseFloat(activeClient.medicacionFrecuente) || 0,
+                    callObservation: visitType === 'telefonica' ? callObservation : undefined,
                 };
                 
-                if (visitType === 'telefonica') {
-                    updatedClientData.callObservation = callObservation;
-                }
-
                 // Asegúrate de no enviar campos `undefined`
                 Object.keys(updatedClientData).forEach(key => {
                     const typedKey = key as keyof typeof updatedClientData;
@@ -380,26 +377,27 @@ export default function RouteManagementPage() {
             return c;
         });
         
-        const allClientsNowCompleted = updatedFullList
-            .filter(c => {
-                const clientDate = c.date;
-                return clientDate ? isToday(clientDate) : false;
-            })
-            .filter(c => c.status !== 'Eliminado')
-            .every(c => c.visitStatus === 'Completado');
+        // Check if all clients for TODAY are completed
+        const todaysClients = updatedFullList.filter(c => c.status !== 'Eliminado' && c.date && isToday(c.date));
+        const allTodaysClientsCompleted = todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado');
+
+        // Check if ALL clients in the entire plan are completed
+        const allPlanClients = updatedFullList.filter(c => c.status !== 'Eliminado');
+        const allPlanClientsCompleted = allPlanClients.length > 0 && allPlanClients.every(c => c.visitStatus === 'Completado');
         
         let newStatus = selectedRoute.status;
-        if (allClientsNowCompleted) {
+        if (allPlanClientsCompleted) {
             newStatus = 'Completada';
         }
         
         await updateRoute(selectedRoute.id, { clients: updatedFullList, status: newStatus });
-        
         setCurrentRouteClientsFull(updatedFullList);
         
-        if (allClientsNowCompleted) {
-            toast({ title: "¡Ruta Finalizada!", description: "Todos los clientes de hoy han sido gestionados." });
+        if (allPlanClientsCompleted) {
+            toast({ title: "¡Ruta Finalizada!", description: "Has gestionado todos los clientes de esta ruta." });
             await refetchData('routes');
+        } else if (allTodaysClientsCompleted) {
+            toast({ title: "Día Completado", description: "Has gestionado todos los clientes de hoy. ¡Buen trabajo!" });
         } else {
             toast({ title: "Salida Confirmada", description: `Visita a ${activeClient.nombre_comercial} completada.` });
         }
@@ -787,8 +785,8 @@ export default function RouteManagementPage() {
                         <div className="flex flex-col items-center justify-center min-h-[60vh] rounded-lg border-2 border-dashed border-green-500/50 bg-green-500/10 p-8 text-center text-green-900">
                             <div>
                                 <CheckCircle className="h-12 w-12 mx-auto mb-4" />
-                                <p className="font-semibold text-xl">¡Ruta Completada!</p>
-                                <p>Has gestionado todos los clientes de esta ruta. ¡Buen trabajo!</p>
+                                <p className="font-semibold text-xl">¡Día Completado!</p>
+                                <p>Has gestionado todos los clientes de hoy. ¡Buen trabajo!</p>
                                 <Button onClick={handleDownloadReport} className="mt-4">
                                     <Download className="mr-2 h-4 w-4" />
                                     Generar Reporte
