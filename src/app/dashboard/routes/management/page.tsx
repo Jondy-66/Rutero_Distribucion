@@ -122,8 +122,10 @@ export default function RouteManagementPage() {
   useEffect(() => {
     if (!authLoading && user && allRoutes.length > 0) {
         const inProgressRoute = allRoutes.find(r => {
-            const routeDate = r.date;
-            return r.createdBy === user.id && r.status === 'En Progreso' && routeDate && isToday(routeDate);
+            // A route is in progress for today if its status is 'En Progreso'
+            // and it has at least one client scheduled for today.
+            const hasClientsForToday = r.clients.some(c => c.date && isToday(c.date) && c.status !== 'Eliminado');
+            return r.createdBy === user.id && r.status === 'En Progreso' && hasClientsForToday;
         });
 
         if (inProgressRoute) {
@@ -364,7 +366,6 @@ export default function RouteManagementPage() {
                     callObservation: visitType === 'telefonica' ? callObservation : undefined,
                 };
                 
-                // Asegúrate de no enviar campos `undefined`
                 Object.keys(updatedClientData).forEach(key => {
                     const typedKey = key as keyof typeof updatedClientData;
                     if (updatedClientData[typedKey] === undefined) {
@@ -377,11 +378,6 @@ export default function RouteManagementPage() {
             return c;
         });
         
-        // Check if all clients for TODAY are completed
-        const todaysClients = updatedFullList.filter(c => c.status !== 'Eliminado' && c.date && isToday(c.date));
-        const allTodaysClientsCompleted = todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado');
-
-        // Check if ALL clients in the entire plan are completed
         const allPlanClients = updatedFullList.filter(c => c.status !== 'Eliminado');
         const allPlanClientsCompleted = allPlanClients.length > 0 && allPlanClients.every(c => c.visitStatus === 'Completado');
         
@@ -393,6 +389,9 @@ export default function RouteManagementPage() {
         await updateRoute(selectedRoute.id, { clients: updatedFullList, status: newStatus });
         setCurrentRouteClientsFull(updatedFullList);
         
+        const todaysClients = updatedFullList.filter(c => c.status !== 'Eliminado' && c.date && isToday(c.date));
+        const allTodaysClientsCompleted = todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado');
+
         if (allPlanClientsCompleted) {
             toast({ title: "¡Ruta Finalizada!", description: "Has gestionado todos los clientes de esta ruta." });
             await refetchData('routes');
@@ -604,12 +603,12 @@ export default function RouteManagementPage() {
                             {loading && <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>}
                             {allRoutes && allRoutes
                                 .filter(r => {
-                                    const routeDate = r.date;
+                                    const hasClientsForToday = r.clients.some(c => c.date && isToday(c.date) && c.status !== 'Eliminado');
                                     return (
                                         r.createdBy === user?.id &&
                                         (r.status === 'Planificada' || r.status === 'En Progreso') && 
-                                        routeDate && isToday(routeDate)
-                                    )
+                                        hasClientsForToday
+                                    );
                                 })
                                 .map(route => (
                                     <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
