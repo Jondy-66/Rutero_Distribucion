@@ -117,22 +117,6 @@ export default function RouteManagementPage() {
 
       return firestoreClient;
   };
-
-
-  useEffect(() => {
-    if (!authLoading && user && allRoutes.length > 0) {
-        const inProgressRoute = allRoutes.find(r => {
-            // A route is in progress for today if its status is 'En Progreso'
-            // and it has at least one client scheduled for today.
-            const hasClientsForToday = r.clients.some(c => c.date && isToday(c.date) && c.status !== 'Eliminado');
-            return r.createdBy === user.id && r.status === 'En Progreso' && hasClientsForToday;
-        });
-
-        if (inProgressRoute) {
-            setSelectedRouteId(inProgressRoute.id);
-        }
-    }
-  }, [authLoading, user, allRoutes]);
   
   useEffect(() => {
     if (selectedRoute) {
@@ -972,3 +956,4 @@ export default function RouteManagementPage() {
     </>
   );
 }
+
