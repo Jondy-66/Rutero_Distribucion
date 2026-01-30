@@ -22,7 +22,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import type { RoutePlan } from '@/lib/types';
+import type { RoutePlan, ClientInRoute } from '@/lib/types';
 import { Download, Users, MoreHorizontal, Eye, Calendar as CalendarIcon } from 'lucide-react';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -42,6 +42,20 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+
+type DailyLog = {
+    id: string;
+    routeName: string;
+    sellerId: string;
+    sellerName: string;
+    date: Date;
+    totalClients: number;
+    completedClients: number;
+    status: 'Completado' | 'Incompleto' | 'Pendiente';
+    originalRouteId: string;
+    clients: ClientInRoute[];
+};
+
 
 export default function SellerReportsPage() {
   const { user: currentUser, users: allUsers, routes: allRoutes, loading: authLoading } = useAuth();
@@ -65,13 +79,20 @@ export default function SellerReportsPage() {
     return [];
   }, [currentUser, allUsers]);
 
-  const filteredRoutes = useMemo(() => {
-    if (!currentUser || !allRoutes) return [];
-    
+  const dailyReports = useMemo(() => {
+    if (!currentUser || !allRoutes || !allUsers) return [];
+
+    const groupBy = <T, K extends keyof any>(list: T[], getKey: (item: T) => K) =>
+      list.reduce((previous, currentItem) => {
+        const group = getKey(currentItem);
+        if (!previous[group]) previous[group] = [];
+        previous[group].push(currentItem);
+        return previous;
+      }, {} as Record<K, T[]>);
+
     const managedSellerIds = managedSellers.map(s => s.id);
-    
-    // Include completed and incomplete routes in the reports.
-    const relevantStatuses: RoutePlan['status'][] = ['Completada', 'Incompleta'];
+    // Include routes that are in progress or finished
+    const relevantStatuses: RoutePlan['status'][] = ['En Progreso', 'Completada', 'Incompleta'];
 
     let routesToConsider = allRoutes.filter(route => 
         managedSellerIds.includes(route.createdBy) && relevantStatuses.includes(route.status)
@@ -81,29 +102,63 @@ export default function SellerReportsPage() {
       routesToConsider = routesToConsider.filter(route => route.createdBy === selectedSellerId);
     }
 
-    if (dateRange?.from) {
-      const fromDate = startOfDay(dateRange.from);
-      routesToConsider = routesToConsider.filter(route => {
-        const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
-        return routeDate >= fromDate;
-      });
-    }
-    if (dateRange?.to) {
-        const toDate = endOfDay(dateRange.to);
-        routesToConsider = routesToConsider.filter(route => {
-            const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
-            return routeDate <= toDate;
+    const logs: DailyLog[] = [];
+
+    routesToConsider.forEach(route => {
+        const clientsByDay = groupBy(
+            route.clients.filter(c => c.status !== 'Eliminado'),
+            c => c.date ? format(c.date, 'yyyy-MM-dd') : 'no-date'
+        );
+
+        Object.entries(clientsByDay).forEach(([dateStr, dailyClients]) => {
+            if (dateStr === 'no-date') return;
+
+            const logDate = new Date(dateStr);
+            logDate.setUTCHours(0,0,0,0); // Normalize to avoid timezone issues
+
+            // Filter by date range
+            if (dateRange?.from && logDate < startOfDay(dateRange.from)) return;
+            if (dateRange?.to && logDate > endOfDay(dateRange.to)) return;
+
+            const completedClients = dailyClients.filter(c => c.visitStatus === 'Completado').length;
+            
+            let status: DailyLog['status'] = 'Pendiente';
+            if (dailyClients.length > 0) {
+                if (completedClients === dailyClients.length) {
+                    status = 'Completado';
+                } else if (logDate < startOfDay(new Date())) { // If day is in the past
+                    status = 'Incompleto';
+                } else if (completedClients > 0) { // If it's today and some are done
+                    status = 'Incompleto';
+                }
+            }
+            
+            const today = startOfDay(new Date());
+            if(logDate > today && status === 'Pendiente') return; // Don't show future pending days
+
+            logs.push({
+                id: `${route.id}-${dateStr}`,
+                routeName: route.routeName,
+                sellerId: route.createdBy,
+                sellerName: allUsers.find(u => u.id === route.createdBy)?.name || 'Desconocido',
+                date: logDate,
+                totalClients: dailyClients.length,
+                completedClients: completedClients,
+                status: status,
+                originalRouteId: route.id,
+                clients: dailyClients,
+            });
         });
-    }
+    });
     
-    return routesToConsider;
-  }, [selectedSellerId, allRoutes, managedSellers, currentUser, dateRange]);
+    return logs.sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [selectedSellerId, allRoutes, managedSellers, currentUser, dateRange, allUsers]);
   
   const handleDownloadExcel = () => {
-    if (filteredRoutes.length === 0) {
+    if (dailyReports.length === 0) {
         toast({
             title: "Sin Datos",
-            description: "No hay rutas finalizadas para descargar con los filtros seleccionados.",
+            description: "No hay gestiones diarias para descargar con los filtros seleccionados.",
             variant: "destructive"
         });
         return;
@@ -111,17 +166,14 @@ export default function SellerReportsPage() {
 
     const dataToExport = [];
 
-    for (const route of filteredRoutes) {
-        const seller = allUsers.find(u => u.id === route.createdBy);
-        const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
-
-        if (route.clients && route.clients.length > 0) {
-            for (const client of route.clients) {
+    for (const dailyLog of dailyReports) {
+        if (dailyLog.clients && dailyLog.clients.length > 0) {
+            for (const client of dailyLog.clients) {
                 if (client.visitStatus === 'Completado') {
                     dataToExport.push({
-                        'Vendedor': seller?.name || 'Desconocido',
-                        'Nombre de Ruta': route.routeName,
-                        'Fecha de Ruta': format(routeDate, 'PPP', { locale: es }),
+                        'Vendedor': dailyLog.sellerName,
+                        'Nombre de Ruta': dailyLog.routeName,
+                        'Fecha de Gestión': format(dailyLog.date, 'PPP', { locale: es }),
                         'RUC Cliente': client.ruc,
                         'Nombre Cliente': client.nombre_comercial,
                         'Hora de Check-in': client.checkInTime || 'N/A',
@@ -144,7 +196,7 @@ export default function SellerReportsPage() {
     if (dataToExport.length === 0) {
         toast({
             title: "Sin Datos",
-            description: "No hay visitas completadas en las rutas seleccionadas para exportar.",
+            description: "No hay visitas completadas en los días seleccionados para exportar.",
             variant: "destructive"
         });
         return;
@@ -152,8 +204,8 @@ export default function SellerReportsPage() {
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Detalle de Rutas");
-    XLSX.writeFile(workbook, `reporte_detallado_vendedores_${selectedSellerId === 'all' ? 'todos' : allUsers.find(u=>u.id === selectedSellerId)?.name.replace(' ', '_')}.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Detalle de Gestiones");
+    XLSX.writeFile(workbook, `reporte_gestiones_vendedores_${selectedSellerId === 'all' ? 'todos' : allUsers.find(u=>u.id === selectedSellerId)?.name.replace(' ', '_')}.xlsx`);
     toast({ title: "Descarga Iniciada", description: "Tu reporte detallado en Excel se está descargando." });
 };
 
@@ -183,9 +235,9 @@ export default function SellerReportsPage() {
     <>
       <PageHeader
         title="Reportes de Vendedores"
-        description="Visualiza y descarga los reportes de rutas finalizadas por los vendedores a tu cargo."
+        description="Visualiza y descarga los reportes de las gestiones diarias por los vendedores a tu cargo."
       >
-        <Button onClick={handleDownloadExcel} disabled={authLoading || filteredRoutes.length === 0}>
+        <Button onClick={handleDownloadExcel} disabled={authLoading || dailyReports.length === 0}>
           <Download className="mr-2" />
           Descargar Excel
         </Button>
@@ -193,9 +245,9 @@ export default function SellerReportsPage() {
       
       <Card>
         <CardHeader>
-            <CardTitle>Rutas Finalizadas por Vendedor</CardTitle>
+            <CardTitle>Gestiones Diarias por Vendedor</CardTitle>
             <CardDescription>
-                Selecciona un vendedor y un rango de fechas para ver sus rutas finalizadas (completadas o incompletas).
+                Selecciona un vendedor y un rango de fechas para ver el detalle de sus jornadas de trabajo.
             </CardDescription>
         </CardHeader>
         <CardContent>
@@ -259,8 +311,8 @@ export default function SellerReportsPage() {
                         <TableHead>Nombre de Ruta</TableHead>
                         <TableHead>Vendedor</TableHead>
                         <TableHead>Fecha</TableHead>
-                        <TableHead>Clientes</TableHead>
-                        <TableHead>Estado</TableHead>
+                        <TableHead>Progreso</TableHead>
+                        <TableHead>Estado del Día</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
@@ -271,23 +323,21 @@ export default function SellerReportsPage() {
                                     <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
                                     <TableCell><Skeleton className="h-5 w-28" /></TableCell>
                                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-8" /></TableCell>
-                                    <TableCell><Skeleton className="h-6 w-20" /></TableCell>
+                                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
                                     <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                                 </TableRow>
                             ))
-                        ) : filteredRoutes.length > 0 ? (
-                            filteredRoutes.map((route) => {
-                                const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
-                                return (
-                                <TableRow key={route.id}>
-                                    <TableCell className="font-medium">{route.routeName}</TableCell>
-                                    <TableCell>{allUsers.find(u => u.id === route.createdBy)?.name || 'Desconocido'}</TableCell>
-                                    <TableCell>{format(routeDate, 'PPP', { locale: es })}</TableCell>
-                                    <TableCell>{route.clients.length}</TableCell>
+                        ) : dailyReports.length > 0 ? (
+                            dailyReports.map((log) => (
+                                <TableRow key={log.id}>
+                                    <TableCell className="font-medium">{log.routeName}</TableCell>
+                                    <TableCell>{log.sellerName}</TableCell>
+                                    <TableCell>{format(log.date, 'PPP', { locale: es })}</TableCell>
+                                    <TableCell>{`${log.completedClients} de ${log.totalClients}`}</TableCell>
                                     <TableCell>
-                                        <Badge variant={route.status === 'Completada' ? 'success' : 'destructive'}>
-                                            {route.status}
+                                        <Badge variant={log.status === 'Completado' ? 'success' : 'destructive'}>
+                                            {log.status}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
@@ -299,19 +349,19 @@ export default function SellerReportsPage() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => handleViewDetails(route.id)}>
+                                                <DropdownMenuItem onClick={() => handleViewDetails(log.originalRouteId)}>
                                                     <Eye className="mr-2 h-4 w-4" />
-                                                    Ver Detalles
+                                                    Ver Ruta Original
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </TableCell>
                                 </TableRow>
-                            )})
+                            ))
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={6} className="text-center h-24">
-                                    No hay rutas finalizadas para mostrar con los filtros seleccionados.
+                                    No hay gestiones diarias para mostrar con los filtros seleccionados.
                                 </TableCell>
                             </TableRow>
                         )}
@@ -323,3 +373,4 @@ export default function SellerReportsPage() {
     </>
   );
 }
+
