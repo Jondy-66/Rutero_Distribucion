@@ -21,7 +21,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan, User } from '@/lib/types';
-import { Download, Calendar as CalendarIcon } from 'lucide-react';
+import { Download, Calendar as CalendarIcon, MoreHorizontal } from 'lucide-react';
 import { format, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -32,9 +32,16 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export default function MyCompletedRoutesPage() {
-  const { user: currentUser, routes: allRoutes, loading: authLoading } = useAuth();
+  const { user: currentUser, routes: allRoutes, loading: authLoading, clients: allSystemClients } = useAuth();
   const { toast } = useToast();
   
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -67,7 +74,7 @@ export default function MyCompletedRoutesPage() {
     return userRoutes;
   }, [dateRange, allRoutes, currentUser]);
   
-  const handleDownloadExcel = () => {
+  const handleDownloadSummaryExcel = () => {
     if (filteredRoutes.length === 0) {
       toast({
         title: "Sin Datos",
@@ -94,6 +101,45 @@ export default function MyCompletedRoutesPage() {
     toast({ title: "Descarga Iniciada", description: "Tu reporte en Excel se está descargando." });
   };
 
+  const handleDownloadDetailedExcel = (route: RoutePlan) => {
+    if (!route || !route.clients || route.clients.length === 0) {
+      toast({ title: "Sin Datos", description: "Esta ruta no tiene clientes para exportar.", variant: "destructive" });
+      return;
+    }
+
+    const dataToExport = route.clients
+      .filter(client => client.status !== 'Eliminado' && client.visitStatus === 'Completado')
+      .map(client => {
+        const clientDetails = allSystemClients.find(c => c.ruc === client.ruc);
+        const visitDate = client.date;
+        return {
+          'Fecha de Visita': visitDate ? format(visitDate, 'PPP', { locale: es }) : 'N/A',
+          'RUC Cliente': client.ruc,
+          'Nombre Cliente': clientDetails?.nombre_comercial || client.nombre_comercial,
+          'Hora de Check-in': client.checkInTime || 'N/A',
+          'Hora de Check-out': client.checkOutTime || 'N/A',
+          'Tipo de Visita': client.visitType === 'presencial' ? 'Presencial' : 'Telefónica',
+          'Observación Llamada': client.callObservation || '',
+          'Valor Venta ($)': client.valorVenta || 0,
+          'Valor Cobro ($)': client.valorCobro || 0,
+          'Devoluciones ($)': client.devoluciones || 0,
+          'Promociones ($)': client.promociones || 0,
+          'Medicación Frecuente ($)': client.medicacionFrecuente || 0,
+        };
+      });
+
+    if (dataToExport.length === 0) {
+        toast({ title: "Sin Datos", description: "No hay clientes gestionados en esta ruta para exportar.", variant: "destructive" });
+        return;
+    }
+    
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Detalle Ruta");
+    XLSX.writeFile(workbook, `reporte_detallado_${route.routeName.replace(/ /g, '_')}.xlsx`);
+    toast({ title: "Descarga Iniciada", description: "Tu reporte detallado en Excel se está descargando." });
+  };
+
   if (authLoading) {
     return (
       <>
@@ -109,9 +155,9 @@ export default function MyCompletedRoutesPage() {
         title="Historial de Mis Rutas"
         description="Visualiza y descarga el reporte de todas tus rutas."
       >
-        <Button onClick={handleDownloadExcel} disabled={authLoading || filteredRoutes.length === 0}>
+        <Button onClick={handleDownloadSummaryExcel} disabled={authLoading || filteredRoutes.length === 0}>
           <Download className="mr-2" />
-          Descargar Excel
+          Descargar Resumen
         </Button>
       </PageHeader>
       
@@ -170,6 +216,7 @@ export default function MyCompletedRoutesPage() {
                         <TableHead>Fecha</TableHead>
                         <TableHead>Clientes</TableHead>
                         <TableHead>Estado</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -180,6 +227,7 @@ export default function MyCompletedRoutesPage() {
                                     <TableCell><Skeleton className="h-5 w-24" /></TableCell>
                                     <TableCell><Skeleton className="h-5 w-8" /></TableCell>
                                     <TableCell><Skeleton className="h-5 w-20" /></TableCell>
+                                    <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                                 </TableRow>
                             ))
                         ) : filteredRoutes.length > 0 ? (
@@ -199,11 +247,27 @@ export default function MyCompletedRoutesPage() {
                                         {route.status}
                                       </Badge>
                                     </TableCell>
+                                    <TableCell className="text-right">
+                                        <DropdownMenu>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon">
+                                                    <MoreHorizontal className="h-4 w-4" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
+                                            <DropdownMenuContent align="end">
+                                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
+                                                <DropdownMenuItem onClick={() => handleDownloadDetailedExcel(route)}>
+                                                    <Download className="mr-2 h-4 w-4" />
+                                                    Descargar Detalle
+                                                </DropdownMenuItem>
+                                            </DropdownMenuContent>
+                                        </DropdownMenu>
+                                    </TableCell>
                                 </TableRow>
                             )})
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={4} className="text-center h-24">
+                                <TableCell colSpan={5} className="text-center h-24">
                                     No hay rutas para el rango de fechas seleccionado.
                                 </TableCell>
                             </TableRow>

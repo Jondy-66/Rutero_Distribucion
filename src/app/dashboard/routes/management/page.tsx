@@ -133,7 +133,6 @@ export default function RouteManagementPage() {
         .filter(clientInRoute => {
             if (clientInRoute.status === 'Eliminado') return false;
             
-            // Filtro clave: solo incluir clientes programados para hoy.
             const clientVisitDate = clientInRoute.date;
             return clientVisitDate ? isToday(clientVisitDate) : false;
         })
@@ -515,17 +514,17 @@ export default function RouteManagementPage() {
     }
   };
   
-  const handleDownloadReport = () => {
+  const handleDownloadDailyReport = () => {
     if (!selectedRoute) return;
 
-    const completedClients = routeClients.filter(c => c.visitStatus === 'Completado');
+    const completedClientsToday = routeClients.filter(c => c.visitStatus === 'Completado' && c.date && isToday(c.date));
     
-    if (completedClients.length === 0) {
-        toast({ title: "Sin Datos", description: "No hay clientes gestionados para generar un reporte.", variant: "destructive" });
+    if (completedClientsToday.length === 0) {
+        toast({ title: "Sin Datos", description: "No hay clientes gestionados hoy para generar un reporte.", variant: "destructive" });
         return;
     }
 
-    const dataToExport = completedClients.map(client => {
+    const dataToExport = completedClientsToday.map(client => {
       const fullClient = availableClients.find(c => c.ruc === client.ruc);
       return {
         'RUC': client.ruc,
@@ -543,9 +542,10 @@ export default function RouteManagementPage() {
     
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Gestión de Ruta");
-    XLSX.writeFile(workbook, `reporte_gestion_${selectedRoute.routeName.replace(/ /g, '_')}.xlsx`);
-    toast({ title: "Reporte Generado", description: "El reporte de gestión se ha descargado." });
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Gestión Diaria");
+    const dailyReportFilename = `reporte_gestion_diaria_${format(new Date(), 'yyyy-MM-dd')}.xlsx`;
+    XLSX.writeFile(workbook, dailyReportFilename);
+    toast({ title: "Reporte del Día Generado", description: "El reporte de gestión de hoy se ha descargado." });
   };
 
 
@@ -758,9 +758,9 @@ export default function RouteManagementPage() {
                                 <CheckCircle className="h-12 w-12 mx-auto mb-4" />
                                 <p className="font-semibold text-xl">¡Día Completado!</p>
                                 <p>Has gestionado todos los clientes de hoy. ¡Buen trabajo!</p>
-                                <Button onClick={handleDownloadReport} className="mt-4">
+                                <Button onClick={handleDownloadDailyReport} className="mt-4">
                                     <Download className="mr-2 h-4 w-4" />
-                                    Generar Reporte
+                                    Generar Reporte del Día
                                 </Button>
                             </div>
                         </div>
@@ -944,5 +944,6 @@ export default function RouteManagementPage() {
     </>
   );
 }
+
 
 
