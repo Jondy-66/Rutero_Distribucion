@@ -121,7 +121,7 @@ export default function RouteManagementPage() {
   useEffect(() => {
     if (selectedRoute) {
         setCurrentRouteClientsFull(selectedRoute.clients);
-        setIsRouteStarted(selectedRoute.status === 'En Progreso' || selectedRoute.status === 'Incompleta');
+        setIsRouteStarted(selectedRoute.status === 'En Progreso');
     } else {
         setCurrentRouteClientsFull([]);
         setIsRouteStarted(false);
@@ -162,19 +162,7 @@ export default function RouteManagementPage() {
 
 
   useEffect(() => {
-    if (!selectedRoute) {
-        setIsRouteExpired(false);
-        setRemainingTime({ hours: 0, minutes: 0, seconds: 0, expired: false });
-        return;
-    }
-    
-    if (selectedRoute.status === 'Incompleta') {
-        setIsRouteExpired(true);
-        setRemainingTime({ hours: 0, minutes: 0, seconds: 0, expired: true });
-        return;
-    }
-
-    if (selectedRoute.status !== 'En Progreso') {
+    if (!selectedRoute || selectedRoute.status !== 'En Progreso') {
         setIsRouteExpired(false);
         setRemainingTime({ hours: 0, minutes: 0, seconds: 0, expired: false });
         return;
@@ -590,7 +578,7 @@ export default function RouteManagementPage() {
                                     const hasClientsForToday = r.clients.some(c => c.date && isToday(c.date) && c.status !== 'Eliminado');
                                     return (
                                         r.createdBy === user?.id &&
-                                        (r.status === 'Planificada' || r.status === 'En Progreso') && 
+                                        ['Planificada', 'En Progreso', 'Incompleta'].includes(r.status) && 
                                         hasClientsForToday
                                     );
                                 })
@@ -601,9 +589,9 @@ export default function RouteManagementPage() {
                     </Select>
                 </div>
                 {selectedRoute && (
-                    <Button onClick={handleStartRoute} disabled={isStarting || selectedRoute.status !== 'Planificada'} className="w-full">
+                    <Button onClick={handleStartRoute} disabled={isStarting || !['Planificada', 'Incompleta'].includes(selectedRoute.status)} className="w-full">
                         {isStarting && <LoaderCircle className="animate-spin mr-2" />}
-                        {selectedRoute.status === 'Planificada' ? 'Iniciar Ruta' : 'Ruta ya en Progreso'}
+                        {selectedRoute.status === 'En Progreso' ? 'Ruta ya en Progreso' : 'Iniciar Ruta'}
                     </Button>
                 )}
             </CardContent>
@@ -956,4 +944,5 @@ export default function RouteManagementPage() {
     </>
   );
 }
+
 
