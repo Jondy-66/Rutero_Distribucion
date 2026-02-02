@@ -121,7 +121,11 @@ export default function RouteManagementPage() {
   useEffect(() => {
     if (selectedRoute) {
         setCurrentRouteClientsFull(selectedRoute.clients);
-        setIsRouteStarted(selectedRoute.status === 'En Progreso');
+        if (selectedRoute.status === 'En Progreso') {
+          setIsRouteStarted(true);
+        } else {
+          setIsRouteStarted(false);
+        }
     } else {
         setCurrentRouteClientsFull([]);
         setIsRouteStarted(false);
@@ -382,6 +386,12 @@ export default function RouteManagementPage() {
   
   const handleRouteSelect = (routeId: string) => {
       setSelectedRouteId(routeId);
+      const route = allRoutes.find(r => r.id === routeId);
+       if (route?.status === 'En Progreso') {
+           setIsRouteStarted(true);
+       } else {
+           setIsRouteStarted(false);
+       }
   }
 
   const handleStartRoute = async () => {
@@ -480,33 +490,37 @@ export default function RouteManagementPage() {
   const onDragEnd = async (result: DropResult) => {
     const { source, destination } = result;
     if (!destination || !selectedRoute) return;
-    
-    const activeClientsList = routeClients; // This is the visible, draggable list
-    const [reorderedItem] = activeClientsList.splice(source.index, 1);
-    activeClientsList.splice(destination.index, 0, reorderedItem);
 
-    // Create a map of the reordered active clients for quick lookup
-    const reorderedRucMap = new Map(activeClientsList.map((client, index) => [client.ruc, index]));
-    
-    // Create the new full list by sorting based on the new order of active clients
-    const newFullList = [...currentRouteClientsFull].sort((a, b) => {
-        const aIsActive = reorderedRucMap.has(a.ruc);
-        const bIsActive = reorderedRucMap.has(b.ruc);
+    // 1. Create a reordered list of today's clients (which are of type RouteClient)
+    const reorderedTodaysClients = Array.from(routeClients);
+    const [movedItem] = reorderedTodaysClients.splice(source.index, 1);
+    reorderedTodaysClients.splice(destination.index, 0, movedItem);
 
-        if (aIsActive && bIsActive) {
-            return (reorderedRucMap.get(a.ruc) ?? 0) - (reorderedRucMap.get(b.ruc) ?? 0);
-        }
-        if (aIsActive) return -1; // Keep active items together
-        if (bIsActive) return 1;
-        return 0; // Keep original order for non-active items
-    });
+    // 2. Convert this reordered list back to the plain ClientInRoute payload format.
+    const reorderedTodaysPayload = reorderedTodaysClients.map(c => toClientInRoutePayload(c));
+
+    // 3. Get all clients from the original full list that are NOT for today.
+    const todaysRucs = new Set(reorderedTodaysClients.map(c => c.ruc));
+    const otherClientsPayload = currentRouteClientsFull.filter(c => !todaysRucs.has(c.ruc));
+
+    // 4. Find the original insertion index of the first of today's clients.
+    const insertionIndex = currentRouteClientsFull.findIndex(c => todaysRucs.has(c.ruc));
+
+    // 5. Build the final, complete list.
+    const finalPayload = [...otherClientsPayload];
+    if (insertionIndex !== -1) {
+        finalPayload.splice(insertionIndex, 0, ...reorderedTodaysPayload);
+    } else {
+        // Fallback: if for some reason no original index was found, append at the end.
+        finalPayload.push(...reorderedTodaysPayload);
+    }
     
     setIsSaving(true);
     try {
-        await updateRoute(selectedRoute.id, { clients: newFullList });
-        setCurrentRouteClientsFull(newFullList);
+        await updateRoute(selectedRoute.id, { clients: finalPayload });
+        setCurrentRouteClientsFull(finalPayload);
         toast({ title: "Orden de Ruta Actualizado" });
-    } catch (error) {
+    } catch (error: any) {
         console.error("Failed to update route order:", error);
         toast({ title: "Error", description: "No se pudo guardar el nuevo orden.", variant: "destructive" });
     } finally {
@@ -578,7 +592,7 @@ export default function RouteManagementPage() {
                                     const hasClientsForToday = r.clients.some(c => c.date && isToday(c.date) && c.status !== 'Eliminado');
                                     return (
                                         r.createdBy === user?.id &&
-                                        ['Planificada', 'En Progreso', 'Incompleta'].includes(r.status) && 
+                                        ['Planificada', 'Incompleta'].includes(r.status) && 
                                         hasClientsForToday
                                     );
                                 })
@@ -944,6 +958,7 @@ export default function RouteManagementPage() {
     </>
   );
 }
+
 
 
 
