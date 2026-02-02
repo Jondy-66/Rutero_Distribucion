@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -295,6 +294,7 @@ export default function RouteManagementPage() {
         );
 
         await updateRoute(selectedRoute.id, { clients: updatedFullList });
+        await refetchData('routes');
         setCurrentRouteClientsFull(updatedFullList);
         
         toast({ title: "Entrada Marcada", description: `Hora de entrada registrada a las ${time}` });
@@ -365,6 +365,9 @@ export default function RouteManagementPage() {
         }
         
         await updateRoute(selectedRoute.id, { clients: updatedFullList, status: newStatus });
+        
+        // Sincronizar datos globales antes de mostrar el mensaje
+        await refetchData('routes');
         setCurrentRouteClientsFull(updatedFullList);
         
         const todaysClients = updatedFullList.filter(c => c.status !== 'Eliminado' && c.date && isToday(c.date instanceof Timestamp ? c.date.toDate() : c.date));
@@ -372,7 +375,6 @@ export default function RouteManagementPage() {
 
         if (allPlanClientsCompleted) {
             toast({ title: "¡Ruta Finalizada!", description: "Has gestionado todos los clientes de esta ruta." });
-            await refetchData('routes');
         } else if (allTodaysClientsCompleted) {
             toast({ title: "Día Completado", description: "Has gestionado todos los clientes de hoy. ¡Buen trabajo!" });
         } else {
@@ -429,8 +431,7 @@ export default function RouteManagementPage() {
         try {
             const updatedClients = [...currentRouteClientsFull, newRouteClient];
             await updateRoute(selectedRoute.id, { clients: updatedClients });
-            
-            // Instead of refetching, update local state
+            await refetchData('routes');
             setCurrentRouteClientsFull(updatedClients);
 
             toast({ title: 'Cliente Añadido', description: `${client.nombre_comercial} ha sido añadido a la ruta de hoy.` });
@@ -520,6 +521,7 @@ export default function RouteManagementPage() {
     setIsSaving(true);
     try {
         await updateRoute(selectedRoute.id, { clients: finalPayload });
+        await refetchData('routes');
         setCurrentRouteClientsFull(finalPayload);
         toast({ title: "Orden de Ruta Actualizado" });
     } catch (error: any) {
