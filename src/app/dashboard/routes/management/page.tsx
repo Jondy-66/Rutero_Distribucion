@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -137,8 +136,12 @@ export default function RouteManagementPage() {
         .filter(clientInRoute => {
             if (clientInRoute.status === 'Eliminado') return false;
             
-            const clientVisitDate = clientInRoute.date;
-            return clientVisitDate ? isToday(clientVisitDate) : false;
+            let clientDate = clientInRoute.date;
+            if (clientDate instanceof Timestamp) {
+                clientDate = clientDate.toDate();
+            }
+            
+            return clientDate ? isToday(clientDate) : false;
         })
         .map(clientInRoute => {
             const clientDetails = availableClients.find(c => c.ruc === clientInRoute.ruc);
@@ -364,7 +367,7 @@ export default function RouteManagementPage() {
         await updateRoute(selectedRoute.id, { clients: updatedFullList, status: newStatus });
         setCurrentRouteClientsFull(updatedFullList);
         
-        const todaysClients = updatedFullList.filter(c => c.status !== 'Eliminado' && c.date && isToday(c.date));
+        const todaysClients = updatedFullList.filter(c => c.status !== 'Eliminado' && c.date && isToday(c.date instanceof Timestamp ? c.date.toDate() : c.date));
         const allTodaysClientsCompleted = todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado');
 
         if (allPlanClientsCompleted) {
@@ -491,27 +494,26 @@ export default function RouteManagementPage() {
     const { source, destination } = result;
     if (!destination || !selectedRoute) return;
 
-    // 1. Create a reordered list of today's clients (which are of type RouteClient)
     const reorderedTodaysClients = Array.from(routeClients);
     const [movedItem] = reorderedTodaysClients.splice(source.index, 1);
     reorderedTodaysClients.splice(destination.index, 0, movedItem);
 
-    // 2. Convert this reordered list back to the plain ClientInRoute payload format.
     const reorderedTodaysPayload = reorderedTodaysClients.map(c => toClientInRoutePayload(c));
 
-    // 3. Get all clients from the original full list that are NOT for today.
     const todaysRucs = new Set(reorderedTodaysClients.map(c => c.ruc));
-    const otherClientsPayload = currentRouteClientsFull.filter(c => !todaysRucs.has(c.ruc));
+    const otherClientsPayload = currentRouteClientsFull
+        .filter(c => !todaysRucs.has(c.ruc))
+        .map(c => ({
+            ...c,
+            date: c.date instanceof Timestamp ? c.date.toDate() : c.date
+        }));
 
-    // 4. Find the original insertion index of the first of today's clients.
     const insertionIndex = currentRouteClientsFull.findIndex(c => todaysRucs.has(c.ruc));
 
-    // 5. Build the final, complete list.
     const finalPayload = [...otherClientsPayload];
     if (insertionIndex !== -1) {
         finalPayload.splice(insertionIndex, 0, ...reorderedTodaysPayload);
     } else {
-        // Fallback: if for some reason no original index was found, append at the end.
         finalPayload.push(...reorderedTodaysPayload);
     }
     
@@ -531,7 +533,7 @@ export default function RouteManagementPage() {
   const handleDownloadDailyReport = () => {
     if (!selectedRoute) return;
 
-    const completedClientsToday = routeClients.filter(c => c.visitStatus === 'Completado' && c.date && isToday(c.date));
+    const completedClientsToday = routeClients.filter(c => c.visitStatus === 'Completado' && c.date && isToday(c.date instanceof Timestamp ? c.date.toDate() : c.date));
     
     if (completedClientsToday.length === 0) {
         toast({ title: "Sin Datos", description: "No hay clientes gestionados hoy para generar un reporte.", variant: "destructive" });
@@ -589,15 +591,19 @@ export default function RouteManagementPage() {
                             {loading && <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>}
                             {allRoutes && allRoutes
                                 .filter(r => {
-                                    const hasClientsForToday = r.clients.some(c => c.date && isToday(c.date) && c.status !== 'Eliminado');
+                                    const hasClientsForToday = r.clients.some(c => {
+                                        let cDate = c.date;
+                                        if (cDate instanceof Timestamp) cDate = cDate.toDate();
+                                        return cDate && isToday(cDate) && c.status !== 'Eliminado';
+                                    });
                                     return (
                                         r.createdBy === user?.id &&
-                                        ['Planificada', 'Incompleta'].includes(r.status) && 
+                                        ['Planificada', 'Incompleta', 'En Progreso'].includes(r.status) && 
                                         hasClientsForToday
                                     );
                                 })
                                 .map(route => (
-                                    <SelectItem key={route.id} value={route.id}>{route.routeName}</SelectItem>
+                                    <SelectItem key={route.id} value={route.id}>{route.routeName} ({route.status})</SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
@@ -605,7 +611,7 @@ export default function RouteManagementPage() {
                 {selectedRoute && (
                     <Button onClick={handleStartRoute} disabled={isStarting || !['Planificada', 'Incompleta'].includes(selectedRoute.status)} className="w-full">
                         {isStarting && <LoaderCircle className="animate-spin mr-2" />}
-                        {selectedRoute.status === 'En Progreso' ? 'Ruta ya en Progreso' : 'Iniciar Ruta'}
+                        {selectedRoute.status === 'En Progreso' ? 'Continuar Gestión' : 'Iniciar Ruta'}
                     </Button>
                 )}
             </CardContent>
@@ -958,7 +964,3 @@ export default function RouteManagementPage() {
     </>
   );
 }
-
-
-
-
