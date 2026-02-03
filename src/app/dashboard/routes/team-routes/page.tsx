@@ -1,5 +1,3 @@
-
-
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -15,10 +13,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
-import { getRoutes, deleteRoute } from '@/lib/firebase/firestore';
+import { getRoutes, deleteRoute, updateRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock } from 'lucide-react';
+import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, PlayCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -116,6 +114,18 @@ export default function TeamRoutesPage() {
 
   const handleAction = (routeId: string) => {
     router.push(`/dashboard/routes/${routeId}`);
+  };
+
+  const handleReactivate = async (routeId: string) => {
+    try {
+        await updateRoute(routeId, { status: 'En Progreso' });
+        toast({ title: 'Éxito', description: 'Ruta reactivada correctamente (En Progreso).' });
+        fetchRoutesData(); // Actualizar lista local
+        await refetchData('routes'); // Sincronizar estado global
+    } catch (error: any) {
+        console.error('Failed to reactivate route:', error);
+        toast({ title: 'Error', description: 'No se pudo reactivar la ruta.', variant: 'destructive' });
+    }
   };
 
   const handleDelete = async (routeId: string) => {
@@ -224,6 +234,7 @@ export default function TeamRoutesPage() {
                             filteredRoutes.map((route, index) => {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
                                 const canDelete = user?.role === 'Administrador';
+                                const canReactivate = user?.role === 'Administrador' && route.status === 'Incompleta';
                                
                                 return (
                                 <TableRow key={route.id}>
@@ -249,6 +260,14 @@ export default function TeamRoutesPage() {
                                                     <DropdownMenuItem onClick={() => handleAction(route.id)}>
                                                         {canReview ? "Revisar" : "Ver Detalles"}
                                                     </DropdownMenuItem>
+                                                    
+                                                    {canReactivate && (
+                                                        <DropdownMenuItem onClick={() => handleReactivate(route.id)}>
+                                                            <PlayCircle className="mr-2 h-4 w-4 text-green-600" />
+                                                            Reactivar (En Progreso)
+                                                        </DropdownMenuItem>
+                                                    )}
+
                                                     {canDelete && (
                                                         <>
                                                             <DropdownMenuSeparator />
