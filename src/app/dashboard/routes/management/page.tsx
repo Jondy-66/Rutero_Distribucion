@@ -13,7 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/page-header';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -22,6 +22,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
 import { Timestamp, GeoPoint } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
 
 type RouteClient = Client & ClientInRoute;
 
@@ -44,6 +45,7 @@ export default function RouteManagementPage() {
 
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
   const [addClientSearchTerm, setAddClientSearchTerm] = useState('');
+  const [multiSelectedClients, setMultiSelectedClients] = useState<Client[]>([]);
 
   const SELECTION_KEY = user ? `mgmt_selected_route_${user.id}` : null;
   const DRAFT_KEY = (rid: string, ruc: string) => user ? `mgmt_draft_${user.id}_${rid}_${ruc}` : null;
@@ -288,40 +290,51 @@ export default function RouteManagementPage() {
     } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 
-  const handleAddClientToRoute = async (client: Client) => {
-    if (!selectedRoute) return;
-    
-    const isAlreadyInToday = currentRouteClientsFull.some(c => 
-        c.ruc === client.ruc && 
-        c.status !== 'Eliminado' && 
-        c.date && 
-        isToday(c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date)))
-    );
+  const toggleClientSelection = (client: Client) => {
+    setMultiSelectedClients(prev => {
+        const isSelected = prev.some(c => c.ruc === client.ruc);
+        if (isSelected) {
+            return prev.filter(c => c.ruc !== client.ruc);
+        } else {
+            return [...prev, client];
+        }
+    });
+  };
 
-    if (isAlreadyInToday) {
-        toast({ title: "Cliente ya en ruta", description: "Este cliente ya está programado para el día de hoy.", variant: "destructive" });
-        return;
-    }
+  const handleConfirmMultiAdd = async () => {
+    if (!selectedRoute || multiSelectedClients.length === 0) return;
 
     setIsSaving(true);
     try {
-        const newClientInRoute: ClientInRoute = {
+        const newClientsInRoute: ClientInRoute[] = multiSelectedClients.map(client => ({
             ruc: client.ruc,
             nombre_comercial: client.nombre_comercial,
             date: Timestamp.fromDate(new Date()),
             origin: 'manual',
             status: 'Activo',
             visitStatus: 'Pendiente'
-        };
+        }));
 
-        const updatedClients = [...currentRouteClientsFull, newClientInRoute];
+        // Filter out those already in today's route to avoid duplicates
+        const existingRucs = new Set(routeClients.map(c => c.ruc));
+        const filteredNewClients = newClientsInRoute.filter(c => !existingRucs.has(c.ruc));
+
+        if (filteredNewClients.length === 0) {
+            toast({ title: "Sin cambios", description: "Los clientes seleccionados ya están en la ruta de hoy." });
+            setIsAddClientDialogOpen(false);
+            setMultiSelectedClients([]);
+            return;
+        }
+
+        const updatedClients = [...currentRouteClientsFull, ...filteredNewClients];
         await updateRoute(selectedRoute.id, { clients: updatedClients });
         await refetchData('routes');
-        toast({ title: "Cliente Añadido", description: `${client.nombre_comercial} ha sido añadido a tu ruta de hoy.` });
+        toast({ title: "Clientes Añadidos", description: `${filteredNewClients.length} cliente(s) añadido(s) a tu ruta.` });
         setIsAddClientDialogOpen(false);
+        setMultiSelectedClients([]);
     } catch (error) {
         console.error(error);
-        toast({ title: "Error", description: "No se pudo añadir el cliente a la ruta.", variant: "destructive" });
+        toast({ title: "Error", description: "No se pudieron añadir los clientes.", variant: "destructive" });
     } finally { setIsSaving(false); }
   };
 
@@ -415,44 +428,51 @@ export default function RouteManagementPage() {
                     </div>
                 </div>
 
-                <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
+                <Dialog open={isAddClientDialogOpen} onOpenChange={(open) => {
+                    setIsAddClientDialogOpen(open);
+                    if (!open) setMultiSelectedClients([]);
+                }}>
                     <DialogTrigger asChild>
                         <Button variant="outline" className="w-full mb-4 border-dashed border-primary text-primary hover:bg-primary/5">
                             <PlusCircle className="mr-2 h-4 w-4" />
                             Añadir Cliente a la Ruta
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="w-[95vw] max-w-lg rounded-xl p-4 sm:p-6 overflow-hidden">
+                    <DialogContent className="w-[95vw] max-w-lg rounded-xl p-4 sm:p-6 flex flex-col max-h-[90vh]">
                         <DialogHeader className="mb-4">
-                            <DialogTitle>Añadir Cliente</DialogTitle>
-                            <DialogDescription>Selecciona un cliente de tu cartera.</DialogDescription>
+                            <DialogTitle>Añadir Clientes</DialogTitle>
+                            <DialogDescription>Selecciona los clientes que deseas agregar a tu jornada.</DialogDescription>
                         </DialogHeader>
                         <div className="relative mb-4">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                             <Input 
-                                placeholder="Buscar cliente..." 
+                                placeholder="Buscar por nombre o RUC..." 
                                 className="pl-9 h-10" 
                                 value={addClientSearchTerm}
                                 onChange={(e) => setAddClientSearchTerm(e.target.value)}
                             />
                         </div>
-                        <ScrollArea className="h-[50vh] sm:h-72">
+                        <ScrollArea className="flex-1 min-h-0">
                             <div className="space-y-2 pr-2">
                                 {filteredAvailableClients.map(client => (
-                                    <div key={client.id} className="flex items-center gap-3 p-2 rounded-lg border border-border bg-card hover:bg-accent transition-all">
+                                    <div 
+                                        key={client.id} 
+                                        className={cn(
+                                            "flex items-center gap-3 p-3 rounded-lg border transition-all cursor-pointer",
+                                            multiSelectedClients.some(c => c.ruc === client.ruc) ? "bg-primary/5 border-primary" : "bg-card border-border hover:bg-accent"
+                                        )}
+                                        onClick={() => toggleClientSelection(client)}
+                                    >
+                                        <Checkbox 
+                                            checked={multiSelectedClients.some(c => c.ruc === client.ruc)}
+                                            onCheckedChange={() => toggleClientSelection(client)}
+                                            className="shrink-0"
+                                        />
                                         <div className="flex-1 min-w-0 flex flex-col gap-0.5">
                                             <span className="font-bold text-sm truncate leading-tight">{client.nombre_comercial}</span>
                                             <span className="text-[10px] text-muted-foreground uppercase truncate leading-tight">{client.ruc}</span>
                                             <span className="text-[10px] text-muted-foreground truncate leading-tight italic">{client.direccion}</span>
                                         </div>
-                                        <Button 
-                                            size="sm" 
-                                            onClick={() => handleAddClientToRoute(client)} 
-                                            disabled={isSaving} 
-                                            className="shrink-0 h-8 px-3 text-xs font-bold bg-primary text-primary-foreground"
-                                        >
-                                            Añadir
-                                        </Button>
                                     </div>
                                 ))}
                                 {filteredAvailableClients.length === 0 && (
@@ -460,6 +480,24 @@ export default function RouteManagementPage() {
                                 )}
                             </div>
                         </ScrollArea>
+                        <DialogFooter className="mt-6 flex flex-row items-center justify-between border-t pt-4 sm:justify-between">
+                            <span className="text-xs text-muted-foreground font-medium">
+                                {multiSelectedClients.length} cliente(s) seleccionados
+                            </span>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="sm" onClick={() => setIsAddClientDialogOpen(false)}>
+                                    Cancelar
+                                </Button>
+                                <Button 
+                                    size="sm" 
+                                    onClick={handleConfirmMultiAdd} 
+                                    disabled={isSaving || multiSelectedClients.length === 0}
+                                    className="font-bold px-4"
+                                >
+                                    {isSaving ? <LoaderCircle className="animate-spin" /> : "Añadir Clientes"}
+                                </Button>
+                            </div>
+                        </DialogFooter>
                     </DialogContent>
                 </Dialog>
 
