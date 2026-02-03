@@ -449,9 +449,9 @@ export default function RouteManagementPage() {
                                     <div key={client.id} className="flex items-center justify-between p-3 rounded-md hover:bg-muted border border-transparent hover:border-border transition-all">
                                         <div className="flex flex-col overflow-hidden mr-4">
                                             <span className="font-medium truncate">{client.nombre_comercial}</span>
-                                            <span className="text-xs text-muted-foreground uppercase">{client.ruc} - {client.direccion}</span>
+                                            <span className="text-xs text-muted-foreground uppercase truncate">{client.ruc} - {client.direccion}</span>
                                         </div>
-                                        <Button size="sm" variant="secondary" onClick={() => handleAddClientToRoute(client)} disabled={isSaving}>
+                                        <Button size="sm" variant="secondary" onClick={() => handleAddClientToRoute(client)} disabled={isSaving} className="shrink-0">
                                             Añadir
                                         </Button>
                                     </div>
