@@ -273,21 +273,42 @@ export default function RouteManagementPage() {
   const onDragEnd = async (result: DropResult) => {
     const { source, destination } = result;
     if (!destination || !selectedRoute) return;
+    if (source.index === destination.index) return;
     
+    // Obtener los clientes de hoy en su nuevo orden
     const items = Array.from(routeClients);
     const [reorderedItem] = items.splice(source.index, 1);
     items.splice(destination.index, 0, reorderedItem);
     
-    const updatedFull = currentRouteClientsFull.map(c => {
-        const match = items.find(i => i.ruc === c.ruc);
-        return match ? { ...c, ...match } : c;
+    const reorderedRucs = items.map(i => i.ruc);
+
+    // Reconstruir la lista completa de clientes de la ruta
+    // preservando el orden de los otros días pero actualizando el de hoy
+    let todayIdx = 0;
+    const finalFullList = currentRouteClientsFull.map(c => {
+        // Si el cliente actual de la lista completa es uno de los de hoy
+        if (reorderedRucs.includes(c.ruc)) {
+            // Reemplazarlo por el siguiente en el nuevo orden de hoy
+            const newItem = items[todayIdx++];
+            // Solo devolvemos las propiedades del tipo ClientInRoute (sin los detalles del join deavailableClients)
+            const { id, ejecutivo, nombre_cliente, status: clientStatus, ...rest } = newItem as any;
+            return {
+                ...rest,
+                status: clientStatus || 'Activo'
+            } as ClientInRoute;
+        }
+        return c;
     });
 
     setIsSaving(true);
     try {
-        await updateRoute(selectedRoute.id, { clients: updatedFull });
+        await updateRoute(selectedRoute.id, { clients: finalFullList });
         await refetchData('routes');
-    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+        toast({ title: "Orden Actualizado" });
+    } catch (e) { 
+        console.error("Error al reordenar:", e); 
+        toast({ title: "Error", description: "No se pudo actualizar el orden.", variant: "destructive" });
+    } finally { setIsSaving(false); }
   };
 
   const toggleClientSelection = (client: Client) => {
@@ -315,7 +336,7 @@ export default function RouteManagementPage() {
             visitStatus: 'Pendiente'
         }));
 
-        // Filter out those already in today's route to avoid duplicates
+        // Filtrar los que ya están en la ruta de hoy
         const existingRucs = new Set(routeClients.map(c => c.ruc));
         const filteredNewClients = newClientsInRoute.filter(c => !existingRucs.has(c.ruc));
 
@@ -502,7 +523,7 @@ export default function RouteManagementPage() {
                 </Dialog>
 
                 <Separator className="my-4" />
-                <p className="text-xs font-semibold text-muted-foreground mb-2">ORDEN DE VISITA (Arrastra para reordenar)</p>
+                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Orden de Visita (Arrastra para reordenar)</p>
                 <DragDropContext onDragEnd={onDragEnd}>
                     <Droppable droppableId="clients">
                         {(provided) => (
