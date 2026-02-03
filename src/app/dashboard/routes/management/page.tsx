@@ -58,6 +58,7 @@ export default function RouteManagementPage() {
   const [isStarting, setIsStarting] = useState(false);
   const [isRouteExpired, setIsRouteExpired] = useState(false);
   const [remainingTime, setRemainingTime] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false });
+  const [todayFormatted, setTodayFormatted] = useState('');
   
   const [currentRouteClientsFull, setCurrentRouteClientsFull] = useState<ClientInRoute[]>([]);
   
@@ -116,6 +117,10 @@ export default function RouteManagementPage() {
       return firestoreClient;
   };
   
+  useEffect(() => {
+    setTodayFormatted(format(new Date(), "EEEE, d 'de' MMMM", { locale: es }));
+  }, []);
+
   useEffect(() => {
     if (selectedRoute) {
         setCurrentRouteClientsFull(selectedRoute.clients);
@@ -663,7 +668,13 @@ export default function RouteManagementPage() {
                     <div className="flex justify-between items-start">
                         <div>
                             <CardTitle>{selectedRoute?.routeName}</CardTitle>
-                            <CardDescription>Ruta actualmente en progreso.</CardDescription>
+                            <CardDescription>
+                                Ruta actualmente en progreso.
+                                <br />
+                                <span className="font-semibold text-primary">
+                                    {todayFormatted}
+                                </span>
+                            </CardDescription>
                         </div>
                         {isRouteStarted && (
                             <div className="text-right">
