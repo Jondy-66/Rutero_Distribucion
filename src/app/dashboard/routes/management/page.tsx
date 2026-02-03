@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -5,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, GripVertical, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, Download } from 'lucide-react';
+import { Route, Search, GripVertical, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan, ClientInRoute } from '@/lib/types';
@@ -692,7 +693,7 @@ export default function RouteManagementPage() {
 
                                 <div className="space-y-4">
                                     <h4 className="font-bold text-lg flex items-center gap-2">
-                                        <Download className="h-5 w-5 text-primary" /> 3. Datos de la Gestión
+                                        <LogIn className="h-5 w-5 text-primary" /> 3. Datos de la Gestión
                                     </h4>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                         <div className="space-y-2">

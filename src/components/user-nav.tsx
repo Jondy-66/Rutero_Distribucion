@@ -1,6 +1,7 @@
 
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { User, Settings, LogOut, Bell, CheckCheck } from 'lucide-react';
+import { User, Settings, LogOut, Bell, CheckCheck, Wifi, WifiOff } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { handleSignOut } from '@/lib/firebase/auth';
 import { useRouter } from 'next/navigation';
@@ -32,6 +33,23 @@ export function UserNav() {
   const { user, notifications, unreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
+  const [isOnline, setIsOnline] = useState(true);
+
+  useEffect(() => {
+    // Verificar estado inicial
+    setIsOnline(typeof navigator !== 'undefined' ? navigator.onLine : true);
+
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
   
   const onSignOut = async () => {
     await handleSignOut();
@@ -51,7 +69,21 @@ export function UserNav() {
   const fallback = user.name ? user.name.split(' ').map(n => n[0]).join('') : 'U';
 
   return (
-    <div className="flex items-center gap-4">
+    <div className="flex items-center gap-2 sm:gap-4">
+      {/* Indicador de Conexión */}
+      <div 
+        title={isOnline ? "Conexión activa" : "Sin conexión a internet"}
+        className={cn(
+          "flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] font-bold uppercase transition-all duration-300",
+          isOnline 
+            ? "bg-green-50 text-green-700 border-green-200" 
+            : "bg-red-50 text-red-700 border-red-200 animate-pulse"
+        )}
+      >
+        <div className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-green-600 shadow-[0_0_8px_rgba(34,197,94,0.6)]" : "bg-red-600")} />
+        <span className="hidden xs:inline-block">{isOnline ? 'En línea' : 'Sin red'}</span>
+      </div>
+
       <Popover>
         <PopoverTrigger asChild>
           <Button variant="ghost" size="icon" className="relative">
