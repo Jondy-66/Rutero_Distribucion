@@ -47,6 +47,18 @@ export default function RouteManagementPage() {
   const [addClientSearchTerm, setAddClientSearchTerm] = useState('');
   const [multiSelectedClients, setMultiSelectedClients] = useState<Client[]>([]);
 
+  // Hydration fix for react-beautiful-dnd
+  const [dndEnabled, setDndEnabled] = useState(false);
+
+  useEffect(() => {
+    setTodayFormatted(format(new Date(), "EEEE, d 'de' MMMM", { locale: es }));
+    const animation = requestAnimationFrame(() => setDndEnabled(true));
+    return () => {
+      cancelAnimationFrame(animation);
+      setDndEnabled(false);
+    };
+  }, []);
+
   const SELECTION_KEY = user ? `mgmt_selected_route_${user.id}` : null;
   const DRAFT_KEY = (rid: string, ruc: string) => user ? `mgmt_draft_${user.id}_${rid}_${ruc}` : null;
 
@@ -55,10 +67,6 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  useEffect(() => {
-    setTodayFormatted(format(new Date(), "EEEE, d 'de' MMMM", { locale: es }));
-  }, []);
-
   useEffect(() => {
     if (!authLoading && SELECTION_KEY) {
       const savedId = localStorage.getItem(SELECTION_KEY);
@@ -275,24 +283,36 @@ export default function RouteManagementPage() {
     if (!destination || !selectedRoute) return;
     if (source.index === destination.index) return;
     
+    // 1. Get today's clients being reordered
     const items = Array.from(routeClients);
     const [reorderedItem] = items.splice(source.index, 1);
     items.splice(destination.index, 0, reorderedItem);
     
-    const reorderedRucs = items.map(i => i.ruc);
+    // 2. Identify the RUCs involved in today's list
+    const todayRucs = new Set(routeClients.map(c => c.ruc));
+    
+    // 3. Find where today's sequence started in the full list
+    let firstTodayIndex = currentRouteClientsFull.findIndex(c => todayRucs.has(c.ruc));
+    if (firstTodayIndex === -1) return;
 
-    let todayIdx = 0;
-    const finalFullList = currentRouteClientsFull.map(c => {
-        if (reorderedRucs.includes(c.ruc)) {
-            const newItem = items[todayIdx++];
-            const { id, ejecutivo, nombre_cliente, status: clientStatus, ...rest } = newItem as any;
-            return {
-                ...rest,
-                status: clientStatus || 'Activo'
-            } as ClientInRoute;
-        }
-        return c;
+    // 4. Get other clients (other days or deleted)
+    const otherClients = currentRouteClientsFull.filter(c => !todayRucs.has(c.ruc));
+    
+    // 5. Re-map cleaned items for saving
+    const cleanedItems = items.map(item => {
+        const { id, ejecutivo, nombre_cliente, status: clientStatus, ...rest } = item as any;
+        return {
+            ...rest,
+            status: clientStatus || 'Activo'
+        } as ClientInRoute;
     });
+
+    // 6. Build final list maintaining the original "today" position in the full route
+    const finalFullList = [
+        ...otherClients.slice(0, firstTodayIndex),
+        ...cleanedItems,
+        ...otherClients.slice(firstTodayIndex)
+    ];
 
     setIsSaving(true);
     try {
@@ -452,7 +472,7 @@ export default function RouteManagementPage() {
                             Añadir Cliente a la Ruta
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="w-[95vw] max-w-2xl rounded-xl p-4 sm:p-6 flex flex-col h-[85vh]">
+                    <DialogContent className="w-[95vw] max-w-2xl rounded-xl p-4 sm:p-6 flex flex-col h-[80vh]">
                         <DialogHeader className="mb-4">
                             <DialogTitle>Añadir Clientes</DialogTitle>
                             <DialogDescription>Selecciona los clientes que deseas agregar a tu jornada.</DialogDescription>
@@ -517,50 +537,52 @@ export default function RouteManagementPage() {
 
                 <Separator className="my-4" />
                 <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Orden de Visita (Arrastra para reordenar)</p>
-                <DragDropContext onDragEnd={onDragEnd}>
-                    <Droppable droppableId="clients">
-                        {(provided) => (
-                            <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-                                {routeClients.map((c, i) => (
-                                    <Draggable key={c.ruc} draggableId={c.ruc} index={i} isDragDisabled={c.visitStatus === 'Completado' || isSaving}>
-                                        {(p) => (
-                                            <div 
-                                                ref={p.innerRef} 
-                                                {...p.draggableProps} 
-                                                {...p.dragHandleProps} 
-                                                className={cn(
-                                                    "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm",
-                                                    activeClient?.ruc === c.ruc ? "ring-2 ring-primary border-transparent" : "hover:border-primary/30",
-                                                    c.visitStatus === 'Completado' && "bg-green-50/50 border-green-200"
-                                                )}
-                                            >
-                                                <div className="flex items-center gap-3 overflow-hidden">
-                                                    <GripVertical className={cn("h-4 w-4 text-muted-foreground shrink-0", c.visitStatus === 'Completado' && "opacity-0")}/>
-                                                    <div className="flex flex-col overflow-hidden">
-                                                        <div className="flex items-center gap-2">
-                                                            <span className={cn("font-medium truncate", i === 0 ? "max-w-[120px]" : "max-w-[150px]", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
-                                                            {c.origin === 'manual' && <Badge variant="secondary" className="text-[8px] h-4 bg-blue-100 text-blue-700 hover:bg-blue-100 border-none">Nuevo</Badge>}
+                {dndEnabled && (
+                    <DragDropContext onDragEnd={onDragEnd}>
+                        <Droppable droppableId="clients">
+                            {(provided) => (
+                                <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
+                                    {routeClients.map((c, i) => (
+                                        <Draggable key={c.ruc} draggableId={c.ruc} index={i} isDragDisabled={c.visitStatus === 'Completado' || isSaving}>
+                                            {(p) => (
+                                                <div 
+                                                    ref={p.innerRef} 
+                                                    {...p.draggableProps} 
+                                                    {...p.dragHandleProps} 
+                                                    className={cn(
+                                                        "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm",
+                                                        activeClient?.ruc === c.ruc ? "ring-2 ring-primary border-transparent" : "hover:border-primary/30",
+                                                        c.visitStatus === 'Completado' && "bg-green-50/50 border-green-200"
+                                                    )}
+                                                >
+                                                    <div className="flex items-center gap-3 overflow-hidden">
+                                                        <GripVertical className={cn("h-4 w-4 text-muted-foreground shrink-0", c.visitStatus === 'Completado' && "opacity-0")}/>
+                                                        <div className="flex flex-col overflow-hidden">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className={cn("font-medium truncate", "max-w-[150px]", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
+                                                                {c.origin === 'manual' && <Badge variant="secondary" className="text-[8px] h-4 bg-blue-100 text-blue-700 hover:bg-blue-100 border-none">Nuevo</Badge>}
+                                                            </div>
+                                                            <span className="text-[10px] text-muted-foreground uppercase">{c.ruc}</span>
                                                         </div>
-                                                        <span className="text-[10px] text-muted-foreground uppercase">{c.ruc}</span>
                                                     </div>
+                                                    {c.visitStatus === 'Completado' ? (
+                                                        <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
+                                                    ) : (
+                                                        <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">#{i + 1}</span>
+                                                    )}
                                                 </div>
-                                                {c.visitStatus === 'Completado' ? (
-                                                    <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
-                                                ) : (
-                                                    <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">#{i + 1}</span>
-                                                )}
-                                            </div>
-                                        )}
-                                    </Draggable>
-                                ))}
-                                {provided.placeholder}
-                                {routeClients.length === 0 && (
-                                    <p className="text-center text-sm text-muted-foreground py-8">No hay clientes programados para hoy.</p>
-                                )}
-                            </div>
-                        )}
-                    </Droppable>
-                </DragDropContext>
+                                            )}
+                                        </Draggable>
+                                    ))}
+                                    {provided.placeholder}
+                                    {routeClients.length === 0 && (
+                                        <p className="text-center text-sm text-muted-foreground py-8">No hay clientes programados para hoy.</p>
+                                    )}
+                                </div>
+                            )}
+                        </Droppable>
+                    </DragDropContext>
+                )}
             </CardContent>
         </Card>
 
