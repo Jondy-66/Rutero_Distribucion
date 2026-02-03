@@ -55,7 +55,7 @@ export default function RouteManagementPage() {
   
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
   const [isRouteStarted, setIsRouteStarted] = useState(false);
-  const [isStarting, setIsStarting] = false;
+  const [isStarting, setIsStarting] = useState(false);
   const [isRouteExpired, setIsRouteExpired] = useState(false);
   const [remainingTime, setRemainingTime] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false });
   const [todayFormatted, setTodayFormatted] = useState('');
@@ -451,7 +451,9 @@ export default function RouteManagementPage() {
         if (allPlanClientsCompleted) {
             newStatus = 'Completada';
         } else if (allTodaysClientsCompleted) {
-            newStatus = 'En Progreso';
+            if (newStatus === 'Incompleta') {
+                newStatus = 'En Progreso';
+            }
         }
         
         await updateRoute(selectedRoute.id, { clients: updatedFullList, status: newStatus });
