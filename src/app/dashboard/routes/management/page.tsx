@@ -119,8 +119,18 @@ export default function RouteManagementPage() {
   useEffect(() => {
     if (selectedRoute) {
         setCurrentRouteClientsFull(selectedRoute.clients);
-        if (selectedRoute.status === 'En Progreso') {
-          setIsRouteStarted(true);
+        if (selectedRoute.status === 'En Progreso' || selectedRoute.status === 'Incompleta') {
+          // Si ya hay clientes completados hoy en esta ruta, asumimos que está iniciada hoy
+          const anyCompletedToday = selectedRoute.clients.some(c => {
+              let cDate = c.date;
+              if (cDate instanceof Timestamp) cDate = cDate.toDate();
+              return cDate && isToday(cDate) && c.visitStatus === 'Completado';
+          });
+          if (anyCompletedToday || selectedRoute.status === 'En Progreso') {
+              setIsRouteStarted(true);
+          } else {
+              setIsRouteStarted(false);
+          }
         } else {
           setIsRouteStarted(false);
         }
@@ -373,8 +383,8 @@ export default function RouteManagementPage() {
         let newStatus = selectedRoute.status;
         if (allPlanClientsCompleted) {
             newStatus = 'Completada';
-        } else if (allTodaysClientsCompleted && newStatus === 'Incompleta') {
-            // Si terminó hoy pero no todo el plan, y estaba incompleta, vuelve a En Progreso
+        } else if (allTodaysClientsCompleted) {
+            // Si terminó hoy pero no todo el plan, y estaba incompleta o en progreso, se mantiene/vuelve a En Progreso
             newStatus = 'En Progreso';
         }
         
@@ -402,7 +412,17 @@ export default function RouteManagementPage() {
       setSelectedRouteId(routeId);
       const route = allRoutes.find(r => r.id === routeId);
        if (route?.status === 'En Progreso' || route?.status === 'Incompleta') {
-           setIsRouteStarted(true);
+           // Verificación adicional: ¿Hay gestiones de hoy?
+           const anyCompletedToday = route.clients.some(c => {
+               let cDate = c.date;
+               if (cDate instanceof Timestamp) cDate = cDate.toDate();
+               return cDate && isToday(cDate) && c.visitStatus === 'Completado';
+           });
+           if (anyCompletedToday || route.status === 'En Progreso') {
+               setIsRouteStarted(true);
+           } else {
+               setIsRouteStarted(false);
+           }
        } else {
            setIsRouteStarted(false);
        }
@@ -589,7 +609,7 @@ export default function RouteManagementPage() {
                     <Select onValueChange={handleRouteSelect} value={selectedRouteId} disabled={loading}>
                         <SelectTrigger>
                             <Route className="mr-2 h-4 w-4" />
-                            <SelectValue placeholder="Elige una ruta planificada para hoy" />
+                            <SelectValue placeholder="Elije una ruta planificada para hoy" />
                         </SelectTrigger>
                         <SelectContent>
                             {loading && <SelectItem value="loading" disabled>Cargando rutas...</SelectItem>}
@@ -606,9 +626,23 @@ export default function RouteManagementPage() {
                                         hasClientsForToday
                                     );
                                 })
-                                .map(route => (
-                                    <SelectItem key={route.id} value={route.id}>{route.routeName} ({route.status})</SelectItem>
-                            ))}
+                                .map(route => {
+                                    // Buscar la fecha de los clientes de hoy en esta ruta para mostrarla en el label
+                                    const todayClient = route.clients.find(c => {
+                                        let cDate = c.date;
+                                        if (cDate instanceof Timestamp) cDate = cDate.toDate();
+                                        return cDate && isToday(cDate) && c.status !== 'Eliminado';
+                                    });
+                                    const displayDate = todayClient?.date 
+                                        ? format(todayClient.date instanceof Timestamp ? todayClient.date.toDate() : todayClient.date, 'dd/MM/yyyy', { locale: es }) 
+                                        : '';
+                                    
+                                    return (
+                                        <SelectItem key={route.id} value={route.id}>
+                                            {route.routeName} - {displayDate} ({route.status})
+                                        </SelectItem>
+                                    );
+                                })}
                         </SelectContent>
                     </Select>
                 </div>
