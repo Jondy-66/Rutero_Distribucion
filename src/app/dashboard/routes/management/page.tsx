@@ -167,7 +167,7 @@ export default function RouteManagementPage() {
 
 
   useEffect(() => {
-    if (!selectedRoute || selectedRoute.status !== 'En Progreso') {
+    if (!selectedRoute || (selectedRoute.status !== 'En Progreso' && selectedRoute.status !== 'Incompleta')) {
         setIsRouteExpired(false);
         setRemainingTime({ hours: 0, minutes: 0, seconds: 0, expired: false });
         return;
@@ -185,7 +185,6 @@ export default function RouteManagementPage() {
             if (selectedRoute.status === 'En Progreso') {
                 (async () => {
                     try {
-                        // Solo marcar como incompleta si hay clientes PENDIENTES para HOY
                         const hasPendingToday = currentRouteClientsFull.some(c => {
                             let cDate = c.date;
                             if (cDate instanceof Timestamp) cDate = cDate.toDate();
@@ -200,9 +199,6 @@ export default function RouteManagementPage() {
                               description: `La ruta "${selectedRoute.routeName}" ha sido marcada como incompleta por no finalizar los clientes de hoy.`,
                               variant: "destructive",
                             });
-                        } else {
-                            // Si terminó hoy, simplemente notificamos que expiró el tiempo para añadir extras, pero la ruta sigue En Progreso para mañana.
-                            console.log("Tiempo expirado pero jornada completada. La ruta sigue En Progreso.");
                         }
                     } catch (error) {
                         console.error("Failed to update route state at expiration:", error);
@@ -371,20 +367,21 @@ export default function RouteManagementPage() {
         const allPlanClients = updatedFullList.filter(c => c.status !== 'Eliminado');
         const allPlanClientsCompleted = allPlanClients.length > 0 && allPlanClients.every(c => c.visitStatus === 'Completado');
         
-        let newStatus = selectedRoute.status;
-        if (allPlanClientsCompleted) {
-            newStatus = 'Completada';
-        }
-        
-        await updateRoute(selectedRoute.id, { clients: updatedFullList, status: newStatus });
-        
-        // Sincronizar datos globales
-        await refetchData('routes');
-        setCurrentRouteClientsFull(updatedFullList);
-        
         const todaysClients = updatedFullList.filter(c => c.status !== 'Eliminado' && c.date && isToday(c.date instanceof Timestamp ? c.date.toDate() : c.date));
         const allTodaysClientsCompleted = todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado');
 
+        let newStatus = selectedRoute.status;
+        if (allPlanClientsCompleted) {
+            newStatus = 'Completada';
+        } else if (allTodaysClientsCompleted && newStatus === 'Incompleta') {
+            // Si terminó hoy pero no todo el plan, y estaba incompleta, vuelve a En Progreso
+            newStatus = 'En Progreso';
+        }
+        
+        await updateRoute(selectedRoute.id, { clients: updatedFullList, status: newStatus });
+        await refetchData('routes');
+        setCurrentRouteClientsFull(updatedFullList);
+        
         if (allPlanClientsCompleted) {
             toast({ title: "¡Ruta Finalizada!", description: "Has gestionado todos los clientes de esta ruta." });
         } else if (allTodaysClientsCompleted) {
@@ -404,7 +401,7 @@ export default function RouteManagementPage() {
   const handleRouteSelect = (routeId: string) => {
       setSelectedRouteId(routeId);
       const route = allRoutes.find(r => r.id === routeId);
-       if (route?.status === 'En Progreso') {
+       if (route?.status === 'En Progreso' || route?.status === 'Incompleta') {
            setIsRouteStarted(true);
        } else {
            setIsRouteStarted(false);
@@ -486,13 +483,6 @@ export default function RouteManagementPage() {
     if (numericValue >= 100) return 'bg-green-100 border-green-300 text-green-900 focus-visible:ring-green-500';
     return '';
   };
-  
-  const routeDate = useMemo(() => {
-    if (selectedRoute) {
-        return selectedRoute.date;
-    }
-    return null;
-  }, [selectedRoute]);
   
   const handleViewClientOnMap = (client: Client) => {
     if (isFinite(client.latitud) && isFinite(client.longitud)) {
@@ -623,7 +613,7 @@ export default function RouteManagementPage() {
                     </Select>
                 </div>
                 {selectedRoute && (
-                    <Button onClick={handleStartRoute} disabled={isStarting || !['Planificada', 'Incompleta'].includes(selectedRoute.status)} className="w-full">
+                    <Button onClick={handleStartRoute} disabled={isStarting || !['Planificada', 'Incompleta', 'En Progreso'].includes(selectedRoute.status)} className="w-full">
                         {isStarting && <LoaderCircle className="animate-spin mr-2" />}
                         {selectedRoute.status === 'En Progreso' ? 'Continuar Gestión' : 'Iniciar Ruta'}
                     </Button>
@@ -770,7 +760,7 @@ export default function RouteManagementPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                     {isRouteExpired && (
+                     {isRouteExpired && !activeClient?.visitStatus && activeClient?.checkInTime && (
                         <Alert variant="destructive" className="mb-4">
                             <AlertTriangle className="h-4 w-4" />
                             <AlertTitle>Ruta {selectedRoute?.status === 'Incompleta' ? 'Incompleta' : 'Expirada'}</AlertTitle>
