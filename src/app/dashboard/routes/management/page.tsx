@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -55,7 +55,7 @@ export default function RouteManagementPage() {
   
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
   const [isRouteStarted, setIsRouteStarted] = useState(false);
-  const [isStarting, setIsStarting] = useState(false);
+  const [isStarting, setIsStarting] = false;
   const [isRouteExpired, setIsRouteExpired] = useState(false);
   const [remainingTime, setRemainingTime] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false });
   const [todayFormatted, setTodayFormatted] = useState('');
@@ -82,8 +82,11 @@ export default function RouteManagementPage() {
   const [confirmationAction, setConfirmationAction] = useState<'checkIn' | 'checkOut' | null>(null);
   const [currentTime, setCurrentTime] = useState('');
 
-
   const loading = authLoading;
+
+  // Persistence keys
+  const SELECTION_KEY = user ? `mgmt_selected_route_${user.id}` : null;
+  const DRAFT_KEY = (rid: string, ruc: string) => user ? `mgmt_draft_${user.id}_${rid}_${ruc}` : null;
 
   const selectedRoute = useMemo(() => {
     if (!selectedRouteId) return undefined;
@@ -121,11 +124,20 @@ export default function RouteManagementPage() {
     setTodayFormatted(format(new Date(), "EEEE, d 'de' MMMM", { locale: es }));
   }, []);
 
+  // Load saved route selection
+  useEffect(() => {
+    if (!authLoading && SELECTION_KEY) {
+      const savedId = localStorage.getItem(SELECTION_KEY);
+      if (savedId && allRoutes.some(r => r.id === savedId)) {
+        handleRouteSelect(savedId);
+      }
+    }
+  }, [authLoading, SELECTION_KEY, allRoutes]);
+
   useEffect(() => {
     if (selectedRoute) {
         setCurrentRouteClientsFull(selectedRoute.clients);
         if (selectedRoute.status === 'En Progreso' || selectedRoute.status === 'Incompleta') {
-          // Si ya hay clientes completados hoy en esta ruta, asumimos que está iniciada hoy
           const anyCompletedToday = selectedRoute.clients.some(c => {
               let cDate = c.date;
               if (cDate instanceof Timestamp) cDate = cDate.toDate();
@@ -162,23 +174,73 @@ export default function RouteManagementPage() {
             return {
                 ...(clientDetails || {}),
                 ...clientInRoute,
-                valorVenta: String(clientInRoute.valorVenta || ''),
-                valorCobro: String(clientInRoute.valorCobro || ''),
-                devoluciones: String(clientInRoute.devoluciones || ''),
-                promociones: String(clientInRoute.promociones || ''),
-                medicacionFrecuente: String(clientInRoute.medicacionFrecuente || ''),
+                valorVenta: String(clientInRoute.valorVenta ?? ''),
+                valorCobro: String(clientInRoute.valorCobro ?? ''),
+                devoluciones: String(clientInRoute.devoluciones ?? ''),
+                promociones: String(clientInRoute.promociones ?? ''),
+                medicacionFrecuente: String(clientInRoute.medicacionFrecuente ?? ''),
             } as RouteClient;
         }).filter(c => c.id);
   }, [currentRouteClientsFull, availableClients]);
 
 
    useEffect(() => {
-    const currentClient = routeClients.find(c => c.visitStatus !== 'Completado');
-    setActiveClient(currentClient || null);
+    const nextPendingClient = routeClients.find(c => c.visitStatus !== 'Completado');
     
-    setVisitType(undefined);
-    setCallObservation('');
-  }, [routeClients]);
+    if (nextPendingClient) {
+        // Only switch if current is completed or we don't have one
+        if (!activeClient || activeClient.visitStatus === 'Completado' || activeClient.ruc !== nextPendingClient.ruc) {
+            setActiveClient(nextPendingClient);
+            
+            // Load drafts for this client
+            if (selectedRouteId) {
+                const key = DRAFT_KEY(selectedRouteId, nextPendingClient.ruc);
+                if (key) {
+                    const savedDraft = localStorage.getItem(key);
+                    if (savedDraft) {
+                        try {
+                            const draft = JSON.parse(savedDraft);
+                            setVisitType(draft.visitType);
+                            setCallObservation(draft.callObservation || '');
+                            setActiveClient(prev => prev ? {
+                                ...prev,
+                                valorVenta: draft.valorVenta ?? prev.valorVenta,
+                                valorCobro: draft.valorCobro ?? prev.valorCobro,
+                                devoluciones: draft.devoluciones ?? prev.devoluciones,
+                                promociones: draft.promociones ?? prev.promociones,
+                                medicacionFrecuente: draft.medicacionFrecuente ?? prev.medicacionFrecuente,
+                            } : null);
+                        } catch (e) { console.error("Error parsing draft", e); }
+                    } else {
+                        setVisitType(undefined);
+                        setCallObservation('');
+                    }
+                }
+            }
+        }
+    } else {
+        setActiveClient(null);
+    }
+  }, [routeClients, activeClient?.visitStatus, selectedRouteId]);
+
+  // Save drafts
+  useEffect(() => {
+    if (activeClient && selectedRouteId && !activeClient.visitStatus) {
+        const key = DRAFT_KEY(selectedRouteId, activeClient.ruc);
+        if (key) {
+            const draftData = {
+                visitType,
+                callObservation,
+                valorVenta: activeClient.valorVenta,
+                valorCobro: activeClient.valorCobro,
+                devoluciones: activeClient.devoluciones,
+                promociones: activeClient.promociones,
+                medicacionFrecuente: activeClient.medicacionFrecuente,
+            };
+            localStorage.setItem(key, JSON.stringify(draftData));
+        }
+    }
+  }, [activeClient, visitType, callObservation, selectedRouteId]);
 
 
   useEffect(() => {
@@ -389,7 +451,6 @@ export default function RouteManagementPage() {
         if (allPlanClientsCompleted) {
             newStatus = 'Completada';
         } else if (allTodaysClientsCompleted) {
-            // Si terminó hoy pero no todo el plan, y estaba incompleta o en progreso, se mantiene/vuelve a En Progreso
             newStatus = 'En Progreso';
         }
         
@@ -397,6 +458,10 @@ export default function RouteManagementPage() {
         await refetchData('routes');
         setCurrentRouteClientsFull(updatedFullList);
         
+        // Clear local draft
+        const key = DRAFT_KEY(selectedRoute.id, activeClient.ruc);
+        if (key) localStorage.removeItem(key);
+
         if (allPlanClientsCompleted) {
             toast({ title: "¡Ruta Finalizada!", description: "Has gestionado todos los clientes de esta ruta." });
         } else if (allTodaysClientsCompleted) {
@@ -415,9 +480,11 @@ export default function RouteManagementPage() {
   
   const handleRouteSelect = (routeId: string) => {
       setSelectedRouteId(routeId);
+      if (SELECTION_KEY) {
+          localStorage.setItem(SELECTION_KEY, routeId);
+      }
       const route = allRoutes.find(r => r.id === routeId);
        if (route?.status === 'En Progreso' || route?.status === 'Incompleta') {
-           // Verificación adicional: ¿Hay gestiones de hoy?
            const anyCompletedToday = route.clients.some(c => {
                let cDate = c.date;
                if (cDate instanceof Timestamp) cDate = cDate.toDate();
@@ -632,7 +699,6 @@ export default function RouteManagementPage() {
                                     );
                                 })
                                 .map(route => {
-                                    // Buscar la fecha de los clientes de hoy en esta ruta para mostrarla en el label
                                     const todayClient = route.clients.find(c => {
                                         let cDate = c.date;
                                         if (cDate instanceof Timestamp) cDate = cDate.toDate();
@@ -661,7 +727,6 @@ export default function RouteManagementPage() {
         </Card>
     ) : (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-        {/* Left Column */}
         <div className="lg:col-span-1 flex flex-col gap-6">
             <Card>
                 <CardHeader>
@@ -790,7 +855,6 @@ export default function RouteManagementPage() {
             </Card>
         </div>
 
-        {/* Right Column */}
         <div className="lg:col-span-2">
              <Card>
                 <CardHeader>
@@ -847,7 +911,6 @@ export default function RouteManagementPage() {
                                         <Separator className="my-4" />
 
                                         <div className="space-y-6">
-                                            {/* --- CHECK IN --- */}
                                             <div className="flex items-center gap-4 p-3 rounded-lg bg-muted/50">
                                                 <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">1</div>
                                                 <div className="flex-1">
@@ -867,7 +930,6 @@ export default function RouteManagementPage() {
                                                 )}
                                             </div>
 
-                                            {/* --- VISIT TYPE --- */}
                                             <div className={cn("space-y-4 pl-14 transition-opacity", !activeClient.checkInTime && "opacity-50 pointer-events-none")}>
                                                  <div className="flex items-center gap-4">
                                                      <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">2</div>
@@ -902,7 +964,6 @@ export default function RouteManagementPage() {
                                                 )}
                                             </div>
                                             
-                                            {/* --- DATA INPUT --- */}
                                             <div className={cn("space-y-4 transition-opacity", isFormDisabled && "opacity-50 pointer-events-none")}>
                                                 <div className="flex items-center gap-4">
                                                      <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">3</div>
@@ -939,7 +1000,6 @@ export default function RouteManagementPage() {
                                                 </div>
                                             </div>
                                             
-                                            {/* --- CHECK OUT --- */}
                                             <div className={cn("flex items-center gap-4 p-3 rounded-lg bg-muted/50 transition-opacity", isFormDisabled && "opacity-50 pointer-events-none")}>
                                                 <div className="flex items-center justify-center h-10 w-10 rounded-full bg-primary text-primary-foreground font-bold text-lg">4</div>
                                                 <div className="flex-1">
