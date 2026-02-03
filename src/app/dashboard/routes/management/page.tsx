@@ -275,22 +275,16 @@ export default function RouteManagementPage() {
     if (!destination || !selectedRoute) return;
     if (source.index === destination.index) return;
     
-    // Obtener los clientes de hoy en su nuevo orden
     const items = Array.from(routeClients);
     const [reorderedItem] = items.splice(source.index, 1);
     items.splice(destination.index, 0, reorderedItem);
     
     const reorderedRucs = items.map(i => i.ruc);
 
-    // Reconstruir la lista completa de clientes de la ruta
-    // preservando el orden de los otros días pero actualizando el de hoy
     let todayIdx = 0;
     const finalFullList = currentRouteClientsFull.map(c => {
-        // Si el cliente actual de la lista completa es uno de los de hoy
         if (reorderedRucs.includes(c.ruc)) {
-            // Reemplazarlo por el siguiente en el nuevo orden de hoy
             const newItem = items[todayIdx++];
-            // Solo devolvemos las propiedades del tipo ClientInRoute (sin los detalles del join deavailableClients)
             const { id, ejecutivo, nombre_cliente, status: clientStatus, ...rest } = newItem as any;
             return {
                 ...rest,
@@ -336,7 +330,6 @@ export default function RouteManagementPage() {
             visitStatus: 'Pendiente'
         }));
 
-        // Filtrar los que ya están en la ruta de hoy
         const existingRucs = new Set(routeClients.map(c => c.ruc));
         const filteredNewClients = newClientsInRoute.filter(c => !existingRucs.has(c.ruc));
 
@@ -608,7 +601,7 @@ export default function RouteManagementPage() {
                                     </div>
                                     {!activeClient.checkInTime && (
                                         <Button onClick={handleCheckIn} disabled={isSaving} size="sm" className="shadow-md shrink-0">
-                                            {isSaving ? <LoaderCircle className="animate-spin" /> : "Marcar"}
+                                            {isSaving ? <LoaderCircle className="animate-spin" /> : "Marcar Entrada"}
                                         </Button>
                                     )}
                                 </div>
