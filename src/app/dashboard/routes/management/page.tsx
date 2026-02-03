@@ -634,7 +634,7 @@ export default function RouteManagementPage() {
                                     <h4 className="font-bold text-lg flex items-center gap-2">
                                         <Download className="h-5 w-5 text-primary" /> 3. Datos de la Gestión
                                     </h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                                         <div className="space-y-2">
                                             <Label htmlFor="venta">Valor de Venta ($)</Label>
                                             <div className="relative">
@@ -660,6 +660,20 @@ export default function RouteManagementPage() {
                                                     className="pl-7 h-12 text-lg"
                                                     value={activeClient.valorCobro} 
                                                     onChange={e => handleClientValueChange(activeClient.ruc, 'valorCobro', e.target.value)}
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label htmlFor="devoluciones">Devoluciones ($)</Label>
+                                            <div className="relative">
+                                                <span className="absolute left-3 top-3 text-muted-foreground">$</span>
+                                                <Input 
+                                                    id="devoluciones"
+                                                    type="number" 
+                                                    placeholder="0.00"
+                                                    className="pl-7 h-12 text-lg text-destructive"
+                                                    value={activeClient.devoluciones} 
+                                                    onChange={e => handleClientValueChange(activeClient.ruc, 'devoluciones', e.target.value)}
                                                 />
                                             </div>
                                         </div>
