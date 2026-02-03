@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, GripVertical, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, AlertTriangle, Phone, User, PlusCircle, Download } from 'lucide-react';
+import { Route, Search, GripVertical, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, Download } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan, ClientInRoute } from '@/lib/types';
@@ -13,12 +13,9 @@ import { useToast } from '@/hooks/use-toast';
 import { format, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
-import { MapView } from '@/components/map-view';
-import { isFinite } from 'lodash';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/page-header';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -425,35 +422,41 @@ export default function RouteManagementPage() {
                             Añadir Cliente a la Ruta
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="max-w-2xl">
-                        <DialogHeader>
-                            <DialogTitle>Añadir Cliente a la Ruta de Hoy</DialogTitle>
-                            <DialogDescription>Selecciona un cliente de tu cartera para añadirlo a tu gestión del día.</DialogDescription>
+                    <DialogContent className="w-[95vw] max-w-lg rounded-xl p-4 sm:p-6 overflow-hidden">
+                        <DialogHeader className="mb-4">
+                            <DialogTitle>Añadir Cliente</DialogTitle>
+                            <DialogDescription>Selecciona un cliente de tu cartera.</DialogDescription>
                         </DialogHeader>
                         <div className="relative mb-4">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                             <Input 
-                                placeholder="Buscar por nombre, RUC..." 
-                                className="pl-8" 
+                                placeholder="Buscar cliente..." 
+                                className="pl-9 h-10" 
                                 value={addClientSearchTerm}
                                 onChange={(e) => setAddClientSearchTerm(e.target.value)}
                             />
                         </div>
-                        <ScrollArea className="h-72">
-                            <div className="space-y-2 p-1">
+                        <ScrollArea className="h-[50vh] sm:h-72">
+                            <div className="space-y-2 pr-2">
                                 {filteredAvailableClients.map(client => (
-                                    <div key={client.id} className="flex items-center justify-between p-3 rounded-md hover:bg-muted border border-transparent hover:border-border transition-all gap-4">
-                                        <div className="flex-1 min-w-0 flex flex-col">
-                                            <span className="font-medium truncate">{client.nombre_comercial}</span>
-                                            <span className="text-xs text-muted-foreground uppercase truncate">{client.ruc} - {client.direccion}</span>
+                                    <div key={client.id} className="flex items-center gap-3 p-2 rounded-lg border border-border bg-card hover:bg-accent transition-all">
+                                        <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                                            <span className="font-bold text-sm truncate leading-tight">{client.nombre_comercial}</span>
+                                            <span className="text-[10px] text-muted-foreground uppercase truncate leading-tight">{client.ruc}</span>
+                                            <span className="text-[10px] text-muted-foreground truncate leading-tight italic">{client.direccion}</span>
                                         </div>
-                                        <Button size="sm" variant="secondary" onClick={() => handleAddClientToRoute(client)} disabled={isSaving} className="shrink-0">
+                                        <Button 
+                                            size="sm" 
+                                            onClick={() => handleAddClientToRoute(client)} 
+                                            disabled={isSaving} 
+                                            className="shrink-0 h-8 px-3 text-xs font-bold bg-primary text-primary-foreground"
+                                        >
                                             Añadir
                                         </Button>
                                     </div>
                                 ))}
                                 {filteredAvailableClients.length === 0 && (
-                                    <p className="text-center text-muted-foreground py-8">No se encontraron clientes disponibles.</p>
+                                    <p className="text-center text-muted-foreground py-8 text-sm italic">No se encontraron clientes.</p>
                                 )}
                             </div>
                         </ScrollArea>
@@ -483,7 +486,7 @@ export default function RouteManagementPage() {
                                                     <GripVertical className={cn("h-4 w-4 text-muted-foreground shrink-0", c.visitStatus === 'Completado' && "opacity-0")}/>
                                                     <div className="flex flex-col overflow-hidden">
                                                         <div className="flex items-center gap-2">
-                                                            <span className={cn("font-medium truncate", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
+                                                            <span className={cn("font-medium truncate", i === 0 ? "max-w-[120px]" : "max-w-[150px]", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
                                                             {c.origin === 'manual' && <Badge variant="secondary" className="text-[8px] h-4 bg-blue-100 text-blue-700 hover:bg-blue-100 border-none">Nuevo</Badge>}
                                                         </div>
                                                         <span className="text-[10px] text-muted-foreground uppercase">{c.ruc}</span>
@@ -514,13 +517,13 @@ export default function RouteManagementPage() {
                 <div className="h-2 bg-primary" />
                 <CardHeader>
                     <div className="flex justify-between items-start">
-                        <div>
-                            <CardTitle className="text-2xl">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
-                            {activeClient && <CardDescription>{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
+                        <div className="flex-1 min-w-0 pr-2">
+                            <CardTitle className="text-xl sm:text-2xl truncate">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
+                            {activeClient && <CardDescription className="line-clamp-2">{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
                         </div>
                         {activeClient && (
-                            <Badge variant="outline" className="text-primary border-primary">
-                                <User className="h-3 w-3 mr-1" /> {activeClient.ejecutivo}
+                            <Badge variant="outline" className="text-primary border-primary shrink-0 text-[10px]">
+                                <User className="h-3 w-3 mr-1" /> {activeClient.ejecutivo.split(' ')[0]}
                             </Badge>
                         )}
                     </div>
@@ -532,21 +535,21 @@ export default function RouteManagementPage() {
                                 "p-5 rounded-xl border-2 transition-all",
                                 activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-muted/30 border-dashed border-muted-foreground/30"
                             )}>
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4">
-                                        <div className={cn("p-3 rounded-full", activeClient.checkInTime ? "bg-green-500 text-white" : "bg-muted text-muted-foreground")}>
+                                <div className="flex items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4 min-w-0">
+                                        <div className={cn("p-3 rounded-full shrink-0", activeClient.checkInTime ? "bg-green-500 text-white" : "bg-muted text-muted-foreground")}>
                                             <LogIn className="h-6 w-6" />
                                         </div>
-                                        <div>
-                                            <h4 className="font-bold text-lg">1. Registro de Entrada</h4>
-                                            <p className="text-sm text-muted-foreground">
+                                        <div className="min-w-0">
+                                            <h4 className="font-bold text-base sm:text-lg">1. Registro de Entrada</h4>
+                                            <p className="text-xs sm:text-sm text-muted-foreground truncate">
                                                 {activeClient.checkInTime ? `Marcado a las ${activeClient.checkInTime}` : 'Pendiente de registrar entrada'}
                                             </p>
                                         </div>
                                     </div>
                                     {!activeClient.checkInTime && (
-                                        <Button onClick={handleCheckIn} disabled={isSaving} size="lg" className="shadow-md">
-                                            {isSaving ? <LoaderCircle className="animate-spin" /> : "Marcar Entrada"}
+                                        <Button onClick={handleCheckIn} disabled={isSaving} size="sm" className="shadow-md shrink-0">
+                                            {isSaving ? <LoaderCircle className="animate-spin" /> : "Marcar"}
                                         </Button>
                                     )}
                                 </div>
@@ -564,7 +567,7 @@ export default function RouteManagementPage() {
                                         )}>
                                             <RadioGroupItem value="presencial" className="sr-only" />
                                             <MapPin className={cn("h-6 w-6", visitType === 'presencial' ? "text-primary" : "text-muted-foreground")} />
-                                            <span className="font-semibold">Presencial</span>
+                                            <span className="font-semibold text-sm">Presencial</span>
                                         </Label>
                                         <Label className={cn(
                                             "flex flex-col items-center justify-center gap-2 border-2 p-4 rounded-xl cursor-pointer hover:bg-accent/50 transition-all",
@@ -572,7 +575,7 @@ export default function RouteManagementPage() {
                                         )}>
                                             <RadioGroupItem value="telefonica" className="sr-only" />
                                             <Phone className={cn("h-6 w-6", visitType === 'telefonica' ? "text-primary" : "text-muted-foreground")} />
-                                            <span className="font-semibold">Telefónica</span>
+                                            <span className="font-semibold text-sm">Telefónica</span>
                                         </Label>
                                     </RadioGroup>
                                     {visitType === 'telefonica' && (
@@ -631,7 +634,7 @@ export default function RouteManagementPage() {
                                             disabled={isSaving || !visitType}
                                         >
                                             {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <LogOut className="mr-2 h-6 w-6" />}
-                                            Guardar y Finalizar Visita
+                                            Guardar y Finalizar
                                         </Button>
                                     </div>
                                 </div>
