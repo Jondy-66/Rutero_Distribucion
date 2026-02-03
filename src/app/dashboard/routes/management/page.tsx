@@ -23,7 +23,6 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautiful-dnd';
-import * as XLSX from 'xlsx';
 import { Timestamp, GeoPoint } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 
@@ -35,8 +34,6 @@ export default function RouteManagementPage() {
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
   const [isRouteStarted, setIsRouteStarted] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
-  const [isRouteExpired, setIsRouteExpired] = useState(false);
-  const [remainingTime, setRemainingTime] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false });
   const [todayFormatted, setTodayFormatted] = useState('');
   
   const [currentRouteClientsFull, setCurrentRouteClientsFull] = useState<ClientInRoute[]>([]);
@@ -48,11 +45,9 @@ export default function RouteManagementPage() {
   const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
   const [callObservation, setCallObservation] = useState('');
 
-  // Estados para añadir cliente nuevo
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
   const [addClientSearchTerm, setAddClientSearchTerm] = useState('');
 
-  // Claves de persistencia
   const SELECTION_KEY = user ? `mgmt_selected_route_${user.id}` : null;
   const DRAFT_KEY = (rid: string, ruc: string) => user ? `mgmt_draft_${user.id}_${rid}_${ruc}` : null;
 
@@ -241,20 +236,21 @@ export default function RouteManagementPage() {
             return c;
         });
         
-        const allDone = updated.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
-        const todaysDone = updated.filter(c => {
-            if (c.status === 'Eliminado') return false;
+        const activeClients = updated.filter(c => c.status !== 'Eliminado');
+        const allDone = activeClients.every(c => c.visitStatus === 'Completado');
+        const todaysClients = activeClients.filter(c => {
             let d: Date | null = null;
             if (c.date instanceof Timestamp) d = c.date.toDate();
             else if (c.date instanceof Date) d = c.date;
             else if (c.date) d = new Date(c.date as any);
             return d ? isToday(d) : false;
-        }).every(c => c.visitStatus === 'Completado');
+        });
+        const todaysDone = todaysClients.every(c => c.visitStatus === 'Completado');
 
         let newStatus = selectedRoute.status;
         if (allDone) {
             newStatus = 'Completada';
-        } else if (todaysDone) {
+        } else if (todaysDone && selectedRoute.status === 'Incompleta') {
             newStatus = 'En Progreso';
         }
 
@@ -292,11 +288,7 @@ export default function RouteManagementPage() {
     try {
         await updateRoute(selectedRoute.id, { clients: updatedFull });
         await refetchData('routes');
-    } catch (e) {
-        console.error(e);
-    } finally {
-        setIsSaving(false);
-    }
+    } catch (e) { console.error(e); } finally { setIsSaving(false); }
   };
 
   const handleAddClientToRoute = async (client: Client) => {
@@ -333,9 +325,7 @@ export default function RouteManagementPage() {
     } catch (error) {
         console.error(error);
         toast({ title: "Error", description: "No se pudo añadir el cliente a la ruta.", variant: "destructive" });
-    } finally {
-        setIsSaving(false);
-    }
+    } finally { setIsSaving(false); }
   };
 
   const filteredAvailableClients = useMemo(() => {
@@ -343,7 +333,6 @@ export default function RouteManagementPage() {
     if (user?.role === 'Usuario' || user?.role === 'Telemercaderista') {
       userClients = availableClients.filter(c => c.ejecutivo === user.name);
     }
-    
     return userClients.filter(c => 
         String(c.nombre_cliente).toLowerCase().includes(addClientSearchTerm.toLowerCase()) ||
         String(c.nombre_comercial).toLowerCase().includes(addClientSearchTerm.toLowerCase()) ||
@@ -378,12 +367,19 @@ export default function RouteManagementPage() {
                     <SelectContent>
                         {allRoutes.filter(r => r.createdBy === user?.id && ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada'].includes(r.status))
                             .map(r => {
-                                let d = new Date();
-                                if (r.date instanceof Timestamp) d = r.date.toDate();
-                                else if (r.date instanceof Date) d = r.date;
+                                let dStr = 'N/A';
+                                const todayClient = r.clients.find(c => {
+                                    if (c.status === 'Eliminado' || !c.date) return false;
+                                    const d = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
+                                    return isToday(d);
+                                });
+                                if (todayClient && todayClient.date) {
+                                    const d = todayClient.date instanceof Timestamp ? todayClient.date.toDate() : (todayClient.date instanceof Date ? todayClient.date : new Date(todayClient.date));
+                                    dStr = format(d, 'dd/MM/yyyy');
+                                }
                                 return (
                                     <SelectItem key={r.id} value={r.id}>
-                                        {r.routeName} - {format(d, 'dd/MM/yyyy')} ({r.status})
+                                        {r.routeName} - {dStr} ({r.status})
                                     </SelectItem>
                                 );
                             })
@@ -446,8 +442,8 @@ export default function RouteManagementPage() {
                         <ScrollArea className="h-72">
                             <div className="space-y-2 p-1">
                                 {filteredAvailableClients.map(client => (
-                                    <div key={client.id} className="flex items-center justify-between p-3 rounded-md hover:bg-muted border border-transparent hover:border-border transition-all">
-                                        <div className="flex flex-col overflow-hidden mr-4">
+                                    <div key={client.id} className="flex items-center justify-between p-3 rounded-md hover:bg-muted border border-transparent hover:border-border transition-all gap-4">
+                                        <div className="flex-1 min-w-0 flex flex-col">
                                             <span className="font-medium truncate">{client.nombre_comercial}</span>
                                             <span className="text-xs text-muted-foreground uppercase truncate">{client.ruc} - {client.direccion}</span>
                                         </div>
