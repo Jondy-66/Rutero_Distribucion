@@ -438,7 +438,7 @@ export default function RouteManagementPage() {
                             Añadir Cliente a la Ruta
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="w-[95vw] max-w-lg rounded-xl p-4 sm:p-6 flex flex-col max-h-[90vh]">
+                    <DialogContent className="w-[95vw] max-w-2xl rounded-xl p-4 sm:p-6 flex flex-col h-[85vh]">
                         <DialogHeader className="mb-4">
                             <DialogTitle>Añadir Clientes</DialogTitle>
                             <DialogDescription>Selecciona los clientes que deseas agregar a tu jornada.</DialogDescription>
