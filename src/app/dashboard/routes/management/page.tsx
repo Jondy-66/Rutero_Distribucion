@@ -48,6 +48,10 @@ export default function RouteManagementPage() {
   const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
   const [callObservation, setCallObservation] = useState('');
 
+  // Estados para añadir cliente nuevo
+  const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
+  const [addClientSearchTerm, setAddClientSearchTerm] = useState('');
+
   // Claves de persistencia
   const SELECTION_KEY = user ? `mgmt_selected_route_${user.id}` : null;
   const DRAFT_KEY = (rid: string, ruc: string) => user ? `mgmt_draft_${user.id}_${rid}_${ruc}` : null;
@@ -295,6 +299,58 @@ export default function RouteManagementPage() {
     }
   };
 
+  const handleAddClientToRoute = async (client: Client) => {
+    if (!selectedRoute) return;
+    
+    const isAlreadyInToday = currentRouteClientsFull.some(c => 
+        c.ruc === client.ruc && 
+        c.status !== 'Eliminado' && 
+        c.date && 
+        isToday(c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date)))
+    );
+
+    if (isAlreadyInToday) {
+        toast({ title: "Cliente ya en ruta", description: "Este cliente ya está programado para el día de hoy.", variant: "destructive" });
+        return;
+    }
+
+    setIsSaving(true);
+    try {
+        const newClientInRoute: ClientInRoute = {
+            ruc: client.ruc,
+            nombre_comercial: client.nombre_comercial,
+            date: Timestamp.fromDate(new Date()),
+            origin: 'manual',
+            status: 'Activo',
+            visitStatus: 'Pendiente'
+        };
+
+        const updatedClients = [...currentRouteClientsFull, newClientInRoute];
+        await updateRoute(selectedRoute.id, { clients: updatedClients });
+        await refetchData('routes');
+        toast({ title: "Cliente Añadido", description: `${client.nombre_comercial} ha sido añadido a tu ruta de hoy.` });
+        setIsAddClientDialogOpen(false);
+    } catch (error) {
+        console.error(error);
+        toast({ title: "Error", description: "No se pudo añadir el cliente a la ruta.", variant: "destructive" });
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
+  const filteredAvailableClients = useMemo(() => {
+    let userClients = availableClients;
+    if (user?.role === 'Usuario' || user?.role === 'Telemercaderista') {
+      userClients = availableClients.filter(c => c.ejecutivo === user.name);
+    }
+    
+    return userClients.filter(c => 
+        String(c.nombre_cliente).toLowerCase().includes(addClientSearchTerm.toLowerCase()) ||
+        String(c.nombre_comercial).toLowerCase().includes(addClientSearchTerm.toLowerCase()) ||
+        String(c.ruc).includes(addClientSearchTerm)
+    );
+  }, [availableClients, addClientSearchTerm, user]);
+
   if (authLoading) {
       return (
           <div className="flex flex-col items-center justify-center h-64">
@@ -322,7 +378,9 @@ export default function RouteManagementPage() {
                     <SelectContent>
                         {allRoutes.filter(r => r.createdBy === user?.id && ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada'].includes(r.status))
                             .map(r => {
-                                const d = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date());
+                                let d = new Date();
+                                if (r.date instanceof Timestamp) d = r.date.toDate();
+                                else if (r.date instanceof Date) d = r.date;
                                 return (
                                     <SelectItem key={r.id} value={r.id}>
                                         {r.routeName} - {format(d, 'dd/MM/yyyy')} ({r.status})
@@ -363,6 +421,49 @@ export default function RouteManagementPage() {
                         />
                     </div>
                 </div>
+
+                <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button variant="outline" className="w-full mb-4 border-dashed border-primary text-primary hover:bg-primary/5">
+                            <PlusCircle className="mr-2 h-4 w-4" />
+                            Añadir Cliente a la Ruta
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                            <DialogTitle>Añadir Cliente a la Ruta de Hoy</DialogTitle>
+                            <DialogDescription>Selecciona un cliente de tu cartera para añadirlo a tu gestión del día.</DialogDescription>
+                        </DialogHeader>
+                        <div className="relative mb-4">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input 
+                                placeholder="Buscar por nombre, RUC..." 
+                                className="pl-8" 
+                                value={addClientSearchTerm}
+                                onChange={(e) => setAddClientSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <ScrollArea className="h-72">
+                            <div className="space-y-2 p-1">
+                                {filteredAvailableClients.map(client => (
+                                    <div key={client.id} className="flex items-center justify-between p-3 rounded-md hover:bg-muted border border-transparent hover:border-border transition-all">
+                                        <div className="flex flex-col overflow-hidden mr-4">
+                                            <span className="font-medium truncate">{client.nombre_comercial}</span>
+                                            <span className="text-xs text-muted-foreground uppercase">{client.ruc} - {client.direccion}</span>
+                                        </div>
+                                        <Button size="sm" variant="secondary" onClick={() => handleAddClientToRoute(client)} disabled={isSaving}>
+                                            Añadir
+                                        </Button>
+                                    </div>
+                                ))}
+                                {filteredAvailableClients.length === 0 && (
+                                    <p className="text-center text-muted-foreground py-8">No se encontraron clientes disponibles.</p>
+                                )}
+                            </div>
+                        </ScrollArea>
+                    </DialogContent>
+                </Dialog>
+
                 <Separator className="my-4" />
                 <p className="text-xs font-semibold text-muted-foreground mb-2">ORDEN DE VISITA (Arrastra para reordenar)</p>
                 <DragDropContext onDragEnd={onDragEnd}>
@@ -385,7 +486,10 @@ export default function RouteManagementPage() {
                                                 <div className="flex items-center gap-3 overflow-hidden">
                                                     <GripVertical className={cn("h-4 w-4 text-muted-foreground shrink-0", c.visitStatus === 'Completado' && "opacity-0")}/>
                                                     <div className="flex flex-col overflow-hidden">
-                                                        <span className={cn("font-medium truncate", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className={cn("font-medium truncate", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
+                                                            {c.origin === 'manual' && <Badge variant="secondary" className="text-[8px] h-4 bg-blue-100 text-blue-700 hover:bg-blue-100 border-none">Nuevo</Badge>}
+                                                        </div>
                                                         <span className="text-[10px] text-muted-foreground uppercase">{c.ruc}</span>
                                                     </div>
                                                 </div>
