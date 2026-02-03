@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -283,36 +284,26 @@ export default function RouteManagementPage() {
     if (!destination || !selectedRoute) return;
     if (source.index === destination.index) return;
     
-    // 1. Get today's clients being reordered
-    const items = Array.from(routeClients);
-    const [reorderedItem] = items.splice(source.index, 1);
-    items.splice(destination.index, 0, reorderedItem);
+    // 1. Clonar el orden actual visible (clientes de hoy)
+    const displayedClients = Array.from(routeClients);
+    const [movedClient] = displayedClients.splice(source.index, 1);
+    displayedClients.splice(destination.index, 0, movedClient);
     
-    // 2. Identify the RUCs involved in today's list
-    const todayRucs = new Set(routeClients.map(c => c.ruc));
+    // 2. Crear un mapa del nuevo orden para el grupo de "hoy"
+    const newOrderRucs = displayedClients.map(c => c.ruc);
+    const todayRucsSet = new Set(routeClients.map(c => c.ruc));
     
-    // 3. Find where today's sequence started in the full list
-    let firstTodayIndex = currentRouteClientsFull.findIndex(c => todayRucs.has(c.ruc));
-    if (firstTodayIndex === -1) return;
-
-    // 4. Get other clients (other days or deleted)
-    const otherClients = currentRouteClientsFull.filter(c => !todayRucs.has(c.ruc));
-    
-    // 5. Re-map cleaned items for saving
-    const cleanedItems = items.map(item => {
-        const { id, ejecutivo, nombre_cliente, status: clientStatus, ...rest } = item as any;
-        return {
-            ...rest,
-            status: clientStatus || 'Activo'
-        } as ClientInRoute;
+    // 3. Reconstruir la lista completa respetando las posiciones de los otros días
+    let todayPointer = 0;
+    const finalFullList = currentRouteClientsFull.map(c => {
+        if (todayRucsSet.has(c.ruc)) {
+            const nextRuc = newOrderRucs[todayPointer++];
+            // Buscar la data original en el plan completo para no perder campos
+            const originalData = currentRouteClientsFull.find(oc => oc.ruc === nextRuc);
+            return originalData!;
+        }
+        return c;
     });
-
-    // 6. Build final list maintaining the original "today" position in the full route
-    const finalFullList = [
-        ...otherClients.slice(0, firstTodayIndex),
-        ...cleanedItems,
-        ...otherClients.slice(firstTodayIndex)
-    ];
 
     setIsSaving(true);
     try {
@@ -556,7 +547,7 @@ export default function RouteManagementPage() {
                                                     )}
                                                 >
                                                     <div className="flex items-center gap-3 overflow-hidden">
-                                                        <GripVertical className={cn("h-4 w-4 text-muted-foreground shrink-0", c.visitStatus === 'Completado' && "opacity-0")}/>
+                                                        <GripVertical className={cn("h-4 w-4 text-muted-foreground shrink-0", (c.visitStatus === 'Completado' || isSaving) && "opacity-0")}/>
                                                         <div className="flex flex-col overflow-hidden">
                                                             <div className="flex items-center gap-2">
                                                                 <span className={cn("font-medium truncate", "max-w-[150px]", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
@@ -590,15 +581,18 @@ export default function RouteManagementPage() {
             <Card className="shadow-lg border-primary/10 overflow-hidden">
                 <div className="h-2 bg-primary" />
                 <CardHeader>
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between items-start gap-4">
                         <div className="flex-1 min-w-0 pr-2">
                             <CardTitle className="text-xl sm:text-2xl truncate">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
                             {activeClient && <CardDescription className="line-clamp-2">{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
                         </div>
                         {activeClient && (
-                            <Badge variant="outline" className="text-primary border-primary shrink-0 text-[10px]">
-                                <User className="h-3 w-3 mr-1" /> {activeClient.ejecutivo.split(' ')[0]}
-                            </Badge>
+                            <div className="flex items-center gap-2 border border-primary text-primary rounded-full px-4 py-1.5 shrink-0 bg-white shadow-sm self-start">
+                                <User className="h-4 w-4" />
+                                <span className="text-[11px] font-bold uppercase leading-none tracking-tight">
+                                    {activeClient.ejecutivo}
+                                </span>
+                            </div>
                         )}
                     </div>
                 </CardHeader>
