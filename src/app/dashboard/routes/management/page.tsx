@@ -48,8 +48,6 @@ export default function RouteManagementPage() {
   const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
   const [callObservation, setCallObservation] = useState('');
 
-  const [currentTime, setCurrentTime] = useState('');
-
   // Claves de persistencia
   const SELECTION_KEY = user ? `mgmt_selected_route_${user.id}` : null;
   const DRAFT_KEY = (rid: string, ruc: string) => user ? `mgmt_draft_${user.id}_${rid}_${ruc}` : null;
@@ -63,7 +61,6 @@ export default function RouteManagementPage() {
     setTodayFormatted(format(new Date(), "EEEE, d 'de' MMMM", { locale: es }));
   }, []);
 
-  // Cargar selección guardada al iniciar
   useEffect(() => {
     if (!authLoading && SELECTION_KEY) {
       const savedId = localStorage.getItem(SELECTION_KEY);
@@ -91,7 +88,10 @@ export default function RouteManagementPage() {
     return currentRouteClientsFull
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date ? new Date(c.date) : null);
+            let cDate: Date | null = null;
+            if (c.date instanceof Timestamp) cDate = c.date.toDate();
+            else if (c.date instanceof Date) cDate = c.date;
+            else if (c.date) cDate = new Date(c.date as any);
             return cDate ? isToday(cDate) : false;
         })
         .map(c => {
@@ -108,7 +108,6 @@ export default function RouteManagementPage() {
         }).filter(c => c.id);
   }, [currentRouteClientsFull, availableClients]);
 
-   // Manejo de cliente activo y carga de borradores
    useEffect(() => {
     const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
     if (nextPending) {
@@ -144,7 +143,6 @@ export default function RouteManagementPage() {
     }
   }, [routeClients, selectedRouteId, activeClient?.visitStatus]);
 
-  // Guardar borradores automáticamente
   useEffect(() => {
     if (activeClient && selectedRouteId && !activeClient.visitStatus) {
         const key = DRAFT_KEY(selectedRouteId, activeClient.ruc);
@@ -180,7 +178,6 @@ export default function RouteManagementPage() {
   const handleCheckIn = async () => {
     if (!selectedRoute || !activeClient) return;
     const time = format(new Date(), 'HH:mm:ss');
-    // En una app real aquí obtendríamos la ubicación GPS real
     const location = markerPosition ? new GeoPoint(markerPosition.lat, markerPosition.lng) : null;
     setIsSaving(true);
     try {
@@ -205,6 +202,12 @@ export default function RouteManagementPage() {
     });
   };
 
+  const parseSafeFloat = (val: any) => {
+    if (!val) return 0;
+    const parsed = parseFloat(String(val).replace(/[^0-9.-]/g, ''));
+    return isFinite(parsed) ? parsed : 0;
+  };
+
   const handleConfirmCheckOut = async () => {
     if (!selectedRoute || !activeClient || !visitType) {
         toast({ title: "Atención", description: "Debes seleccionar el tipo de visita.", variant: "destructive" });
@@ -219,39 +222,41 @@ export default function RouteManagementPage() {
             if (c.ruc === activeClient.ruc) {
                 return { 
                     ...c, 
-                    checkOutTime: time, checkOutLocation: location,
+                    checkOutTime: time, 
+                    checkOutLocation: location,
                     visitStatus: 'Completado' as const, 
                     visitType,
-                    valorVenta: parseFloat(activeClient.valorVenta) || 0,
-                    valorCobro: parseFloat(activeClient.valorCobro) || 0,
-                    devoluciones: parseFloat(activeClient.devoluciones) || 0,
-                    promociones: parseFloat(activeClient.promociones) || 0,
-                    medicacionFrecuente: parseFloat(activeClient.medicacionFrecuente) || 0,
-                    callObservation: visitType === 'telefonica' ? callObservation : undefined
+                    valorVenta: parseSafeFloat(activeClient.valorVenta),
+                    valorCobro: parseSafeFloat(activeClient.valorCobro),
+                    devoluciones: parseSafeFloat(activeClient.devoluciones),
+                    promociones: parseSafeFloat(activeClient.promociones),
+                    medicacionFrecuente: parseSafeFloat(activeClient.medicacionFrecuente),
+                    callObservation: visitType === 'telefonica' ? (callObservation || null) : null
                 };
             }
             return c;
         });
         
-        // Verificar si se completó TODA la ruta o solo el día
         const allDone = updated.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
         const todaysDone = updated.filter(c => {
-            const d = c.date instanceof Timestamp ? c.date.toDate() : (c.date ? new Date(c.date) : null);
-            return c.status !== 'Eliminado' && d && isToday(d);
+            if (c.status === 'Eliminado') return false;
+            let d: Date | null = null;
+            if (c.date instanceof Timestamp) d = c.date.toDate();
+            else if (c.date instanceof Date) d = c.date;
+            else if (c.date) d = new Date(c.date as any);
+            return d ? isToday(d) : false;
         }).every(c => c.visitStatus === 'Completado');
 
         let newStatus = selectedRoute.status;
         if (allDone) {
             newStatus = 'Completada';
         } else if (todaysDone) {
-            // Si terminó hoy pero faltan días, vuelve a "En Progreso" (por si estaba en "Incompleta")
             newStatus = 'En Progreso';
         }
 
         await updateRoute(selectedRoute.id, { clients: updated, status: newStatus });
         await refetchData('routes');
         
-        // Limpiar borrador
         const key = DRAFT_KEY(selectedRoute.id, activeClient.ruc);
         if (key) localStorage.removeItem(key);
         
@@ -259,8 +264,8 @@ export default function RouteManagementPage() {
         setVisitType(undefined);
         setCallObservation('');
     } catch(error) { 
-        console.error(error); 
-        toast({ title: "Error", description: "No se pudo guardar la visita.", variant: "destructive" });
+        console.error("Error al guardar visita:", error); 
+        toast({ title: "Error", description: "No se pudo guardar la visita. Revisa los datos ingresados.", variant: "destructive" });
     } finally { 
         setIsSaving(false); 
     }
@@ -274,7 +279,6 @@ export default function RouteManagementPage() {
     const [reorderedItem] = items.splice(source.index, 1);
     items.splice(destination.index, 0, reorderedItem);
     
-    // Reconstruir la lista completa preservando el orden de hoy
     const updatedFull = currentRouteClientsFull.map(c => {
         const match = items.find(i => i.ruc === c.ruc);
         return match ? { ...c, ...match } : c;
@@ -424,7 +428,6 @@ export default function RouteManagementPage() {
                 <CardContent className="space-y-8">
                     {activeClient ? (
                         <div className="space-y-8">
-                            {/* PASO 1: ENTRADA */}
                             <div className={cn(
                                 "p-5 rounded-xl border-2 transition-all",
                                 activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-muted/30 border-dashed border-muted-foreground/30"
@@ -449,7 +452,6 @@ export default function RouteManagementPage() {
                                 </div>
                             </div>
 
-                            {/* PASO 2 Y 3: GESTIÓN */}
                             <div className={cn("space-y-8 transition-all duration-500", !activeClient.checkInTime && "opacity-40 grayscale pointer-events-none")}>
                                 <div className="space-y-4">
                                     <h4 className="font-bold text-lg flex items-center gap-2">
