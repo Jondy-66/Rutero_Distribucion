@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
@@ -36,11 +35,11 @@ export default function RouteManagementPage() {
   const [todayFormatted, setTodayFormatted] = useState('');
   
   const [currentRouteClientsFull, setCurrentRouteClientsFull] = useState<ClientInRoute[]>([]);
-  const [markerPosition, setMarkerPosition] = useState<{ lat: number; lng: number} | null>(null);
   const { toast } = useToast();
   
   const [activeClient, setActiveClient] = useState<RouteClient | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
   const [callObservation, setCallObservation] = useState('');
 
@@ -171,6 +170,30 @@ export default function RouteManagementPage() {
       if (SELECTION_KEY) localStorage.setItem(SELECTION_KEY, routeId);
   }
 
+  const getCurrentLocation = (): Promise<{lat: number, lng: number} | null> => {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) {
+        toast({ title: "Error de Ubicación", description: "Tu navegador no soporta geolocalización.", variant: "destructive" });
+        resolve(null);
+        return;
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          resolve({ lat: position.coords.latitude, lng: position.coords.longitude });
+        },
+        (error) => {
+          console.error("Geolocation error:", error);
+          let msg = "No se pudo obtener tu ubicación actual.";
+          if (error.code === error.PERMISSION_DENIED) msg = "Por favor, permite el acceso a tu ubicación en el navegador para registrar la visita.";
+          toast({ title: "Error de Ubicación", description: msg, variant: "destructive" });
+          resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 8000, maximumAge: 0 }
+      );
+    });
+  };
+
   const handleStartRoute = async () => {
       if (!selectedRoute) return;
       setIsStarting(true);
@@ -184,8 +207,12 @@ export default function RouteManagementPage() {
 
   const handleCheckIn = async () => {
     if (!selectedRoute || !activeClient) return;
+    
+    setIsLocating(true);
+    const locationCoords = await getCurrentLocation();
     const time = format(new Date(), 'HH:mm:ss');
-    const location = markerPosition ? new GeoPoint(markerPosition.lat, markerPosition.lng) : null;
+    const location = locationCoords ? new GeoPoint(locationCoords.lat, locationCoords.lng) : null;
+    
     setIsSaving(true);
     try {
         const updated = currentRouteClientsFull.map(c => 
@@ -199,6 +226,7 @@ export default function RouteManagementPage() {
         toast({ title: "Error", description: "No se pudo registrar la entrada.", variant: "destructive" });
     } finally { 
         setIsSaving(false); 
+        setIsLocating(false);
     }
   };
 
@@ -220,10 +248,14 @@ export default function RouteManagementPage() {
         toast({ title: "Atención", description: "Debes seleccionar el tipo de visita.", variant: "destructive" });
         return;
     }
+
+    setIsLocating(true);
+    const locationCoords = await getCurrentLocation();
+    
     setIsSaving(true);
     try {
         const time = format(new Date(), 'HH:mm:ss');
-        const location = markerPosition ? new GeoPoint(markerPosition.lat, markerPosition.lng) : null;
+        const location = locationCoords ? new GeoPoint(locationCoords.lat, locationCoords.lng) : null;
         
         const updated = currentRouteClientsFull.map(c => {
             if (c.ruc === activeClient.ruc) {
@@ -276,6 +308,7 @@ export default function RouteManagementPage() {
         toast({ title: "Error", description: "No se pudo guardar la visita. Revisa los datos ingresados.", variant: "destructive" });
     } finally { 
         setIsSaving(false); 
+        setIsLocating(false);
     }
   }
 
@@ -284,21 +317,17 @@ export default function RouteManagementPage() {
     if (!destination || !selectedRoute) return;
     if (source.index === destination.index) return;
     
-    // 1. Clonar el orden actual visible (clientes de hoy)
     const displayedClients = Array.from(routeClients);
     const [movedClient] = displayedClients.splice(source.index, 1);
     displayedClients.splice(destination.index, 0, movedClient);
     
-    // 2. Crear un mapa del nuevo orden para el grupo de "hoy"
     const newOrderRucs = displayedClients.map(c => c.ruc);
     const todayRucsSet = new Set(routeClients.map(c => c.ruc));
     
-    // 3. Reconstruir la lista completa respetando las posiciones de los otros días
     let todayPointer = 0;
     const finalFullList = currentRouteClientsFull.map(c => {
         if (todayRucsSet.has(c.ruc)) {
             const nextRuc = newOrderRucs[todayPointer++];
-            // Buscar la data original en el plan completo para no perder campos
             const originalData = currentRouteClientsFull.find(oc => oc.ruc === nextRuc);
             return originalData!;
         }
@@ -616,7 +645,8 @@ export default function RouteManagementPage() {
                                         </div>
                                     </div>
                                     {!activeClient.checkInTime && (
-                                        <Button onClick={handleCheckIn} disabled={isSaving} size="sm" className="shadow-md shrink-0">
+                                        <Button onClick={handleCheckIn} disabled={isSaving || isLocating} size="sm" className="shadow-md shrink-0">
+                                            {isLocating ? <LoaderCircle className="animate-spin mr-2" /> : null}
                                             {isSaving ? <LoaderCircle className="animate-spin" /> : "Marcar Entrada"}
                                         </Button>
                                     )}
@@ -713,8 +743,9 @@ export default function RouteManagementPage() {
                                         <Button 
                                             onClick={handleConfirmCheckOut} 
                                             className="w-full h-14 text-xl font-bold shadow-lg" 
-                                            disabled={isSaving || !visitType}
+                                            disabled={isSaving || !visitType || isLocating}
                                         >
+                                            {isLocating ? <LoaderCircle className="animate-spin mr-2" /> : null}
                                             {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <LogOut className="mr-2 h-6 w-6" />}
                                             Guardar y Finalizar
                                         </Button>
