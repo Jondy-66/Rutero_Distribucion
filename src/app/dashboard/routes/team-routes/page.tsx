@@ -247,7 +247,7 @@ export default function TeamRoutesPage() {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
                                 const canDelete = user?.role === 'Administrador';
                                 const canReactivate = user?.role === 'Administrador' && route.status === 'Incompleta';
-                                const canForceComplete = user?.role === 'Administrador' && route.status === 'En Progreso';
+                                const canForceComplete = user?.role === 'Administrador' && (route.status === 'En Progreso' || route.status === 'Incompleta');
                                
                                 return (
                                 <TableRow key={route.id}>
