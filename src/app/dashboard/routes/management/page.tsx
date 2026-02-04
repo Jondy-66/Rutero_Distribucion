@@ -77,12 +77,38 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
+  // EFECTO DE SINCRONIZACIÓN PROTEGIDA: Fusiona datos del servidor con el estado local
   useEffect(() => {
-    if (selectedRoute && (selectedRoute.id !== lastSyncedRouteId.current || !isSaving)) {
-        setCurrentRouteClientsFull(selectedRoute.clients || []);
-        setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status));
-        lastSyncedRouteId.current = selectedRoute.id;
-    } else if (!selectedRoute) {
+    if (selectedRoute) {
+        if (selectedRoute.id !== lastSyncedRouteId.current) {
+            // Cambio de ruta: Inicialización total
+            setCurrentRouteClientsFull(selectedRoute.clients || []);
+            setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status));
+            lastSyncedRouteId.current = selectedRoute.id;
+        } else if (!isSaving) {
+            // Sincronización en la misma ruta: PROTECCIÓN CONTRA SOBRESCRITURA
+            setCurrentRouteClientsFull(prev => {
+                const serverClients = selectedRoute.clients || [];
+                return serverClients.map(sc => {
+                    const localClient = prev.find(pc => pc.ruc === sc.ruc);
+                    // CRÍTICO: Si localmente ya se gestionó, NO permitir que el servidor lo regrese a pendiente
+                    if (localClient) {
+                        const isLocallyCompleted = localClient.visitStatus === 'Completado';
+                        const isLocallyCheckedIn = !!localClient.checkInTime;
+                        const isServerPending = sc.visitStatus !== 'Completado';
+                        const isServerNoCheckIn = !sc.checkInTime;
+
+                        if ((isLocallyCompleted && isServerPending) || (isLocallyCheckedIn && isServerNoCheckIn)) {
+                            // Mantener los datos locales más avanzados para evitar "borrados" visuales
+                            return { ...sc, ...localClient };
+                        }
+                    }
+                    return sc;
+                });
+            });
+            setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status));
+        }
+    } else {
         setCurrentRouteClientsFull([]);
         setIsRouteStarted(false);
         lastSyncedRouteId.current = undefined;
@@ -90,7 +116,6 @@ export default function RouteManagementPage() {
   }, [selectedRoute, isSaving]);
   
   const routeClients = useMemo(() => {
-    // Se ha eliminado el filtro de fecha hoy para asegurar que todos los clientes de la ruta sean visibles
     return currentRouteClientsFull
         .filter(c => c.status !== 'Eliminado')
         .map(c => {
@@ -195,7 +220,7 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeClient) return;
     
     const time = format(new Date(), 'HH:mm:ss');
-    // Actualización optimista del estado local
+    // Actualización optimista inmediata
     const updated = currentRouteClientsFull.map(c => 
         c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c
     );
@@ -242,7 +267,7 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     const time = format(new Date(), 'HH:mm:ss');
     
-    // Estado optimista local
+    // Estado optimista local para respuesta inmediata
     const optimisticUpdated = currentRouteClientsFull.map(c => {
         if (c.ruc === activeClient.ruc) {
             return { 
@@ -319,6 +344,7 @@ export default function RouteManagementPage() {
     const finalFull = currentRouteClientsFull.map(c => {
         if (activeRucsSet.has(c.ruc)) {
             const nextRuc = newOrderRucs[activePtr++];
+            // Buscar el cliente original para mantener sus datos de gestión (check-in, etc.)
             return currentRouteClientsFull.find(oc => oc.ruc === nextRuc)!;
         }
         return c;
