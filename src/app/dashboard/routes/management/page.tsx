@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
@@ -77,21 +77,17 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // EFECTO DE SINCRONIZACIÓN PROTEGIDA: Fusiona datos del servidor con el estado local
   useEffect(() => {
     if (selectedRoute) {
         if (selectedRoute.id !== lastSyncedRouteId.current) {
-            // Cambio de ruta: Inicialización total
             setCurrentRouteClientsFull(selectedRoute.clients || []);
             setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status));
             lastSyncedRouteId.current = selectedRoute.id;
         } else if (!isSaving) {
-            // Sincronización en la misma ruta: PROTECCIÓN CONTRA SOBRESCRITURA
             setCurrentRouteClientsFull(prev => {
                 const serverClients = selectedRoute.clients || [];
                 return serverClients.map(sc => {
                     const localClient = prev.find(pc => pc.ruc === sc.ruc);
-                    // CRÍTICO: Si localmente ya se gestionó, NO permitir que el servidor lo regrese a pendiente
                     if (localClient) {
                         const isLocallyCompleted = localClient.visitStatus === 'Completado';
                         const isLocallyCheckedIn = !!localClient.checkInTime;
@@ -99,7 +95,6 @@ export default function RouteManagementPage() {
                         const isServerNoCheckIn = !sc.checkInTime;
 
                         if ((isLocallyCompleted && isServerPending) || (isLocallyCheckedIn && isServerNoCheckIn)) {
-                            // Mantener los datos locales más avanzados para evitar "borrados" visuales
                             return { ...sc, ...localClient };
                         }
                     }
@@ -117,7 +112,13 @@ export default function RouteManagementPage() {
   
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
-        .filter(c => c.status !== 'Eliminado')
+        .filter(c => {
+            if (c.status === 'Eliminado') return false;
+            // FILTRO CRÍTICO: Mostrar solo clientes de HOY o clientes ya gestionados/empezados
+            const belongsToToday = c.date ? isToday(c.date) : false;
+            const isManaged = c.visitStatus === 'Completado' || !!c.checkInTime;
+            return belongsToToday || isManaged;
+        })
         .map(c => {
             const details = availableClients.find(ac => ac.ruc === c.ruc);
             return {
@@ -220,7 +221,6 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeClient) return;
     
     const time = format(new Date(), 'HH:mm:ss');
-    // Actualización optimista inmediata
     const updated = currentRouteClientsFull.map(c => 
         c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c
     );
@@ -267,7 +267,6 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     const time = format(new Date(), 'HH:mm:ss');
     
-    // Estado optimista local para respuesta inmediata
     const optimisticUpdated = currentRouteClientsFull.map(c => {
         if (c.ruc === activeClient.ruc) {
             return { 
@@ -344,7 +343,6 @@ export default function RouteManagementPage() {
     const finalFull = currentRouteClientsFull.map(c => {
         if (activeRucsSet.has(c.ruc)) {
             const nextRuc = newOrderRucs[activePtr++];
-            // Buscar el cliente original para mantener sus datos de gestión (check-in, etc.)
             return currentRouteClientsFull.find(oc => oc.ruc === nextRuc)!;
         }
         return c;
@@ -463,14 +461,14 @@ export default function RouteManagementPage() {
             <CardHeader className="pb-3">
                 <CardTitle className="text-xl">{selectedRoute?.routeName}</CardTitle>
                 <div className="mt-1">
-                    <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Gestión en progreso</p>
+                    <p className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Gestión del día</p>
                     <p className="text-primary font-bold text-lg capitalize">{todayFormatted}</p>
                 </div>
             </CardHeader>
             <CardContent>
                 <div className="mb-4">
                     <div className="flex justify-between text-xs mb-1">
-                        <span>Progreso de la Ruta</span>
+                        <span>Progreso de Hoy</span>
                         <span className="font-bold">{routeClients.filter(c => c.visitStatus === 'Completado').length} / {routeClients.length}</span>
                     </div>
                     <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
@@ -523,7 +521,7 @@ export default function RouteManagementPage() {
                 </Dialog>
 
                 <Separator className="my-4" />
-                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Orden de Visita</p>
+                <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wider">Orden de Visita (Hoy)</p>
                 {dndEnabled && (
                     <DragDropContext onDragEnd={onDragEnd}>
                         <Droppable droppableId="clients">
@@ -645,7 +643,7 @@ export default function RouteManagementPage() {
                         <div className="text-center py-16 animate-in zoom-in-95">
                             <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-6" />
                             <h3 className="text-3xl font-bold mb-2">¡Ruta Completada!</h3>
-                            <p className="text-muted-foreground text-lg mb-8">Has gestionado todos los clientes asignados.</p>
+                            <p className="text-muted-foreground text-lg mb-8">Has gestionado todos los clientes asignados para hoy.</p>
                             <Button variant="outline" size="lg" onClick={() => window.location.href='/dashboard'}>Volver al Panel</Button>
                         </div>
                     )}
