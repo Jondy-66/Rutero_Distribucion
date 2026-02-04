@@ -77,24 +77,29 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
+  // EFECTO DE SINCRONIZACIÓN INTELIGENTE: Evita sobreescribir datos locales con datos antiguos del servidor
   useEffect(() => {
     if (selectedRoute) {
         if (selectedRoute.id !== lastSyncedRouteId.current) {
+            // Carga inicial de una nueva ruta
             setCurrentRouteClientsFull(selectedRoute.clients || []);
             setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status));
             lastSyncedRouteId.current = selectedRoute.id;
         } else if (!isSaving) {
+            // Sincronización de datos del servidor para la misma ruta (fusión inteligente)
             setCurrentRouteClientsFull(prev => {
                 const serverClients = selectedRoute.clients || [];
                 return serverClients.map(sc => {
                     const localClient = prev.find(pc => pc.ruc === sc.ruc);
                     if (localClient) {
-                        const isLocallyCompleted = localClient.visitStatus === 'Completado';
+                        // Si el cliente local ya tiene checkIn y el servidor no, mantenemos el local (estado optimista)
+                        // Esto evita que el registro desaparezca antes de que el servidor confirme el guardado
                         const isLocallyCheckedIn = !!localClient.checkInTime;
-                        const isServerPending = sc.visitStatus !== 'Completado';
                         const isServerNoCheckIn = !sc.checkInTime;
+                        const isLocallyCompleted = localClient.visitStatus === 'Completado';
+                        const isServerPending = sc.visitStatus !== 'Completado';
 
-                        if ((isLocallyCompleted && isServerPending) || (isLocallyCheckedIn && isServerNoCheckIn)) {
+                        if ((isLocallyCheckedIn && isServerNoCheckIn) || (isLocallyCompleted && isServerPending)) {
                             return { ...sc, ...localClient };
                         }
                     }
@@ -114,9 +119,7 @@ export default function RouteManagementPage() {
     return currentRouteClientsFull
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            // FILTRO CRÍTICO: Mostrar solo clientes programados para el día de hoy.
-            // Esto oculta automáticamente las gestiones de días anteriores de la semana.
-            // Los que ya se gestionaron hoy seguirán apareciendo porque su fecha es hoy.
+            // FILTRO: Mostrar solo clientes programados para el día de hoy.
             return c.date ? isToday(c.date) : false;
         })
         .map(c => {
@@ -221,10 +224,12 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeClient) return;
     
     const time = format(new Date(), 'HH:mm:ss');
-    const updated = currentRouteClientsFull.map(c => 
+    
+    // ACTUALIZACIÓN OPTIMISTA INMEDIATA EN ESTADO LOCAL
+    const optimisticUpdated = currentRouteClientsFull.map(c => 
         c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c
     );
-    setCurrentRouteClientsFull(updated);
+    setCurrentRouteClientsFull(optimisticUpdated);
     
     setIsLocating(true);
     setIsSaving(true);
@@ -232,14 +237,20 @@ export default function RouteManagementPage() {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
+        // Preparar datos finales para el servidor
         const finalUpdated = currentRouteClientsFull.map(c => 
             c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
         );
         
+        // Guardar en Firestore
         await updateRoute(selectedRoute.id, { clients: finalUpdated });
+        
+        // Refrescar estado global para confirmar sincronización
         await refetchData('routes');
         toast({ title: "Entrada Registrada" });
     } catch (e) { 
+        // Si falla, revertimos el cambio local
+        setCurrentRouteClientsFull(prev => prev.map(c => c.ruc === activeClient.ruc ? { ...c, checkInTime: null } : c));
         console.error(e); 
         toast({ title: "Error", description: "No se pudo registrar la entrada.", variant: "destructive" });
     } finally { 
@@ -267,6 +278,7 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     const time = format(new Date(), 'HH:mm:ss');
     
+    // ACTUALIZACIÓN OPTIMISTA DE FINALIZACIÓN
     const optimisticUpdated = currentRouteClientsFull.map(c => {
         if (c.ruc === activeClient.ruc) {
             return { 
@@ -288,7 +300,7 @@ export default function RouteManagementPage() {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
-        const updated = currentRouteClientsFull.map(c => {
+        const finalUpdated = currentRouteClientsFull.map(c => {
             if (c.ruc === activeClient.ruc) {
                 return { 
                     ...c, 
@@ -305,12 +317,12 @@ export default function RouteManagementPage() {
             return c;
         });
         
-        const activeClients = updated.filter(c => c.status !== 'Eliminado');
+        const activeClients = finalUpdated.filter(c => c.status !== 'Eliminado');
         const allDone = activeClients.every(c => c.visitStatus === 'Completado');
         let newStatus = selectedRoute.status;
         if (allDone) newStatus = 'Completada';
 
-        await updateRoute(selectedRoute.id, { clients: updated, status: newStatus });
+        await updateRoute(selectedRoute.id, { clients: finalUpdated, status: newStatus });
         await refetchData('routes');
         
         const key = DRAFT_KEY(selectedRoute.id, activeClient.ruc);
