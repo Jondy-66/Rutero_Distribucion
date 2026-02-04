@@ -1,5 +1,5 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales optimizada.
+ * @fileoverview Gestión de estado de autenticación y datos globales con enfoque en estabilidad.
  */
 
 'use client';
@@ -50,12 +50,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   const { toast } = useToast();
-  const notificationToastShown = useRef(false);
+  
   const isDataInitialized = useRef(false);
+  const authChecked = useRef(false);
 
-  const fetchInitialData = useCallback(async () => {
-    // Si ya estamos cargando o ya inicializamos, no repetir
-    if (dataLoading || isDataInitialized.current) return;
+  const fetchInitialData = useCallback(async (userId: string) => {
+    if (isDataInitialized.current) return;
     
     setDataLoading(true);
     try {
@@ -75,7 +75,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
         setDataLoading(false);
     }
-  }, [dataLoading]);
+  }, []);
   
   const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'routes' | 'phoneContacts') => {
       try {
@@ -98,54 +98,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
-      // Iniciar estado de carga al detectar cambio de auth
-      setLoading(true);
-      notificationToastShown.current = false;
-      isDataInitialized.current = false;
+    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
       setFirebaseUser(fbUser);
-
+      
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
-        const unsubscribeUser = onSnapshot(userDocRef, 
-          async (userDoc) => {
-            try {
-                if (userDoc.exists()) {
-                  const userData = { id: fbUser.uid, ...userDoc.data() } as User;
-                  setUser(userData);
-                  // Disparar carga de datos pero NO esperar a que termine para quitar el splash
-                  fetchInitialData();
-                  setLoading(false);
-                } else {
-                  // Recuperación manual si onSnapshot falla inicialmente
-                  const secondCheck = await getDoc(userDocRef);
-                  if (secondCheck.exists()) {
-                    const userData = { id: fbUser.uid, ...secondCheck.data() } as User;
-                    setUser(userData);
-                    fetchInitialData();
-                    setLoading(false);
-                  } else {
-                    console.error(`Perfil no encontrado para UID: ${fbUser.uid}`);
-                    toast({
-                      title: "Error de Perfil",
-                      description: "Tu perfil de usuario no se encontró. Por favor, contacta al administrador.",
-                      variant: "destructive",
-                    });
-                    await signOut(auth);
-                    setUser(null);
-                    setLoading(false);
-                  }
-                }
-            } catch (err) {
-                console.error("Error en inicialización de perfil:", err);
-                setLoading(false);
-            }
-          },
-          (error) => {
-            console.error("Firestore user onSnapshot error:", error);
-            setLoading(false);
+        
+        // Carga inicial del perfil
+        try {
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            const userData = { id: fbUser.uid, ...userDoc.data() } as User;
+            setUser(userData);
+            await fetchInitialData(fbUser.uid);
+          } else {
+            console.error("Profile missing");
+            await signOut(auth);
           }
-        );
+        } catch (err) {
+          console.error("Auth init error:", err);
+        }
+
+        // Suscripciones en tiempo real
+        const unsubscribeUser = onSnapshot(userDocRef, (doc) => {
+          if (doc.exists()) setUser({ id: fbUser.uid, ...doc.data() } as User);
+        });
 
         const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', fbUser.uid));
         const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
@@ -157,39 +134,34 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             
             notificationsData.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
             setNotifications(notificationsData);
-
-             const unread = notificationsData.filter(n => !n.read).length;
-             if (unread > 0 && !notificationToastShown.current) {
-                toast({ title: "Notificaciones", description: `Tienes ${unread} sin leer.` });
-                notificationToastShown.current = true;
-             }
         });
 
+        setLoading(false);
         return () => {
             unsubscribeUser();
             unsubscribeNotifications();
         };
       } else {
         setUser(null);
-        setFirebaseUser(null);
         setClients([]);
         setUsers([]);
         setRoutes([]);
         setPhoneContacts([]);
         setNotifications([]);
+        isDataInitialized.current = false;
         setLoading(false);
       }
     });
 
     return () => unsubscribeAuth();
-  }, [toast, fetchInitialData]);
+  }, [fetchInitialData]);
 
   return (
     <AuthContext.Provider value={{ 
         user, 
         firebaseUser, 
-        loading, // Ahora solo depende del perfil crítico
-        dataLoading, // Para que componentes individuales muestren skeletons
+        loading,
+        dataLoading,
         clients, 
         users, 
         routes,
