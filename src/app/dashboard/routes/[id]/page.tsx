@@ -567,11 +567,11 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                                                 <>
                                                     <div className="space-y-2">
                                                         <Label htmlFor={`promociones-${client.ruc}`}>Promociones ($)</Label>
-                                                        <Input id={`promociones-${client.ruc}`} type="text" placeholder="0.00" value={client.promociones ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'promociones', e.target.value)} disabled={isFormDisabled} />
+                                                        <Input id={`promociones-${client.ruc}`} type="text" placeholder="0.00" value={client.promociones ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'promociones', e.target.value)} disabled={isFormDisabled} />
                                                     </div>
                                                     <div className="space-y-2">
                                                         <Label htmlFor={`medicacionFrecuente-${client.ruc}`}>Medicación Frecuente ($)</Label>
-                                                        <Input id={`medicacionFrecuente-${client.ruc}`} type="text" placeholder="0.00" value={client.medicacionFrecuente ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'medicacionFrecuente', e.target.value)} disabled={isFormDisabled} />
+                                                        <Input id={`medicacionFrecuente-${client.ruc}`} type="text" placeholder="0.00" value={client.medicacionFrecuente ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'medicacionFrecuente', e.target.value)} disabled={isFormDisabled} />
                                                     </div>
                                                 </>
                                             )}

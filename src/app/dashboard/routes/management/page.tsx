@@ -36,15 +36,12 @@ export default function RouteManagementPage() {
   const [isStarting, setIsStarting] = useState(false);
   const [todayFormatted, setTodayFormatted] = useState('');
   
+  // ESTADO MAESTRO LOCAL: Fuente de verdad para la interfaz
   const [currentRouteClientsFull, setCurrentRouteClientsFull] = useState<ClientInRoute[]>([]);
-  const [activeClient, setActiveClient] = useState<RouteClient | null>(null);
+  const [activeRuc, setActiveRuc] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   
-  // Estado local instantáneo para inputs y selectores
-  const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
-  const [callObservation, setCallObservation] = useState('');
-
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
   const [addClientSearchTerm, setAddClientSearchTerm] = useState('');
   const [multiSelectedClients, setMultiSelectedClients] = useState<Client[]>([]);
@@ -63,7 +60,6 @@ export default function RouteManagementPage() {
   }, []);
 
   const SELECTION_KEY = user ? `mgmt_selected_route_${user.id}` : null;
-  const DRAFT_KEY = (rid: string, ruc: string) => user ? `mgmt_draft_${user.id}_${rid}_${ruc}` : null;
 
   const selectedRoute = useMemo(() => {
     if (!selectedRouteId) return undefined;
@@ -87,11 +83,10 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // MOTOR DE SINCRONIZACIÓN BLINDADO: Protege el registro local contra sobreescrituras del servidor
+  // MOTOR DE SINCRONIZACIÓN BLINDADO: Fusiona datos del servidor protegiendo los locales
   useEffect(() => {
     if (!selectedRoute) return;
 
-    // Si cambiamos de ruta, reseteamos todo el estado local
     if (selectedRoute.id !== lastSyncedRouteId.current) {
         setCurrentRouteClientsFull(selectedRoute.clients || []);
         setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(selectedRoute.status));
@@ -99,7 +94,6 @@ export default function RouteManagementPage() {
         return;
     }
 
-    // Si NO estamos guardando, fusionamos inteligentemente los datos del servidor
     if (!isSaving) {
         setCurrentRouteClientsFull(prev => {
             const serverClients = selectedRoute.clients || [];
@@ -108,28 +102,26 @@ export default function RouteManagementPage() {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
                 if (!server) return local; 
 
-                // Lógica de Escudo Local:
-                // Si el servidor trae null o vacío en gestión pero nosotros tenemos algo local, MANTENEMOS lo local.
-                const finalCheckIn = server.checkInTime || local.checkInTime;
-                const finalStatus = (server.visitStatus === 'Completado' || local.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
-                const finalCheckOut = server.checkOutTime || local.checkOutTime;
+                // Lógica de Escudo Local: Prioriza datos locales si existen
+                const finalCheckIn = local.checkInTime || server.checkInTime;
+                const finalStatus = (local.visitStatus === 'Completado' || server.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
+                const finalCheckOut = local.checkOutTime || server.checkOutTime;
 
                 return { 
                     ...server, 
                     checkInTime: finalCheckIn,
-                    checkInLocation: server.checkInLocation || local.checkInLocation,
+                    checkInLocation: local.checkInLocation || server.checkInLocation,
                     checkOutTime: finalCheckOut,
-                    checkOutLocation: server.checkOutLocation || local.checkOutLocation,
-                    visitStatus: finalStatus,
-                    visitType: server.visitType || local.visitType,
-                    callObservation: server.callObservation || local.callObservation,
-                    valorVenta: server.valorVenta ?? local.valorVenta,
-                    valorCobro: server.valorCobro ?? local.valorCobro,
-                    devoluciones: server.devoluciones ?? local.devoluciones,
+                    checkOutLocation: local.checkOutLocation || server.checkOutLocation,
+                    visitStatus: finalStatus as any,
+                    visitType: local.visitType || server.visitType,
+                    callObservation: local.callObservation || server.callObservation,
+                    valorVenta: local.valorVenta ?? server.valorVenta,
+                    valorCobro: local.valorCobro ?? server.valorCobro,
+                    devoluciones: local.devoluciones ?? server.devoluciones,
                 };
             });
 
-            // Añadir clientes que el servidor tenga y nosotros no
             serverClients.forEach(sc => {
                 if (!updated.find(u => u.ruc === sc.ruc)) {
                     updated.push(sc);
@@ -147,10 +139,14 @@ export default function RouteManagementPage() {
     return map;
   }, [availableClients]);
   
-  // FILTRO: Solo clientes de HOY para la jornada activa
+  // FILTRO: Solo clientes de HOY para la jornada activa (o los que ya tienen gestión)
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
-        .filter(c => c.status !== 'Eliminado' && (c.date ? isToday(c.date) : false))
+        .filter(c => c.status !== 'Eliminado' && (
+            (c.date ? isToday(c.date) : false) || 
+            c.checkInTime || 
+            c.visitStatus === 'Completado'
+        ))
         .map(c => {
             const details = clientsMap.get(c.ruc);
             return {
@@ -165,64 +161,32 @@ export default function RouteManagementPage() {
                 longitud: details?.longitud || 0,
                 status: details?.status || 'active',
                 ...c,
-                valorVenta: String(c.valorVenta ?? ''),
-                valorCobro: String(c.valorCobro ?? ''),
-                devoluciones: String(c.devoluciones ?? ''),
             } as RouteClient;
         });
   }, [currentRouteClientsFull, clientsMap, user]);
 
-  // Manejo de Cliente Activo y Borradores
+  // Manejo de Cliente Activo
   useEffect(() => {
-    const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
-    if (nextPending) {
-        if (!activeClient || activeClient.ruc !== nextPending.ruc) {
-            setActiveClient(nextPending);
-            if (selectedRouteId) {
-                const key = DRAFT_KEY(selectedRouteId, nextPending.ruc);
-                if (key) {
-                    const saved = localStorage.getItem(key);
-                    if (saved) {
-                        try {
-                            const draft = JSON.parse(saved);
-                            setVisitType(draft.visitType);
-                            setCallObservation(draft.callObservation || '');
-                        } catch (e) { console.error(e); }
-                    } else {
-                        setVisitType(undefined);
-                        setCallObservation('');
-                    }
-                }
-            }
-        }
-    } else {
-        setActiveClient(null);
+    if (!activeRuc && routeClients.length > 0) {
+        const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
+        if (nextPending) setActiveRuc(nextPending.ruc);
     }
-  }, [routeClients, selectedRouteId, activeClient?.ruc]);
+  }, [routeClients, activeRuc]);
+
+  const activeClient = useMemo(() => {
+    return routeClients.find(c => c.ruc === activeRuc) || null;
+  }, [routeClients, activeRuc]);
 
   const handleRouteSelect = (routeId: string) => {
       setSelectedRouteId(routeId);
       if (SELECTION_KEY) localStorage.setItem(SELECTION_KEY, routeId);
   };
 
-  const handleVisitTypeChange = (type: 'presencial' | 'telefonica') => {
-    setVisitType(type);
-    if (selectedRouteId && activeClient) {
-        const key = DRAFT_KEY(selectedRouteId, activeClient.ruc);
-        if (key) {
-            localStorage.setItem(key, JSON.stringify({ visitType: type, callObservation }));
-        }
-    }
-  };
-
-  const handleObservationChange = (obs: string) => {
-    setCallObservation(obs);
-    if (selectedRouteId && activeClient) {
-        const key = DRAFT_KEY(selectedRouteId, activeClient.ruc);
-        if (key) {
-            localStorage.setItem(key, JSON.stringify({ visitType, callObservation: obs }));
-        }
-    }
+  const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
+    if (!activeRuc) return;
+    setCurrentRouteClientsFull(prev => prev.map(c => 
+        c.ruc === activeRuc ? { ...c, [field]: value } : c
+    ));
   };
 
   const getCurrentLocation = (): Promise<{lat: number, lng: number} | null> => {
@@ -247,16 +211,12 @@ export default function RouteManagementPage() {
       } catch (error) { console.error(error); } finally { setIsStarting(false); }
   }
 
-  // REGISTRO DE ENTRADA (Check-in) CON ACTUALIZACIÓN OPTIMISTA
   const handleCheckIn = async () => {
     if (!selectedRoute || !activeClient) return;
     const time = format(new Date(), 'HH:mm:ss');
     
-    // 1. Actualización local inmediata para bloquear el botón
-    const locallyUpdated = currentRouteClientsFull.map(c => 
-        c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c
-    );
-    setCurrentRouteClientsFull(locallyUpdated);
+    // Actualización local inmediata
+    handleFieldChange('checkInTime', time);
     
     setIsLocating(true);
     setIsSaving(true);
@@ -264,12 +224,11 @@ export default function RouteManagementPage() {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
-        // 2. Preparar datos finales para el servidor
-        const finalClientsForServer = locallyUpdated.map(c => 
-            c.ruc === activeClient.ruc ? { ...c, checkInLocation: location } : c
+        const updatedClients = currentRouteClientsFull.map(c => 
+            c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
         );
         
-        await updateRoute(selectedRoute.id, { clients: finalClientsForServer });
+        await updateRoute(selectedRoute.id, { clients: updatedClients });
         await refetchData('routes');
         toast({ title: "Entrada Registrada" });
     } catch (e) { 
@@ -282,7 +241,7 @@ export default function RouteManagementPage() {
   };
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || !activeClient || !visitType) {
+    if (!selectedRoute || !activeClient || !activeClient.visitType) {
         toast({ title: "Atención", description: "Selecciona el tipo de visita.", variant: "destructive" });
         return;
     }
@@ -296,17 +255,14 @@ export default function RouteManagementPage() {
             return { 
                 ...c, 
                 checkOutTime: time, 
-                visitStatus: 'Completado' as const, 
-                visitType,
-                callObservation: visitType === 'telefonica' ? callObservation : null,
-                valorVenta: parseFloat(activeClient.valorVenta) || 0,
-                valorCobro: parseFloat(activeClient.valorCobro) || 0,
-                devoluciones: parseFloat(activeClient.devoluciones) || 0,
+                visitStatus: 'Completado' as const,
+                valorVenta: parseFloat(String(c.valorVenta)) || 0,
+                valorCobro: parseFloat(String(c.valorCobro)) || 0,
+                devoluciones: parseFloat(String(c.devoluciones)) || 0,
             };
         }
         return c;
     });
-    setCurrentRouteClientsFull(updatedLocally);
 
     try {
         const coords = await getCurrentLocation();
@@ -322,12 +278,8 @@ export default function RouteManagementPage() {
         await updateRoute(selectedRoute.id, { clients: finalWithLocation, status: newStatus });
         await refetchData('routes');
         
-        const key = DRAFT_KEY(selectedRoute.id, activeClient.ruc);
-        if (key) localStorage.removeItem(key);
-        
         toast({ title: "Visita Finalizada" });
-        setVisitType(undefined);
-        setCallObservation('');
+        setActiveRuc(null); // Esto forzará al useEffect a buscar el siguiente pendiente
     } catch(e) { 
         console.error(e); 
         toast({ title: "Error al finalizar visita", variant: "destructive" });
@@ -493,7 +445,13 @@ export default function RouteManagementPage() {
                                     {routeClients.map((c, i) => (
                                         <Draggable key={c.ruc} draggableId={c.ruc} index={i} isDragDisabled={c.visitStatus === 'Completado' || isSaving}>
                                             {(p) => (
-                                                <div ref={p.innerRef} {...p.draggableProps} {...p.dragHandleProps} className={cn("flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm", activeClient?.ruc === c.ruc ? "ring-2 ring-primary" : "hover:border-primary/30", c.visitStatus === 'Completado' && "bg-green-50/50 border-green-200")}>
+                                                <div 
+                                                    ref={p.innerRef} 
+                                                    {...p.draggableProps} 
+                                                    {...p.dragHandleProps} 
+                                                    onClick={() => setActiveRuc(c.ruc)}
+                                                    className={cn("flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer", activeRuc === c.ruc ? "ring-2 ring-primary" : "hover:border-primary/30", c.visitStatus === 'Completado' && "bg-green-50/50 border-green-200")}
+                                                >
                                                     <div className="flex items-center gap-3 overflow-hidden flex-1">
                                                         <GripVertical className={cn("h-4 w-4 text-muted-foreground shrink-0", (c.visitStatus === 'Completado' || isSaving) && "opacity-0")}/>
                                                         <div className="min-w-0 flex-1">
@@ -560,31 +518,31 @@ export default function RouteManagementPage() {
                             <div className={cn("space-y-8 transition-all duration-300", !activeClient.checkInTime && "opacity-40 pointer-events-none")}>
                                 <div className="space-y-4">
                                     <h4 className="font-bold text-lg flex items-center gap-2"><Phone className="h-5 w-5 text-primary" /> 2. Tipo de Visita</h4>
-                                    <RadioGroup onValueChange={(v: any) => handleVisitTypeChange(v)} value={visitType} className="grid grid-cols-2 gap-4">
-                                        <Label className={cn("flex flex-col items-center justify-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", visitType === 'presencial' ? "border-primary bg-primary/5 scale-95" : "hover:border-primary/20")}>
+                                    <RadioGroup onValueChange={(v: any) => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4">
+                                        <Label className={cn("flex flex-col items-center justify-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 scale-95" : "hover:border-primary/20")}>
                                             <RadioGroupItem value="presencial" className="sr-only" />
-                                            <MapPin className={cn("h-6 w-6", visitType === 'presencial' ? "text-primary" : "text-muted-foreground")} />
+                                            <MapPin className={cn("h-6 w-6", activeClient.visitType === 'presencial' ? "text-primary" : "text-muted-foreground")} />
                                             <span className="font-semibold text-sm">Presencial</span>
                                         </Label>
-                                        <Label className={cn("flex flex-col items-center justify-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", visitType === 'telefonica' ? "border-primary bg-primary/5 scale-95" : "hover:border-primary/20")}>
+                                        <Label className={cn("flex flex-col items-center justify-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 scale-95" : "hover:border-primary/20")}>
                                             <RadioGroupItem value="telefonica" className="sr-only" />
-                                            <Phone className={cn("h-6 w-6", visitType === 'telefonica' ? "text-primary" : "text-muted-foreground")} />
+                                            <Phone className={cn("h-6 w-6", activeClient.visitType === 'telefonica' ? "text-primary" : "text-muted-foreground")} />
                                             <span className="font-semibold text-sm">Telefónica</span>
                                         </Label>
                                     </RadioGroup>
-                                    {visitType === 'telefonica' && (
-                                        <Textarea placeholder="Resultado de la llamada..." value={callObservation} onChange={e => handleObservationChange(e.target.value)} className="animate-in fade-in slide-in-from-top-2" />
+                                    {activeClient.visitType === 'telefonica' && (
+                                        <Textarea placeholder="Resultado de la llamada..." value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} className="animate-in fade-in slide-in-from-top-2" />
                                     )}
                                 </div>
 
                                 <div className="space-y-4">
                                     <h4 className="font-bold text-lg flex items-center gap-2"><LogIn className="h-5 w-5 text-primary" /> 3. Datos de la Gestión</h4>
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                                        <div className="space-y-2"><Label>Venta ($)</Label><Input type="number" placeholder="0.00" value={activeClient.valorVenta} onChange={e => setActiveClient(prev => prev ? {...prev, valorVenta: e.target.value} : null)}/></div>
-                                        <div className="space-y-2"><Label>Cobro ($)</Label><Input type="number" placeholder="0.00" value={activeClient.valorCobro} onChange={e => setActiveClient(prev => prev ? {...prev, valorCobro: e.target.value} : null)}/></div>
-                                        <div className="space-y-2"><Label>Devoluciones ($)</Label><Input type="number" placeholder="0.00" value={activeClient.devoluciones} onChange={e => setActiveClient(prev => prev ? {...prev, devoluciones: e.target.value} : null)}/></div>
+                                        <div className="space-y-2"><Label>Venta ($)</Label><Input type="number" placeholder="0.00" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)}/></div>
+                                        <div className="space-y-2"><Label>Cobro ($)</Label><Input type="number" placeholder="0.00" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)}/></div>
+                                        <div className="space-y-2"><Label>Devoluciones ($)</Label><Input type="number" placeholder="0.00" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)}/></div>
                                     </div>
-                                    <Button onClick={handleConfirmCheckOut} className="w-full h-14 text-xl font-bold mt-4 shadow-lg" disabled={isSaving || !visitType || isLocating}>
+                                    <Button onClick={handleConfirmCheckOut} className="w-full h-14 text-xl font-bold mt-4 shadow-lg" disabled={isSaving || !activeClient.visitType || isLocating}>
                                         {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <LogOut className="mr-2 h-6 w-6" />}
                                         Finalizar Visita
                                     </Button>
