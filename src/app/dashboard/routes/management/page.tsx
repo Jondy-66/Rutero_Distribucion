@@ -23,6 +23,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from 'react-beautif
 import { Timestamp, GeoPoint } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Progress } from '@/components/ui/progress';
 
 type RouteClient = Client & ClientInRoute;
 
@@ -94,10 +95,12 @@ export default function RouteManagementPage() {
                         const isLocallyCompleted = local.visitStatus === 'Completado';
                         const isServerCompleted = sc.visitStatus === 'Completado';
 
+                        // BLINDAJE: Si localmente ya gestionamos algo, no permitimos que el servidor lo borre
                         if ((hasLocalCheckIn && !hasServerCheckIn) || (isLocallyCompleted && !isServerCompleted)) {
                             return { ...sc, ...local };
                         }
                         
+                        // Si es un cliente re-añadido hoy pero el servidor aún lo ve como eliminado
                         const isLocallyActiveToday = local.status === 'Activo' && local.date && isToday(local.date);
                         if (isLocallyActiveToday && sc.status === 'Eliminado') {
                             return { ...sc, ...local };
