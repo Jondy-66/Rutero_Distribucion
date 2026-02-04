@@ -1,7 +1,5 @@
-
-
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, use } from 'react';
 import { notFound, useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -24,7 +22,8 @@ import type { Client } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
 
-export default function EditClientPage({ params: { id: clientId } }: { params: { id: string } }) {
+export default function EditClientPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: clientId } = use(params);
   const router = useRouter();
   const { toast } = useToast();
   const { refetchData } = useAuth();

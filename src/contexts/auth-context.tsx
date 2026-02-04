@@ -51,13 +51,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   const isDataInitialized = useRef(false);
 
-  // Carga granular para no bloquear la UI
   const fetchInitialData = useCallback(async () => {
     if (isDataInitialized.current) return;
     setDataLoading(true);
     
     try {
-        // Ejecutamos en paralelo pero actualizamos de forma independiente para mayor fluidez
         const loadUsers = getUsers().then(data => setUsers(data));
         const loadClients = getClients().then(data => setClients(data));
         const loadRoutes = getRoutes().then(data => setRoutes(data.map(transformRouteDates)));
@@ -111,7 +109,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
         
-        // Listener en tiempo real para el perfil del usuario (prioridad alta)
         const unsubscribeUser = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
             const userData = { id: fbUser.uid, ...doc.data() } as User;

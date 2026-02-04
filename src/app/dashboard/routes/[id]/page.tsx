@@ -1,7 +1,5 @@
-
-
 'use client';
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter, notFound } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -48,11 +46,11 @@ const generateTimeSlots = (startHour: number, endHour: number, interval: number,
 const startTimeSlots = generateTimeSlots(8, 18, 30);
 const endTimeSlots = generateTimeSlots(8, 18, 30, 30);
 
-export default function EditRoutePage({ params }: { params: { id: string } }) {
+export default function EditRoutePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: routeId } = use(params);
   const router = useRouter();
   const { toast } = useToast();
   const { user: currentUser, users, clients, loading: authLoading, refetchData } = useAuth();
-  const routeId = params.id;
 
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [clientsInRoute, setClientsInRoute] = useState<ClientInRoute[]>([]);
@@ -72,22 +70,16 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
-    // Admin can edit unless it's completed
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
-    
-    // The user who created it can edit if it's 'Planificada' (and it's a predicted route or a normal draft) or 'Rechazada'
     const isOwner = currentUser.id === route.createdBy;
     const isEditableStatus = route.status === 'Planificada' || route.status === 'Rechazada';
-    
     return isOwner && isEditableStatus;
 }, [currentUser, route]);
 
 
   const canApprove = useMemo(() => {
      if (!currentUser || !route) return false;
-     // Admin can always approve/reject.
      if (currentUser.role === 'Administrador' && route.status === 'Pendiente de Aprobación') return true;
-     // Supervisor can approve/reject if they are the assigned supervisor.
      return currentUser.id === route.supervisorId && route.status === 'Pendiente de Aprobación';
   }, [currentUser, route]);
 
@@ -99,7 +91,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         const routeData = await getRoute(routeId);
         if (routeData) {
           setRoute(routeData);
-          // Initialize clientsInRoute only once from the fetched route data
           setClientsInRoute(routeData.clients || []);
         } else {
           notFound();
@@ -131,9 +122,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
 
   useEffect(() => {
     if (isClientDialogOpen) {
-      // Get RUCs of clients currently in the route list (excluding those marked as 'Eliminado')
       const currentRucsInRoute = new Set(clientsInRoute.filter(c => c.status !== 'Eliminado').map(c => c.ruc));
-      // Pre-select clients in the dialog if they are already in the main list
       const clientsToSelect = clients.filter(c => currentRucsInRoute.has(c.ruc));
       setDialogSelectedClients(clientsToSelect);
     }
@@ -157,7 +146,7 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
     e.preventDefault();
     if (!route || !currentUser) return;
 
-    if (!newStatus) { // Only validate if saving, not when approving/rejecting
+    if (!newStatus) {
         if (!route.routeName || clientsInRoute.filter(c => c.status !== 'Eliminado').length === 0 || !route.supervisorId) {
             toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente activo.', variant: 'destructive' });
             return;
@@ -198,7 +187,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
                 link: `/dashboard/routes/${routeId}`
             });
         } else if (newStatus === 'Planificada' || newStatus === 'Rechazada') {
-            // Send notification to the user who created the route for approval/rejection
             await addNotification({
                 userId: route.createdBy,
                 title: `Ruta ${newStatus === 'Planificada' ? 'Aprobada' : 'Rechazada'}`,
@@ -219,7 +207,6 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
       if (newStatus) {
         router.push('/dashboard/routes');
       } else {
-        // After a save, refresh the local state from the updated data to avoid inconsistencies
         const updatedRouteData = await getRoute(routeId);
         if (updatedRouteData) {
             setRoute(updatedRouteData);
@@ -247,17 +234,13 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   };
 
   const handleConfirmClientSelection = () => {
-    // Create a map of existing clients in the route for quick lookup
     const existingClientsMap = new Map(clientsInRoute.map(c => [c.ruc, c]));
     
-    // Process clients selected in the dialog
     const newClientsList = dialogSelectedClients.map(selectedClient => {
         const existingClientData = existingClientsMap.get(selectedClient.ruc);
         if (existingClientData) {
-            // If client already exists, keep its data but ensure its status is 'Activo'
             return { ...existingClientData, status: 'Activo' as const };
         }
-        // If it's a new client, create a default structure
         return {
             ruc: selectedClient.ruc,
             nombre_comercial: selectedClient.nombre_comercial,
@@ -267,19 +250,16 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
         };
     });
 
-    // Identify clients that were in the original list but are no longer selected
     const unselectedClients = clientsInRoute.filter(originalClient => 
         !dialogSelectedClients.some(selectedClient => selectedClient.ruc === originalClient.ruc)
     );
 
-    // Mark unselected clients as 'Eliminado' instead of removing them completely
     const markedAsRemoved = unselectedClients.map(client => ({
         ...client,
         status: 'Eliminado' as const,
         removalObservation: client.removalObservation || 'Eliminado de la lista',
     }));
     
-    // Combine the newly confirmed list with the ones marked for removal
     setClientsInRoute([...newClientsList, ...markedAsRemoved]);
     setIsClientDialogOpen(false);
 };
@@ -301,15 +281,13 @@ export default function EditRoutePage({ params }: { params: { id: string } }) {
   }
   
     const filteredAvailableClients = useMemo(() => {
-    // Return all clients that belong to the user (if 'Usuario') or all clients (if 'Admin'/'Supervisor')
     const userClients = clients.filter(c => {
       if (currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista') {
         return c.ejecutivo === currentUser.name;
       }
-      return true; // Admin/Supervisor can see all
+      return true;
     });
 
-    // Then, filter by search term
     return userClients.filter(c => {
       const searchTermLower = dialogSearchTerm.toLowerCase();
       return (

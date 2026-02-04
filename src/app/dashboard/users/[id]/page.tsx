@@ -1,7 +1,5 @@
-
-
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, use } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,7 +28,8 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
 import { PasswordInput } from '@/components/password-input';
 
-export default function UserProfilePage({ params }: { params: { id: string } }) {
+export default function UserProfilePage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: userId } = use(params);
   const router = useRouter();
   const { toast } = useToast();
   const { user: currentUser, users, loading: authLoading, refetchData } = useAuth();
@@ -46,8 +45,8 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   useEffect(() => {
-    if (users.length > 0 && params.id) {
-        const userData = users.find(u => u.id === params.id);
+    if (users.length > 0 && userId) {
+        const userData = users.find(u => u.id === userId);
         if (!userData) {
             notFound();
             return;
@@ -63,7 +62,7 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
             });
         }
     }
-  }, [params.id, users]);
+  }, [userId, users]);
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,10 +71,9 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     try {
       const dataToUpdate: Partial<User> = {
         role: user.role,
-        status: user.status || 'active', // Ensure status is never undefined
+        status: user.status || 'active',
       };
 
-      // Solo un admin puede cambiar nombre y correo
       if(currentUser?.role === 'Administrador') {
         dataToUpdate.name = user.name;
         dataToUpdate.email = user.email;
@@ -85,7 +83,6 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
         dataToUpdate.supervisorId = user.supervisorId;
       }
       
-      // Si el estado se cambia a activo, reseteamos los intentos fallidos
       if (user.status === 'active') {
           dataToUpdate.failedLoginAttempts = 0;
       }
@@ -93,7 +90,6 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
       await updateUser(user.id, dataToUpdate);
       await refetchData('users');
       toast({ title: "Éxito", description: "Usuario actualizado correctamente." });
-      // No redirigimos para que el admin pueda seguir gestionando
     } catch (error: any) {
       console.error(error);
       if (error.code === 'permission-denied') {
@@ -336,5 +332,3 @@ export default function UserProfilePage({ params }: { params: { id: string } }) 
     </>
   );
 }
-
-    

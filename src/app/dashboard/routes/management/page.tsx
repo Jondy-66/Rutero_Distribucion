@@ -77,7 +77,6 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // Sincronización Blindada: Fusión de datos mejorada para dar prioridad a acciones locales (Check-In)
   useEffect(() => {
     if (selectedRoute) {
         if (selectedRoute.id !== lastSyncedRouteId.current) {
@@ -90,17 +89,15 @@ export default function RouteManagementPage() {
                 const merged = serverClients.map(sc => {
                     const local = prev.find(pc => pc.ruc === sc.ruc);
                     if (local) {
-                        // REGLA DE ORO: Si localmente ya tiene entrada o está completado, NO sobrescribir con datos viejos del servidor
                         const hasLocalCheckIn = !!local.checkInTime;
                         const hasServerCheckIn = !!sc.checkInTime;
                         const isLocallyCompleted = local.visitStatus === 'Completado';
                         const isServerCompleted = sc.visitStatus === 'Completado';
 
                         if ((hasLocalCheckIn && !hasServerCheckIn) || (isLocallyCompleted && !isServerCompleted)) {
-                            return { ...sc, ...local }; // Mantener versión local más avanzada
+                            return { ...sc, ...local };
                         }
                         
-                        // Si localmente está activo para hoy, mantenerlo así
                         const isLocallyActiveToday = local.status === 'Activo' && local.date && isToday(local.date);
                         if (isLocallyActiveToday && sc.status === 'Eliminado') {
                             return { ...sc, ...local };
@@ -108,7 +105,6 @@ export default function RouteManagementPage() {
                     }
                     return sc;
                 });
-                // Añadir clientes que aún no llegan al servidor (optimistas)
                 const optimisticAdds = prev.filter(pc => !serverClients.some(sc => sc.ruc === pc.ruc));
                 return [...merged, ...optimisticAdds];
             });
@@ -173,7 +169,6 @@ export default function RouteManagementPage() {
                 }
             }
         } else {
-            // Sincronizar cambios en el cliente activo (como el checkInTime recién marcado)
             const updatedActive = routeClients.find(c => c.ruc === activeClient.ruc);
             if (updatedActive && (updatedActive.checkInTime !== activeClient.checkInTime || updatedActive.visitStatus !== activeClient.visitStatus)) {
                 setActiveClient(updatedActive);
@@ -215,11 +210,9 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeClient) return;
     const time = format(new Date(), 'HH:mm:ss');
     
-    // UI INSTANTÁNEA (FUNCIONAL): Actualizamos el estado local antes de llamar a la base de datos
     setCurrentRouteClientsFull(prev => {
         const updated = prev.map(c => c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c);
         
-        // Llamada asíncrona pero sin bloquear la UI
         (async () => {
             setIsLocating(true);
             setIsSaving(true);
@@ -252,7 +245,6 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     setIsSaving(true);
 
-    // UI Instantánea
     setCurrentRouteClientsFull(prev => {
         const updated = prev.map(c => {
             if (c.ruc === activeClient.ruc) {
@@ -269,7 +261,6 @@ export default function RouteManagementPage() {
             return c;
         });
 
-        // Proceso de guardado
         (async () => {
             try {
                 const coords = await getCurrentLocation();
@@ -480,7 +471,7 @@ export default function RouteManagementPage() {
                 <CardHeader>
                     <div className="flex justify-between items-start gap-4">
                         <div className="flex-1 min-w-0">
-                            <CardTitle className="text-xl sm:text-2xl">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
+                            <CardTitle className="text-xl sm:text-2xl break-words">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
                             {activeClient && <CardDescription className="whitespace-normal break-words">{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
                         </div>
                         {activeClient && (
