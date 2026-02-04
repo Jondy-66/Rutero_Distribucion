@@ -77,10 +77,9 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // Sync with global state only when necessary to avoid overwriting local optimistic updates
   useEffect(() => {
     if (selectedRoute && (selectedRoute.id !== lastSyncedRouteId.current || !isSaving)) {
-        setCurrentRouteClientsFull(selectedRoute.clients);
+        setCurrentRouteClientsFull(selectedRoute.clients || []);
         setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status));
         lastSyncedRouteId.current = selectedRoute.id;
     } else if (!selectedRoute) {
@@ -91,19 +90,23 @@ export default function RouteManagementPage() {
   }, [selectedRoute, isSaving]);
   
   const routeClients = useMemo(() => {
+    // Hemos eliminado el filtro isToday para asegurar que todos los clientes de la ruta seleccionada sean visibles
     return currentRouteClientsFull
-        .filter(c => {
-            if (c.status === 'Eliminado') return false;
-            let cDate: Date | null = null;
-            if (c.date instanceof Timestamp) cDate = c.date.toDate();
-            else if (c.date instanceof Date) cDate = c.date;
-            else if (c.date) cDate = new Date(c.date as any);
-            return cDate ? isToday(cDate) : false;
-        })
+        .filter(c => c.status !== 'Eliminado')
         .map(c => {
             const details = availableClients.find(ac => ac.ruc === c.ruc);
             return {
-                ...(details || {}),
+                // Fallback a datos de la ruta si los detalles maestros aún no cargan
+                id: details?.id || c.ruc,
+                ejecutivo: details?.ejecutivo || user?.name || '',
+                nombre_cliente: details?.nombre_cliente || c.nombre_comercial,
+                nombre_comercial: c.nombre_comercial,
+                direccion: details?.direccion || 'Dirección no disponible',
+                provincia: details?.provincia || '',
+                canton: details?.canton || '',
+                latitud: details?.latitud || 0,
+                longitud: details?.longitud || 0,
+                status: details?.status || 'active',
                 ...c,
                 valorVenta: String(c.valorVenta ?? ''),
                 valorCobro: String(c.valorCobro ?? ''),
@@ -111,8 +114,8 @@ export default function RouteManagementPage() {
                 promociones: String(c.promociones ?? ''),
                 medicacionFrecuente: String(c.medicacionFrecuente ?? ''),
             } as RouteClient;
-        }).filter(c => c.id);
-  }, [currentRouteClientsFull, availableClients]);
+        });
+  }, [currentRouteClientsFull, availableClients, user]);
 
    useEffect(() => {
     const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
@@ -194,8 +197,6 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     
     const time = format(new Date(), 'HH:mm:ss');
-    
-    // Update locally first for immediate feedback
     const updated = currentRouteClientsFull.map(c => 
         c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c
     );
@@ -206,7 +207,6 @@ export default function RouteManagementPage() {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
-        // Final data with location
         const finalUpdated = currentRouteClientsFull.map(c => 
             c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
         );
@@ -242,7 +242,6 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     const time = format(new Date(), 'HH:mm:ss');
     
-    // Optimistic local update
     const optimisticUpdated = currentRouteClientsFull.map(c => {
         if (c.ruc === activeClient.ruc) {
             return { 
@@ -313,18 +312,17 @@ export default function RouteManagementPage() {
     displayed.splice(destination.index, 0, moved);
     
     const newOrderRucs = displayed.map(c => c.ruc);
-    const todayRucsSet = new Set(routeClients.map(c => c.ruc));
+    const activeRucsSet = new Set(routeClients.map(c => c.ruc));
     
-    let todayPtr = 0;
+    let activePtr = 0;
     const finalFull = currentRouteClientsFull.map(c => {
-        if (todayRucsSet.has(c.ruc)) {
-            const nextRuc = newOrderRucs[todayPtr++];
+        if (activeRucsSet.has(c.ruc)) {
+            const nextRuc = newOrderRucs[activePtr++];
             return currentRouteClientsFull.find(oc => oc.ruc === nextRuc)!;
         }
         return c;
     });
 
-    // Optimistic update
     setCurrentRouteClientsFull(finalFull);
 
     setIsSaving(true);
@@ -360,7 +358,6 @@ export default function RouteManagementPage() {
     
     if (filtered.length > 0) {
         const updatedFull = [...currentRouteClientsFull, ...filtered];
-        // Optimistic update
         setCurrentRouteClientsFull(updatedFull);
         
         setIsSaving(true);
@@ -402,12 +399,12 @@ export default function RouteManagementPage() {
 
   return (
     <>
-    <PageHeader title="Gestión de Ruta" description="Gestiona tus visitas del día de forma eficiente."/>
+    <PageHeader title="Gestión de Ruta" description="Gestiona tus visitas de forma eficiente."/>
     {!isRouteStarted ? (
         <Card className="max-w-2xl mx-auto shadow-lg border-primary/20">
             <CardHeader>
-                <CardTitle>Selecciona una Ruta para Hoy</CardTitle>
-                <CardDescription>Elije la ruta que vas a gestionar en esta jornada.</CardDescription>
+                <CardTitle>Selecciona una Ruta</CardTitle>
+                <CardDescription>Elije la ruta que vas a gestionar.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
                 <Select onValueChange={handleRouteSelect} value={selectedRouteId}>
@@ -446,7 +443,7 @@ export default function RouteManagementPage() {
             <CardContent>
                 <div className="mb-4">
                     <div className="flex justify-between text-xs mb-1">
-                        <span>Progreso del día</span>
+                        <span>Progreso de la Ruta</span>
                         <span className="font-bold">{routeClients.filter(c => c.visitStatus === 'Completado').length} / {routeClients.length}</span>
                     </div>
                     <div className="h-2 w-full bg-muted rounded-full overflow-hidden">
@@ -467,7 +464,7 @@ export default function RouteManagementPage() {
                     <DialogContent className="w-[95vw] max-w-2xl rounded-xl p-4 flex flex-col h-[80vh]">
                         <DialogHeader className="mb-4">
                             <DialogTitle>Añadir Clientes</DialogTitle>
-                            <DialogDescription>Selecciona los clientes adicionales para hoy.</DialogDescription>
+                            <DialogDescription>Selecciona los clientes adicionales.</DialogDescription>
                         </DialogHeader>
                         <div className="relative mb-4">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -539,7 +536,7 @@ export default function RouteManagementPage() {
                 <CardHeader>
                     <div className="flex justify-between items-start gap-4">
                         <div className="flex-1 min-w-0 pr-2">
-                            <CardTitle className="text-xl sm:text-2xl truncate">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
+                            <CardTitle className="text-xl sm:text-2xl truncate">{activeClient ? activeClient.nombre_comercial : 'Ruta Finalizada'}</CardTitle>
                             {activeClient && <CardDescription className="line-clamp-2">{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
                         </div>
                         {activeClient && (
@@ -620,8 +617,8 @@ export default function RouteManagementPage() {
                     ) : (
                         <div className="text-center py-16 animate-in zoom-in-95">
                             <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-6" />
-                            <h3 className="text-3xl font-bold mb-2">¡Todo listo por hoy!</h3>
-                            <p className="text-muted-foreground text-lg mb-8">Has completado todas las visitas programadas.</p>
+                            <h3 className="text-3xl font-bold mb-2">¡Ruta Completada!</h3>
+                            <p className="text-muted-foreground text-lg mb-8">Has gestionado todos los clientes asignados.</p>
                             <Button variant="outline" size="lg" onClick={() => window.location.href='/dashboard'}>Volver al Panel</Button>
                         </div>
                     )}
