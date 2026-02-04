@@ -41,7 +41,7 @@ export default function RouteManagementPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   
-  // Estado local para evitar lag en la selección
+  // Estado local instantáneo
   const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
   const [callObservation, setCallObservation] = useState('');
 
@@ -70,7 +70,7 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // CARGA INICIAL: Recuperar ruta activa de LocalStorage
+  // CARGA INICIAL: Recuperar ruta activa
   useEffect(() => {
     if (!authLoading && isInitialMount.current && SELECTION_KEY) {
       const savedId = localStorage.getItem(SELECTION_KEY);
@@ -78,8 +78,7 @@ export default function RouteManagementPage() {
         const found = allRoutes.find(r => r.id === savedId);
         if (found) {
           setSelectedRouteId(savedId);
-          // Si la ruta ya estaba en progreso o incompleta, saltamos directamente a la gestión
-          if (['En Progreso', 'Incompleta'].includes(found.status)) {
+          if (['En Progreso', 'Incompleta', 'Completada'].includes(found.status)) {
             setIsRouteStarted(true);
           }
         }
@@ -88,33 +87,47 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // SINCRONIZACIÓN: Mantener los datos locales frescos pero sin borrar gestiones activas
+  // MOTOR DE SINCRONIZACIÓN BLINDADO: Protege el registro local contra sobreescrituras del servidor
   useEffect(() => {
-    if (selectedRoute) {
-        if (selectedRoute.id !== lastSyncedRouteId.current) {
-            setCurrentRouteClientsFull(selectedRoute.clients || []);
-            setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status));
-            lastSyncedRouteId.current = selectedRoute.id;
-        } else if (!isSaving) {
-            setCurrentRouteClientsFull(prev => {
-                const serverClients = selectedRoute.clients || [];
-                return serverClients.map(sc => {
-                    const local = prev.find(pc => pc.ruc === sc.ruc);
-                    if (local) {
-                        const hasLocalCheckIn = !!local.checkInTime;
-                        const hasServerCheckIn = !!sc.checkInTime;
-                        const isLocallyCompleted = local.visitStatus === 'Completado';
-                        const isServerCompleted = sc.visitStatus === 'Completado';
+    if (!selectedRoute) return;
 
-                        // PRIORIDAD LOCAL: Si ya gestionamos algo aquí, no dejamos que el servidor lo resetee
-                        if ((hasLocalCheckIn && !hasServerCheckIn) || (isLocallyCompleted && !isServerCompleted)) {
-                            return { ...sc, ...local };
-                        }
-                    }
-                    return sc;
-                });
+    if (selectedRoute.id !== lastSyncedRouteId.current) {
+        setCurrentRouteClientsFull(selectedRoute.clients || []);
+        setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(selectedRoute.status));
+        lastSyncedRouteId.current = selectedRoute.id;
+        return;
+    }
+
+    if (!isSaving) {
+        setCurrentRouteClientsFull(prev => {
+            const serverClients = selectedRoute.clients || [];
+            
+            // Mapeamos sobre el estado LOCAL para preservar cambios que el servidor aún no conoce
+            const updated = prev.map(local => {
+                const server = serverClients.find(sc => sc.ruc === local.ruc);
+                if (!server) return local; // Es un cliente nuevo añadido localmente
+
+                const localHasMgmt = !!local.checkInTime || local.visitStatus === 'Completado';
+                const serverHasMgmt = !!server.checkInTime || server.visitStatus === 'Completado';
+
+                // ESCUDO: Si tenemos entrada local pero el servidor no, MANTENEMOS la local
+                if (localHasMgmt && !serverHasMgmt) {
+                    return local;
+                }
+
+                // De lo contrario, fusionamos priorizando los datos del servidor (por si hubo cambios en otros campos)
+                return { ...local, ...server };
             });
-        }
+
+            // Añadir clientes que el servidor tenga y nosotros no (ej. sincronización de otro dispositivo)
+            serverClients.forEach(sc => {
+                if (!updated.find(u => u.ruc === sc.ruc)) {
+                    updated.push(sc);
+                }
+            });
+
+            return updated;
+        });
     }
   }, [selectedRoute, isSaving]);
 
@@ -124,6 +137,7 @@ export default function RouteManagementPage() {
     return map;
   }, [availableClients]);
   
+  // FILTRO: Solo clientes de HOY
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
         .filter(c => c.status !== 'Eliminado' && (c.date ? isToday(c.date) : false))
@@ -148,7 +162,7 @@ export default function RouteManagementPage() {
         });
   }, [currentRouteClientsFull, clientsMap, user]);
 
-  // Manejo de Borradores Locales para velocidad instantánea
+  // Manejo de Borradores de Gestión
   useEffect(() => {
     const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
     if (nextPending) {
@@ -227,7 +241,7 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeClient) return;
     const time = format(new Date(), 'HH:mm:ss');
     
-    // UI Instantánea
+    // UI Instantánea y Blindada
     setCurrentRouteClientsFull(prev => prev.map(c => c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c));
     
     setIsLocating(true);
@@ -236,6 +250,7 @@ export default function RouteManagementPage() {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
+        // Actualizamos localmente con la ubicación antes de enviar al servidor
         const finalClients = currentRouteClientsFull.map(c => 
             c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
         );
@@ -337,16 +352,31 @@ export default function RouteManagementPage() {
     if (!selectedRoute || multiSelectedClients.length === 0) return;
     const todayDate = new Date();
     const updatedFullList = [...currentRouteClientsFull];
-    let added = 0;
 
     for (const selected of multiSelectedClients) {
         const idx = updatedFullList.findIndex(c => c.ruc === selected.ruc);
         if (idx !== -1) {
-            updatedFullList[idx] = { ...updatedFullList[idx], date: todayDate, status: 'Activo', origin: 'manual', visitStatus: 'Pendiente', checkInTime: null, checkOutTime: null };
+            // REACTIVAR: Si ya existía (eliminado o en otro día), lo traemos a hoy y activo
+            updatedFullList[idx] = { 
+                ...updatedFullList[idx], 
+                date: todayDate, 
+                status: 'Activo', 
+                origin: 'manual', 
+                visitStatus: 'Pendiente', 
+                checkInTime: null, 
+                checkOutTime: null 
+            };
         } else {
-            updatedFullList.push({ ruc: selected.ruc, nombre_comercial: selected.nombre_comercial, date: todayDate, origin: 'manual', status: 'Activo', visitStatus: 'Pendiente' });
+            // NUEVO: Totalmente nuevo en esta ruta
+            updatedFullList.push({ 
+                ruc: selected.ruc, 
+                nombre_comercial: selected.nombre_comercial, 
+                date: todayDate, 
+                origin: 'manual', 
+                status: 'Activo', 
+                visitStatus: 'Pendiente' 
+            });
         }
-        added++;
     }
     
     setCurrentRouteClientsFull(updatedFullList);
@@ -424,7 +454,10 @@ export default function RouteManagementPage() {
                                         setMultiSelectedClients(prev => prev.some(c => c.ruc === client.ruc) ? prev.filter(c => c.ruc !== client.ruc) : [...prev, client]);
                                     }}>
                                         <Checkbox checked={multiSelectedClients.some(c => c.ruc === client.ruc)} />
-                                        <div className="min-w-0"><p className="font-bold text-sm">{client.nombre_comercial}</p><p className="text-[10px] text-muted-foreground uppercase">{client.ruc}</p></div>
+                                        <div className="min-w-0 flex-1">
+                                            <p className="font-bold text-sm whitespace-normal leading-tight">{client.nombre_comercial}</p>
+                                            <p className="text-[10px] text-muted-foreground uppercase">{client.ruc} - {client.nombre_cliente}</p>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -446,17 +479,17 @@ export default function RouteManagementPage() {
                                         <Draggable key={c.ruc} draggableId={c.ruc} index={i} isDragDisabled={c.visitStatus === 'Completado' || isSaving}>
                                             {(p) => (
                                                 <div ref={p.innerRef} {...p.draggableProps} {...p.dragHandleProps} className={cn("flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm", activeClient?.ruc === c.ruc ? "ring-2 ring-primary" : "hover:border-primary/30", c.visitStatus === 'Completado' && "bg-green-50/50 border-green-200")}>
-                                                    <div className="flex items-center gap-3 overflow-hidden">
+                                                    <div className="flex items-center gap-3 overflow-hidden flex-1">
                                                         <GripVertical className={cn("h-4 w-4 text-muted-foreground shrink-0", (c.visitStatus === 'Completado' || isSaving) && "opacity-0")}/>
-                                                        <div className="min-w-0">
-                                                            <div className="flex items-center gap-2 flex-wrap">
-                                                                <span className={cn("font-medium break-words leading-tight", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
+                                                        <div className="min-w-0 flex-1">
+                                                            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                                                                <span className={cn("font-medium break-words leading-tight whitespace-normal", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
                                                                 {c.origin === 'manual' && <Badge variant="secondary" className="text-[8px] h-4 bg-blue-100 text-blue-700">Nuevo</Badge>}
                                                             </div>
                                                             <span className="text-[10px] text-muted-foreground">{c.ruc}</span>
                                                         </div>
                                                     </div>
-                                                    {c.visitStatus === 'Completado' ? <CheckCircle className="h-5 w-5 text-green-500" /> : <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">#{i + 1}</span>}
+                                                    {c.visitStatus === 'Completado' ? <CheckCircle className="h-5 w-5 text-green-500 shrink-0 ml-2" /> : <span className="text-[10px] font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0 ml-2">#{i + 1}</span>}
                                                 </div>
                                             )}
                                         </Draggable>
@@ -476,7 +509,7 @@ export default function RouteManagementPage() {
                 <CardHeader>
                     <div className="flex justify-between items-start gap-4">
                         <div className="flex-1 min-w-0">
-                            <CardTitle className="text-xl sm:text-2xl break-words leading-tight">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
+                            <CardTitle className="text-xl sm:text-2xl break-words leading-tight whitespace-normal">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
                             {activeClient && <CardDescription className="whitespace-normal break-words mt-1">{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
                         </div>
                         {activeClient && (
