@@ -114,10 +114,10 @@ export default function RouteManagementPage() {
     return currentRouteClientsFull
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            // FILTRO CRÍTICO: Mostrar solo clientes de HOY o clientes ya gestionados/empezados
-            const belongsToToday = c.date ? isToday(c.date) : false;
-            const isManaged = c.visitStatus === 'Completado' || !!c.checkInTime;
-            return belongsToToday || isManaged;
+            // FILTRO CRÍTICO: Mostrar solo clientes programados para el día de hoy.
+            // Esto oculta automáticamente las gestiones de días anteriores de la semana.
+            // Los que ya se gestionaron hoy seguirán apareciendo porque su fecha es hoy.
+            return c.date ? isToday(c.date) : false;
         })
         .map(c => {
             const details = availableClients.find(ac => ac.ruc === c.ruc);
@@ -210,7 +210,7 @@ export default function RouteManagementPage() {
       if (!selectedRoute) return;
       setIsStarting(true);
       try {
-          await updateRoute(selectedRoute.id, { status: 'En Progreso' });
+          await updateRoute(selectedRoute.id, { status: 'En Pregreso' });
           await refetchData('routes');
           setIsRouteStarted(true);
           toast({ title: "Ruta Iniciada" });
