@@ -40,6 +40,8 @@ export default function RouteManagementPage() {
   const [activeClient, setActiveClient] = useState<RouteClient | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  
+  // Estado local para evitar lag en la selección
   const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
   const [callObservation, setCallObservation] = useState('');
 
@@ -68,16 +70,25 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
+  // CARGA INICIAL: Recuperar ruta activa de LocalStorage
   useEffect(() => {
     if (!authLoading && isInitialMount.current && SELECTION_KEY) {
       const savedId = localStorage.getItem(SELECTION_KEY);
-      if (savedId && allRoutes.some(r => r.id === savedId)) {
-        setSelectedRouteId(savedId);
+      if (savedId) {
+        const found = allRoutes.find(r => r.id === savedId);
+        if (found) {
+          setSelectedRouteId(savedId);
+          // Si la ruta ya estaba en progreso o incompleta, saltamos directamente a la gestión
+          if (['En Progreso', 'Incompleta'].includes(found.status)) {
+            setIsRouteStarted(true);
+          }
+        }
       }
       isInitialMount.current = false;
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
+  // SINCRONIZACIÓN: Mantener los datos locales frescos pero sin borrar gestiones activas
   useEffect(() => {
     if (selectedRoute) {
         if (selectedRoute.id !== lastSyncedRouteId.current) {
@@ -87,7 +98,7 @@ export default function RouteManagementPage() {
         } else if (!isSaving) {
             setCurrentRouteClientsFull(prev => {
                 const serverClients = selectedRoute.clients || [];
-                const merged = serverClients.map(sc => {
+                return serverClients.map(sc => {
                     const local = prev.find(pc => pc.ruc === sc.ruc);
                     if (local) {
                         const hasLocalCheckIn = !!local.checkInTime;
@@ -95,28 +106,15 @@ export default function RouteManagementPage() {
                         const isLocallyCompleted = local.visitStatus === 'Completado';
                         const isServerCompleted = sc.visitStatus === 'Completado';
 
-                        // BLINDAJE: Si localmente ya gestionamos algo, no permitimos que el servidor lo borre
+                        // PRIORIDAD LOCAL: Si ya gestionamos algo aquí, no dejamos que el servidor lo resetee
                         if ((hasLocalCheckIn && !hasServerCheckIn) || (isLocallyCompleted && !isServerCompleted)) {
-                            return { ...sc, ...local };
-                        }
-                        
-                        // Si es un cliente re-añadido hoy pero el servidor aún lo ve como eliminado
-                        const isLocallyActiveToday = local.status === 'Activo' && local.date && isToday(local.date);
-                        if (isLocallyActiveToday && sc.status === 'Eliminado') {
                             return { ...sc, ...local };
                         }
                     }
                     return sc;
                 });
-                const optimisticAdds = prev.filter(pc => !serverClients.some(sc => sc.ruc === pc.ruc));
-                return [...merged, ...optimisticAdds];
             });
-            setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status));
         }
-    } else {
-        setCurrentRouteClientsFull([]);
-        setIsRouteStarted(false);
-        lastSyncedRouteId.current = undefined;
     }
   }, [selectedRoute, isSaving]);
 
@@ -150,10 +148,11 @@ export default function RouteManagementPage() {
         });
   }, [currentRouteClientsFull, clientsMap, user]);
 
-   useEffect(() => {
+  // Manejo de Borradores Locales para velocidad instantánea
+  useEffect(() => {
     const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
     if (nextPending) {
-        if (!activeClient || activeClient.visitStatus === 'Completado' || activeClient.ruc !== nextPending.ruc) {
+        if (!activeClient || activeClient.ruc !== nextPending.ruc) {
             setActiveClient(nextPending);
             if (selectedRouteId) {
                 const key = DRAFT_KEY(selectedRouteId, nextPending.ruc);
@@ -171,21 +170,36 @@ export default function RouteManagementPage() {
                     }
                 }
             }
-        } else {
-            const updatedActive = routeClients.find(c => c.ruc === activeClient.ruc);
-            if (updatedActive && (updatedActive.checkInTime !== activeClient.checkInTime || updatedActive.visitStatus !== activeClient.visitStatus)) {
-                setActiveClient(updatedActive);
-            }
         }
     } else {
         setActiveClient(null);
     }
-  }, [routeClients, selectedRouteId, activeClient?.ruc, activeClient?.visitStatus, activeClient?.checkInTime]);
+  }, [routeClients, selectedRouteId, activeClient?.ruc]);
 
   const handleRouteSelect = (routeId: string) => {
       setSelectedRouteId(routeId);
       if (SELECTION_KEY) localStorage.setItem(SELECTION_KEY, routeId);
-  }
+  };
+
+  const handleVisitTypeChange = (type: 'presencial' | 'telefonica') => {
+    setVisitType(type);
+    if (selectedRouteId && activeClient) {
+        const key = DRAFT_KEY(selectedRouteId, activeClient.ruc);
+        if (key) {
+            localStorage.setItem(key, JSON.stringify({ visitType: type, callObservation }));
+        }
+    }
+  };
+
+  const handleObservationChange = (obs: string) => {
+    setCallObservation(obs);
+    if (selectedRouteId && activeClient) {
+        const key = DRAFT_KEY(selectedRouteId, activeClient.ruc);
+        if (key) {
+            localStorage.setItem(key, JSON.stringify({ visitType, callObservation: obs }));
+        }
+    }
+  };
 
   const getCurrentLocation = (): Promise<{lat: number, lng: number} | null> => {
     return new Promise((resolve) => {
@@ -213,29 +227,28 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeClient) return;
     const time = format(new Date(), 'HH:mm:ss');
     
-    setCurrentRouteClientsFull(prev => {
-        const updated = prev.map(c => c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c);
+    // UI Instantánea
+    setCurrentRouteClientsFull(prev => prev.map(c => c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c));
+    
+    setIsLocating(true);
+    setIsSaving(true);
+    try {
+        const coords = await getCurrentLocation();
+        const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
-        (async () => {
-            setIsLocating(true);
-            setIsSaving(true);
-            try {
-                const coords = await getCurrentLocation();
-                const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
-                const finalUpdate = updated.map(c => c.ruc === activeClient.ruc ? { ...c, checkInLocation: location } : c);
-                await updateRoute(selectedRoute.id, { clients: finalUpdate });
-                await refetchData('routes');
-                toast({ title: "Entrada Registrada" });
-            } catch (e) { 
-                console.error(e); 
-            } finally { 
-                setIsSaving(false); 
-                setIsLocating(false);
-            }
-        })();
-
-        return updated;
-    });
+        const finalClients = currentRouteClientsFull.map(c => 
+            c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
+        );
+        
+        await updateRoute(selectedRoute.id, { clients: finalClients });
+        await refetchData('routes');
+        toast({ title: "Entrada Registrada" });
+    } catch (e) { 
+        console.error(e); 
+    } finally { 
+        setIsSaving(false); 
+        setIsLocating(false);
+    }
   };
 
   const handleConfirmCheckOut = async () => {
@@ -248,56 +261,49 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     setIsSaving(true);
 
-    setCurrentRouteClientsFull(prev => {
-        const updated = prev.map(c => {
-            if (c.ruc === activeClient.ruc) {
-                return { 
-                    ...c, 
-                    checkOutTime: time, 
-                    visitStatus: 'Completado' as const, 
-                    visitType,
-                    valorVenta: parseFloat(activeClient.valorVenta) || 0,
-                    valorCobro: parseFloat(activeClient.valorCobro) || 0,
-                    devoluciones: parseFloat(activeClient.devoluciones) || 0,
-                };
-            }
-            return c;
-        });
-
-        (async () => {
-            try {
-                const coords = await getCurrentLocation();
-                const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
-                const finalWithLocation = updated.map(c => {
-                    if (c.ruc === activeClient.ruc) {
-                        return { ...c, checkOutLocation: location, callObservation: visitType === 'telefonica' ? callObservation : null };
-                    }
-                    return c;
-                });
-                
-                const allDone = finalWithLocation.filter(c => c.status !== 'Eliminado' && (c.date ? isToday(c.date) : false)).every(c => c.visitStatus === 'Completado');
-                const newStatus = allDone ? 'Completada' : selectedRoute.status;
-
-                await updateRoute(selectedRoute.id, { clients: finalWithLocation, status: newStatus });
-                await refetchData('routes');
-                
-                const key = DRAFT_KEY(selectedRoute.id, activeClient.ruc);
-                if (key) localStorage.removeItem(key);
-                
-                toast({ title: "Visita Finalizada" });
-                setVisitType(undefined);
-                setCallObservation('');
-            } catch(e) { 
-                console.error(e); 
-            } finally { 
-                setIsSaving(false); 
-                setIsLocating(false);
-            }
-        })();
-
-        return updated;
+    const updatedFullList = currentRouteClientsFull.map(c => {
+        if (c.ruc === activeClient.ruc) {
+            return { 
+                ...c, 
+                checkOutTime: time, 
+                visitStatus: 'Completado' as const, 
+                visitType,
+                callObservation: visitType === 'telefonica' ? callObservation : null,
+                valorVenta: parseFloat(activeClient.valorVenta) || 0,
+                valorCobro: parseFloat(activeClient.valorCobro) || 0,
+                devoluciones: parseFloat(activeClient.devoluciones) || 0,
+            };
+        }
+        return c;
     });
-  }
+
+    try {
+        const coords = await getCurrentLocation();
+        const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
+        
+        const finalWithLocation = updatedFullList.map(c => 
+            c.ruc === activeClient.ruc ? { ...c, checkOutLocation: location } : c
+        );
+        
+        const allDone = finalWithLocation.filter(c => c.status !== 'Eliminado' && (c.date ? isToday(c.date) : false)).every(c => c.visitStatus === 'Completado');
+        const newStatus = allDone ? 'Completada' : selectedRoute.status;
+
+        await updateRoute(selectedRoute.id, { clients: finalWithLocation, status: newStatus });
+        await refetchData('routes');
+        
+        const key = DRAFT_KEY(selectedRoute.id, activeClient.ruc);
+        if (key) localStorage.removeItem(key);
+        
+        toast({ title: "Visita Finalizada" });
+        setVisitType(undefined);
+        setCallObservation('');
+    } catch(e) { 
+        console.error(e); 
+    } finally { 
+        setIsSaving(false); 
+        setIsLocating(false);
+    }
+  };
 
   const onDragEnd = async (result: DropResult) => {
     const { source, destination } = result;
@@ -330,12 +336,10 @@ export default function RouteManagementPage() {
   const handleConfirmMultiAdd = async () => {
     if (!selectedRoute || multiSelectedClients.length === 0) return;
     const todayDate = new Date();
-    const activeRucsToday = new Set(routeClients.map(c => c.ruc));
     const updatedFullList = [...currentRouteClientsFull];
     let added = 0;
 
     for (const selected of multiSelectedClients) {
-        if (activeRucsToday.has(selected.ruc)) continue;
         const idx = updatedFullList.findIndex(c => c.ruc === selected.ruc);
         if (idx !== -1) {
             updatedFullList[idx] = { ...updatedFullList[idx], date: todayDate, status: 'Activo', origin: 'manual', visitStatus: 'Pendiente', checkInTime: null, checkOutTime: null };
@@ -345,15 +349,13 @@ export default function RouteManagementPage() {
         added++;
     }
     
-    if (added > 0) {
-        setCurrentRouteClientsFull(updatedFullList);
-        setIsSaving(true);
-        try {
-            await updateRoute(selectedRoute.id, { clients: updatedFullList });
-            await refetchData('routes');
-            toast({ title: "Clientes Añadidos", description: `Se añadieron ${added} clientes a tu jornada.` });
-        } catch (e) { console.error(e); } finally { setIsSaving(false); }
-    }
+    setCurrentRouteClientsFull(updatedFullList);
+    setIsSaving(true);
+    try {
+        await updateRoute(selectedRoute.id, { clients: updatedFullList });
+        await refetchData('routes');
+        toast({ title: "Clientes Añadidos" });
+    } catch (e) { console.error(e); } finally { setIsSaving(false); }
     setIsAddClientDialogOpen(false);
     setMultiSelectedClients([]);
   };
@@ -402,7 +404,7 @@ export default function RouteManagementPage() {
                 <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
                     <DialogTrigger asChild>
                         <Button variant="outline" className="w-full mb-4 border-dashed border-primary text-primary hover:bg-primary/5">
-                            <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente a la Ruta
+                            <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente
                         </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-2xl h-[80vh] flex flex-col">
@@ -448,7 +450,7 @@ export default function RouteManagementPage() {
                                                         <GripVertical className={cn("h-4 w-4 text-muted-foreground shrink-0", (c.visitStatus === 'Completado' || isSaving) && "opacity-0")}/>
                                                         <div className="min-w-0">
                                                             <div className="flex items-center gap-2 flex-wrap">
-                                                                <span className={cn("font-medium break-words", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
+                                                                <span className={cn("font-medium break-words leading-tight", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
                                                                 {c.origin === 'manual' && <Badge variant="secondary" className="text-[8px] h-4 bg-blue-100 text-blue-700">Nuevo</Badge>}
                                                             </div>
                                                             <span className="text-[10px] text-muted-foreground">{c.ruc}</span>
@@ -474,8 +476,8 @@ export default function RouteManagementPage() {
                 <CardHeader>
                     <div className="flex justify-between items-start gap-4">
                         <div className="flex-1 min-w-0">
-                            <CardTitle className="text-xl sm:text-2xl break-words">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
-                            {activeClient && <CardDescription className="whitespace-normal break-words">{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
+                            <CardTitle className="text-xl sm:text-2xl break-words leading-tight">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
+                            {activeClient && <CardDescription className="whitespace-normal break-words mt-1">{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
                         </div>
                         {activeClient && (
                             <div className="flex items-center gap-2 border border-primary text-primary rounded-full px-4 py-1.5 bg-white shadow-sm shrink-0">
@@ -507,23 +509,23 @@ export default function RouteManagementPage() {
                                 </div>
                             </div>
 
-                            <div className={cn("space-y-8 transition-all duration-500", !activeClient.checkInTime && "opacity-40 pointer-events-none")}>
+                            <div className={cn("space-y-8 transition-all duration-300", !activeClient.checkInTime && "opacity-40 pointer-events-none")}>
                                 <div className="space-y-4">
                                     <h4 className="font-bold text-lg flex items-center gap-2"><Phone className="h-5 w-5 text-primary" /> 2. Tipo de Visita</h4>
-                                    <RadioGroup onValueChange={(v: any) => setVisitType(v)} value={visitType} className="grid grid-cols-2 gap-4">
-                                        <Label className={cn("flex flex-col items-center justify-center gap-2 border-2 p-4 rounded-xl cursor-pointer", visitType === 'presencial' && "border-primary bg-primary/5")}>
+                                    <RadioGroup onValueChange={(v: any) => handleVisitTypeChange(v)} value={visitType} className="grid grid-cols-2 gap-4">
+                                        <Label className={cn("flex flex-col items-center justify-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", visitType === 'presencial' ? "border-primary bg-primary/5 scale-95" : "hover:border-primary/20")}>
                                             <RadioGroupItem value="presencial" className="sr-only" />
                                             <MapPin className={cn("h-6 w-6", visitType === 'presencial' ? "text-primary" : "text-muted-foreground")} />
                                             <span className="font-semibold text-sm">Presencial</span>
                                         </Label>
-                                        <Label className={cn("flex flex-col items-center justify-center gap-2 border-2 p-4 rounded-xl cursor-pointer", visitType === 'telefonica' && "border-primary bg-primary/5")}>
+                                        <Label className={cn("flex flex-col items-center justify-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", visitType === 'telefonica' ? "border-primary bg-primary/5 scale-95" : "hover:border-primary/20")}>
                                             <RadioGroupItem value="telefonica" className="sr-only" />
                                             <Phone className={cn("h-6 w-6", visitType === 'telefonica' ? "text-primary" : "text-muted-foreground")} />
                                             <span className="font-semibold text-sm">Telefónica</span>
                                         </Label>
                                     </RadioGroup>
                                     {visitType === 'telefonica' && (
-                                        <Textarea placeholder="Resultado de la llamada..." value={callObservation} onChange={e => setCallObservation(e.target.value)}/>
+                                        <Textarea placeholder="Resultado de la llamada..." value={callObservation} onChange={e => handleObservationChange(e.target.value)} className="animate-in fade-in slide-in-from-top-2" />
                                     )}
                                 </div>
 
