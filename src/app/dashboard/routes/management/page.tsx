@@ -48,6 +48,7 @@ export default function RouteManagementPage() {
 
   const [dndEnabled, setDndEnabled] = useState(false);
   const isInitialMount = useRef(true);
+  const lastSyncedRouteId = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     setTodayFormatted(format(new Date(), "EEEE, d 'de' MMMM", { locale: es }));
@@ -76,15 +77,18 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
+  // Sync with global state only when necessary to avoid overwriting local optimistic updates
   useEffect(() => {
-    if (selectedRoute) {
+    if (selectedRoute && (selectedRoute.id !== lastSyncedRouteId.current || !isSaving)) {
         setCurrentRouteClientsFull(selectedRoute.clients);
         setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status));
-    } else {
+        lastSyncedRouteId.current = selectedRoute.id;
+    } else if (!selectedRoute) {
         setCurrentRouteClientsFull([]);
         setIsRouteStarted(false);
+        lastSyncedRouteId.current = undefined;
     }
-  }, [selectedRoute]);
+  }, [selectedRoute, isSaving]);
   
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
@@ -166,7 +170,7 @@ export default function RouteManagementPage() {
       navigator.geolocation.getCurrentPosition(
         (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
         () => {
-          toast({ title: "Error", description: "No se pudo obtener ubicación.", variant: "destructive" });
+          toast({ title: "Aviso", description: "No se obtuvo ubicación exacta." });
           resolve(null);
         },
         { enableHighAccuracy: true, timeout: 5000 }
@@ -188,19 +192,32 @@ export default function RouteManagementPage() {
   const handleCheckIn = async () => {
     if (!selectedRoute || !activeClient) return;
     setIsLocating(true);
-    const coords = await getCurrentLocation();
+    
     const time = format(new Date(), 'HH:mm:ss');
-    const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
+    
+    // Update locally first for immediate feedback
+    const updated = currentRouteClientsFull.map(c => 
+        c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c
+    );
+    setCurrentRouteClientsFull(updated);
     
     setIsSaving(true);
     try {
-        const updated = currentRouteClientsFull.map(c => 
+        const coords = await getCurrentLocation();
+        const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
+        
+        // Final data with location
+        const finalUpdated = currentRouteClientsFull.map(c => 
             c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
         );
-        await updateRoute(selectedRoute.id, { clients: updated });
+        
+        await updateRoute(selectedRoute.id, { clients: finalUpdated });
         await refetchData('routes');
         toast({ title: "Entrada Registrada" });
-    } catch (e) { console.error(e); } finally { 
+    } catch (e) { 
+        console.error(e); 
+        toast({ title: "Error", description: "No se pudo registrar la entrada.", variant: "destructive" });
+    } finally { 
         setIsSaving(false); 
         setIsLocating(false);
     }
@@ -223,11 +240,28 @@ export default function RouteManagementPage() {
     }
 
     setIsLocating(true);
-    const coords = await getCurrentLocation();
+    const time = format(new Date(), 'HH:mm:ss');
     
+    // Optimistic local update
+    const optimisticUpdated = currentRouteClientsFull.map(c => {
+        if (c.ruc === activeClient.ruc) {
+            return { 
+                ...c, 
+                checkOutTime: time, 
+                visitStatus: 'Completado' as const, 
+                visitType,
+                valorVenta: parseSafeFloat(activeClient.valorVenta),
+                valorCobro: parseSafeFloat(activeClient.valorCobro),
+                devoluciones: parseSafeFloat(activeClient.devoluciones),
+            };
+        }
+        return c;
+    });
+    setCurrentRouteClientsFull(optimisticUpdated);
+
     setIsSaving(true);
     try {
-        const time = format(new Date(), 'HH:mm:ss');
+        const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
         const updated = currentRouteClientsFull.map(c => {
@@ -261,7 +295,10 @@ export default function RouteManagementPage() {
         toast({ title: "Visita Finalizada" });
         setVisitType(undefined);
         setCallObservation('');
-    } catch(e) { console.error(e); } finally { 
+    } catch(e) { 
+        console.error(e); 
+        toast({ title: "Error", description: "No se pudo guardar la visita.", variant: "destructive" });
+    } finally { 
         setIsSaving(false); 
         setIsLocating(false);
     }
@@ -287,11 +324,17 @@ export default function RouteManagementPage() {
         return c;
     });
 
+    // Optimistic update
+    setCurrentRouteClientsFull(finalFull);
+
     setIsSaving(true);
     try {
         await updateRoute(selectedRoute.id, { clients: finalFull });
         await refetchData('routes');
-    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+    } catch (e) { 
+        console.error(e); 
+        toast({ title: "Error", description: "No se pudo cambiar el orden.", variant: "destructive" });
+    } finally { setIsSaving(false); }
   };
 
   const toggleClientSelection = (client: Client) => {
@@ -302,26 +345,37 @@ export default function RouteManagementPage() {
 
   const handleConfirmMultiAdd = async () => {
     if (!selectedRoute || multiSelectedClients.length === 0) return;
-    setIsSaving(true);
-    try {
-        const newClients: ClientInRoute[] = multiSelectedClients.map(c => ({
-            ruc: c.ruc,
-            nombre_comercial: c.nombre_comercial,
-            date: Timestamp.fromDate(new Date()),
-            origin: 'manual',
-            status: 'Activo',
-            visitStatus: 'Pendiente'
-        }));
-        const existingRucs = new Set(routeClients.map(c => c.ruc));
-        const filtered = newClients.filter(c => !existingRucs.has(c.ruc));
-        if (filtered.length > 0) {
-            await updateRoute(selectedRoute.id, { clients: [...currentRouteClientsFull, ...filtered] });
+    
+    const newClients: ClientInRoute[] = multiSelectedClients.map(c => ({
+        ruc: c.ruc,
+        nombre_comercial: c.nombre_comercial,
+        date: Timestamp.fromDate(new Date()),
+        origin: 'manual',
+        status: 'Activo',
+        visitStatus: 'Pendiente'
+    }));
+    
+    const existingRucs = new Set(currentRouteClientsFull.map(c => c.ruc));
+    const filtered = newClients.filter(c => !existingRucs.has(c.ruc));
+    
+    if (filtered.length > 0) {
+        const updatedFull = [...currentRouteClientsFull, ...filtered];
+        // Optimistic update
+        setCurrentRouteClientsFull(updatedFull);
+        
+        setIsSaving(true);
+        try {
+            await updateRoute(selectedRoute.id, { clients: updatedFull });
             await refetchData('routes');
             toast({ title: "Clientes Añadidos" });
-        }
-        setIsAddClientDialogOpen(false);
-        setMultiSelectedClients([]);
-    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+        } catch (e) { 
+            console.error(e); 
+            toast({ title: "Error", description: "No se pudieron añadir clientes.", variant: "destructive" });
+        } finally { setIsSaving(false); }
+    }
+    
+    setIsAddClientDialogOpen(false);
+    setMultiSelectedClients([]);
   };
 
   const filteredAvailableClients = useMemo(() => {
