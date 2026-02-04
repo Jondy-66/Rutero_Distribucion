@@ -543,7 +543,7 @@ export default function RouteManagementPage() {
                                     <div key={client.id} className={cn("flex items-center gap-3 p-3 rounded-lg border cursor-pointer", multiSelectedClients.some(c => c.ruc === client.ruc) ? "bg-primary/5 border-primary" : "bg-card hover:bg-accent")} onClick={() => toggleClientSelection(client)}>
                                         <Checkbox checked={multiSelectedClients.some(c => c.ruc === client.ruc)} onCheckedChange={() => toggleClientSelection(client)}/>
                                         <div className="flex-1 min-w-0">
-                                            <p className="font-bold text-sm truncate">{client.nombre_comercial}</p>
+                                            <p className="font-bold text-sm break-words">{client.nombre_comercial}</p>
                                             <p className="text-[10px] text-muted-foreground uppercase">{client.ruc}</p>
                                         </div>
                                     </div>
@@ -575,9 +575,9 @@ export default function RouteManagementPage() {
                                                 <div ref={p.innerRef} {...p.draggableProps} {...p.dragHandleProps} className={cn("flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm", activeClient?.ruc === c.ruc ? "ring-2 ring-primary border-transparent" : "hover:border-primary/30", c.visitStatus === 'Completado' && "bg-green-50/50 border-green-200")}>
                                                     <div className="flex items-center gap-3 overflow-hidden">
                                                         <GripVertical className={cn("h-4 w-4 text-muted-foreground shrink-0", (c.visitStatus === 'Completado' || isSaving) && "opacity-0")}/>
-                                                        <div className="flex flex-col overflow-hidden">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className={cn("font-medium truncate max-w-[150px]", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <div className="flex items-center gap-2 flex-wrap">
+                                                                <span className={cn("font-medium break-words", c.visitStatus === 'Completado' && "text-green-700")}>{c.nombre_comercial}</span>
                                                                 {c.origin === 'manual' && <Badge variant="secondary" className="text-[8px] h-4 bg-blue-100 text-blue-700">Nuevo</Badge>}
                                                             </div>
                                                             <span className="text-[10px] text-muted-foreground">{c.ruc}</span>
@@ -603,8 +603,8 @@ export default function RouteManagementPage() {
                 <CardHeader>
                     <div className="flex justify-between items-start gap-4">
                         <div className="flex-1 min-w-0 pr-2">
-                            <CardTitle className="text-xl sm:text-2xl truncate">{activeClient ? activeClient.nombre_comercial : 'Ruta Finalizada'}</CardTitle>
-                            {activeClient && <CardDescription className="line-clamp-2">{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
+                            <CardTitle className="text-xl sm:text-2xl break-words">{activeClient ? activeClient.nombre_comercial : 'Ruta Finalizada'}</CardTitle>
+                            {activeClient && <CardDescription>{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
                         </div>
                         {activeClient && (
                             <div className="flex items-center gap-2 border border-primary text-primary rounded-full px-4 py-1.5 bg-white shadow-sm shrink-0">
