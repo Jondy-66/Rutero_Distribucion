@@ -77,7 +77,7 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // Sincronización Inteligente: Fusiona datos locales con el servidor
+  // Sincronización Inteligente Blindada: Fusiona datos locales con el servidor protegiendo cambios críticos
   useEffect(() => {
     if (selectedRoute) {
         if (selectedRoute.id !== lastSyncedRouteId.current) {
@@ -88,7 +88,6 @@ export default function RouteManagementPage() {
             setCurrentRouteClientsFull(prev => {
                 const serverClients = selectedRoute.clients || [];
                 
-                // Mapear clientes del servidor preservando cambios locales críticos
                 const mergedServerClients = serverClients.map(sc => {
                     const localClient = prev.find(pc => pc.ruc === sc.ruc);
                     if (localClient) {
@@ -96,8 +95,14 @@ export default function RouteManagementPage() {
                         const isServerNoCheckIn = !sc.checkInTime;
                         const isLocallyCompleted = localClient.visitStatus === 'Completado';
                         const isServerPending = sc.visitStatus !== 'Completado';
+                        
+                        // Protegemos el estado 'Activo' y la fecha de 'Hoy' si el usuario acaba de re-añadir el cliente
+                        const isLocallyActiveToday = localClient.status === 'Activo' && localClient.date && isToday(localClient.date);
+                        const isServerNotActiveToday = sc.status !== 'Activo' || !sc.date || !isToday(sc.date);
 
-                        if ((isLocallyCheckedIn && isServerNoCheckIn) || (isLocallyCompleted && isServerPending)) {
+                        if ((isLocallyCheckedIn && isServerNoCheckIn) || 
+                            (isLocallyCompleted && isServerPending) ||
+                            (isLocallyActiveToday && isServerNotActiveToday)) {
                             return { ...sc, ...localClient };
                         }
                     }
@@ -122,7 +127,6 @@ export default function RouteManagementPage() {
     return currentRouteClientsFull
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            // Filtro por hoy
             return c.date ? isToday(c.date) : false;
         })
         .map(c => {
@@ -227,7 +231,6 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeClient) return;
     
     const time = format(new Date(), 'HH:mm:ss');
-    
     const optimisticUpdated = currentRouteClientsFull.map(c => 
         c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c
     );
@@ -274,7 +277,6 @@ export default function RouteManagementPage() {
 
     setIsLocating(true);
     const time = format(new Date(), 'HH:mm:ss');
-    
     const optimisticUpdated = currentRouteClientsFull.map(c => {
         if (c.ruc === activeClient.ruc) {
             return { 
@@ -378,29 +380,36 @@ export default function RouteManagementPage() {
     if (!selectedRoute || multiSelectedClients.length === 0) return;
     
     const todayDate = new Date();
-    
-    // Identificar clientes que ya están en la ruta maestra (activos hoy)
+    // Identificamos RUCs ya activos HOY (para evitar re-añadir el mismo dos veces en la misma lista)
     const activeRucsToday = new Set(routeClients.map(c => c.ruc));
     
     const updatedFullList = [...currentRouteClientsFull];
     let actuallyAddedCount = 0;
 
     for (const selected of multiSelectedClients) {
-        if (activeRucsToday.has(selected.ruc)) continue; // Ya está activo hoy
+        if (activeRucsToday.has(selected.ruc)) continue;
 
         const existingIndex = updatedFullList.findIndex(c => c.ruc === selected.ruc);
         
         if (existingIndex !== -1) {
-            // Reactivar cliente existente
+            // Reactivar cliente: No importa si estaba eliminado o en otro día, lo traemos a HOY como ACTIVO
             updatedFullList[existingIndex] = {
                 ...updatedFullList[existingIndex],
                 date: todayDate,
                 status: 'Activo',
                 origin: 'manual',
-                visitStatus: 'Pendiente'
+                visitStatus: 'Pendiente',
+                // Reseteamos datos de gestión para la nueva visita
+                checkInTime: null,
+                checkOutTime: null,
+                checkInLocation: null,
+                checkOutLocation: null,
+                valorVenta: 0,
+                valorCobro: 0,
+                devoluciones: 0
             };
         } else {
-            // Añadir nuevo cliente
+            // Añadir nuevo cliente totalmente
             updatedFullList.push({
                 ruc: selected.ruc,
                 nombre_comercial: selected.nombre_comercial,
@@ -414,7 +423,7 @@ export default function RouteManagementPage() {
     }
     
     if (actuallyAddedCount > 0) {
-        setCurrentRouteClientsFull(updatedFullList); // Actualización optimista
+        setCurrentRouteClientsFull(updatedFullList); // Actualización optimista inmediata
         
         setIsSaving(true);
         try {
@@ -471,7 +480,7 @@ export default function RouteManagementPage() {
                         <SelectValue placeholder="Elije una ruta planificada" />
                     </SelectTrigger>
                     <SelectContent>
-                        {allRoutes.filter(r => r.createdBy === user?.id && ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada'].includes(r.status))
+                        {allRoutes.filter(r => r.createdBy === user?.id && ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada', 'Pendiente de Aprobación'].includes(r.status))
                             .map(r => (
                                 <SelectItem key={r.id} value={r.id}>
                                     {r.routeName} ({r.status})
@@ -481,9 +490,9 @@ export default function RouteManagementPage() {
                     </SelectContent>
                 </Select>
                 {selectedRoute && (
-                    <Button onClick={handleStartRoute} disabled={isStarting} className="w-full h-12 text-lg font-semibold">
+                    <Button onClick={handleStartRoute} disabled={isStarting || selectedRoute.status === 'Pendiente de Aprobación'} className="w-full h-12 text-lg font-semibold">
                         {isStarting ? <LoaderCircle className="animate-spin mr-2" /> : <PlayCircle className="mr-2 h-5 w-5" />}
-                        {selectedRoute.status === 'En Progreso' ? 'Continuar Gestión' : 'Iniciar Gestión'}
+                        {selectedRoute.status === 'Pendiente de Aprobación' ? 'Esperando Aprobación' : (selectedRoute.status === 'En Progreso' ? 'Continuar Gestión' : 'Iniciar Gestión')}
                     </Button>
                 )}
             </CardContent>
