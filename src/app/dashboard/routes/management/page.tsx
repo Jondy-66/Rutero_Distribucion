@@ -77,7 +77,7 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // Sincronización Blindada: Fusiona datos locales con el servidor protegiendo cambios críticos
+  // Sincronización Blindada: Fusión de datos mejorada para dar prioridad a acciones locales (Check-In)
   useEffect(() => {
     if (selectedRoute) {
         if (selectedRoute.id !== lastSyncedRouteId.current) {
@@ -90,20 +90,25 @@ export default function RouteManagementPage() {
                 const merged = serverClients.map(sc => {
                     const local = prev.find(pc => pc.ruc === sc.ruc);
                     if (local) {
-                        const isLocallyCheckedIn = !!local.checkInTime;
-                        const isServerNoCheckIn = !sc.checkInTime;
+                        // REGLA DE ORO: Si localmente ya tiene entrada o está completado, NO sobrescribir con datos viejos del servidor
+                        const hasLocalCheckIn = !!local.checkInTime;
+                        const hasServerCheckIn = !!sc.checkInTime;
                         const isLocallyCompleted = local.visitStatus === 'Completado';
-                        const isServerPending = sc.visitStatus !== 'Completado';
-                        const isLocallyActiveToday = local.status === 'Activo' && local.date && isToday(local.date);
+                        const isServerCompleted = sc.visitStatus === 'Completado';
 
-                        if ((isLocallyCheckedIn && isServerNoCheckIn) || 
-                            (isLocallyCompleted && isServerPending) ||
-                            isLocallyActiveToday) {
+                        if ((hasLocalCheckIn && !hasServerCheckIn) || (isLocallyCompleted && !isServerCompleted)) {
+                            return { ...sc, ...local }; // Mantener versión local más avanzada
+                        }
+                        
+                        // Si localmente está activo para hoy, mantenerlo así
+                        const isLocallyActiveToday = local.status === 'Activo' && local.date && isToday(local.date);
+                        if (isLocallyActiveToday && sc.status === 'Eliminado') {
                             return { ...sc, ...local };
                         }
                     }
                     return sc;
                 });
+                // Añadir clientes que aún no llegan al servidor (optimistas)
                 const optimisticAdds = prev.filter(pc => !serverClients.some(sc => sc.ruc === pc.ruc));
                 return [...merged, ...optimisticAdds];
             });
@@ -116,7 +121,6 @@ export default function RouteManagementPage() {
     }
   }, [selectedRoute, isSaving]);
 
-  // OPTIMIZACIÓN O(1): Usamos un Mapa para buscar detalles de clientes instantáneamente
   const clientsMap = useMemo(() => {
     const map = new Map<string, Client>();
     availableClients.forEach(c => map.set(c.ruc, c));
@@ -168,11 +172,17 @@ export default function RouteManagementPage() {
                     }
                 }
             }
+        } else {
+            // Sincronizar cambios en el cliente activo (como el checkInTime recién marcado)
+            const updatedActive = routeClients.find(c => c.ruc === activeClient.ruc);
+            if (updatedActive && (updatedActive.checkInTime !== activeClient.checkInTime || updatedActive.visitStatus !== activeClient.visitStatus)) {
+                setActiveClient(updatedActive);
+            }
         }
     } else {
         setActiveClient(null);
     }
-  }, [routeClients, selectedRouteId, activeClient?.visitStatus]);
+  }, [routeClients, selectedRouteId, activeClient?.ruc, activeClient?.visitStatus, activeClient?.checkInTime]);
 
   const handleRouteSelect = (routeId: string) => {
       setSelectedRouteId(routeId);
@@ -205,26 +215,31 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeClient) return;
     const time = format(new Date(), 'HH:mm:ss');
     
-    // UI Instantánea
-    setCurrentRouteClientsFull(prev => prev.map(c => c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c));
-    
-    setIsLocating(true);
-    setIsSaving(true);
-    try {
-        const coords = await getCurrentLocation();
-        const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
-        const finalUpdated = currentRouteClientsFull.map(c => 
-            c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
-        );
-        await updateRoute(selectedRoute.id, { clients: finalUpdated });
-        await refetchData('routes');
-        toast({ title: "Entrada Registrada" });
-    } catch (e) { 
-        console.error(e); 
-    } finally { 
-        setIsSaving(false); 
-        setIsLocating(false);
-    }
+    // UI INSTANTÁNEA (FUNCIONAL): Actualizamos el estado local antes de llamar a la base de datos
+    setCurrentRouteClientsFull(prev => {
+        const updated = prev.map(c => c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c);
+        
+        // Llamada asíncrona pero sin bloquear la UI
+        (async () => {
+            setIsLocating(true);
+            setIsSaving(true);
+            try {
+                const coords = await getCurrentLocation();
+                const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
+                const finalUpdate = updated.map(c => c.ruc === activeClient.ruc ? { ...c, checkInLocation: location } : c);
+                await updateRoute(selectedRoute.id, { clients: finalUpdate });
+                await refetchData('routes');
+                toast({ title: "Entrada Registrada" });
+            } catch (e) { 
+                console.error(e); 
+            } finally { 
+                setIsSaving(false); 
+                setIsLocating(false);
+            }
+        })();
+
+        return updated;
+    });
   };
 
   const handleConfirmCheckOut = async () => {
@@ -233,64 +248,61 @@ export default function RouteManagementPage() {
         return;
     }
 
-    setIsLocating(true);
     const time = format(new Date(), 'HH:mm:ss');
-    
-    // UI Instantánea
-    setCurrentRouteClientsFull(prev => prev.map(c => {
-        if (c.ruc === activeClient.ruc) {
-            return { 
-                ...c, 
-                checkOutTime: time, 
-                visitStatus: 'Completado' as const, 
-                visitType,
-                valorVenta: parseFloat(activeClient.valorVenta) || 0,
-                valorCobro: parseFloat(activeClient.valorCobro) || 0,
-                devoluciones: parseFloat(activeClient.devoluciones) || 0,
-            };
-        }
-        return c;
-    }));
-
+    setIsLocating(true);
     setIsSaving(true);
-    try {
-        const coords = await getCurrentLocation();
-        const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
-        const finalUpdated = currentRouteClientsFull.map(c => {
+
+    // UI Instantánea
+    setCurrentRouteClientsFull(prev => {
+        const updated = prev.map(c => {
             if (c.ruc === activeClient.ruc) {
                 return { 
                     ...c, 
                     checkOutTime: time, 
-                    checkOutLocation: location,
                     visitStatus: 'Completado' as const, 
                     visitType,
                     valorVenta: parseFloat(activeClient.valorVenta) || 0,
                     valorCobro: parseFloat(activeClient.valorCobro) || 0,
                     devoluciones: parseFloat(activeClient.devoluciones) || 0,
-                    callObservation: visitType === 'telefonica' ? callObservation : null
                 };
             }
             return c;
         });
-        
-        const allDone = finalUpdated.filter(c => c.status !== 'Eliminado' && (c.date ? isToday(c.date) : false)).every(c => c.visitStatus === 'Completado');
-        const newStatus = allDone ? 'Completada' : selectedRoute.status;
 
-        await updateRoute(selectedRoute.id, { clients: finalUpdated, status: newStatus });
-        await refetchData('routes');
-        
-        const key = DRAFT_KEY(selectedRoute.id, activeClient.ruc);
-        if (key) localStorage.removeItem(key);
-        
-        toast({ title: "Visita Finalizada" });
-        setVisitType(undefined);
-        setCallObservation('');
-    } catch(e) { 
-        console.error(e); 
-    } finally { 
-        setIsSaving(false); 
-        setIsLocating(false);
-    }
+        // Proceso de guardado
+        (async () => {
+            try {
+                const coords = await getCurrentLocation();
+                const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
+                const finalWithLocation = updated.map(c => {
+                    if (c.ruc === activeClient.ruc) {
+                        return { ...c, checkOutLocation: location, callObservation: visitType === 'telefonica' ? callObservation : null };
+                    }
+                    return c;
+                });
+                
+                const allDone = finalWithLocation.filter(c => c.status !== 'Eliminado' && (c.date ? isToday(c.date) : false)).every(c => c.visitStatus === 'Completado');
+                const newStatus = allDone ? 'Completada' : selectedRoute.status;
+
+                await updateRoute(selectedRoute.id, { clients: finalWithLocation, status: newStatus });
+                await refetchData('routes');
+                
+                const key = DRAFT_KEY(selectedRoute.id, activeClient.ruc);
+                if (key) localStorage.removeItem(key);
+                
+                toast({ title: "Visita Finalizada" });
+                setVisitType(undefined);
+                setCallObservation('');
+            } catch(e) { 
+                console.error(e); 
+            } finally { 
+                setIsSaving(false); 
+                setIsLocating(false);
+            }
+        })();
+
+        return updated;
+    });
   }
 
   const onDragEnd = async (result: DropResult) => {
@@ -469,7 +481,7 @@ export default function RouteManagementPage() {
                     <div className="flex justify-between items-start gap-4">
                         <div className="flex-1 min-w-0">
                             <CardTitle className="text-xl sm:text-2xl">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
-                            {activeClient && <CardDescription>{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
+                            {activeClient && <CardDescription className="whitespace-normal break-words">{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
                         </div>
                         {activeClient && (
                             <div className="flex items-center gap-2 border border-primary text-primary rounded-full px-4 py-1.5 bg-white shadow-sm shrink-0">
