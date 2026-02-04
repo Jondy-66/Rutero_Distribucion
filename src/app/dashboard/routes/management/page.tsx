@@ -77,7 +77,7 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // Sincronización Inteligente: Protege el estado local de "Marcar Entrada"
+  // Sincronización Inteligente: Fusiona datos locales con el servidor
   useEffect(() => {
     if (selectedRoute) {
         if (selectedRoute.id !== lastSyncedRouteId.current) {
@@ -87,10 +87,11 @@ export default function RouteManagementPage() {
         } else if (!isSaving) {
             setCurrentRouteClientsFull(prev => {
                 const serverClients = selectedRoute.clients || [];
-                return serverClients.map(sc => {
+                
+                // Mapear clientes del servidor preservando cambios locales críticos
+                const mergedServerClients = serverClients.map(sc => {
                     const localClient = prev.find(pc => pc.ruc === sc.ruc);
                     if (localClient) {
-                        // Mantenemos los datos locales de check-in si el servidor aún no los tiene
                         const isLocallyCheckedIn = !!localClient.checkInTime;
                         const isServerNoCheckIn = !sc.checkInTime;
                         const isLocallyCompleted = localClient.visitStatus === 'Completado';
@@ -102,6 +103,11 @@ export default function RouteManagementPage() {
                     }
                     return sc;
                 });
+
+                // Crucial: Mantener clientes que están en local pero aún no han llegado al servidor
+                const optimisticAdds = prev.filter(pc => !serverClients.some(sc => sc.ruc === pc.ruc));
+                
+                return [...mergedServerClients, ...optimisticAdds];
             });
             setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status));
         }
@@ -116,7 +122,7 @@ export default function RouteManagementPage() {
     return currentRouteClientsFull
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            // Filtro por hoy: Las fechas en el estado son Date objects gracias al transform de AuthContext
+            // Filtro por hoy
             return c.date ? isToday(c.date) : false;
         })
         .map(c => {
@@ -222,7 +228,6 @@ export default function RouteManagementPage() {
     
     const time = format(new Date(), 'HH:mm:ss');
     
-    // Actualización optimista: Bloquea el estado en la UI de inmediato
     const optimisticUpdated = currentRouteClientsFull.map(c => 
         c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c
     );
@@ -270,7 +275,6 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     const time = format(new Date(), 'HH:mm:ss');
     
-    // Actualización optimista de finalización
     const optimisticUpdated = currentRouteClientsFull.map(c => {
         if (c.ruc === activeClient.ruc) {
             return { 
@@ -373,35 +377,56 @@ export default function RouteManagementPage() {
   const handleConfirmMultiAdd = async () => {
     if (!selectedRoute || multiSelectedClients.length === 0) return;
     
-    // Identificamos RUCs existentes para evitar duplicados en la ruta maestra
-    const existingRucs = new Set(currentRouteClientsFull.map(c => c.ruc));
+    const todayDate = new Date();
     
-    const newClientsToAdd: ClientInRoute[] = multiSelectedClients
-        .filter(c => !existingRucs.has(c.ruc)) // Solo los que no están en la ruta
-        .map(c => ({
-            ruc: c.ruc,
-            nombre_comercial: c.nombre_comercial,
-            date: new Date(), // Asignamos fecha de hoy para que pase el filtro isToday
-            origin: 'manual', // Esto activa el badge "Nuevo"
-            status: 'Activo',
-            visitStatus: 'Pendiente'
-        }));
+    // Identificar clientes que ya están en la ruta maestra (activos hoy)
+    const activeRucsToday = new Set(routeClients.map(c => c.ruc));
     
-    if (newClientsToAdd.length > 0) {
-        const updatedFull = [...currentRouteClientsFull, ...newClientsToAdd];
-        setCurrentRouteClientsFull(updatedFull); // Actualización optimista
+    const updatedFullList = [...currentRouteClientsFull];
+    let actuallyAddedCount = 0;
+
+    for (const selected of multiSelectedClients) {
+        if (activeRucsToday.has(selected.ruc)) continue; // Ya está activo hoy
+
+        const existingIndex = updatedFullList.findIndex(c => c.ruc === selected.ruc);
+        
+        if (existingIndex !== -1) {
+            // Reactivar cliente existente
+            updatedFullList[existingIndex] = {
+                ...updatedFullList[existingIndex],
+                date: todayDate,
+                status: 'Activo',
+                origin: 'manual',
+                visitStatus: 'Pendiente'
+            };
+        } else {
+            // Añadir nuevo cliente
+            updatedFullList.push({
+                ruc: selected.ruc,
+                nombre_comercial: selected.nombre_comercial,
+                date: todayDate,
+                origin: 'manual',
+                status: 'Activo',
+                visitStatus: 'Pendiente'
+            });
+        }
+        actuallyAddedCount++;
+    }
+    
+    if (actuallyAddedCount > 0) {
+        setCurrentRouteClientsFull(updatedFullList); // Actualización optimista
         
         setIsSaving(true);
         try {
-            await updateRoute(selectedRoute.id, { clients: updatedFull });
+            await updateRoute(selectedRoute.id, { clients: updatedFullList });
             await refetchData('routes');
-            toast({ title: "Clientes Añadidos", description: `Se añadieron ${newClientsToAdd.length} clientes nuevos.` });
+            toast({ title: "Clientes Actualizados", description: `Se añadieron ${actuallyAddedCount} clientes a tu jornada de hoy.` });
         } catch (e) { 
             console.error(e); 
             toast({ title: "Error", description: "No se pudieron añadir clientes.", variant: "destructive" });
         } finally { setIsSaving(false); }
     } else {
-        toast({ title: "Sin cambios", description: "Los clientes seleccionados ya están en tu ruta." });
+        toast({ title: "Sin cambios", description: "Los clientes seleccionados ya están en tu ruta de hoy." });
     }
     
     setIsAddClientDialogOpen(false);
