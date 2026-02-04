@@ -1,10 +1,10 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Route, LoaderCircle } from 'lucide-react';
+import { Route, LoaderCircle, WifiOff } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { handleSignIn } from '@/lib/firebase/auth';
 import { useAuth } from '@/hooks/use-auth';
@@ -21,10 +21,25 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSlowConnection, setIsSlowConnection] = useState(false);
+
+  // Monitor de conexión lenta
+  useEffect(() => {
+    let timer: NodeJS.Timeout;
+    if (isLoading) {
+      timer = setTimeout(() => {
+        setIsSlowConnection(true);
+      }, 6000); // 6 segundos antes de avisar sobre lentitud
+    } else {
+      setIsSlowConnection(false);
+    }
+    return () => clearTimeout(timer);
+  }, [isLoading]);
 
   const onSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setIsSlowConnection(false);
 
     try {
         const userToLogin = await getUserByEmail(email);
@@ -58,7 +73,7 @@ export default function LoginPage() {
         } else if (error.code === 'auth/invalid-credential') {
             description = "Credenciales incorrectas. Por favor, verifica tus datos.";
             
-            // Handle failed login attempts
+            // Manejo de intentos fallidos
             const userToUpdate = await getUserByEmail(email);
             if (userToUpdate) {
                 const currentAttempts = userToUpdate.failedLoginAttempts || 0;
@@ -165,10 +180,22 @@ export default function LoginPage() {
                             </div>
                         </div>
                         <div className="space-y-2 pt-2">
-                            <Button type="submit" className="w-full" disabled={isLoading}>
-                                {isLoading && <LoaderCircle className="animate-spin" />}
-                                Iniciar Sesión
+                            <Button type="submit" className="w-full h-12" disabled={isLoading}>
+                                {isLoading ? (
+                                    <div className="flex items-center gap-2">
+                                        <LoaderCircle className="animate-spin h-5 w-5" />
+                                        <span>Iniciando...</span>
+                                    </div>
+                                ) : (
+                                    "Iniciar Sesión"
+                                )}
                             </Button>
+                            {isSlowConnection && (
+                                <p className="text-[11px] text-orange-600 font-bold flex items-center justify-center gap-1 mt-2 animate-pulse uppercase">
+                                    <WifiOff className="h-3 w-3" />
+                                    La conexión parece lenta. Esperando respuesta...
+                                </p>
+                            )}
                         </div>
                         </div>
                     </form>

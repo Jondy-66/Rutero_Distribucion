@@ -5,7 +5,7 @@
  */
 
 import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 /**
@@ -43,9 +43,12 @@ export const deleteSecondaryApp = (appInstance: any) => {
 }
 
 /**
- * Instancia del servicio Firestore.
+ * Instancia del servicio Firestore con PERSISTENCIA OFFLINE habilitada.
+ * Esto permite que el aplicativo funcione mucho mejor con conexiones lentas o inexistentes.
  */
-const db = getFirestore(app);
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
 
 /**
  * Instancia del servicio de autenticación de Firebase.

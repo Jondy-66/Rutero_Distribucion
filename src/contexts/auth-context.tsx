@@ -1,5 +1,6 @@
 /**
  * @fileoverview Gestión de estado de autenticación y datos globales con enfoque en estabilidad y rapidez.
+ * Optimizado para funcionar con conexiones lentas mediante el uso de caché local y snapshots.
  */
 
 'use client';
@@ -8,7 +9,7 @@ import React, { createContext, useState, useEffect, ReactNode, useCallback, useR
 import { User as FirebaseAuthUser, onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase/config';
 import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
-import { collection, doc, onSnapshot, query, where, Timestamp, getDoc } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
 import { getClients, getUsers, getRoutes, getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore } from '@/lib/firebase/firestore';
 
 interface AuthContextType {
@@ -56,7 +57,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     setDataLoading(true);
     try {
-        // Ejecutar descargas en paralelo sin bloquear el hilo principal
+        // Ejecutar descargas en paralelo. Firestore devolverá datos de caché instantáneamente si están disponibles.
         const [usersData, clientsData, routesData, phoneContactsData] = await Promise.all([
             getUsers(), 
             getClients(), 
@@ -102,29 +103,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
         
-        try {
-          const userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            const userData = { id: fbUser.uid, ...userDoc.data() } as User;
+        // Usamos onSnapshot para el perfil del usuario. 
+        // Esto permite cargar desde la caché local instantáneamente incluso con internet lento.
+        const unsubscribeUser = onSnapshot(userDocRef, (doc) => {
+          if (doc.exists()) {
+            const userData = { id: fbUser.uid, ...doc.data() } as User;
             setUser(userData);
-            // Iniciar descarga de datos en segundo plano sin esperar
+            setLoading(false); // Quitamos el splash screen en cuanto tenemos datos (aunque sean de caché)
             fetchInitialData();
           } else {
-            console.error("Profile missing");
-            await signOut(auth);
+            console.error("Profile missing in Firestore");
+            setLoading(false);
+            signOut(auth);
           }
-        } catch (err) {
-          console.error("Auth init error:", err);
-        } finally {
-          // Asegurar que la pantalla de carga desaparezca lo antes posible
-          setLoading(false);
-        }
-
-        // Suscripciones en tiempo real
-        const unsubscribeUser = onSnapshot(userDocRef, (doc) => {
-          if (doc.exists()) setUser({ id: fbUser.uid, ...doc.data() } as User);
+        }, (error) => {
+            console.error("Profile snapshot error:", error);
+            setLoading(false);
         });
 
+        // Suscripción a notificaciones
         const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', fbUser.uid));
         const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
             const notificationsData = snapshot.docs.map(doc => ({
