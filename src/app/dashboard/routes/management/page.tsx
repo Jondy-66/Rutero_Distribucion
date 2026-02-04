@@ -41,7 +41,7 @@ export default function RouteManagementPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   
-  // Estado local instantáneo
+  // Estado local instantáneo para inputs y selectores
   const [visitType, setVisitType] = useState<'presencial' | 'telefonica' | undefined>();
   const [callObservation, setCallObservation] = useState('');
 
@@ -70,7 +70,7 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // CARGA INICIAL: Recuperar ruta activa
+  // CARGA INICIAL: Recuperar ruta activa desde localStorage
   useEffect(() => {
     if (!authLoading && isInitialMount.current && SELECTION_KEY) {
       const savedId = localStorage.getItem(SELECTION_KEY);
@@ -91,6 +91,7 @@ export default function RouteManagementPage() {
   useEffect(() => {
     if (!selectedRoute) return;
 
+    // Si cambiamos de ruta, reseteamos todo el estado local
     if (selectedRoute.id !== lastSyncedRouteId.current) {
         setCurrentRouteClientsFull(selectedRoute.clients || []);
         setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(selectedRoute.status));
@@ -98,28 +99,37 @@ export default function RouteManagementPage() {
         return;
     }
 
+    // Si NO estamos guardando, fusionamos inteligentemente los datos del servidor
     if (!isSaving) {
         setCurrentRouteClientsFull(prev => {
             const serverClients = selectedRoute.clients || [];
             
-            // Mapeamos sobre el estado LOCAL para preservar cambios que el servidor aún no conoce
             const updated = prev.map(local => {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
-                if (!server) return local; // Es un cliente nuevo añadido localmente
+                if (!server) return local; 
 
-                const localHasMgmt = !!local.checkInTime || local.visitStatus === 'Completado';
-                const serverHasMgmt = !!server.checkInTime || server.visitStatus === 'Completado';
+                // Lógica de Escudo Local:
+                // Si el servidor trae null o vacío en gestión pero nosotros tenemos algo local, MANTENEMOS lo local.
+                const finalCheckIn = server.checkInTime || local.checkInTime;
+                const finalStatus = (server.visitStatus === 'Completado' || local.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
+                const finalCheckOut = server.checkOutTime || local.checkOutTime;
 
-                // ESCUDO: Si tenemos entrada local pero el servidor no, MANTENEMOS la local
-                if (localHasMgmt && !serverHasMgmt) {
-                    return local;
-                }
-
-                // De lo contrario, fusionamos priorizando los datos del servidor (por si hubo cambios en otros campos)
-                return { ...local, ...server };
+                return { 
+                    ...server, 
+                    checkInTime: finalCheckIn,
+                    checkInLocation: server.checkInLocation || local.checkInLocation,
+                    checkOutTime: finalCheckOut,
+                    checkOutLocation: server.checkOutLocation || local.checkOutLocation,
+                    visitStatus: finalStatus,
+                    visitType: server.visitType || local.visitType,
+                    callObservation: server.callObservation || local.callObservation,
+                    valorVenta: server.valorVenta ?? local.valorVenta,
+                    valorCobro: server.valorCobro ?? local.valorCobro,
+                    devoluciones: server.devoluciones ?? local.devoluciones,
+                };
             });
 
-            // Añadir clientes que el servidor tenga y nosotros no (ej. sincronización de otro dispositivo)
+            // Añadir clientes que el servidor tenga y nosotros no
             serverClients.forEach(sc => {
                 if (!updated.find(u => u.ruc === sc.ruc)) {
                     updated.push(sc);
@@ -137,7 +147,7 @@ export default function RouteManagementPage() {
     return map;
   }, [availableClients]);
   
-  // FILTRO: Solo clientes de HOY
+  // FILTRO: Solo clientes de HOY para la jornada activa
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
         .filter(c => c.status !== 'Eliminado' && (c.date ? isToday(c.date) : false))
@@ -162,7 +172,7 @@ export default function RouteManagementPage() {
         });
   }, [currentRouteClientsFull, clientsMap, user]);
 
-  // Manejo de Borradores de Gestión
+  // Manejo de Cliente Activo y Borradores
   useEffect(() => {
     const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
     if (nextPending) {
@@ -237,12 +247,16 @@ export default function RouteManagementPage() {
       } catch (error) { console.error(error); } finally { setIsStarting(false); }
   }
 
+  // REGISTRO DE ENTRADA (Check-in) CON ACTUALIZACIÓN OPTIMISTA
   const handleCheckIn = async () => {
     if (!selectedRoute || !activeClient) return;
     const time = format(new Date(), 'HH:mm:ss');
     
-    // UI Instantánea y Blindada
-    setCurrentRouteClientsFull(prev => prev.map(c => c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c));
+    // 1. Actualización local inmediata para bloquear el botón
+    const locallyUpdated = currentRouteClientsFull.map(c => 
+        c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c
+    );
+    setCurrentRouteClientsFull(locallyUpdated);
     
     setIsLocating(true);
     setIsSaving(true);
@@ -250,16 +264,17 @@ export default function RouteManagementPage() {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
-        // Actualizamos localmente con la ubicación antes de enviar al servidor
-        const finalClients = currentRouteClientsFull.map(c => 
-            c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
+        // 2. Preparar datos finales para el servidor
+        const finalClientsForServer = locallyUpdated.map(c => 
+            c.ruc === activeClient.ruc ? { ...c, checkInLocation: location } : c
         );
         
-        await updateRoute(selectedRoute.id, { clients: finalClients });
+        await updateRoute(selectedRoute.id, { clients: finalClientsForServer });
         await refetchData('routes');
         toast({ title: "Entrada Registrada" });
     } catch (e) { 
         console.error(e); 
+        toast({ title: "Error al registrar entrada", variant: "destructive" });
     } finally { 
         setIsSaving(false); 
         setIsLocating(false);
@@ -276,7 +291,7 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     setIsSaving(true);
 
-    const updatedFullList = currentRouteClientsFull.map(c => {
+    const updatedLocally = currentRouteClientsFull.map(c => {
         if (c.ruc === activeClient.ruc) {
             return { 
                 ...c, 
@@ -291,12 +306,13 @@ export default function RouteManagementPage() {
         }
         return c;
     });
+    setCurrentRouteClientsFull(updatedLocally);
 
     try {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
-        const finalWithLocation = updatedFullList.map(c => 
+        const finalWithLocation = updatedLocally.map(c => 
             c.ruc === activeClient.ruc ? { ...c, checkOutLocation: location } : c
         );
         
@@ -314,6 +330,7 @@ export default function RouteManagementPage() {
         setCallObservation('');
     } catch(e) { 
         console.error(e); 
+        toast({ title: "Error al finalizar visita", variant: "destructive" });
     } finally { 
         setIsSaving(false); 
         setIsLocating(false);
@@ -356,7 +373,6 @@ export default function RouteManagementPage() {
     for (const selected of multiSelectedClients) {
         const idx = updatedFullList.findIndex(c => c.ruc === selected.ruc);
         if (idx !== -1) {
-            // REACTIVAR: Si ya existía (eliminado o en otro día), lo traemos a hoy y activo
             updatedFullList[idx] = { 
                 ...updatedFullList[idx], 
                 date: todayDate, 
@@ -367,7 +383,6 @@ export default function RouteManagementPage() {
                 checkOutTime: null 
             };
         } else {
-            // NUEVO: Totalmente nuevo en esta ruta
             updatedFullList.push({ 
                 ruc: selected.ruc, 
                 nombre_comercial: selected.nombre_comercial, 
