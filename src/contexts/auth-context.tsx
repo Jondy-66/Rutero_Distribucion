@@ -1,6 +1,5 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales con enfoque en estabilidad y rapidez.
- * Optimizado para funcionar con conexiones lentas mediante el uso de caché local y snapshots.
+ * @fileoverview Gestión de estado de autenticación y datos globales optimizada para alto rendimiento.
  */
 
 'use client';
@@ -52,25 +51,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   const isDataInitialized = useRef(false);
 
+  // Carga granular para no bloquear la UI
   const fetchInitialData = useCallback(async () => {
     if (isDataInitialized.current) return;
-    
     setDataLoading(true);
+    
     try {
-        // Ejecutar descargas en paralelo. Firestore devolverá datos de caché instantáneamente si están disponibles.
-        const [usersData, clientsData, routesData, phoneContactsData] = await Promise.all([
-            getUsers(), 
-            getClients(), 
-            getRoutes(), 
-            getPhoneContacts()
-        ]);
-        setUsers(usersData);
-        setClients(clientsData);
-        setRoutes(routesData.map(transformRouteDates));
-        setPhoneContacts(phoneContactsData);
+        // Ejecutamos en paralelo pero actualizamos de forma independiente para mayor fluidez
+        const loadUsers = getUsers().then(data => setUsers(data));
+        const loadClients = getClients().then(data => setClients(data));
+        const loadRoutes = getRoutes().then(data => setRoutes(data.map(transformRouteDates)));
+        const loadPhone = getPhoneContacts().then(data => setPhoneContacts(data));
+
+        await Promise.all([loadUsers, loadClients, loadRoutes, loadPhone]);
         isDataInitialized.current = true;
     } catch(error) {
-        console.error("Failed to fetch initial data:", error);
+        console.error("Error cargando datos iniciales:", error);
     } finally {
         setDataLoading(false);
     }
@@ -78,12 +74,24 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'routes' | 'phoneContacts') => {
       try {
-          if (dataType === 'clients') setClients(await getClients());
-          if (dataType === 'users') setUsers(await getUsers());
-          if (dataType === 'routes') setRoutes((await getRoutes()).map(transformRouteDates));
-          if (dataType === 'phoneContacts') setPhoneContacts(await getPhoneContacts());
+          if (dataType === 'clients') {
+              const data = await getClients();
+              setClients(data);
+          }
+          if (dataType === 'users') {
+              const data = await getUsers();
+              setUsers(data);
+          }
+          if (dataType === 'routes') {
+              const data = await getRoutes();
+              setRoutes(data.map(transformRouteDates));
+          }
+          if (dataType === 'phoneContacts') {
+              const data = await getPhoneContacts();
+              setPhoneContacts(data);
+          }
       } catch (error) {
-          console.error(`Failed to refetch ${dataType}:`, error);
+          console.error(`Error al refrescar ${dataType}:`, error);
       }
   }, []);
 
@@ -97,31 +105,28 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }
 
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, async (fbUser) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
       setFirebaseUser(fbUser);
       
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
         
-        // Usamos onSnapshot para el perfil del usuario. 
-        // Esto permite cargar desde la caché local instantáneamente incluso con internet lento.
+        // Listener en tiempo real para el perfil del usuario (prioridad alta)
         const unsubscribeUser = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
             const userData = { id: fbUser.uid, ...doc.data() } as User;
             setUser(userData);
-            setLoading(false); // Quitamos el splash screen en cuanto tenemos datos (aunque sean de caché)
+            setLoading(false);
             fetchInitialData();
           } else {
-            console.error("Profile missing in Firestore");
             setLoading(false);
             signOut(auth);
           }
         }, (error) => {
-            console.error("Profile snapshot error:", error);
+            console.error("Error en perfil:", error);
             setLoading(false);
         });
 
-        // Suscripción a notificaciones
         const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', fbUser.uid));
         const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
             const notificationsData = snapshot.docs.map(doc => ({
@@ -130,8 +135,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 createdAt: doc.data().createdAt instanceof Timestamp ? doc.data().createdAt.toDate() : null,
             } as Notification));
             
-            notificationsData.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0));
-            setNotifications(notificationsData);
+            setNotifications(notificationsData.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0)));
         });
 
         return () => {
