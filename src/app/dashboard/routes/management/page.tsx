@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, GripVertical, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle } from 'lucide-react';
+import { Route, Search, GripVertical, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan, ClientInRoute } from '@/lib/types';
@@ -77,23 +77,20 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // EFECTO DE SINCRONIZACIÓN INTELIGENTE: Evita sobreescribir datos locales con datos antiguos del servidor
+  // Sincronización Inteligente: Protege el estado local de "Marcar Entrada"
   useEffect(() => {
     if (selectedRoute) {
         if (selectedRoute.id !== lastSyncedRouteId.current) {
-            // Carga inicial de una nueva ruta
             setCurrentRouteClientsFull(selectedRoute.clients || []);
             setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status));
             lastSyncedRouteId.current = selectedRoute.id;
         } else if (!isSaving) {
-            // Sincronización de datos del servidor para la misma ruta (fusión inteligente)
             setCurrentRouteClientsFull(prev => {
                 const serverClients = selectedRoute.clients || [];
                 return serverClients.map(sc => {
                     const localClient = prev.find(pc => pc.ruc === sc.ruc);
                     if (localClient) {
-                        // Si el cliente local ya tiene checkIn y el servidor no, mantenemos el local (estado optimista)
-                        // Esto evita que el registro desaparezca antes de que el servidor confirme el guardado
+                        // Mantenemos los datos locales de check-in si el servidor aún no los tiene
                         const isLocallyCheckedIn = !!localClient.checkInTime;
                         const isServerNoCheckIn = !sc.checkInTime;
                         const isLocallyCompleted = localClient.visitStatus === 'Completado';
@@ -119,7 +116,7 @@ export default function RouteManagementPage() {
     return currentRouteClientsFull
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            // FILTRO: Mostrar solo clientes programados para el día de hoy.
+            // Filtro por hoy: Las fechas en el estado son Date objects gracias al transform de AuthContext
             return c.date ? isToday(c.date) : false;
         })
         .map(c => {
@@ -213,7 +210,7 @@ export default function RouteManagementPage() {
       if (!selectedRoute) return;
       setIsStarting(true);
       try {
-          await updateRoute(selectedRoute.id, { status: 'En Pregreso' });
+          await updateRoute(selectedRoute.id, { status: 'En Progreso' });
           await refetchData('routes');
           setIsRouteStarted(true);
           toast({ title: "Ruta Iniciada" });
@@ -225,7 +222,7 @@ export default function RouteManagementPage() {
     
     const time = format(new Date(), 'HH:mm:ss');
     
-    // ACTUALIZACIÓN OPTIMISTA INMEDIATA EN ESTADO LOCAL
+    // Actualización optimista: Bloquea el estado en la UI de inmediato
     const optimisticUpdated = currentRouteClientsFull.map(c => 
         c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c
     );
@@ -237,19 +234,14 @@ export default function RouteManagementPage() {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
-        // Preparar datos finales para el servidor
         const finalUpdated = currentRouteClientsFull.map(c => 
             c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
         );
         
-        // Guardar en Firestore
         await updateRoute(selectedRoute.id, { clients: finalUpdated });
-        
-        // Refrescar estado global para confirmar sincronización
         await refetchData('routes');
         toast({ title: "Entrada Registrada" });
     } catch (e) { 
-        // Si falla, revertimos el cambio local
         setCurrentRouteClientsFull(prev => prev.map(c => c.ruc === activeClient.ruc ? { ...c, checkInTime: null } : c));
         console.error(e); 
         toast({ title: "Error", description: "No se pudo registrar la entrada.", variant: "destructive" });
@@ -278,7 +270,7 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     const time = format(new Date(), 'HH:mm:ss');
     
-    // ACTUALIZACIÓN OPTIMISTA DE FINALIZACIÓN
+    // Actualización optimista de finalización
     const optimisticUpdated = currentRouteClientsFull.map(c => {
         if (c.ruc === activeClient.ruc) {
             return { 
@@ -381,31 +373,35 @@ export default function RouteManagementPage() {
   const handleConfirmMultiAdd = async () => {
     if (!selectedRoute || multiSelectedClients.length === 0) return;
     
-    const newClients: ClientInRoute[] = multiSelectedClients.map(c => ({
-        ruc: c.ruc,
-        nombre_comercial: c.nombre_comercial,
-        date: Timestamp.fromDate(new Date()),
-        origin: 'manual',
-        status: 'Activo',
-        visitStatus: 'Pendiente'
-    }));
-    
+    // Identificamos RUCs existentes para evitar duplicados en la ruta maestra
     const existingRucs = new Set(currentRouteClientsFull.map(c => c.ruc));
-    const filtered = newClients.filter(c => !existingRucs.has(c.ruc));
     
-    if (filtered.length > 0) {
-        const updatedFull = [...currentRouteClientsFull, ...filtered];
-        setCurrentRouteClientsFull(updatedFull);
+    const newClientsToAdd: ClientInRoute[] = multiSelectedClients
+        .filter(c => !existingRucs.has(c.ruc)) // Solo los que no están en la ruta
+        .map(c => ({
+            ruc: c.ruc,
+            nombre_comercial: c.nombre_comercial,
+            date: new Date(), // Asignamos fecha de hoy para que pase el filtro isToday
+            origin: 'manual', // Esto activa el badge "Nuevo"
+            status: 'Activo',
+            visitStatus: 'Pendiente'
+        }));
+    
+    if (newClientsToAdd.length > 0) {
+        const updatedFull = [...currentRouteClientsFull, ...newClientsToAdd];
+        setCurrentRouteClientsFull(updatedFull); // Actualización optimista
         
         setIsSaving(true);
         try {
             await updateRoute(selectedRoute.id, { clients: updatedFull });
             await refetchData('routes');
-            toast({ title: "Clientes Añadidos" });
+            toast({ title: "Clientes Añadidos", description: `Se añadieron ${newClientsToAdd.length} clientes nuevos.` });
         } catch (e) { 
             console.error(e); 
             toast({ title: "Error", description: "No se pudieron añadir clientes.", variant: "destructive" });
         } finally { setIsSaving(false); }
+    } else {
+        toast({ title: "Sin cambios", description: "Los clientes seleccionados ya están en tu ruta." });
     }
     
     setIsAddClientDialogOpen(false);
@@ -501,7 +497,7 @@ export default function RouteManagementPage() {
                     <DialogContent className="w-[95vw] max-w-2xl rounded-xl p-4 flex flex-col h-[80vh]">
                         <DialogHeader className="mb-4">
                             <DialogTitle>Añadir Clientes</DialogTitle>
-                            <DialogDescription>Selecciona los clientes adicionales.</DialogDescription>
+                            <DialogDescription>Selecciona los clientes adicionales para gestionar hoy.</DialogDescription>
                         </DialogHeader>
                         <div className="relative mb-4">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -525,7 +521,7 @@ export default function RouteManagementPage() {
                             <div className="flex gap-2">
                                 <Button variant="ghost" size="sm" onClick={() => setIsAddClientDialogOpen(false)}>Cancelar</Button>
                                 <Button size="sm" onClick={handleConfirmMultiAdd} disabled={isSaving || multiSelectedClients.length === 0}>
-                                    {isSaving ? <LoaderCircle className="animate-spin" /> : "Añadir Clientes"}
+                                    {isSaving ? <LoaderCircle className="animate-spin" /> : "Añadir a Hoy"}
                                 </Button>
                             </div>
                         </DialogFooter>
@@ -666,10 +662,4 @@ export default function RouteManagementPage() {
     )}
     </>
   );
-}
-
-function PlayCircle(props: React.SVGProps<SVGSVGElement>) {
-  return (
-    <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polygon points="10 8 16 12 10 16 10 8" /></svg>
-  )
 }
