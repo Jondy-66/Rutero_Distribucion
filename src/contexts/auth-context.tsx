@@ -1,5 +1,5 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales con enfoque en estabilidad.
+ * @fileoverview Gestión de estado de autenticación y datos globales con enfoque en estabilidad y rapidez.
  */
 
 'use client';
@@ -9,7 +9,6 @@ import { User as FirebaseAuthUser, onAuthStateChanged, signOut } from 'firebase/
 import { db, auth } from '@/lib/firebase/config';
 import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
 import { collection, doc, onSnapshot, query, where, Timestamp, getDoc } from 'firebase/firestore';
-import { useToast } from '@/hooks/use-toast';
 import { getClients, getUsers, getRoutes, getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore } from '@/lib/firebase/firestore';
 
 interface AuthContextType {
@@ -49,16 +48,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
-  const { toast } = useToast();
   
   const isDataInitialized = useRef(false);
-  const authChecked = useRef(false);
 
-  const fetchInitialData = useCallback(async (userId: string) => {
+  const fetchInitialData = useCallback(async () => {
     if (isDataInitialized.current) return;
     
     setDataLoading(true);
     try {
+        // Ejecutar descargas en paralelo sin bloquear el hilo principal
         const [usersData, clientsData, routesData, phoneContactsData] = await Promise.all([
             getUsers(), 
             getClients(), 
@@ -104,19 +102,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
         
-        // Carga inicial del perfil
         try {
           const userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
             const userData = { id: fbUser.uid, ...userDoc.data() } as User;
             setUser(userData);
-            await fetchInitialData(fbUser.uid);
+            // Iniciar descarga de datos en segundo plano sin esperar
+            fetchInitialData();
           } else {
             console.error("Profile missing");
             await signOut(auth);
           }
         } catch (err) {
           console.error("Auth init error:", err);
+        } finally {
+          // Asegurar que la pantalla de carga desaparezca lo antes posible
+          setLoading(false);
         }
 
         // Suscripciones en tiempo real
@@ -136,7 +137,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setNotifications(notificationsData);
         });
 
-        setLoading(false);
         return () => {
             unsubscribeUser();
             unsubscribeNotifications();

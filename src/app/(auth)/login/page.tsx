@@ -53,7 +53,9 @@ export default function LoginPage() {
         
         let description = "Ocurrió un error al iniciar sesión.";
         
-        if (error.code === 'auth/invalid-credential') {
+        if (error.code === 'auth/network-request-failed') {
+            description = "Error de conexión. Por favor, verifica tu internet e intenta de nuevo.";
+        } else if (error.code === 'auth/invalid-credential') {
             description = "Credenciales incorrectas. Por favor, verifica tus datos.";
             
             // Handle failed login attempts

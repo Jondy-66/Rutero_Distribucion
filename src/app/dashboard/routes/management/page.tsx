@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, isToday } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
@@ -90,13 +90,12 @@ export default function RouteManagementPage() {
   }, [selectedRoute, isSaving]);
   
   const routeClients = useMemo(() => {
-    // Hemos eliminado el filtro isToday para asegurar que todos los clientes de la ruta seleccionada sean visibles
+    // Se ha eliminado el filtro de fecha hoy para asegurar que todos los clientes de la ruta sean visibles
     return currentRouteClientsFull
         .filter(c => c.status !== 'Eliminado')
         .map(c => {
             const details = availableClients.find(ac => ac.ruc === c.ruc);
             return {
-                // Fallback a datos de la ruta si los detalles maestros aún no cargan
                 id: details?.id || c.ruc,
                 ejecutivo: details?.ejecutivo || user?.name || '',
                 nombre_cliente: details?.nombre_cliente || c.nombre_comercial,
@@ -194,14 +193,15 @@ export default function RouteManagementPage() {
 
   const handleCheckIn = async () => {
     if (!selectedRoute || !activeClient) return;
-    setIsLocating(true);
     
     const time = format(new Date(), 'HH:mm:ss');
+    // Actualización optimista del estado local
     const updated = currentRouteClientsFull.map(c => 
         c.ruc === activeClient.ruc ? { ...c, checkInTime: time } : c
     );
     setCurrentRouteClientsFull(updated);
     
+    setIsLocating(true);
     setIsSaving(true);
     try {
         const coords = await getCurrentLocation();
@@ -242,6 +242,7 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     const time = format(new Date(), 'HH:mm:ss');
     
+    // Estado optimista local
     const optimisticUpdated = currentRouteClientsFull.map(c => {
         if (c.ruc === activeClient.ruc) {
             return { 
