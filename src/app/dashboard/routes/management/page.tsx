@@ -25,8 +25,9 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 
-type RouteClient = Client & ClientInRoute;
-
+/**
+ * Sanitiza los datos de los clientes antes de enviarlos a Firestore para evitar errores de serialización.
+ */
 const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
         const cleaned: any = { ...c };
@@ -38,6 +39,7 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         cleaned.devoluciones = parseFloat(String(c.devoluciones)) || 0;
         cleaned.promociones = parseFloat(String(c.promociones)) || 0;
         cleaned.medicacionFrecuente = parseFloat(String(c.medicacionFrecuente)) || 0;
+        // Eliminar undefined para Firestore
         Object.keys(cleaned).forEach(key => {
             if (cleaned[key] === undefined) {
                 cleaned[key] = null;
@@ -46,6 +48,8 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         return cleaned;
     });
 };
+
+type RouteClient = Client & ClientInRoute;
 
 export default function RouteManagementPage() {
   const { user, clients: availableClients, routes: allRoutes, loading: authLoading, refetchData } = useAuth();
@@ -66,7 +70,7 @@ export default function RouteManagementPage() {
   const [multiSelectedClients, setMultiSelectedClients] = useState<Client[]>([]);
 
   const [dndEnabled, setDndEnabled] = useState(false);
-  const isInitialMount = useRef(true);
+  const isInitialRehydrationDone = useRef(false);
   const lastSyncedRouteId = useRef<string | undefined>(undefined);
 
   useEffect(() => {
@@ -85,22 +89,24 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
+  // Rehidratación de la sesión al refrescar
   useEffect(() => {
-    if (!authLoading && isInitialMount.current && SELECTION_KEY) {
+    if (!authLoading && !isInitialRehydrationDone.current && SELECTION_KEY && allRoutes.length > 0) {
       const savedId = localStorage.getItem(SELECTION_KEY);
       if (savedId) {
         const found = allRoutes.find(r => r.id === savedId);
         if (found) {
           setSelectedRouteId(savedId);
-          if (['En Progreso', 'Incompleta', 'Completada'].includes(found.status)) {
-            setIsRouteStarted(true);
-          }
+          setIsRouteStarted(true); // Siempre saltar a la gestión si había una ruta guardada
+          isInitialRehydrationDone.current = true;
         }
+      } else {
+          isInitialRehydrationDone.current = true;
       }
-      isInitialMount.current = false;
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
+  // Sincronización inteligente con protección local
   useEffect(() => {
     if (!selectedRoute) return;
 
@@ -118,8 +124,9 @@ export default function RouteManagementPage() {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
                 if (!server) return local; 
                 
-                // Escudo Local: Proteger datos de entrada y finalización
+                // Escudo Local: Proteger datos de entrada, tipo de visita y finalización
                 const finalCheckIn = local.checkInTime || server.checkInTime;
+                const finalVisitType = local.visitType || server.visitType;
                 const finalStatus = (local.visitStatus === 'Completado' || server.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
                 const finalCheckOut = local.checkOutTime || server.checkOutTime;
                 
@@ -130,7 +137,7 @@ export default function RouteManagementPage() {
                     checkOutTime: finalCheckOut,
                     checkOutLocation: local.checkOutLocation || server.checkOutLocation,
                     visitStatus: finalStatus as any,
-                    visitType: local.visitType || server.visitType,
+                    visitType: finalVisitType,
                     callObservation: local.callObservation || server.callObservation,
                     valorVenta: local.valorVenta ?? server.valorVenta,
                     valorCobro: local.valorCobro ?? server.valorCobro,
@@ -139,6 +146,7 @@ export default function RouteManagementPage() {
                     date: local.date || server.date,
                 };
             });
+            // Añadir los que están en el servidor pero no en local
             serverClients.forEach(sc => {
                 if (!updated.find(u => u.ruc === sc.ruc)) {
                     updated.push(sc);
@@ -155,6 +163,7 @@ export default function RouteManagementPage() {
     return map;
   }, [availableClients]);
   
+  // Filtro estricto de hoy para la lista de gestión
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
         .filter(c => c.status !== 'Eliminado' && c.date && isToday(c.date))
@@ -248,7 +257,7 @@ export default function RouteManagementPage() {
         toast({ title: "Entrada Registrada" });
     } catch (e) { 
         console.error("Error in handleCheckIn:", e); 
-        toast({ title: "Error al registrar entrada", description: "Ocurrió un problema al guardar en la base de datos.", variant: "destructive" });
+        toast({ title: "Error al registrar entrada", variant: "destructive" });
     } finally { 
         setIsSaving(false); 
         setIsLocating(false);
@@ -293,7 +302,7 @@ export default function RouteManagementPage() {
         setActiveRuc(null);
     } catch(e) { 
         console.error("Error in handleConfirmCheckOut:", e); 
-        toast({ title: "Error al finalizar visita", description: "No se pudo guardar la gestión diaria.", variant: "destructive" });
+        toast({ title: "Error al finalizar visita", variant: "destructive" });
     } finally { 
         setIsSaving(false); 
         setIsLocating(false);
@@ -497,7 +506,7 @@ export default function RouteManagementPage() {
                 <CardHeader className="pb-4 pt-6">
                     <div className="flex flex-col space-y-4">
                         <div className="flex items-start justify-between gap-4">
-                            <CardTitle className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight tracking-tight uppercase">
+                            <CardTitle className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight tracking-tight uppercase whitespace-normal break-words overflow-visible">
                                 {activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}
                             </CardTitle>
                             {activeClient && (
@@ -538,7 +547,6 @@ export default function RouteManagementPage() {
                                 </div>
                             )}
 
-                            {/* Registro de Entrada - Diseño inspirado en la referencia */}
                             <div className={cn(
                                 "p-6 rounded-2xl border-2 transition-all shadow-sm", 
                                 (activeClient.checkInTime || isClientFinalized) 
@@ -585,7 +593,7 @@ export default function RouteManagementPage() {
                                         )}>
                                             <RadioGroupItem value="presencial" className="sr-only" />
                                             <MapPin className={cn("h-8 w-8", activeClient.visitType === 'presencial' ? "text-primary" : "text-slate-300")} />
-                                            <span className="font-bold text-sm">PRESENCIAL</span>
+                                            <span className="font-bold text-sm uppercase">Presencial</span>
                                         </Label>
                                         <Label className={cn(
                                             "flex flex-col items-center justify-center gap-3 border-2 p-6 rounded-2xl cursor-pointer transition-all shadow-sm", 
@@ -593,7 +601,7 @@ export default function RouteManagementPage() {
                                         )}>
                                             <RadioGroupItem value="telefonica" className="sr-only" />
                                             <Phone className={cn("h-8 w-8", activeClient.visitType === 'telefonica' ? "text-primary" : "text-slate-300")} />
-                                            <span className="font-bold text-sm">TELEFÓNICA</span>
+                                            <span className="font-bold text-sm uppercase">Telefónica</span>
                                         </Label>
                                     </RadioGroup>
                                     {activeClient.visitType === 'telefonica' && (
