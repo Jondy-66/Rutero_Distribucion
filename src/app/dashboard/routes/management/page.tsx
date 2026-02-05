@@ -30,7 +30,12 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         const cleaned: any = { ...c };
         if (c.date instanceof Date) {
             cleaned.date = Timestamp.fromDate(c.date);
+        } else if (c.date && typeof (c.date as any).toDate === 'function') {
+            // Ya es un Timestamp
+        } else if (c.date) {
+            cleaned.date = Timestamp.fromDate(new Date(c.date as any));
         }
+        
         cleaned.valorVenta = parseFloat(String(c.valorVenta)) || 0;
         cleaned.valorCobro = parseFloat(String(c.valorCobro)) || 0;
         cleaned.devoluciones = parseFloat(String(c.devoluciones)) || 0;
@@ -92,7 +97,6 @@ export default function RouteManagementPage() {
       if (savedId) {
         const found = allRoutes.find(r => r.id === savedId);
         if (found) {
-          // VALIDACIÓN DE FECHA: Si la ruta está completada y no es de hoy, ignoramos la persistencia
           const routeDate = found.date instanceof Timestamp ? found.date.toDate() : found.date;
           const isOldFinishedRoute = found.status === 'Completada' && !isToday(routeDate);
 
@@ -127,7 +131,6 @@ export default function RouteManagementPage() {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
                 if (!server) return local; 
                 
-                // ESCUDO DE DATOS: Si el dato local tiene entrada/salida marcada, no dejar que el servidor lo borre
                 const finalCheckIn = local.checkInTime || server.checkInTime;
                 const finalVisitType = local.visitType || server.visitType;
                 const finalStatus = (local.visitStatus === 'Completado' || server.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
@@ -168,7 +171,11 @@ export default function RouteManagementPage() {
   
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
-        .filter(c => c.status !== 'Eliminado' && c.date && isToday(c.date))
+        .filter(c => {
+            if (c.status === 'Eliminado' || !c.date) return false;
+            const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
+            return isToday(cDate);
+        })
         .map(c => {
             const details = clientsMap.get(c.ruc);
             return {
@@ -299,7 +306,12 @@ export default function RouteManagementPage() {
             return nextClients;
         });
 
-        const allDone = nextClients.filter(c => c.status !== 'Eliminado' && (c.date ? isToday(c.date) : false)).every(c => c.visitStatus === 'Completado');
+        const allDone = nextClients.filter(c => {
+            if (c.status === 'Eliminado' || !c.date) return false;
+            const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
+            return isToday(cDate);
+        }).every(c => c.visitStatus === 'Completado');
+        
         const newStatus = allDone ? 'Completada' : selectedRoute.status;
         
         const sanitized = sanitizeClientsForFirestore(nextClients);
@@ -324,7 +336,6 @@ export default function RouteManagementPage() {
     const [moved] = displayed.splice(source.index, 1);
     displayed.splice(destination.index, 0, moved);
 
-    // Si un cliente se mueve al orden número 1, se convierte en el activo para gestión
     if (destination.index === 0 && moved.visitStatus !== 'Completado') {
         setActiveRuc(moved.ruc);
     }
@@ -402,6 +413,24 @@ export default function RouteManagementPage() {
 
   const isClientFinalized = activeClient?.visitStatus === 'Completado';
 
+  const selectableRoutes = allRoutes.filter(r => {
+    const isOwner = r.createdBy === user?.id;
+    const isSelectableStatus = ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada'].includes(r.status);
+    if (!isOwner || !isSelectableStatus) return false;
+
+    const rDate = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date(r.date));
+    const mainDateIsToday = isToday(rDate);
+    const isInProgress = r.status === 'En Progreso';
+    
+    const hasClientsForToday = r.clients.some(c => {
+        if (c.status === 'Eliminado' || !c.date) return false;
+        const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
+        return isToday(cDate);
+    });
+
+    return mainDateIsToday || isInProgress || hasClientsForToday;
+  });
+
   return (
     <>
     <PageHeader title="Gestión de Ruta" description="Gestión optimizada de visitas diarias."/>
@@ -412,16 +441,11 @@ export default function RouteManagementPage() {
                 <Select onValueChange={handleRouteSelect} value={selectedRouteId}>
                     <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta planificada para hoy" /></SelectTrigger>
                     <SelectContent>
-                        {allRoutes.filter(r => {
-                            const isOwner = r.createdBy === user?.id;
-                            const routeDate = r.date instanceof Timestamp ? r.date.toDate() : r.date;
-                            // Solo mostramos rutas de HOY o que ya están EN PROGRESO
-                            const isForTodayOrInProgress = isToday(routeDate) || r.status === 'En Progreso';
-                            const isSelectableStatus = ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada'].includes(r.status);
-                            return isOwner && isForTodayOrInProgress && isSelectableStatus;
-                        })
-                        .map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName} ({r.status})</SelectItem>))
-                        }
+                        {selectableRoutes.length > 0 ? (
+                            selectableRoutes.map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName} ({r.status})</SelectItem>))
+                        ) : (
+                            <SelectItem value="no-routes" disabled>No tienes rutas planificadas para hoy</SelectItem>
+                        )}
                     </SelectContent>
                 </Select>
                 {selectedRoute && (
