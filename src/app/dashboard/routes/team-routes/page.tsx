@@ -79,7 +79,7 @@ export default function TeamRoutesPage() {
   const managedUsers = useMemo(() => {
     if (!user) return [];
     if (user.role === 'Administrador') {
-      return users.filter(u => u.role === 'Usuario');
+      return users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
     }
     if (user.role === 'Supervisor') {
       return users.filter(u => u.supervisorId === user.id);
@@ -120,8 +120,8 @@ export default function TeamRoutesPage() {
     try {
         await updateRoute(routeId, { status: 'En Progreso' });
         toast({ title: 'Éxito', description: 'Ruta reactivada correctamente (En Progreso).' });
-        fetchRoutesData(); // Actualizar lista local
-        await refetchData('routes'); // Sincronizar estado global
+        fetchRoutesData(); 
+        await refetchData('routes'); 
     } catch (error: any) {
         console.error('Failed to reactivate route:', error);
         toast({ title: 'Error', description: 'No se pudo reactivar la ruta.', variant: 'destructive' });
@@ -132,8 +132,8 @@ export default function TeamRoutesPage() {
     try {
         await updateRoute(routeId, { status: 'Completada' });
         toast({ title: 'Éxito', description: 'Ruta marcada como completada correctamente.' });
-        fetchRoutesData(); // Actualizar lista local
-        await refetchData('routes'); // Sincronizar estado global
+        fetchRoutesData(); 
+        await refetchData('routes'); 
     } catch (error: any) {
         console.error('Failed to complete route:', error);
         toast({ title: 'Error', description: 'No se pudo completar la ruta.', variant: 'destructive' });
@@ -144,7 +144,7 @@ export default function TeamRoutesPage() {
     try {
         await deleteRoute(routeId);
         toast({ title: 'Éxito', description: 'Ruta eliminada correctamente.' });
-        fetchRoutesData(); // Re-fetch data to update the list
+        fetchRoutesData(); 
     } catch (error: any) {
         console.error('Failed to delete route:', error);
         toast({ title: 'Error', description: 'No se pudo eliminar la ruta.', variant: 'destructive' });
@@ -246,7 +246,7 @@ export default function TeamRoutesPage() {
                             filteredRoutes.map((route, index) => {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
                                 const canDelete = user?.role === 'Administrador';
-                                const canReactivate = user?.role === 'Administrador' && route.status === 'Incompleta';
+                                const canReactivate = user?.role === 'Administrador' && (route.status === 'Incompleta' || route.status === 'Completada' || route.status === 'Rechazada');
                                 const canForceComplete = user?.role === 'Administrador' && (route.status === 'En Progreso' || route.status === 'Incompleta');
                                
                                 return (
@@ -277,7 +277,7 @@ export default function TeamRoutesPage() {
                                                     {canReactivate && (
                                                         <DropdownMenuItem onClick={() => handleReactivate(route.id)}>
                                                             <PlayCircle className="mr-2 h-4 w-4 text-green-600" />
-                                                            Reactivar (En Progreso)
+                                                            Volver a En Progreso
                                                         </DropdownMenuItem>
                                                     )}
 
