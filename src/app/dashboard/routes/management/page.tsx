@@ -92,8 +92,16 @@ export default function RouteManagementPage() {
       if (savedId) {
         const found = allRoutes.find(r => r.id === savedId);
         if (found) {
-          setSelectedRouteId(savedId);
-          setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(found.status));
+          // VALIDACIÓN DE FECHA: Si la ruta está completada y no es de hoy, ignoramos la persistencia
+          const routeDate = found.date instanceof Timestamp ? found.date.toDate() : found.date;
+          const isOldFinishedRoute = found.status === 'Completada' && !isToday(routeDate);
+
+          if (isOldFinishedRoute) {
+            localStorage.removeItem(SELECTION_KEY);
+          } else {
+            setSelectedRouteId(savedId);
+            setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(found.status));
+          }
           isInitialRehydrationDone.current = true;
         }
       } else {
@@ -119,6 +127,7 @@ export default function RouteManagementPage() {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
                 if (!server) return local; 
                 
+                // ESCUDO DE DATOS: Si el dato local tiene entrada/salida marcada, no dejar que el servidor lo borre
                 const finalCheckIn = local.checkInTime || server.checkInTime;
                 const finalVisitType = local.visitType || server.visitType;
                 const finalStatus = (local.visitStatus === 'Completado' || server.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
@@ -401,17 +410,24 @@ export default function RouteManagementPage() {
             <CardHeader><CardTitle>Selecciona una Ruta</CardTitle></CardHeader>
             <CardContent className="space-y-4">
                 <Select onValueChange={handleRouteSelect} value={selectedRouteId}>
-                    <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta planificada" /></SelectTrigger>
+                    <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta planificada para hoy" /></SelectTrigger>
                     <SelectContent>
-                        {allRoutes.filter(r => r.createdBy === user?.id && ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada', 'Pendiente de Aprobación'].includes(r.status))
-                            .map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName} ({r.status})</SelectItem>))
+                        {allRoutes.filter(r => {
+                            const isOwner = r.createdBy === user?.id;
+                            const routeDate = r.date instanceof Timestamp ? r.date.toDate() : r.date;
+                            // Solo mostramos rutas de HOY o que ya están EN PROGRESO
+                            const isForTodayOrInProgress = isToday(routeDate) || r.status === 'En Progreso';
+                            const isSelectableStatus = ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada'].includes(r.status);
+                            return isOwner && isForTodayOrInProgress && isSelectableStatus;
+                        })
+                        .map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName} ({r.status})</SelectItem>))
                         }
                     </SelectContent>
                 </Select>
                 {selectedRoute && (
-                    <Button onClick={handleStartRoute} disabled={isStarting || selectedRoute.status === 'Pendiente de Aprobación'} className="w-full h-12 text-lg font-semibold">
+                    <Button onClick={handleStartRoute} disabled={isStarting} className="w-full h-12 text-lg font-semibold">
                         {isStarting ? <LoaderCircle className="animate-spin mr-2" /> : <PlayCircle className="mr-2 h-5 w-5" />}
-                        {selectedRoute.status === 'Pendiente de Aprobación' ? 'Esperando Aprobación' : (selectedRoute.status === 'En Progreso' ? 'Continuar Gestión' : 'Iniciar Gestión')}
+                        {selectedRoute.status === 'En Progreso' ? 'Continuar Gestión' : 'Iniciar Gestión'}
                     </Button>
                 )}
             </CardContent>
@@ -442,7 +458,7 @@ export default function RouteManagementPage() {
                         <DialogHeader><DialogTitle>Añadir Clientes</DialogTitle></DialogHeader>
                         <div className="relative mb-4">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input placeholder="Buscar por nombre, RUC o nombre comercial..." className="pl-9" value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)}/>
+                            <Input placeholder="Buscar por Nombre Comercial, RUC o Nombre Legal..." className="pl-9" value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)}/>
                         </div>
                         <ScrollArea className="flex-1">
                             <div className="space-y-2 pr-2">
