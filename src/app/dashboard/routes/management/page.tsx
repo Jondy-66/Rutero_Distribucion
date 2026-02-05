@@ -117,9 +117,12 @@ export default function RouteManagementPage() {
             const updated = prev.map(local => {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
                 if (!server) return local; 
+                
+                // Escudo Local: Proteger datos de entrada y finalización
                 const finalCheckIn = local.checkInTime || server.checkInTime;
                 const finalStatus = (local.visitStatus === 'Completado' || server.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
                 const finalCheckOut = local.checkOutTime || server.checkOutTime;
+                
                 return { 
                     ...server, 
                     checkInTime: finalCheckIn,
@@ -132,6 +135,8 @@ export default function RouteManagementPage() {
                     valorVenta: local.valorVenta ?? server.valorVenta,
                     valorCobro: local.valorCobro ?? server.valorCobro,
                     devoluciones: local.devoluciones ?? server.devoluciones,
+                    status: (local.status === 'Activo' || server.status === 'Activo') ? 'Activo' : server.status,
+                    date: local.date || server.date,
                 };
             });
             serverClients.forEach(sc => {
@@ -487,49 +492,76 @@ export default function RouteManagementPage() {
         </Card>
 
         <div className="lg:col-span-2 space-y-6">
-            <Card className="shadow-lg border-primary/10 overflow-hidden">
+            <Card className="shadow-2xl border-none overflow-hidden bg-white">
                 <div className="h-2 bg-primary" />
-                <CardHeader>
-                    <div className="flex justify-between items-start gap-4">
-                        <div className="flex-1 min-w-0">
-                            <CardTitle className="text-xl sm:text-2xl break-words leading-tight whitespace-normal">{activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}</CardTitle>
-                            {activeClient && <CardDescription className="whitespace-normal break-words mt-1">{activeClient.nombre_cliente} • {activeClient.direccion}</CardDescription>}
+                <CardHeader className="pb-4 pt-6">
+                    <div className="flex flex-col space-y-4">
+                        <div className="flex items-start justify-between gap-4">
+                            <CardTitle className="text-2xl sm:text-3xl font-extrabold text-slate-900 leading-tight tracking-tight uppercase">
+                                {activeClient ? activeClient.nombre_comercial : 'Jornada Finalizada'}
+                            </CardTitle>
+                            {activeClient && (
+                                <div className="flex items-center gap-1.5 border border-primary/30 text-primary rounded-full px-3 py-1 bg-primary/5 shrink-0 self-start">
+                                    <User className="h-3.5 w-3.5" />
+                                    <span className="text-[10px] font-bold uppercase truncate max-w-[100px] sm:max-w-none">{activeClient.ejecutivo}</span>
+                                </div>
+                            )}
                         </div>
                         {activeClient && (
-                            <div className="flex items-center gap-2 border border-primary text-primary rounded-full px-4 py-1.5 bg-white shadow-sm shrink-0">
-                                <User className="h-4 w-4" />
-                                <span className="text-[11px] font-bold uppercase tracking-tight">{activeClient.ejecutivo}</span>
+                            <div className="space-y-2">
+                                <p className="text-sm font-medium text-slate-500 uppercase tracking-wide leading-relaxed">
+                                    {activeClient.nombre_cliente}
+                                </p>
+                                <div className="flex items-start gap-2 text-slate-400">
+                                    <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
+                                    <p className="text-xs sm:text-sm font-medium leading-normal uppercase">
+                                        {activeClient.direccion}
+                                    </p>
+                                </div>
                             </div>
                         )}
                     </div>
                 </CardHeader>
-                <CardContent className="space-y-8">
+                <CardContent className="space-y-10">
                     {activeClient ? (
-                        <div className="space-y-8">
+                        <div className="space-y-10">
                             {isClientFinalized && (
-                                <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3 text-green-800">
-                                    <CheckCircle className="h-6 w-6 shrink-0" />
-                                    <div className="flex-1">
-                                        <p className="font-bold">Visita Finalizada</p>
-                                        <p className="text-sm">Esta gestión ya no puede ser modificada. Se completó a las {activeClient.checkOutTime}.</p>
+                                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-4 text-emerald-800 shadow-sm animate-in fade-in zoom-in-95 duration-300">
+                                    <div className="p-2 bg-emerald-500 rounded-full text-white">
+                                        <CheckCircle className="h-6 w-6 shrink-0" />
                                     </div>
-                                    <Lock className="h-5 w-5 opacity-50" />
+                                    <div className="flex-1">
+                                        <p className="font-extrabold text-lg">Visita Finalizada</p>
+                                        <p className="text-sm opacity-90">Gestión completada a las {activeClient.checkOutTime}. No se permiten más cambios.</p>
+                                    </div>
+                                    <Lock className="h-5 w-5 opacity-40" />
                                 </div>
                             )}
 
-                            <div className={cn("p-5 rounded-xl border-2 transition-all", (activeClient.checkInTime || isClientFinalized) ? "bg-green-50 border-green-200" : "bg-muted/30 border-dashed border-muted-foreground/30")}>
+                            {/* Registro de Entrada - Diseño inspirado en la referencia */}
+                            <div className={cn(
+                                "p-6 rounded-2xl border-2 transition-all shadow-sm", 
+                                (activeClient.checkInTime || isClientFinalized) 
+                                    ? "bg-emerald-50 border-emerald-200" 
+                                    : "bg-white border-dashed border-slate-200"
+                            )}>
                                 <div className="flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-4 min-w-0">
-                                        <div className={cn("p-3 rounded-full shrink-0", (activeClient.checkInTime || isClientFinalized) ? "bg-green-500 text-white" : "bg-muted text-muted-foreground")}>
+                                    <div className="flex items-center gap-4 flex-1">
+                                        <div className={cn(
+                                            "p-3.5 rounded-2xl shrink-0 flex items-center justify-center", 
+                                            (activeClient.checkInTime || isClientFinalized) ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200" : "bg-slate-100 text-slate-400"
+                                        )}>
                                             <LogIn className="h-6 w-6" />
                                         </div>
-                                        <div>
-                                            <h4 className="font-bold text-base sm:text-lg">1. Registro de Entrada</h4>
-                                            <p className="text-xs text-muted-foreground">{activeClient.checkInTime ? `Marcado: ${activeClient.checkInTime}` : (isClientFinalized ? 'Completado' : 'Pendiente')}</p>
+                                        <div className="min-w-0">
+                                            <h4 className="font-bold text-lg text-slate-800">1. Registro de Entrada</h4>
+                                            <p className="text-xs font-semibold text-slate-500 uppercase">
+                                                {activeClient.checkInTime ? `Marcado: ${activeClient.checkInTime}` : (isClientFinalized ? 'Completado' : 'Pendiente')}
+                                            </p>
                                         </div>
                                     </div>
                                     {!activeClient.checkInTime && !isClientFinalized && (
-                                        <Button onClick={handleCheckIn} disabled={isSaving || isLocating} className="shadow-md">
+                                        <Button onClick={handleCheckIn} disabled={isSaving || isLocating} className="h-12 px-6 font-bold shadow-md bg-primary hover:bg-primary/90">
                                             {isLocating ? <LoaderCircle className="animate-spin mr-2" /> : "Marcar Entrada"}
                                         </Button>
                                     )}
@@ -537,50 +569,74 @@ export default function RouteManagementPage() {
                             </div>
 
                             <div className={cn(
-                                "space-y-8 transition-all duration-300", 
-                                (!activeClient.checkInTime && !isClientFinalized) && "opacity-40 pointer-events-none",
+                                "space-y-10 transition-all duration-500", 
+                                (!activeClient.checkInTime && !isClientFinalized) && "opacity-30 grayscale pointer-events-none",
                                 isClientFinalized && "opacity-80 pointer-events-none"
                             )}>
-                                <div className="space-y-4">
-                                    <h4 className="font-bold text-lg flex items-center gap-2"><Phone className="h-5 w-5 text-primary" /> 2. Tipo de Visita</h4>
-                                    <RadioGroup onValueChange={(v: any) => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4">
-                                        <Label className={cn("flex flex-col items-center justify-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 scale-95" : "hover:border-primary/20")}>
+                                <div className="space-y-5">
+                                    <h4 className="font-extrabold text-xl flex items-center gap-3 text-slate-800">
+                                        <Phone className="h-6 w-6 text-primary" /> 
+                                        2. Tipo de Visita
+                                    </h4>
+                                    <RadioGroup onValueChange={(v: any) => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-5">
+                                        <Label className={cn(
+                                            "flex flex-col items-center justify-center gap-3 border-2 p-6 rounded-2xl cursor-pointer transition-all shadow-sm", 
+                                            activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-2 ring-primary/20 scale-95" : "bg-white hover:border-slate-300"
+                                        )}>
                                             <RadioGroupItem value="presencial" className="sr-only" />
-                                            <MapPin className={cn("h-6 w-6", activeClient.visitType === 'presencial' ? "text-primary" : "text-muted-foreground")} />
-                                            <span className="font-semibold text-sm">Presencial</span>
+                                            <MapPin className={cn("h-8 w-8", activeClient.visitType === 'presencial' ? "text-primary" : "text-slate-300")} />
+                                            <span className="font-bold text-sm">PRESENCIAL</span>
                                         </Label>
-                                        <Label className={cn("flex flex-col items-center justify-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 scale-95" : "hover:border-primary/20")}>
+                                        <Label className={cn(
+                                            "flex flex-col items-center justify-center gap-3 border-2 p-6 rounded-2xl cursor-pointer transition-all shadow-sm", 
+                                            activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-2 ring-primary/20 scale-95" : "bg-white hover:border-slate-300"
+                                        )}>
                                             <RadioGroupItem value="telefonica" className="sr-only" />
-                                            <Phone className={cn("h-6 w-6", activeClient.visitType === 'telefonica' ? "text-primary" : "text-muted-foreground")} />
-                                            <span className="font-semibold text-sm">Telefónica</span>
+                                            <Phone className={cn("h-8 w-8", activeClient.visitType === 'telefonica' ? "text-primary" : "text-slate-300")} />
+                                            <span className="font-bold text-sm">TELEFÓNICA</span>
                                         </Label>
                                     </RadioGroup>
                                     {activeClient.visitType === 'telefonica' && (
-                                        <Textarea placeholder="Resultado de la llamada..." value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} className="animate-in fade-in slide-in-from-top-2" />
+                                        <Textarea placeholder="Resultado de la llamada..." value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} className="bg-slate-50 border-slate-200 rounded-xl min-h-[100px] animate-in slide-in-from-top-4 duration-300" />
                                     )}
                                 </div>
 
-                                <div className="space-y-4">
-                                    <h4 className="font-bold text-lg flex items-center gap-2"><LogIn className="h-5 w-5 text-primary" /> 3. Datos de la Gestión</h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                                        <div className="space-y-2"><Label>Venta ($)</Label><Input type="number" placeholder="0.00" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)}/></div>
-                                        <div className="space-y-2"><Label>Cobro ($)</Label><Input type="number" placeholder="0.00" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)}/></div>
-                                        <div className="space-y-2"><Label>Devoluciones ($)</Label><Input type="number" placeholder="0.00" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)}/></div>
+                                <div className="space-y-6">
+                                    <h4 className="font-extrabold text-xl flex items-center gap-3 text-slate-800">
+                                        <LogIn className="h-6 w-6 text-primary" /> 
+                                        3. Datos de la Gestión
+                                    </h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                                        <div className="space-y-3">
+                                            <Label className="text-xs font-bold text-slate-500 uppercase">Venta ($)</Label>
+                                            <Input type="number" placeholder="0.00" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} className="h-12 bg-white text-lg font-bold border-slate-200 rounded-xl" />
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label className="text-xs font-bold text-slate-500 uppercase">Cobro ($)</Label>
+                                            <Input type="number" placeholder="0.00" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} className="h-12 bg-white text-lg font-bold border-slate-200 rounded-xl" />
+                                        </div>
+                                        <div className="space-y-3">
+                                            <Label className="text-xs font-bold text-slate-500 uppercase">Devoluciones ($)</Label>
+                                            <Input type="number" placeholder="0.00" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} className="h-12 bg-white text-lg font-bold border-slate-200 rounded-xl" />
+                                        </div>
                                     </div>
                                     {!isClientFinalized && (
-                                        <Button onClick={handleConfirmCheckOut} className="w-full h-14 text-xl font-bold mt-4 shadow-lg" disabled={isSaving || !activeClient.visitType || isLocating}>
-                                            {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <LogOut className="mr-2 h-6 w-6" />}
-                                            Finalizar Visita
+                                        <Button onClick={handleConfirmCheckOut} className="w-full h-16 text-xl font-black mt-6 shadow-xl bg-primary hover:bg-primary/90 rounded-2xl transform active:scale-95 transition-all" disabled={isSaving || !activeClient.visitType || isLocating}>
+                                            {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <LogOut className="mr-3 h-7 w-7" />}
+                                            FINALIZAR VISITA
                                         </Button>
                                     )}
                                 </div>
                             </div>
                         </div>
                     ) : (
-                        <div className="text-center py-16">
-                            <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-6" />
-                            <h3 className="text-3xl font-bold mb-2">¡Ruta Completada!</h3>
-                            <Button variant="outline" className="mt-8" onClick={() => window.location.href='/dashboard'}>Volver al Panel</Button>
+                        <div className="text-center py-20 animate-in fade-in duration-700">
+                            <div className="p-6 bg-emerald-500 text-white rounded-full inline-block shadow-2xl mb-8">
+                                <CheckCircle className="h-20 w-20" />
+                            </div>
+                            <h3 className="text-4xl font-black text-slate-900 mb-4 tracking-tighter uppercase">¡Jornada Finalizada!</h3>
+                            <p className="text-slate-500 mb-10 max-w-xs mx-auto font-medium">Has completado todas las visitas programadas para el día de hoy.</p>
+                            <Button variant="outline" className="h-14 px-10 border-2 font-bold rounded-2xl" onClick={() => window.location.href='/dashboard'}>Volver al Panel</Button>
                         </div>
                     )}
                 </CardContent>
