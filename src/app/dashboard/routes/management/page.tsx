@@ -27,6 +27,34 @@ import { Progress } from '@/components/ui/progress';
 
 type RouteClient = Client & ClientInRoute;
 
+// Función de utilidad para limpiar datos antes de enviarlos a Firestore
+const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
+    return clients.map(c => {
+        const cleaned: any = { ...c };
+        
+        // Convertir fechas a Timestamps si son objetos Date
+        if (c.date instanceof Date) {
+            cleaned.date = Timestamp.fromDate(c.date);
+        }
+        
+        // Asegurar que los números sean válidos y no NaN
+        cleaned.valorVenta = parseFloat(String(c.valorVenta)) || 0;
+        cleaned.valorCobro = parseFloat(String(c.valorCobro)) || 0;
+        cleaned.devoluciones = parseFloat(String(c.devoluciones)) || 0;
+        cleaned.promociones = parseFloat(String(c.promociones)) || 0;
+        cleaned.medicacionFrecuente = parseFloat(String(c.medicacionFrecuente)) || 0;
+        
+        // Eliminar valores undefined que rompen Firestore
+        Object.keys(cleaned).forEach(key => {
+            if (cleaned[key] === undefined) {
+                cleaned[key] = null;
+            }
+        });
+        
+        return cleaned;
+    });
+};
+
 export default function RouteManagementPage() {
   const { user, clients: availableClients, routes: allRoutes, loading: authLoading, refetchData } = useAuth();
   const { toast } = useToast();
@@ -36,7 +64,6 @@ export default function RouteManagementPage() {
   const [isStarting, setIsStarting] = useState(false);
   const [todayFormatted, setTodayFormatted] = useState('');
   
-  // ESTADO MAESTRO LOCAL: Fuente de verdad para la interfaz
   const [currentRouteClientsFull, setCurrentRouteClientsFull] = useState<ClientInRoute[]>([]);
   const [activeRuc, setActiveRuc] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -66,7 +93,6 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // CARGA INICIAL: Recuperar ruta activa desde localStorage
   useEffect(() => {
     if (!authLoading && isInitialMount.current && SELECTION_KEY) {
       const savedId = localStorage.getItem(SELECTION_KEY);
@@ -83,7 +109,6 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // MOTOR DE SINCRONIZACIÓN BLINDADO: Fusiona datos del servidor protegiendo los locales
   useEffect(() => {
     if (!selectedRoute) return;
 
@@ -102,7 +127,7 @@ export default function RouteManagementPage() {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
                 if (!server) return local; 
 
-                // Lógica de Escudo Local: Prioriza datos locales si existen
+                // Lógica de Escudo Local Blindada
                 const finalCheckIn = local.checkInTime || server.checkInTime;
                 const finalStatus = (local.visitStatus === 'Completado' || server.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
                 const finalCheckOut = local.checkOutTime || server.checkOutTime;
@@ -139,7 +164,6 @@ export default function RouteManagementPage() {
     return map;
   }, [availableClients]);
   
-  // FILTRO: Solo clientes de HOY para la jornada activa (o los que ya tienen gestión)
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
         .filter(c => c.status !== 'Eliminado' && (
@@ -165,7 +189,6 @@ export default function RouteManagementPage() {
         });
   }, [currentRouteClientsFull, clientsMap, user]);
 
-  // Manejo de Cliente Activo
   useEffect(() => {
     if (!activeRuc && routeClients.length > 0) {
         const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
@@ -191,11 +214,14 @@ export default function RouteManagementPage() {
 
   const getCurrentLocation = (): Promise<{lat: number, lng: number} | null> => {
     return new Promise((resolve) => {
-      if (!navigator.geolocation) return resolve(null);
+      if (typeof window === 'undefined' || !navigator.geolocation) return resolve(null);
       navigator.geolocation.getCurrentPosition(
         (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-        () => resolve(null),
-        { enableHighAccuracy: true, timeout: 5000 }
+        (error) => {
+            console.warn("Geolocation error:", error.message);
+            resolve(null);
+        },
+        { enableHighAccuracy: true, timeout: 6000 }
       );
     });
   };
@@ -208,32 +234,38 @@ export default function RouteManagementPage() {
           await refetchData('routes');
           setIsRouteStarted(true);
           toast({ title: "Ruta Iniciada" });
-      } catch (error) { console.error(error); } finally { setIsStarting(false); }
+      } catch (error) { 
+          console.error(error);
+          toast({ title: "Error al iniciar ruta", variant: "destructive" });
+      } finally { setIsStarting(false); }
   }
 
   const handleCheckIn = async () => {
     if (!selectedRoute || !activeClient) return;
     const time = format(new Date(), 'HH:mm:ss');
     
-    // Actualización local inmediata
-    handleFieldChange('checkInTime', time);
-    
     setIsLocating(true);
     setIsSaving(true);
+
     try {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
-        const updatedClients = currentRouteClientsFull.map(c => 
-            c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
-        );
-        
-        await updateRoute(selectedRoute.id, { clients: updatedClients });
+        let nextClients: ClientInRoute[] = [];
+        setCurrentRouteClientsFull(prev => {
+            nextClients = prev.map(c => 
+                c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
+            );
+            return nextClients;
+        });
+
+        const sanitized = sanitizeClientsForFirestore(nextClients);
+        await updateRoute(selectedRoute.id, { clients: sanitized });
         await refetchData('routes');
         toast({ title: "Entrada Registrada" });
     } catch (e) { 
-        console.error(e); 
-        toast({ title: "Error al registrar entrada", variant: "destructive" });
+        console.error("Error in handleCheckIn:", e); 
+        toast({ title: "Error al registrar entrada", description: "Ocurrió un problema al guardar en la base de datos.", variant: "destructive" });
     } finally { 
         setIsSaving(false); 
         setIsLocating(false);
@@ -250,39 +282,41 @@ export default function RouteManagementPage() {
     setIsLocating(true);
     setIsSaving(true);
 
-    const updatedLocally = currentRouteClientsFull.map(c => {
-        if (c.ruc === activeClient.ruc) {
-            return { 
-                ...c, 
-                checkOutTime: time, 
-                visitStatus: 'Completado' as const,
-                valorVenta: parseFloat(String(c.valorVenta)) || 0,
-                valorCobro: parseFloat(String(c.valorCobro)) || 0,
-                devoluciones: parseFloat(String(c.devoluciones)) || 0,
-            };
-        }
-        return c;
-    });
-
     try {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         
-        const finalWithLocation = updatedLocally.map(c => 
-            c.ruc === activeClient.ruc ? { ...c, checkOutLocation: location } : c
-        );
-        
-        const allDone = finalWithLocation.filter(c => c.status !== 'Eliminado' && (c.date ? isToday(c.date) : false)).every(c => c.visitStatus === 'Completado');
+        let nextClients: ClientInRoute[] = [];
+        setCurrentRouteClientsFull(prev => {
+            nextClients = prev.map(c => {
+                if (c.ruc === activeClient.ruc) {
+                    return { 
+                        ...c, 
+                        checkOutTime: time, 
+                        checkOutLocation: location,
+                        visitStatus: 'Completado' as const,
+                        valorVenta: parseFloat(String(c.valorVenta)) || 0,
+                        valorCobro: parseFloat(String(c.valorCobro)) || 0,
+                        devoluciones: parseFloat(String(c.devoluciones)) || 0,
+                    };
+                }
+                return c;
+            });
+            return nextClients;
+        });
+
+        const allDone = nextClients.filter(c => c.status !== 'Eliminado' && (c.date ? isToday(c.date) : false)).every(c => c.visitStatus === 'Completado');
         const newStatus = allDone ? 'Completada' : selectedRoute.status;
 
-        await updateRoute(selectedRoute.id, { clients: finalWithLocation, status: newStatus });
+        const sanitized = sanitizeClientsForFirestore(nextClients);
+        await updateRoute(selectedRoute.id, { clients: sanitized, status: newStatus });
         await refetchData('routes');
         
         toast({ title: "Visita Finalizada" });
-        setActiveRuc(null); // Esto forzará al useEffect a buscar el siguiente pendiente
+        setActiveRuc(null);
     } catch(e) { 
-        console.error(e); 
-        toast({ title: "Error al finalizar visita", variant: "destructive" });
+        console.error("Error in handleConfirmCheckOut:", e); 
+        toast({ title: "Error al finalizar visita", description: "No se pudo guardar la gestión diaria.", variant: "destructive" });
     } finally { 
         setIsSaving(false); 
         setIsLocating(false);
@@ -312,9 +346,13 @@ export default function RouteManagementPage() {
     setCurrentRouteClientsFull(finalFull);
     setIsSaving(true);
     try {
-        await updateRoute(selectedRoute.id, { clients: finalFull });
+        const sanitized = sanitizeClientsForFirestore(finalFull);
+        await updateRoute(selectedRoute.id, { clients: sanitized });
         await refetchData('routes');
-    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+    } catch (e) { 
+        console.error(e); 
+        toast({ title: "Error al reordenar lista", variant: "destructive" });
+    } finally { setIsSaving(false); }
   };
 
   const handleConfirmMultiAdd = async () => {
@@ -349,10 +387,14 @@ export default function RouteManagementPage() {
     setCurrentRouteClientsFull(updatedFullList);
     setIsSaving(true);
     try {
-        await updateRoute(selectedRoute.id, { clients: updatedFullList });
+        const sanitized = sanitizeClientsForFirestore(updatedFullList);
+        await updateRoute(selectedRoute.id, { clients: sanitized });
         await refetchData('routes');
         toast({ title: "Clientes Añadidos" });
-    } catch (e) { console.error(e); } finally { setIsSaving(false); }
+    } catch (e) { 
+        console.error(e); 
+        toast({ title: "Error al añadir clientes", variant: "destructive" });
+    } finally { setIsSaving(false); }
     setIsAddClientDialogOpen(false);
     setMultiSelectedClients([]);
   };
