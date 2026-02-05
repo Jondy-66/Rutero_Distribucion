@@ -39,7 +39,8 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         cleaned.devoluciones = parseFloat(String(c.devoluciones)) || 0;
         cleaned.promociones = parseFloat(String(c.promociones)) || 0;
         cleaned.medicacionFrecuente = parseFloat(String(c.medicacionFrecuente)) || 0;
-        // Eliminar undefined para Firestore
+        
+        // Convertimos undefined a null para compatibilidad con Firestore
         Object.keys(cleaned).forEach(key => {
             if (cleaned[key] === undefined) {
                 cleaned[key] = null;
@@ -89,7 +90,7 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Rehidratación de la sesión al refrescar
+  // Rehidratación inteligente de la sesión al refrescar
   useEffect(() => {
     if (!authLoading && !isInitialRehydrationDone.current && SELECTION_KEY && allRoutes.length > 0) {
       const savedId = localStorage.getItem(SELECTION_KEY);
@@ -97,7 +98,7 @@ export default function RouteManagementPage() {
         const found = allRoutes.find(r => r.id === savedId);
         if (found) {
           setSelectedRouteId(savedId);
-          setIsRouteStarted(true); // Siempre saltar a la gestión si había una ruta guardada
+          setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(found.status));
           isInitialRehydrationDone.current = true;
         }
       } else {
@@ -106,7 +107,7 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // Sincronización inteligente con protección local
+  // Sincronización Blindada: El "Escudo Local" evita que el servidor borre tus cambios de hoy
   useEffect(() => {
     if (!selectedRoute) return;
 
@@ -120,11 +121,12 @@ export default function RouteManagementPage() {
     if (!isSaving) {
         setCurrentRouteClientsFull(prev => {
             const serverClients = selectedRoute.clients || [];
+            // Mapeamos el orden local actual pero actualizamos los campos desde el servidor con protección
             const updated = prev.map(local => {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
                 if (!server) return local; 
                 
-                // Escudo Local: Proteger datos de entrada, tipo de visita y finalización
+                // Prioridad Local: Si ya marcamos entrada o salida localmente, no dejamos que el servidor lo borre
                 const finalCheckIn = local.checkInTime || server.checkInTime;
                 const finalVisitType = local.visitType || server.visitType;
                 const finalStatus = (local.visitStatus === 'Completado' || server.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
@@ -146,7 +148,8 @@ export default function RouteManagementPage() {
                     date: local.date || server.date,
                 };
             });
-            // Añadir los que están en el servidor pero no en local
+            
+            // Añadir clientes que existan en el servidor pero no en nuestra lista local (por si otro dispositivo añadió uno)
             serverClients.forEach(sc => {
                 if (!updated.find(u => u.ruc === sc.ruc)) {
                     updated.push(sc);
@@ -163,7 +166,7 @@ export default function RouteManagementPage() {
     return map;
   }, [availableClients]);
   
-  // Filtro estricto de hoy para la lista de gestión
+  // Filtro de HOY: Solo clientes programados para hoy aparecen en la lista de gestión
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
         .filter(c => c.status !== 'Eliminado' && c.date && isToday(c.date))
@@ -203,6 +206,7 @@ export default function RouteManagementPage() {
 
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (!activeRuc) return;
+    // Actualización local inmediata para eliminar el lag visual
     setCurrentRouteClientsFull(prev => prev.map(c => 
         c.ruc === activeRuc ? { ...c, [field]: value } : c
     ));
@@ -244,6 +248,7 @@ export default function RouteManagementPage() {
     try {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
+        
         let nextClients: ClientInRoute[] = [];
         setCurrentRouteClientsFull(prev => {
             nextClients = prev.map(c => 
@@ -251,6 +256,7 @@ export default function RouteManagementPage() {
             );
             return nextClients;
         });
+
         const sanitized = sanitizeClientsForFirestore(nextClients);
         await updateRoute(selectedRoute.id, { clients: sanitized });
         await refetchData('routes');
@@ -275,6 +281,7 @@ export default function RouteManagementPage() {
     try {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
+        
         let nextClients: ClientInRoute[] = [];
         setCurrentRouteClientsFull(prev => {
             nextClients = prev.map(c => {
@@ -293,8 +300,10 @@ export default function RouteManagementPage() {
             });
             return nextClients;
         });
+
         const allDone = nextClients.filter(c => c.status !== 'Eliminado' && (c.date ? isToday(c.date) : false)).every(c => c.visitStatus === 'Completado');
         const newStatus = allDone ? 'Completada' : selectedRoute.status;
+        
         const sanitized = sanitizeClientsForFirestore(nextClients);
         await updateRoute(selectedRoute.id, { clients: sanitized, status: newStatus });
         await refetchData('routes');
@@ -309,14 +318,18 @@ export default function RouteManagementPage() {
     }
   };
 
+  // Reordenamiento Maestro: Permite cambiar el orden de visitas del día
   const onDragEnd = async (result: DropResult) => {
     const { source, destination } = result;
     if (!destination || !selectedRoute || source.index === destination.index) return;
+
     const displayed = Array.from(routeClients);
     const [moved] = displayed.splice(source.index, 1);
     displayed.splice(destination.index, 0, moved);
+
     const newOrderRucs = displayed.map(c => c.ruc);
     const activeRucsSet = new Set(routeClients.map(c => c.ruc));
+    
     let activePtr = 0;
     const finalFull = currentRouteClientsFull.map(c => {
         if (activeRucsSet.has(c.ruc)) {
@@ -325,12 +338,14 @@ export default function RouteManagementPage() {
         }
         return c;
     });
+
     setCurrentRouteClientsFull(finalFull);
     setIsSaving(true);
     try {
         const sanitized = sanitizeClientsForFirestore(finalFull);
         await updateRoute(selectedRoute.id, { clients: sanitized });
         await refetchData('routes');
+        toast({ title: "Orden actualizado" });
     } catch (e) { 
         console.error(e); 
         toast({ title: "Error al reordenar lista", variant: "destructive" });
@@ -341,9 +356,11 @@ export default function RouteManagementPage() {
     if (!selectedRoute || multiSelectedClients.length === 0) return;
     const todayDate = new Date();
     const updatedFullList = [...currentRouteClientsFull];
+
     for (const selected of multiSelectedClients) {
         const idx = updatedFullList.findIndex(c => c.ruc === selected.ruc);
         if (idx !== -1) {
+            // Reactivación inteligente: si ya existía en la ruta, lo traemos a hoy y lo ponemos activo
             updatedFullList[idx] = { 
                 ...updatedFullList[idx], 
                 date: todayDate, 
@@ -364,6 +381,7 @@ export default function RouteManagementPage() {
             });
         }
     }
+
     setCurrentRouteClientsFull(updatedFullList);
     setIsSaving(true);
     try {
@@ -408,6 +426,7 @@ export default function RouteManagementPage() {
         </Card>
     ) : (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Lista de Clientes con Drag and Drop */}
         <Card className="lg:col-span-1 shadow-md">
             <CardHeader className="pb-3">
                 <CardTitle className="text-xl">{selectedRoute?.routeName}</CardTitle>
@@ -461,6 +480,8 @@ export default function RouteManagementPage() {
                 </Dialog>
 
                 <Separator className="my-4" />
+                <p className="text-[10px] text-muted-foreground mb-2 italic">Arrastra para cambiar el orden de las visitas</p>
+                
                 {dndEnabled && (
                     <DragDropContext onDragEnd={onDragEnd}>
                         <Droppable droppableId="clients">
@@ -500,6 +521,7 @@ export default function RouteManagementPage() {
             </CardContent>
         </Card>
 
+        {/* Panel de Gestión Activo - Diseño de Alta Claridad para Móvil */}
         <div className="lg:col-span-2 space-y-6">
             <Card className="shadow-2xl border-none overflow-hidden bg-white">
                 <div className="h-2 bg-primary" />
