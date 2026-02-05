@@ -442,14 +442,16 @@ export default function RouteManagementPage() {
                         <DialogHeader><DialogTitle>Añadir Clientes</DialogTitle></DialogHeader>
                         <div className="relative mb-4">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input placeholder="Buscar por nombre o RUC..." className="pl-9" value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)}/>
+                            <Input placeholder="Buscar por nombre, RUC o nombre comercial..." className="pl-9" value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)}/>
                         </div>
                         <ScrollArea className="flex-1">
                             <div className="space-y-2 pr-2">
                                 {availableClients.filter(c => {
                                     const term = addClientSearchTerm.toLowerCase();
                                     return (user?.role === 'Administrador' || c.ejecutivo === user?.name) && 
-                                           (c.nombre_cliente.toLowerCase().includes(term) || c.ruc.includes(term));
+                                           (c.nombre_cliente.toLowerCase().includes(term) || 
+                                            c.nombre_comercial.toLowerCase().includes(term) || 
+                                            c.ruc.includes(term));
                                 }).map(client => (
                                     <div key={client.id} className={cn("flex items-center gap-3 p-3 rounded-lg border cursor-pointer", multiSelectedClients.some(c => c.ruc === client.ruc) ? "bg-primary/5 border-primary" : "hover:bg-accent")} onClick={() => {
                                         setMultiSelectedClients(prev => prev.some(c => c.ruc === client.ruc) ? prev.filter(c => c.ruc !== client.ruc) : [...prev, client]);
