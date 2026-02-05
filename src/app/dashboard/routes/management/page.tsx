@@ -25,9 +25,6 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 
-/**
- * Sanitiza los datos de los clientes antes de enviarlos a Firestore para evitar errores de serialización.
- */
 const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
         const cleaned: any = { ...c };
@@ -40,7 +37,6 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         cleaned.promociones = parseFloat(String(c.promociones)) || 0;
         cleaned.medicacionFrecuente = parseFloat(String(c.medicacionFrecuente)) || 0;
         
-        // Convertimos undefined a null para compatibilidad con Firestore
         Object.keys(cleaned).forEach(key => {
             if (cleaned[key] === undefined) {
                 cleaned[key] = null;
@@ -90,7 +86,6 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Rehidratación inteligente de la sesión al refrescar
   useEffect(() => {
     if (!authLoading && !isInitialRehydrationDone.current && SELECTION_KEY && allRoutes.length > 0) {
       const savedId = localStorage.getItem(SELECTION_KEY);
@@ -107,7 +102,6 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // Sincronización Blindada: El "Escudo Local" evita que el servidor borre tus cambios de hoy
   useEffect(() => {
     if (!selectedRoute) return;
 
@@ -121,12 +115,10 @@ export default function RouteManagementPage() {
     if (!isSaving) {
         setCurrentRouteClientsFull(prev => {
             const serverClients = selectedRoute.clients || [];
-            // Mapeamos el orden local actual pero actualizamos los campos desde el servidor con protección
             const updated = prev.map(local => {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
                 if (!server) return local; 
                 
-                // Prioridad Local: Si ya marcamos entrada o salida localmente, no dejamos que el servidor lo borre
                 const finalCheckIn = local.checkInTime || server.checkInTime;
                 const finalVisitType = local.visitType || server.visitType;
                 const finalStatus = (local.visitStatus === 'Completado' || server.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
@@ -149,7 +141,6 @@ export default function RouteManagementPage() {
                 };
             });
             
-            // Añadir clientes que existan en el servidor pero no en nuestra lista local (por si otro dispositivo añadió uno)
             serverClients.forEach(sc => {
                 if (!updated.find(u => u.ruc === sc.ruc)) {
                     updated.push(sc);
@@ -166,7 +157,6 @@ export default function RouteManagementPage() {
     return map;
   }, [availableClients]);
   
-  // Filtro de HOY: Solo clientes programados para hoy aparecen en la lista de gestión
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
         .filter(c => c.status !== 'Eliminado' && c.date && isToday(c.date))
@@ -206,7 +196,6 @@ export default function RouteManagementPage() {
 
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (!activeRuc) return;
-    // Actualización local inmediata para eliminar el lag visual
     setCurrentRouteClientsFull(prev => prev.map(c => 
         c.ruc === activeRuc ? { ...c, [field]: value } : c
     ));
@@ -318,7 +307,6 @@ export default function RouteManagementPage() {
     }
   };
 
-  // Reordenamiento Maestro: Permite cambiar el orden de visitas del día
   const onDragEnd = async (result: DropResult) => {
     const { source, destination } = result;
     if (!destination || !selectedRoute || source.index === destination.index) return;
@@ -326,6 +314,11 @@ export default function RouteManagementPage() {
     const displayed = Array.from(routeClients);
     const [moved] = displayed.splice(source.index, 1);
     displayed.splice(destination.index, 0, moved);
+
+    // Si un cliente se mueve al orden número 1, se convierte en el activo para gestión
+    if (destination.index === 0 && moved.visitStatus !== 'Completado') {
+        setActiveRuc(moved.ruc);
+    }
 
     const newOrderRucs = displayed.map(c => c.ruc);
     const activeRucsSet = new Set(routeClients.map(c => c.ruc));
@@ -360,7 +353,6 @@ export default function RouteManagementPage() {
     for (const selected of multiSelectedClients) {
         const idx = updatedFullList.findIndex(c => c.ruc === selected.ruc);
         if (idx !== -1) {
-            // Reactivación inteligente: si ya existía en la ruta, lo traemos a hoy y lo ponemos activo
             updatedFullList[idx] = { 
                 ...updatedFullList[idx], 
                 date: todayDate, 
@@ -426,7 +418,6 @@ export default function RouteManagementPage() {
         </Card>
     ) : (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Lista de Clientes con Drag and Drop */}
         <Card className="lg:col-span-1 shadow-md">
             <CardHeader className="pb-3">
                 <CardTitle className="text-xl">{selectedRoute?.routeName}</CardTitle>
@@ -521,7 +512,6 @@ export default function RouteManagementPage() {
             </CardContent>
         </Card>
 
-        {/* Panel de Gestión Activo - Diseño de Alta Claridad para Móvil */}
         <div className="lg:col-span-2 space-y-6">
             <Card className="shadow-2xl border-none overflow-hidden bg-white">
                 <div className="h-2 bg-primary" />

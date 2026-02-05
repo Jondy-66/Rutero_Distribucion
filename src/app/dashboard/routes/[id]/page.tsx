@@ -30,7 +30,6 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogHeader, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 
-
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
     const slots = [];
     for (let hour = startHour; hour <= endHour; hour++) {
@@ -67,7 +66,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   const [clientToRemove, setClientToRemove] = useState<ClientInRoute | null>(null);
   const [removalObservation, setRemovalObservation] = useState('');
 
-  
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
@@ -76,13 +74,11 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     return isOwner && isEditableStatus;
 }, [currentUser, route]);
 
-
   const canApprove = useMemo(() => {
      if (!currentUser || !route) return false;
      if (currentUser.role === 'Administrador' && route.status === 'Pendiente de Aprobación') return true;
      return currentUser.id === route.supervisorId && route.status === 'Pendiente de Aprobación';
   }, [currentUser, route]);
-
 
   useEffect(() => {
     const fetchRouteData = async () => {
@@ -157,7 +153,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         toast({ title: 'Observación Requerida', description: 'Debes proporcionar una observación para rechazar la ruta.', variant: 'destructive' });
         return;
     }
-
 
     setIsSaving(true);
     try {
@@ -302,7 +297,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       if (!currentUser || !route) return false;
       return currentUser.id === route.createdBy && (route.status === 'Planificada' || route.status === 'Rechazada');
   }, [currentUser, route]);
-
 
   if (loading || authLoading) {
     return (
