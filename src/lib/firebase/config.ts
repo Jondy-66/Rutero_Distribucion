@@ -5,7 +5,7 @@
  */
 
 import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 /**
@@ -24,15 +24,16 @@ const firebaseConfig = {
 
 /**
  * Inicializa Firebase.
+ * Comprueba si ya existe una aplicación de Firebase para evitar la reinicialización.
  */
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 /**
  * Crea una instancia secundaria de la app de Firebase.
+ * Útil para tareas administrativas sin afectar la sesión principal.
  */
 export const createSecondaryApp = (appName: string) => {
-    const secondaryApp = initializeApp(firebaseConfig, appName);
-    return secondaryApp;
+    return initializeApp(firebaseConfig, appName);
 };
 
 /**
@@ -44,11 +45,25 @@ export const deleteSecondaryApp = (appInstance: any) => {
 
 /**
  * Instancia del servicio Firestore con PERSISTENCIA OFFLINE habilitada.
- * Esto permite que el aplicativo funcione mucho mejor con conexiones lentas o inexistentes.
+ * Se utiliza un patrón de inicialización único para evitar errores de lease en múltiples pestañas.
  */
-const db = initializeFirestore(app, {
-  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
-});
+let db;
+if (typeof window !== 'undefined') {
+    const apps = getApps();
+    try {
+        // Intentamos inicializar con cache persistente y soporte multi-pestaña
+        db = initializeFirestore(app, {
+            localCache: persistentLocalCache({ 
+                tabManager: persistentMultipleTabManager() 
+            })
+        });
+    } catch (e) {
+        // Si ya está inicializado, obtenemos la instancia existente
+        db = getFirestore(app);
+    }
+} else {
+    db = getFirestore(app);
+}
 
 /**
  * Instancia del servicio de autenticación de Firebase.

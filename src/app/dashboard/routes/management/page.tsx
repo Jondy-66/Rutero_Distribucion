@@ -97,7 +97,7 @@ export default function RouteManagementPage() {
       if (savedId) {
         const found = allRoutes.find(r => r.id === savedId);
         if (found) {
-          const routeDate = found.date instanceof Timestamp ? found.date.toDate() : found.date;
+          const routeDate = found.date instanceof Timestamp ? found.date.toDate() : (found.date instanceof Date ? found.date : new Date(found.date));
           const isOldFinishedRoute = found.status === 'Completada' && !isToday(routeDate);
 
           if (isOldFinishedRoute) {
