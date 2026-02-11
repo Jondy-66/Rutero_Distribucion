@@ -89,22 +89,17 @@ export default function TeamRoutesPage() {
 
   const filteredRoutes = useMemo(() => {
     if (!user) return [];
-    
     let routesToFilter: RoutePlan[] = [];
-
     if (user.role === 'Administrador') {
         routesToFilter = allRoutes.filter(route => route.createdBy !== user.id);
     } else if (user.role === 'Supervisor') {
         const managedUserIds = managedUsers.map(u => u.id);
         routesToFilter = allRoutes.filter(route => managedUserIds.includes(route.createdBy));
     }
-    
     if (selectedUser !== 'all') {
         routesToFilter = routesToFilter.filter(route => route.createdBy === selectedUser);
     }
-
     return routesToFilter;
-
   }, [allRoutes, user, managedUsers, selectedUser]);
   
   const getCreatorName = (creatorId: string) => {
@@ -185,7 +180,6 @@ export default function TeamRoutesPage() {
           <PageHeader title="Acceso Denegado" description="Esta página solo está disponible para supervisores y administradores." />
       );
   }
-
 
   return (
     <>

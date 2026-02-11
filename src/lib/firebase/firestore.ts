@@ -115,8 +115,6 @@ export const deleteClient = (id: string) => {
 
 export const addClientsBatch = async (clientsData: Omit<Client, 'id' | 'status'>[]) => {
     const batch = writeBatch(db);
-    // Para evitar lecturas masivas en batches grandes, no validamos duplicados aquí si la cuota es crítica
-    // Pero mantenemos la lógica por seguridad si los datos son pocos
     for (const client of clientsData) {
         const newClientRef = doc(clientsCollection);
         batch.set(newClientRef, {...client, status: 'active'});

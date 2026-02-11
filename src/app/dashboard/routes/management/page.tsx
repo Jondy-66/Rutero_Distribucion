@@ -25,13 +25,9 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 
-/**
- * Limpia los datos de los clientes antes de enviarlos a Firestore para evitar errores de NaN o undefined.
- */
 const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
         const cleaned: any = { ...c };
-        
         if (c.date instanceof Date) {
             cleaned.date = Timestamp.fromDate(c.date);
         } else if (c.date && typeof (c.date as any).toDate === 'function') {
@@ -39,17 +35,14 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         } else if (c.date) {
             cleaned.date = Timestamp.fromDate(new Date(c.date as any));
         }
-        
         cleaned.valorVenta = parseFloat(String(c.valorVenta || 0)) || 0;
         cleaned.valorCobro = parseFloat(String(c.valorCobro || 0)) || 0;
         cleaned.devoluciones = parseFloat(String(c.devoluciones || 0)) || 0;
         cleaned.promociones = parseFloat(String(c.promociones || 0)) || 0;
         cleaned.medicacionFrecuente = parseFloat(String(c.medicacionFrecuente || 0)) || 0;
-        
         Object.keys(cleaned).forEach(key => {
             if (cleaned[key] === undefined) cleaned[key] = null;
         });
-        
         return cleaned;
     });
 };
@@ -94,7 +87,7 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Rehidratación de sesión mejorada para persistencia total
+  // Rehidratación inteligente de sesión
   useEffect(() => {
     if (!authLoading && !isInitialRehydrationDone.current && SELECTION_KEY && allRoutes.length > 0) {
       const savedId = localStorage.getItem(SELECTION_KEY);
@@ -106,7 +99,6 @@ export default function RouteManagementPage() {
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
             return isToday(cDate);
           });
-
           const routeMainDate = found.date instanceof Timestamp ? found.date.toDate() : (found.date instanceof Date ? found.date : new Date(found.date));
           const isOldFinishedRoute = found.status === 'Completada' && !isToday(routeMainDate) && !hasClientsForToday;
 
@@ -122,7 +114,7 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // Lógica para reactivación automática de rutas multidiarias
+  // Reactivación automática de rutas multidiarias
   useEffect(() => {
     if (selectedRoute && selectedRoute.status === 'Completada') {
         const hasPendingForToday = selectedRoute.clients.some(c => {
@@ -130,44 +122,35 @@ export default function RouteManagementPage() {
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
             return isToday(cDate);
         });
-        
         if (hasPendingForToday) {
             updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => refetchData('routes'));
         }
     }
   }, [selectedRoute, refetchData]);
 
-  // Sincronización blindada con Escudo Local para evitar pérdida de registros de entrada
+  // Sincronización con Escudo Local
   useEffect(() => {
     if (!selectedRoute) return;
-
     if (selectedRoute.id !== lastSyncedRouteId.current) {
         setCurrentRouteClientsFull(selectedRoute.clients || []);
         setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(selectedRoute.status));
         lastSyncedRouteId.current = selectedRoute.id;
         return;
     }
-
     if (!isSaving) {
         setCurrentRouteClientsFull(prev => {
             const serverClients = selectedRoute.clients || [];
             return prev.map(local => {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
                 if (!server) return local; 
-                
-                const finalCheckIn = local.checkInTime || server.checkInTime;
-                const finalVisitType = local.visitType || server.visitType;
-                const finalStatus = (local.visitStatus === 'Completado' || server.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
-                const finalCheckOut = local.checkOutTime || server.checkOutTime;
-                
                 return { 
                     ...server, 
-                    checkInTime: finalCheckIn,
+                    checkInTime: local.checkInTime || server.checkInTime,
                     checkInLocation: local.checkInLocation || server.checkInLocation,
-                    checkOutTime: finalCheckOut,
+                    checkOutTime: local.checkOutTime || server.checkOutTime,
                     checkOutLocation: local.checkOutLocation || server.checkOutLocation,
-                    visitStatus: finalStatus as any,
-                    visitType: finalVisitType,
+                    visitStatus: (local.visitStatus === 'Completado' || server.visitStatus === 'Completado') ? 'Completado' : 'Pendiente',
+                    visitType: local.visitType || server.visitType,
                     callObservation: local.callObservation || server.callObservation,
                     valorVenta: local.valorVenta ?? server.valorVenta,
                     valorCobro: local.valorCobro ?? server.valorCobro,
@@ -256,7 +239,6 @@ export default function RouteManagementPage() {
     try {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
-        
         let nextClients: ClientInRoute[] = [];
         setCurrentRouteClientsFull(prev => {
             nextClients = prev.map(c => 
@@ -264,7 +246,6 @@ export default function RouteManagementPage() {
             );
             return nextClients;
         });
-
         const sanitized = sanitizeClientsForFirestore(nextClients);
         await updateRoute(selectedRoute.id, { clients: sanitized });
         await refetchData('routes');
@@ -288,7 +269,6 @@ export default function RouteManagementPage() {
     try {
         const coords = await getCurrentLocation();
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
-        
         let nextClients: ClientInRoute[] = [];
         setCurrentRouteClientsFull(prev => {
             nextClients = prev.map(c => {
@@ -304,15 +284,12 @@ export default function RouteManagementPage() {
             });
             return nextClients;
         });
-
         const allDoneToday = nextClients.filter(c => {
             if (c.status === 'Eliminado' || !c.date) return false;
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
             return isToday(cDate);
         }).every(c => c.visitStatus === 'Completado');
-        
         const newStatus = allDoneToday ? 'Completada' : selectedRoute.status;
-        
         const sanitized = sanitizeClientsForFirestore(nextClients);
         await updateRoute(selectedRoute.id, { clients: sanitized, status: newStatus });
         await refetchData('routes');
@@ -329,18 +306,14 @@ export default function RouteManagementPage() {
   const onDragEnd = async (result: DropResult) => {
     const { source, destination } = result;
     if (!destination || !selectedRoute || source.index === destination.index) return;
-
     const displayed = Array.from(routeClients);
     const [moved] = displayed.splice(source.index, 1);
     displayed.splice(destination.index, 0, moved);
-
     if (destination.index === 0 && moved.visitStatus !== 'Completado') {
         setActiveRuc(moved.ruc);
     }
-
     const newOrderRucs = displayed.map(c => c.ruc);
     const activeRucsSet = new Set(routeClients.map(c => c.ruc));
-    
     let activePtr = 0;
     const finalFull = currentRouteClientsFull.map(c => {
         if (activeRucsSet.has(c.ruc)) {
@@ -349,7 +322,6 @@ export default function RouteManagementPage() {
         }
         return c;
     });
-
     setCurrentRouteClientsFull(finalFull);
     setIsSaving(true);
     try {
@@ -366,7 +338,6 @@ export default function RouteManagementPage() {
     if (!selectedRoute || multiSelectedClients.length === 0) return;
     const todayDate = new Date();
     const updatedFullList = [...currentRouteClientsFull];
-
     for (const selected of multiSelectedClients) {
         const idx = updatedFullList.findIndex(c => c.ruc === selected.ruc);
         if (idx !== -1) {
@@ -390,7 +361,6 @@ export default function RouteManagementPage() {
             });
         }
     }
-
     setCurrentRouteClientsFull(updatedFullList);
     setIsSaving(true);
     try {
@@ -407,20 +377,16 @@ export default function RouteManagementPage() {
 
   if (authLoading) return <div className="flex items-center justify-center h-64"><LoaderCircle className="animate-spin h-8 w-8 text-primary" /></div>;
 
-  const isClientFinalized = activeClient?.visitStatus === 'Completado';
-
   const selectableRoutes = allRoutes.filter(r => {
     const isOwner = r.createdBy === user?.id;
     const isSelectableStatus = ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada', 'Completada'].includes(r.status);
     if (!isOwner || !isSelectableStatus) return false;
-
     const rDate = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date(r.date));
     const hasActivityForToday = r.clients.some(c => {
         if (c.status === 'Eliminado' || !c.date) return false;
         const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
         return isToday(cDate);
     });
-
     if (r.status === 'Completada' && !hasActivityForToday) return false;
     return isToday(rDate) || r.status === 'En Progreso' || hasActivityForToday;
   });
@@ -476,7 +442,7 @@ export default function RouteManagementPage() {
                         <DialogHeader><DialogTitle>Añadir Clientes</DialogTitle></DialogHeader>
                         <div className="relative mb-4">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input placeholder="Buscar por Nombre Comercial, RUC o Nombre Legal..." className="pl-9" value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)}/>
+                            <Input placeholder="Buscar por RUC, Nombre Comercial o Razón Social..." className="pl-9" value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)}/>
                         </div>
                         <ScrollArea className="flex-1">
                             <div className="space-y-2 pr-2">
@@ -507,7 +473,6 @@ export default function RouteManagementPage() {
 
                 <Separator className="my-4" />
                 <p className="text-[10px] text-muted-foreground mb-2 italic">Arrastra para cambiar el orden de las visitas</p>
-                
                 {dndEnabled && (
                     <DragDropContext onDragEnd={onDragEnd}>
                         <Droppable droppableId="clients">
@@ -581,14 +546,14 @@ export default function RouteManagementPage() {
                 <CardContent className="space-y-10">
                     {activeClient ? (
                         <div className="space-y-10">
-                            {isClientFinalized && (
+                            {activeClient.visitStatus === 'Completado' && (
                                 <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-5 flex items-center gap-4 text-emerald-800 shadow-sm animate-in fade-in zoom-in-95 duration-300">
                                     <div className="p-2 bg-emerald-500 rounded-full text-white">
                                         <CheckCircle className="h-6 w-6 shrink-0" />
                                     </div>
                                     <div className="flex-1">
                                         <p className="font-extrabold text-lg">Visita Finalizada</p>
-                                        <p className="text-sm opacity-90">Gestión completada a las {activeClient.checkOutTime}. No se permiten más cambios.</p>
+                                        <p className="text-sm opacity-90">Gestión completada a las {activeClient.checkOutTime}.</p>
                                     </div>
                                     <Lock className="h-5 w-5 opacity-40" />
                                 </div>
@@ -596,7 +561,7 @@ export default function RouteManagementPage() {
 
                             <div className={cn(
                                 "p-6 rounded-2xl border-2 transition-all shadow-sm", 
-                                (activeClient.checkInTime || isClientFinalized) 
+                                (activeClient.checkInTime || activeClient.visitStatus === 'Completado') 
                                     ? "bg-emerald-50 border-emerald-200" 
                                     : "bg-white border-dashed border-slate-200"
                             )}>
@@ -604,18 +569,18 @@ export default function RouteManagementPage() {
                                     <div className="flex items-center gap-4 flex-1">
                                         <div className={cn(
                                             "p-3.5 rounded-2xl shrink-0 flex items-center justify-center", 
-                                            (activeClient.checkInTime || isClientFinalized) ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200" : "bg-slate-100 text-slate-400"
+                                            (activeClient.checkInTime || activeClient.visitStatus === 'Completado') ? "bg-emerald-500 text-white shadow-lg shadow-emerald-200" : "bg-slate-100 text-slate-400"
                                         )}>
                                             <LogIn className="h-6 w-6" />
                                         </div>
                                         <div className="min-w-0">
                                             <h4 className="font-bold text-lg text-slate-800">1. Registro de Entrada</h4>
                                             <p className="text-xs font-semibold text-slate-500 uppercase">
-                                                {activeClient.checkInTime ? `Marcado: ${activeClient.checkInTime}` : (isClientFinalized ? 'Completado' : 'Pendiente')}
+                                                {activeClient.checkInTime ? `Marcado: ${activeClient.checkInTime}` : (activeClient.visitStatus === 'Completado' ? 'Completado' : 'Pendiente')}
                                             </p>
                                         </div>
                                     </div>
-                                    {!activeClient.checkInTime && !isClientFinalized && (
+                                    {!activeClient.checkInTime && activeClient.visitStatus !== 'Completado' && (
                                         <Button onClick={handleCheckIn} disabled={isSaving || isLocating} className="h-12 px-6 font-bold shadow-md bg-primary hover:bg-primary/90">
                                             {isLocating ? <LoaderCircle className="animate-spin mr-2" /> : "Marcar Entrada"}
                                         </Button>
@@ -625,8 +590,8 @@ export default function RouteManagementPage() {
 
                             <div className={cn(
                                 "space-y-10 transition-all duration-500", 
-                                (!activeClient.checkInTime && !isClientFinalized) && "opacity-30 grayscale pointer-events-none",
-                                isClientFinalized && "opacity-80 pointer-events-none"
+                                (!activeClient.checkInTime && activeClient.visitStatus !== 'Completado') && "opacity-30 grayscale pointer-events-none",
+                                activeClient.visitStatus === 'Completado' && "opacity-80 pointer-events-none"
                             )}>
                                 <div className="space-y-5">
                                     <h4 className="font-extrabold text-xl flex items-center gap-3 text-slate-800">
@@ -675,7 +640,7 @@ export default function RouteManagementPage() {
                                             <Input type="number" placeholder="0.00" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} className="h-12 bg-white text-lg font-bold border-slate-200 rounded-xl" />
                                         </div>
                                     </div>
-                                    {!isClientFinalized && (
+                                    {activeClient.visitStatus !== 'Completado' && (
                                         <Button onClick={handleConfirmCheckOut} className="w-full h-16 text-xl font-black mt-6 shadow-xl bg-primary hover:bg-primary/90 rounded-2xl transform active:scale-95 transition-all" disabled={isSaving || !activeClient.visitType || isLocating}>
                                             {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <LogOut className="mr-3 h-7 w-7" />}
                                             FINALIZAR VISITA

@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setDataLoading(true);
     
     try {
-        // Los usuarios normales solo cargan SUS clientes y SUS rutas para ahorrar cuota
+        // Filtro selectivo: Vendedores solo ven SUS datos. Admins ven todo.
         const ejecutivoFilter = (userData.role === 'Usuario' || userData.role === 'Telemercaderista') ? userData.name : undefined;
         const routeFilters = userData.role === 'Administrador' ? undefined : 
                              (userData.role === 'Supervisor' ? { supervisorId: userData.id } : { createdBy: userData.id });
@@ -113,7 +113,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
         
-        // Listener en tiempo real solo al perfil del usuario
         const unsubscribeUser = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
             const userData = { id: fbUser.uid, ...doc.data() } as User;
@@ -126,7 +125,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         });
 
-        // Notificaciones limitadas para ahorrar cuota
         const notificationsQuery = query(
             collection(db, 'notifications'), 
             where('userId', '==', fbUser.uid),
