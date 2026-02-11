@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isDataInitialized = useRef(false);
 
   /**
-   * Carga inicial optimizada basada en el rol del usuario.
+   * Carga inicial optimizada basada en el rol del usuario para ahorrar cuota Firestore.
    */
   const fetchInitialData = useCallback(async (userData: User) => {
     if (isDataInitialized.current) return;
@@ -56,7 +56,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                              (userData.role === 'Supervisor' ? { supervisorId: userData.id } : { createdBy: userData.id });
 
         const [usersData, clientsData, routesData, phoneData] = await Promise.all([
-            userData.role === 'Administrador' ? getUsers() : Promise.resolve([]), // Solo admin ve a todos
+            userData.role === 'Administrador' ? getUsers() : Promise.resolve([]),
             getClients(ejecutivoFilter),
             getRoutes(routeFilters),
             getPhoneContacts()
@@ -113,7 +113,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
         
-        // Listen only to the specific user profile
+        // Listener en tiempo real solo al perfil del usuario
         const unsubscribeUser = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
             const userData = { id: fbUser.uid, ...doc.data() } as User;
@@ -126,12 +126,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         });
 
-        // Optimized notifications listener
+        // Notificaciones limitadas para ahorrar cuota
         const notificationsQuery = query(
             collection(db, 'notifications'), 
             where('userId', '==', fbUser.uid),
             orderBy('createdAt', 'desc'),
-            limit(20) // Only latest 20 to save quota
+            limit(15)
         );
         const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
             const notificationsData = snapshot.docs.map(doc => ({

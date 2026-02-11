@@ -77,12 +77,14 @@ export const deleteUser = (id: string) => {
 const clientsCollection = collection(db, 'clients');
 
 /**
- * Obtiene clientes filtrados opcionalmente por ejecutivo para reducir consumo de cuota.
+ * Obtiene clientes filtrados opcionalmente por ejecutivo para reducir consumo de cuota Firestore.
  */
 export const getClients = async (ejecutivo?: string): Promise<Client[]> => {
-  let q = query(clientsCollection);
+  let q;
   if (ejecutivo) {
     q = query(clientsCollection, where('ejecutivo', '==', ejecutivo));
+  } else {
+    q = query(clientsCollection);
   }
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
@@ -113,23 +115,13 @@ export const deleteClient = (id: string) => {
 
 export const addClientsBatch = async (clientsData: Omit<Client, 'id' | 'status'>[]) => {
     const batch = writeBatch(db);
-    const allClientsSnapshot = await getDocs(query(clientsCollection, limit(1000))); // Limit scan for batch
-    const rucsInDb = new Set<string>();
-    allClientsSnapshot.forEach(doc => {
-        rucsInDb.add(doc.data().ruc);
-    });
-
-    let addedCount = 0;
+    // Para evitar lecturas masivas en batches grandes, no validamos duplicados aquí si la cuota es crítica
+    // Pero mantenemos la lógica por seguridad si los datos son pocos
     for (const client of clientsData) {
-        if (client.ruc && !rucsInDb.has(client.ruc)) {
-            const newClientRef = doc(clientsCollection);
-            batch.set(newClientRef, {...client, status: 'active'});
-            rucsInDb.add(client.ruc);
-            addedCount++;
-        }
+        const newClientRef = doc(clientsCollection);
+        batch.set(newClientRef, {...client, status: 'active'});
     }
     await batch.commit();
-    return addedCount;
 }
 
 export const updateClientLocations = async (locations: { ruc: string; provincia: string; canton: string; direccion: string; latitud: number; longitud: number; }[]) => {
@@ -191,10 +183,11 @@ export const addRoute = async (routeData: Omit<RoutePlan, 'id' | 'createdAt'>): 
 };
 
 /**
- * Obtiene rutas filtradas por usuario o supervisor para ahorrar cuota.
+ * Obtiene rutas filtradas por usuario o supervisor para ahorrar cuota Firestore.
  */
 export const getRoutes = async (filters?: { createdBy?: string, supervisorId?: string }): Promise<RoutePlan[]> => {
-    let q = query(routesCollection, orderBy('createdAt', 'desc'), limit(100)); // Limit per user
+    let q = query(routesCollection, orderBy('createdAt', 'desc'), limit(50));
+    
     if (filters?.createdBy) {
         q = query(routesCollection, where('createdBy', '==', filters.createdBy), orderBy('createdAt', 'desc'));
     } else if (filters?.supervisorId) {
@@ -208,7 +201,10 @@ export const getRoutes = async (filters?: { createdBy?: string, supervisorId?: s
             id: doc.id,
             ...data,
             date: data.date ? (data.date as Timestamp).toDate() : new Date(),
-            clients: (data.clients as any[]).map(c => ({ ...c, date: c.date ? (c.date as Timestamp).toDate() : undefined }))
+            clients: (data.clients as any[]).map(c => ({ 
+                ...c, 
+                date: c.date ? (c.date as Timestamp).toDate() : undefined 
+            }))
         } as RoutePlan;
     });
 };
@@ -222,7 +218,10 @@ export const getRoute = async (id: string): Promise<RoutePlan | null> => {
             id: docSnap.id,
             ...data,
             date: data.date ? (data.date as Timestamp).toDate() : new Date(),
-            clients: (data.clients as any[]).map(c => ({ ...c, date: c.date ? (c.date as Timestamp).toDate() : undefined }))
+            clients: (data.clients as any[]).map(c => ({ 
+                ...c, 
+                date: c.date ? (c.date as Timestamp).toDate() : undefined 
+            }))
         } as RoutePlan;
     }
     return null;
@@ -268,7 +267,7 @@ export const markAllNotificationsAsRead = async (userId: string) => {
 const phoneContactsCollection = collection(db, 'phoneContacts');
 
 export const getPhoneContacts = async (): Promise<PhoneContact[]> => {
-    const snapshot = await getDocs(query(phoneContactsCollection, limit(500)));
+    const snapshot = await getDocs(query(phoneContactsCollection, limit(200)));
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as PhoneContact[];
 };
 

@@ -32,23 +32,20 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
         const cleaned: any = { ...c };
         
-        // Asegurar que las fechas sean Timestamps válidos
         if (c.date instanceof Date) {
             cleaned.date = Timestamp.fromDate(c.date);
         } else if (c.date && typeof (c.date as any).toDate === 'function') {
-            // Ya es un Timestamp, no hacer nada
+            // Ya es un Timestamp
         } else if (c.date) {
             cleaned.date = Timestamp.fromDate(new Date(c.date as any));
         }
         
-        // Convertir campos numéricos y sanitizar vacíos
         cleaned.valorVenta = parseFloat(String(c.valorVenta || 0)) || 0;
         cleaned.valorCobro = parseFloat(String(c.valorCobro || 0)) || 0;
         cleaned.devoluciones = parseFloat(String(c.devoluciones || 0)) || 0;
         cleaned.promociones = parseFloat(String(c.promociones || 0)) || 0;
         cleaned.medicacionFrecuente = parseFloat(String(c.medicacionFrecuente || 0)) || 0;
         
-        // Evitar undefined en Firestore
         Object.keys(cleaned).forEach(key => {
             if (cleaned[key] === undefined) cleaned[key] = null;
         });
@@ -97,7 +94,7 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Rehidratación de sesión mejorada
+  // Rehidratación de sesión mejorada para persistencia total
   useEffect(() => {
     if (!authLoading && !isInitialRehydrationDone.current && SELECTION_KEY && allRoutes.length > 0) {
       const savedId = localStorage.getItem(SELECTION_KEY);
@@ -113,11 +110,11 @@ export default function RouteManagementPage() {
           const routeMainDate = found.date instanceof Timestamp ? found.date.toDate() : (found.date instanceof Date ? found.date : new Date(found.date));
           const isOldFinishedRoute = found.status === 'Completada' && !isToday(routeMainDate) && !hasClientsForToday;
 
-          if (isOldFinishedRoute) {
-            localStorage.removeItem(SELECTION_KEY);
-          } else {
+          if (!isOldFinishedRoute) {
             setSelectedRouteId(savedId);
             setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(found.status));
+          } else {
+            localStorage.removeItem(SELECTION_KEY);
           }
         }
       }
@@ -125,7 +122,7 @@ export default function RouteManagementPage() {
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
-  // Lógica para volver automáticamente a "En Progreso" si hay clientes pendientes hoy
+  // Lógica para reactivación automática de rutas multidiarias
   useEffect(() => {
     if (selectedRoute && selectedRoute.status === 'Completada') {
         const hasPendingForToday = selectedRoute.clients.some(c => {
@@ -140,7 +137,7 @@ export default function RouteManagementPage() {
     }
   }, [selectedRoute, refetchData]);
 
-  // Sincronización blindada con Escudo Local
+  // Sincronización blindada con Escudo Local para evitar pérdida de registros de entrada
   useEffect(() => {
     if (!selectedRoute) return;
 
@@ -158,7 +155,6 @@ export default function RouteManagementPage() {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
                 if (!server) return local; 
                 
-                // Priorizar estados locales para evitar saltos visuales durante el guardado
                 const finalCheckIn = local.checkInTime || server.checkInTime;
                 const finalVisitType = local.visitType || server.visitType;
                 const finalStatus = (local.visitStatus === 'Completado' || server.visitStatus === 'Completado') ? 'Completado' : 'Pendiente';
@@ -419,14 +415,14 @@ export default function RouteManagementPage() {
     if (!isOwner || !isSelectableStatus) return false;
 
     const rDate = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date(r.date));
-    const hasPendingClientsForToday = r.clients.some(c => {
-        if (c.status === 'Eliminado' || !c.date || c.visitStatus === 'Completado') return false;
+    const hasActivityForToday = r.clients.some(c => {
+        if (c.status === 'Eliminado' || !c.date) return false;
         const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
         return isToday(cDate);
     });
 
-    if (r.status === 'Completada' && !hasPendingClientsForToday) return false;
-    return isToday(rDate) || r.status === 'En Progreso' || hasPendingClientsForToday;
+    if (r.status === 'Completada' && !hasActivityForToday) return false;
+    return isToday(rDate) || r.status === 'En Progreso' || hasActivityForToday;
   });
 
   return (
