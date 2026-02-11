@@ -1,5 +1,5 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales optimizada para reducir consumo de cuota Firestore.
+ * @fileoverview Gestión de estado de autenticación y datos globales.
  */
 
 'use client';
@@ -43,22 +43,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isDataInitialized = useRef(false);
 
   /**
-   * Carga inicial optimizada basada en el rol del usuario para ahorrar cuota Firestore.
+   * Carga inicial de datos globales.
    */
-  const fetchInitialData = useCallback(async (userData: User) => {
+  const fetchInitialData = useCallback(async () => {
     if (isDataInitialized.current) return;
     setDataLoading(true);
     
     try {
-        // Filtro selectivo: Vendedores solo ven SUS datos. Admins ven todo.
-        const ejecutivoFilter = (userData.role === 'Usuario' || userData.role === 'Telemercaderista') ? userData.name : undefined;
-        const routeFilters = userData.role === 'Administrador' ? undefined : 
-                             (userData.role === 'Supervisor' ? { supervisorId: userData.id } : { createdBy: userData.id });
-
         const [usersData, clientsData, routesData, phoneData] = await Promise.all([
-            userData.role === 'Administrador' ? getUsers() : Promise.resolve([]),
-            getClients(ejecutivoFilter),
-            getRoutes(routeFilters),
+            getUsers(),
+            getClients(),
+            getRoutes(),
             getPhoneContacts()
         ]);
 
@@ -75,27 +70,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
   
   const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'routes' | 'phoneContacts') => {
-      if (!user) return;
       try {
-          if (dataType === 'clients') {
-              const ejecutivoFilter = (user.role === 'Usuario' || user.role === 'Telemercaderista') ? user.name : undefined;
-              setClients(await getClients(ejecutivoFilter));
-          }
-          if (dataType === 'users' && user.role === 'Administrador') {
-              setUsers(await getUsers());
-          }
-          if (dataType === 'routes') {
-              const routeFilters = user.role === 'Administrador' ? undefined : 
-                                   (user.role === 'Supervisor' ? { supervisorId: user.id } : { createdBy: user.id });
-              setRoutes(await getRoutes(routeFilters));
-          }
-          if (dataType === 'phoneContacts') {
-              setPhoneContacts(await getPhoneContacts());
-          }
+          if (dataType === 'clients') setClients(await getClients());
+          if (dataType === 'users') setUsers(await getUsers());
+          if (dataType === 'routes') setRoutes(await getRoutes());
+          if (dataType === 'phoneContacts') setPhoneContacts(await getPhoneContacts());
       } catch (error) {
           console.error(`Error al refrescar ${dataType}:`, error);
       }
-  }, [user]);
+  }, []);
 
   const handleMarkNotificationAsRead = async (notificationId: string) => {
     try { await markAsReadFirestore(notificationId); } catch (error) { console.error(error); }
@@ -118,7 +101,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const userData = { id: fbUser.uid, ...doc.data() } as User;
             setUser(userData);
             setLoading(false);
-            fetchInitialData(userData);
+            fetchInitialData();
           } else {
             setLoading(false);
             signOut(auth);

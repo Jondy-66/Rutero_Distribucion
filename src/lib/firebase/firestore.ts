@@ -76,17 +76,8 @@ export const deleteUser = (id: string) => {
 
 const clientsCollection = collection(db, 'clients');
 
-/**
- * Obtiene clientes filtrados opcionalmente por ejecutivo para reducir consumo de cuota Firestore.
- */
-export const getClients = async (ejecutivo?: string): Promise<Client[]> => {
-  let q;
-  if (ejecutivo) {
-    q = query(clientsCollection, where('ejecutivo', '==', ejecutivo));
-  } else {
-    q = query(clientsCollection);
-  }
-  const snapshot = await getDocs(q);
+export const getClients = async (): Promise<Client[]> => {
+  const snapshot = await getDocs(clientsCollection);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
 };
 
@@ -180,18 +171,8 @@ export const addRoute = async (routeData: Omit<RoutePlan, 'id' | 'createdAt'>): 
     return newDocRef.id;
 };
 
-/**
- * Obtiene rutas filtradas por usuario o supervisor para ahorrar cuota Firestore.
- */
-export const getRoutes = async (filters?: { createdBy?: string, supervisorId?: string }): Promise<RoutePlan[]> => {
-    let q = query(routesCollection, orderBy('createdAt', 'desc'), limit(50));
-    
-    if (filters?.createdBy) {
-        q = query(routesCollection, where('createdBy', '==', filters.createdBy), orderBy('createdAt', 'desc'));
-    } else if (filters?.supervisorId) {
-        q = query(routesCollection, where('supervisorId', '==', filters.supervisorId), orderBy('createdAt', 'desc'));
-    }
-    
+export const getRoutes = async (): Promise<RoutePlan[]> => {
+    const q = query(routesCollection, orderBy('createdAt', 'desc'), limit(50));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => {
         const data = doc.data();

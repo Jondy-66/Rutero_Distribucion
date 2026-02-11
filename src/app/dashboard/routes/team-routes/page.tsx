@@ -13,10 +13,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
-import { getRoutes, deleteRoute, updateRoute } from '@/lib/firebase/firestore';
+import { getRoutes, deleteRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, PlayCircle, CheckCircle } from 'lucide-react';
+import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,7 +44,7 @@ import {
 import { Timestamp } from 'firebase/firestore';
 
 export default function TeamRoutesPage() {
-  const { user, users, loading: authLoading, refetchData } = useAuth();
+  const { user, users, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [allRoutes, setAllRoutes] = useState<RoutePlan[]>([]);
@@ -111,34 +111,10 @@ export default function TeamRoutesPage() {
     router.push(`/dashboard/routes/${routeId}`);
   };
 
-  const handleReactivate = async (routeId: string) => {
-    try {
-        await updateRoute(routeId, { status: 'En Progreso' });
-        toast({ title: 'Éxito', description: 'Ruta reactivada correctamente (En Progreso).' });
-        fetchRoutesData(); 
-        await refetchData('routes'); 
-    } catch (error: any) {
-        console.error('Failed to reactivate route:', error);
-        toast({ title: 'Error', description: 'No se pudo reactivar la ruta.', variant: 'destructive' });
-    }
-  };
-
-  const handleForceComplete = async (routeId: string) => {
-    try {
-        await updateRoute(routeId, { status: 'Completada' });
-        toast({ title: 'Éxito', description: 'Ruta marcada como completada correctamente.' });
-        fetchRoutesData(); 
-        await refetchData('routes'); 
-    } catch (error: any) {
-        console.error('Failed to complete route:', error);
-        toast({ title: 'Error', description: 'No se pudo completar la ruta.', variant: 'destructive' });
-    }
-  };
-
   const handleDelete = async (routeId: string) => {
     try {
         await deleteRoute(routeId);
-        toast({ title: 'Éxito', description: 'Ruta eliminada correctamente.' });
+        toast({ title: "Éxito", description: "Ruta eliminada correctamente." });
         fetchRoutesData(); 
     } catch (error: any) {
         console.error('Failed to delete route:', error);
@@ -240,8 +216,6 @@ export default function TeamRoutesPage() {
                             filteredRoutes.map((route, index) => {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
                                 const canDelete = user?.role === 'Administrador';
-                                const canReactivate = user?.role === 'Administrador' && (route.status === 'Incompleta' || route.status === 'Completada' || route.status === 'Rechazada');
-                                const canForceComplete = user?.role === 'Administrador' && (route.status === 'En Progreso' || route.status === 'Incompleta');
                                
                                 return (
                                 <TableRow key={route.id}>
@@ -268,20 +242,6 @@ export default function TeamRoutesPage() {
                                                         {canReview ? "Revisar" : "Ver Detalles"}
                                                     </DropdownMenuItem>
                                                     
-                                                    {canReactivate && (
-                                                        <DropdownMenuItem onClick={() => handleReactivate(route.id)}>
-                                                            <PlayCircle className="mr-2 h-4 w-4 text-green-600" />
-                                                            Volver a En Progreso
-                                                        </DropdownMenuItem>
-                                                    )}
-
-                                                    {canForceComplete && (
-                                                        <DropdownMenuItem onClick={() => handleForceComplete(route.id)}>
-                                                            <CheckCircle className="mr-2 h-4 w-4 text-blue-600" />
-                                                            Finalizar (Completada)
-                                                        </DropdownMenuItem>
-                                                    )}
-
                                                     {canDelete && (
                                                         <>
                                                             <DropdownMenuSeparator />
