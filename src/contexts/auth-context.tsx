@@ -1,5 +1,5 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales optimizada para alto rendimiento.
+ * @fileoverview Gestión de estado de autenticación y datos globales optimizada para reducir consumo de cuota Firestore.
  */
 
 'use client';
@@ -8,7 +8,7 @@ import React, { createContext, useState, useEffect, ReactNode, useCallback, useR
 import { User as FirebaseAuthUser, onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase/config';
 import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
-import { collection, doc, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, Timestamp, orderBy, limit } from 'firebase/firestore';
 import { getClients, getUsers, getRoutes, getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore } from '@/lib/firebase/firestore';
 
 interface AuthContextType {
@@ -27,15 +27,6 @@ interface AuthContextType {
   markAllNotificationsAsRead: () => Promise<void>;
 }
 
-const transformRouteDates = (route: RoutePlan): RoutePlan => ({
-    ...route,
-    date: route.date instanceof Timestamp ? route.date.toDate() : (route.date instanceof Date ? route.date : new Date()),
-    clients: route.clients.map(client => ({
-        ...client,
-        date: client.date instanceof Timestamp ? client.date.toDate() : (client.date instanceof Date ? client.date : undefined)
-    }))
-});
-
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
@@ -51,17 +42,30 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   const isDataInitialized = useRef(false);
 
-  const fetchInitialData = useCallback(async () => {
+  /**
+   * Carga inicial optimizada basada en el rol del usuario.
+   */
+  const fetchInitialData = useCallback(async (userData: User) => {
     if (isDataInitialized.current) return;
     setDataLoading(true);
     
     try {
-        const loadUsers = getUsers().then(data => setUsers(data));
-        const loadClients = getClients().then(data => setClients(data));
-        const loadRoutes = getRoutes().then(data => setRoutes(data.map(transformRouteDates)));
-        const loadPhone = getPhoneContacts().then(data => setPhoneContacts(data));
+        // Los usuarios normales solo cargan SUS clientes y SUS rutas para ahorrar cuota
+        const ejecutivoFilter = (userData.role === 'Usuario' || userData.role === 'Telemercaderista') ? userData.name : undefined;
+        const routeFilters = userData.role === 'Administrador' ? undefined : 
+                             (userData.role === 'Supervisor' ? { supervisorId: userData.id } : { createdBy: userData.id });
 
-        await Promise.all([loadUsers, loadClients, loadRoutes, loadPhone]);
+        const [usersData, clientsData, routesData, phoneData] = await Promise.all([
+            userData.role === 'Administrador' ? getUsers() : Promise.resolve([]), // Solo admin ve a todos
+            getClients(ejecutivoFilter),
+            getRoutes(routeFilters),
+            getPhoneContacts()
+        ]);
+
+        setUsers(usersData);
+        setClients(clientsData);
+        setRoutes(routesData);
+        setPhoneContacts(phoneData);
         isDataInitialized.current = true;
     } catch(error) {
         console.error("Error cargando datos iniciales:", error);
@@ -71,27 +75,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
   
   const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'routes' | 'phoneContacts') => {
+      if (!user) return;
       try {
           if (dataType === 'clients') {
-              const data = await getClients();
-              setClients(data);
+              const ejecutivoFilter = (user.role === 'Usuario' || user.role === 'Telemercaderista') ? user.name : undefined;
+              setClients(await getClients(ejecutivoFilter));
           }
-          if (dataType === 'users') {
-              const data = await getUsers();
-              setUsers(data);
+          if (dataType === 'users' && user.role === 'Administrador') {
+              setUsers(await getUsers());
           }
           if (dataType === 'routes') {
-              const data = await getRoutes();
-              setRoutes(data.map(transformRouteDates));
+              const routeFilters = user.role === 'Administrador' ? undefined : 
+                                   (user.role === 'Supervisor' ? { supervisorId: user.id } : { createdBy: user.id });
+              setRoutes(await getRoutes(routeFilters));
           }
           if (dataType === 'phoneContacts') {
-              const data = await getPhoneContacts();
-              setPhoneContacts(data);
+              setPhoneContacts(await getPhoneContacts());
           }
       } catch (error) {
           console.error(`Error al refrescar ${dataType}:`, error);
       }
-  }, []);
+  }, [user]);
 
   const handleMarkNotificationAsRead = async (notificationId: string) => {
     try { await markAsReadFirestore(notificationId); } catch (error) { console.error(error); }
@@ -109,30 +113,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
         
+        // Listen only to the specific user profile
         const unsubscribeUser = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
             const userData = { id: fbUser.uid, ...doc.data() } as User;
             setUser(userData);
             setLoading(false);
-            fetchInitialData();
+            fetchInitialData(userData);
           } else {
             setLoading(false);
             signOut(auth);
           }
-        }, (error) => {
-            console.error("Error en perfil:", error);
-            setLoading(false);
         });
 
-        const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', fbUser.uid));
+        // Optimized notifications listener
+        const notificationsQuery = query(
+            collection(db, 'notifications'), 
+            where('userId', '==', fbUser.uid),
+            orderBy('createdAt', 'desc'),
+            limit(20) // Only latest 20 to save quota
+        );
         const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
             const notificationsData = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
                 createdAt: doc.data().createdAt instanceof Timestamp ? doc.data().createdAt.toDate() : null,
             } as Notification));
-            
-            setNotifications(notificationsData.sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0)));
+            setNotifications(notificationsData);
         });
 
         return () => {

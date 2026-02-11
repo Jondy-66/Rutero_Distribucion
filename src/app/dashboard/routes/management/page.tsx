@@ -25,28 +25,34 @@ import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 
+/**
+ * Limpia los datos de los clientes antes de enviarlos a Firestore para evitar errores de NaN o undefined.
+ */
 const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
         const cleaned: any = { ...c };
+        
+        // Asegurar que las fechas sean Timestamps válidos
         if (c.date instanceof Date) {
             cleaned.date = Timestamp.fromDate(c.date);
         } else if (c.date && typeof (c.date as any).toDate === 'function') {
-            // Ya es un Timestamp
+            // Ya es un Timestamp, no hacer nada
         } else if (c.date) {
             cleaned.date = Timestamp.fromDate(new Date(c.date as any));
         }
         
-        cleaned.valorVenta = parseFloat(String(c.valorVenta)) || 0;
-        cleaned.valorCobro = parseFloat(String(c.valorCobro)) || 0;
-        cleaned.devoluciones = parseFloat(String(c.devoluciones)) || 0;
-        cleaned.promociones = parseFloat(String(c.promociones)) || 0;
-        cleaned.medicacionFrecuente = parseFloat(String(c.medicacionFrecuente)) || 0;
+        // Convertir campos numéricos y sanitizar vacíos
+        cleaned.valorVenta = parseFloat(String(c.valorVenta || 0)) || 0;
+        cleaned.valorCobro = parseFloat(String(c.valorCobro || 0)) || 0;
+        cleaned.devoluciones = parseFloat(String(c.devoluciones || 0)) || 0;
+        cleaned.promociones = parseFloat(String(c.promociones || 0)) || 0;
+        cleaned.medicacionFrecuente = parseFloat(String(c.medicacionFrecuente || 0)) || 0;
         
+        // Evitar undefined en Firestore
         Object.keys(cleaned).forEach(key => {
-            if (cleaned[key] === undefined) {
-                cleaned[key] = null;
-            }
+            if (cleaned[key] === undefined) cleaned[key] = null;
         });
+        
         return cleaned;
     });
 };
@@ -91,7 +97,7 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Rehidratación de sesión mejorada para considerar rutas completadas con clientes hoy
+  // Rehidratación de sesión mejorada
   useEffect(() => {
     if (!authLoading && !isInitialRehydrationDone.current && SELECTION_KEY && allRoutes.length > 0) {
       const savedId = localStorage.getItem(SELECTION_KEY);
@@ -104,7 +110,6 @@ export default function RouteManagementPage() {
             return isToday(cDate);
           });
 
-          // Si es una ruta antigua finalizada (ayer o antes) sin clientes para hoy, limpiar selección
           const routeMainDate = found.date instanceof Timestamp ? found.date.toDate() : (found.date instanceof Date ? found.date : new Date(found.date));
           const isOldFinishedRoute = found.status === 'Completada' && !isToday(routeMainDate) && !hasClientsForToday;
 
@@ -114,11 +119,9 @@ export default function RouteManagementPage() {
             setSelectedRouteId(savedId);
             setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(found.status));
           }
-          isInitialRehydrationDone.current = true;
         }
-      } else {
-          isInitialRehydrationDone.current = true;
       }
+      isInitialRehydrationDone.current = true;
     }
   }, [authLoading, SELECTION_KEY, allRoutes]);
 
@@ -132,12 +135,12 @@ export default function RouteManagementPage() {
         });
         
         if (hasPendingForToday) {
-            console.log("Detectados clientes pendientes para hoy en ruta completada. Reactivando automáticamente...");
             updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => refetchData('routes'));
         }
     }
   }, [selectedRoute, refetchData]);
 
+  // Sincronización blindada con Escudo Local
   useEffect(() => {
     if (!selectedRoute) return;
 
@@ -151,7 +154,7 @@ export default function RouteManagementPage() {
     if (!isSaving) {
         setCurrentRouteClientsFull(prev => {
             const serverClients = selectedRoute.clients || [];
-            const updated = prev.map(local => {
+            return prev.map(local => {
                 const server = serverClients.find(sc => sc.ruc === local.ruc);
                 if (!server) return local; 
                 
@@ -172,28 +175,14 @@ export default function RouteManagementPage() {
                     callObservation: local.callObservation || server.callObservation,
                     valorVenta: local.valorVenta ?? server.valorVenta,
                     valorCobro: local.valorCobro ?? server.valorCobro,
-                    devoluciones: local.devoluciones ?? server.devoluciones,
                     status: (local.status === 'Activo' || server.status === 'Activo') ? 'Activo' : server.status,
                     date: local.date || server.date,
                 };
             });
-            
-            serverClients.forEach(sc => {
-                if (!updated.find(u => u.ruc === sc.ruc)) {
-                    updated.push(sc);
-                }
-            });
-            return updated;
         });
     }
   }, [selectedRoute, isSaving]);
 
-  const clientsMap = useMemo(() => {
-    const map = new Map<string, Client>();
-    availableClients.forEach(c => map.set(c.ruc, c));
-    return map;
-  }, [availableClients]);
-  
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
         .filter(c => {
@@ -202,22 +191,19 @@ export default function RouteManagementPage() {
             return isToday(cDate);
         })
         .map(c => {
-            const details = clientsMap.get(c.ruc);
+            const details = availableClients.find(ac => ac.ruc === c.ruc);
             return {
                 id: details?.id || c.ruc,
                 ejecutivo: details?.ejecutivo || user?.name || '',
                 nombre_cliente: details?.nombre_cliente || c.nombre_comercial,
                 nombre_comercial: c.nombre_comercial,
                 direccion: details?.direccion || 'Dirección no disponible',
-                provincia: details?.provincia || '',
-                canton: details?.canton || '',
                 latitud: details?.latitud || 0,
                 longitud: details?.longitud || 0,
-                status: details?.status || 'active',
                 ...c,
             } as RouteClient;
         });
-  }, [currentRouteClientsFull, clientsMap, user]);
+  }, [currentRouteClientsFull, availableClients, user]);
 
   useEffect(() => {
     if (!activeRuc && routeClients.length > 0) {
@@ -247,10 +233,7 @@ export default function RouteManagementPage() {
       if (typeof window === 'undefined' || !navigator.geolocation) return resolve(null);
       navigator.geolocation.getCurrentPosition(
         (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-        (error) => {
-            console.warn("Geolocation error:", error.message);
-            resolve(null);
-        },
+        () => resolve(null),
         { enableHighAccuracy: true, timeout: 6000 }
       );
     });
@@ -265,7 +248,6 @@ export default function RouteManagementPage() {
           setIsRouteStarted(true);
           toast({ title: "Ruta Iniciada" });
       } catch (error) { 
-          console.error(error);
           toast({ title: "Error al iniciar ruta", variant: "destructive" });
       } finally { setIsStarting(false); }
   }
@@ -292,7 +274,6 @@ export default function RouteManagementPage() {
         await refetchData('routes');
         toast({ title: "Entrada Registrada" });
     } catch (e) { 
-        console.error("Error in handleCheckIn:", e); 
         toast({ title: "Error al registrar entrada", variant: "destructive" });
     } finally { 
         setIsSaving(false); 
@@ -321,9 +302,6 @@ export default function RouteManagementPage() {
                         checkOutTime: time, 
                         checkOutLocation: location,
                         visitStatus: 'Completado' as const,
-                        valorVenta: parseFloat(String(c.valorVenta)) || 0,
-                        valorCobro: parseFloat(String(c.valorCobro)) || 0,
-                        devoluciones: parseFloat(String(c.devoluciones)) || 0,
                     };
                 }
                 return c;
@@ -345,7 +323,6 @@ export default function RouteManagementPage() {
         toast({ title: "Visita Finalizada" });
         setActiveRuc(null);
     } catch(e) { 
-        console.error("Error in handleConfirmCheckOut:", e); 
         toast({ title: "Error al finalizar visita", variant: "destructive" });
     } finally { 
         setIsSaving(false); 
@@ -385,7 +362,6 @@ export default function RouteManagementPage() {
         await refetchData('routes');
         toast({ title: "Orden actualizado" });
     } catch (e) { 
-        console.error(e); 
         toast({ title: "Error al reordenar lista", variant: "destructive" });
     } finally { setIsSaving(false); }
   };
@@ -427,7 +403,6 @@ export default function RouteManagementPage() {
         await refetchData('routes');
         toast({ title: "Clientes Añadidos" });
     } catch (e) { 
-        console.error(e); 
         toast({ title: "Error al añadir clientes", variant: "destructive" });
     } finally { setIsSaving(false); }
     setIsAddClientDialogOpen(false);
@@ -440,30 +415,18 @@ export default function RouteManagementPage() {
 
   const selectableRoutes = allRoutes.filter(r => {
     const isOwner = r.createdBy === user?.id;
-    // Permitir rutas completadas si tienen trabajo pendiente hoy
     const isSelectableStatus = ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada', 'Completada'].includes(r.status);
     if (!isOwner || !isSelectableStatus) return false;
 
     const rDate = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date(r.date));
-    const mainDateIsToday = isToday(rDate);
-    const isInProgress = r.status === 'En Progreso';
-    
-    const hasClientsForToday = r.clients.some(c => {
-        if (c.status === 'Eliminado' || !c.date) return false;
-        const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
-        return isToday(cDate);
-    });
-
     const hasPendingClientsForToday = r.clients.some(c => {
         if (c.status === 'Eliminado' || !c.date || c.visitStatus === 'Completado') return false;
         const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
         return isToday(cDate);
     });
 
-    // Si está completada, solo mostrar si tiene clientes pendientes para hoy
     if (r.status === 'Completada' && !hasPendingClientsForToday) return false;
-
-    return mainDateIsToday || isInProgress || hasClientsForToday;
+    return isToday(rDate) || r.status === 'En Progreso' || hasPendingClientsForToday;
   });
 
   return (
@@ -523,10 +486,9 @@ export default function RouteManagementPage() {
                             <div className="space-y-2 pr-2">
                                 {availableClients.filter(c => {
                                     const term = addClientSearchTerm.toLowerCase();
-                                    return (user?.role === 'Administrador' || c.ejecutivo === user?.name) && 
-                                           (c.nombre_cliente.toLowerCase().includes(term) || 
-                                            c.nombre_comercial.toLowerCase().includes(term) || 
-                                            c.ruc.includes(term));
+                                    return (c.nombre_cliente.toLowerCase().includes(term) || 
+                                           c.nombre_comercial.toLowerCase().includes(term) || 
+                                           c.ruc.includes(term));
                                 }).map(client => (
                                     <div key={client.id} className={cn("flex items-center gap-3 p-3 rounded-lg border cursor-pointer", multiSelectedClients.some(c => c.ruc === client.ruc) ? "bg-primary/5 border-primary" : "hover:bg-accent")} onClick={() => {
                                         setMultiSelectedClients(prev => prev.some(c => c.ruc === client.ruc) ? prev.filter(c => c.ruc !== client.ruc) : [...prev, client]);
@@ -694,7 +656,7 @@ export default function RouteManagementPage() {
                                         </Label>
                                     </RadioGroup>
                                     {activeClient.visitType === 'telefonica' && (
-                                        <Textarea placeholder="Resultado de la llamada..." value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} className="bg-slate-50 border-slate-200 rounded-xl min-h-[100px] animate-in slide-in-from-top-4 duration-300" />
+                                        <Textarea placeholder="Resultado de la llamada..." value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} className="bg-slate-50 border-slate-200 rounded-xl min-h-[100px]" />
                                     )}
                                 </div>
 

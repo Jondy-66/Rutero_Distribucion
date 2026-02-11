@@ -1,5 +1,3 @@
-
-
 /**
  * @fileoverview Este archivo contiene funciones para interactuar con la base de datos Firestore.
  * Proporciona una capa de abstracción para realizar operaciones CRUD (Crear, Leer, Actualizar, Eliminar)
@@ -7,55 +5,33 @@
  */
 
 import { db } from './config';
-import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp } from 'firebase/firestore';
+import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp, limit } from 'firebase/firestore';
 import type { User, Client, RoutePlan, ClientInRoute, Notification, PhoneContact } from '@/lib/types';
 import { updateUserPasswordAsAdmin } from './auth';
 
 // --- COLECCIÓN DE USUARIOS ---
 
-/**
- * Referencia a la colección 'users' en Firestore.
- */
 const usersCollection = collection(db, 'users');
 
-/**
- * Obtiene todos los usuarios de la base de datos, ordenados por nombre.
- * @returns {Promise<User[]>} Una promesa que se resuelve con un array de objetos User.
- */
 export const getUsers = async (): Promise<User[]> => {
   const q = query(usersCollection, orderBy('name'));
   const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
 };
 
-/**
- * Obtiene todos los usuarios con el rol de 'Supervisor', ordenados por nombre.
- * @returns {Promise<User[]>} Una promesa que se resuelve con un array de objetos User de supervisores.
- */
 export const getSupervisors = async (): Promise<User[]> => {
     const q = query(usersCollection, where('role', '==', 'Supervisor'));
     const snapshot = await getDocs(q);
     const supervisors = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
-    // La ordenación por nombre se hace en el lado del cliente después de la consulta.
     return supervisors.sort((a, b) => a.name.localeCompare(b.name));
 };
 
-/**
- * Obtiene todos los usuarios asignados a un supervisor específico, ordenados por nombre.
- * @param {string} supervisorId - El ID del supervisor.
- * @returns {Promise<User[]>} Una promesa que se resuelve con un array de usuarios asignados.
- */
 export const getUsersBySupervisor = async (supervisorId: string): Promise<User[]> => {
     const q = query(usersCollection, where('supervisorId', '==', supervisorId), orderBy('name'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
 };
 
-/**
- * Obtiene un único usuario por su ID.
- * @param {string} id - El ID del documento del usuario a obtener.
- * @returns {Promise<User | null>} Una promesa que se resuelve con el objeto User o null si no se encuentra.
- */
 export const getUser = async (id: string): Promise<User | null> => {
     const docRef = doc(db, 'users', id);
     const docSnap = await getDoc(docRef);
@@ -65,100 +41,53 @@ export const getUser = async (id: string): Promise<User | null> => {
     return null;
 }
 
-
-/**
- * Obtiene un único usuario por su dirección de correo electrónico.
- * @param {string} email - El correo electrónico del usuario a buscar.
- * @returns {Promise<User | null>} Una promesa que se resuelve con el objeto User o null si no se encuentra.
- */
 export const getUserByEmail = async (email: string): Promise<User | null> => {
-    const q = query(usersCollection, where("email", "==", email));
+    const q = query(usersCollection, where("email", "==", email), limit(1));
     const querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-        return null; // No se encontró ningún usuario con ese correo.
-    }
-
-    // Devuelve el primer usuario encontrado (el correo debe ser único).
+    if (querySnapshot.empty) return null;
     const userDoc = querySnapshot.docs[0];
     return { id: userDoc.id, ...userDoc.data() } as User;
 };
 
-/**
- * Añade un nuevo usuario a la colección 'users' utilizando su UID de Firebase Auth como ID del documento.
- * @param {string} uid - El UID del usuario de Firebase Authentication.
- * @param {Partial<Omit<User, 'id' | 'status'>>} userData - Los datos del usuario a añadir.
- * @returns {Promise<void>} Una promesa que se resuelve cuando el usuario ha sido añadido.
- */
 export const addUser = (uid: string, userData: Partial<Omit<User, 'id' | 'status'>>) => {
     const userDoc = doc(db, "users", uid);
-    // Todos los usuarios nuevos se crean con estado 'active'.
     return setDoc(userDoc, { ...userData, status: 'active', failedLoginAttempts: 0 });
 };
 
-/**
- * Actualiza los datos de un usuario existente.
- * Si se cambia el estado a 'activo', resetea el contador de intentos fallidos.
- * @param {string} id - El ID del documento del usuario a actualizar.
- * @param {Partial<User>} userData - Los campos del usuario a actualizar.
- * @returns {Promise<void>} Una promesa que se resuelve cuando el usuario ha sido actualizado.
- */
 export const updateUser = (id: string, userData: Partial<User>) => {
   const userDoc = doc(db, 'users', id);
   const dataToUpdate = { ...userData };
-
-  // Si el estado se cambia a 'activo', reseteamos los intentos fallidos.
   if (userData.status === 'active') {
     dataToUpdate.failedLoginAttempts = 0;
   }
-  
   return updateDoc(userDoc, dataToUpdate);
 };
 
-/**
- * Llama al endpoint de la API para actualizar la contraseña de un usuario.
- * @param {string} uid - El UID del usuario.
- * @param {string} newPassword - La nueva contraseña.
- * @returns {Promise<void>}
- */
 export const updateUserPassword = async (uid: string, newPassword: string): Promise<void> => {
   return updateUserPasswordAsAdmin(uid, newPassword);
 };
 
-
-/**
- * Elimina un usuario de la colección 'users' en Firestore.
- * Nota: Esto no elimina al usuario de Firebase Authentication.
- * @param {string} id - El ID del documento del usuario a eliminar.
- * @returns {Promise<void>} Una promesa que se resuelve cuando el usuario ha sido eliminado.
- */
 export const deleteUser = (id: string) => {
   const userDoc = doc(db, 'users', id);
   return deleteDoc(userDoc);
 };
 
-
 // --- COLECCIÓN DE CLIENTES ---
 
-/**
- * Referencia a la colección 'clients' en Firestore.
- */
 const clientsCollection = collection(db, 'clients');
 
 /**
- * Obtiene todos los clientes de la base de datos.
- * @returns {Promise<Client[]>} Una promesa que se resuelve con un array de objetos Client.
+ * Obtiene clientes filtrados opcionalmente por ejecutivo para reducir consumo de cuota.
  */
-export const getClients = async (): Promise<Client[]> => {
-  const snapshot = await getDocs(clientsCollection);
+export const getClients = async (ejecutivo?: string): Promise<Client[]> => {
+  let q = query(clientsCollection);
+  if (ejecutivo) {
+    q = query(clientsCollection, where('ejecutivo', '==', ejecutivo));
+  }
+  const snapshot = await getDocs(q);
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
 };
 
-/**
- * Obtiene un único cliente por su ID.
- * @param {string} id - El ID del documento del cliente a obtener.
- * @returns {Promise<Client | null>} Una promesa que se resuelve con el objeto Client o null si no se encuentra.
- */
 export const getClient = async (id: string): Promise<Client | null> => {
     const docRef = doc(db, 'clients', id);
     const docSnap = await getDoc(docRef);
@@ -168,48 +97,23 @@ export const getClient = async (id: string): Promise<Client | null> => {
     return null;
 }
 
-/**
- * Añade un nuevo cliente a la colección 'clients'.
- * @param {Omit<Client, 'id'>} clientData - Los datos del cliente a añadir.
- * @returns {Promise<DocumentReference>} Una promesa que se resuelve con la referencia al documento creado.
- */
 export const addClient = (clientData: Omit<Client, 'id' | 'status'> & {status: 'active' | 'inactive'}) => {
   return addDoc(clientsCollection, clientData);
 };
 
-/**
- * Actualiza los datos de un cliente existente.
- * @param {string} id - El ID del documento del cliente a actualizar.
- * @param {Partial<Client>} clientData - Los campos del cliente a actualizar.
- * @returns {Promise<void>} Una promesa que se resuelve cuando el cliente ha sido actualizado.
- */
 export const updateClient = (id: string, clientData: Partial<Client>) => {
   const clientDoc = doc(db, 'clients', id);
   return updateDoc(clientDoc, clientData);
 };
 
-/**
- * Elimina un cliente de la colección 'clients'.
- * @param {string} id - El ID del documento del cliente a eliminar.
- * @returns {Promise<void>} Una promesa que se resuelve cuando el cliente ha sido eliminado.
- */
 export const deleteClient = (id: string) => {
   const clientDoc = doc(db, 'clients', id);
   return deleteDoc(clientDoc);
 }
 
-/**
- * Añade múltiples clientes en un lote (batch).
- * Verifica la existencia de RUCs para evitar duplicados.
- * @param {Omit<Client, 'id' | 'status'>[]} clientsData - Un array de objetos de cliente a añadir.
- * @returns {Promise<number>} Una promesa que se resuelve con el número de clientes realmente añadidos.
- */
 export const addClientsBatch = async (clientsData: Omit<Client, 'id' | 'status'>[]) => {
     const batch = writeBatch(db);
-    const clientsCollectionRef = collection(db, 'clients');
-    
-    // Obtener todos los RUCs existentes para una verificación eficiente de duplicados.
-    const allClientsSnapshot = await getDocs(clientsCollectionRef);
+    const allClientsSnapshot = await getDocs(query(clientsCollection, limit(1000))); // Limit scan for batch
     const rucsInDb = new Set<string>();
     allClientsSnapshot.forEach(doc => {
         rucsInDb.add(doc.data().ruc);
@@ -217,118 +121,69 @@ export const addClientsBatch = async (clientsData: Omit<Client, 'id' | 'status'>
 
     let addedCount = 0;
     for (const client of clientsData) {
-        // Solo añade el cliente si tiene RUC y no existe ya en la BD.
         if (client.ruc && !rucsInDb.has(client.ruc)) {
-            const newClientRef = doc(clientsCollectionRef); // Firestore genera un ID automático.
+            const newClientRef = doc(clientsCollection);
             batch.set(newClientRef, {...client, status: 'active'});
-            rucsInDb.add(client.ruc); // Añadir al set para evitar duplicados dentro del mismo lote.
+            rucsInDb.add(client.ruc);
             addedCount++;
-        } else {
-            console.warn(`Cliente con RUC ${client.ruc} ya existe o el RUC falta. Omitiendo.`);
         }
     }
-
     await batch.commit();
     return addedCount;
 }
 
-/**
- * Actualiza las ubicaciones de múltiples clientes en un lote.
- * Busca a los clientes por su RUC y actualiza sus datos de ubicación.
- * @param {object[]} locations - Un array de objetos con los datos de ubicación a actualizar.
- * @returns {Promise<void>} Una promesa que se resuelve cuando todas las ubicaciones han sido actualizadas.
- */
 export const updateClientLocations = async (locations: { ruc: string; provincia: string; canton: string; direccion: string; latitud: number; longitud: number; }[]) => {
     const batch = writeBatch(db);
-    const clientsCollectionRef = collection(db, 'clients');
-    
     for (const location of locations) {
-        // Encontrar al cliente por su RUC.
-        const q = query(clientsCollectionRef, where("ruc", "==", location.ruc));
+        const q = query(clientsCollection, where("ruc", "==", location.ruc), limit(1));
         const querySnapshot = await getDocs(q);
-
         if (!querySnapshot.empty) {
             const clientDoc = querySnapshot.docs[0];
-            const clientDocRef = doc(db, 'clients', clientDoc.id);
-            batch.update(clientDocRef, {
+            batch.update(doc(db, 'clients', clientDoc.id), {
                 provincia: location.provincia,
                 canton: location.canton,
                 direccion: location.direccion,
                 latitud: location.latitud,
                 longitud: location.longitud,
             });
-        } else {
-            console.warn(`Cliente con RUC ${location.ruc} no encontrado. Omitiendo actualización.`);
         }
     }
-
     await batch.commit();
 }
 
-
 // --- COLECCIÓN DE RUTAS ---
 
-/**
- * Referencia a la colección 'routes' en Firestore.
- */
 const routesCollection = collection(db, 'routes');
 
-/**
- * Tipo auxiliar para guardar rutas, convirtiendo la fecha a Timestamp de Firestore.
- */
-type RouteToSave = Omit<RoutePlan, 'id' | 'createdAt'>;
-
-/**
- * Añade múltiples planes de ruta en un lote.
- * @param {RouteToSave[]} routesData - Un array de objetos de ruta a guardar.
- * @returns {Promise<string[]>} Una promesa que se resuelve con los IDs de las nuevas rutas.
- */
-export const addRoutesBatch = async (routesData: RouteToSave[]): Promise<string[]> => {
+export const addRoutesBatch = async (routesData: Omit<RoutePlan, 'id' | 'createdAt'>[]): Promise<string[]> => {
     const batch = writeBatch(db);
     const newRouteIds: string[] = [];
-    
     for (const route of routesData) {
         const newRouteRef = doc(routesCollection);
         newRouteIds.push(newRouteRef.id);
-        
-        const clientsWithTimestamps = route.clients.map(client => {
-            const dateObj = client.date ? (client.date instanceof Date ? client.date : new Date(client.date as any)) : null;
-            return {
-                ...client,
-                date: dateObj && !isNaN(dateObj.getTime()) ? Timestamp.fromDate(dateObj) : null,
-            };
-        });
-        
+        const clientsWithTimestamps = route.clients.map(client => ({
+            ...client,
+            date: client.date ? Timestamp.fromDate(new Date(client.date as any)) : null,
+        }));
         batch.set(newRouteRef, {
             ...route, 
-            date: route.date && route.date instanceof Date ? Timestamp.fromDate(route.date) : serverTimestamp(),
+            date: route.date ? Timestamp.fromDate(new Date(route.date as any)) : serverTimestamp(),
             clients: clientsWithTimestamps,
             createdAt: serverTimestamp()
         });
     }
-
     await batch.commit();
     return newRouteIds;
 }
 
-/**
- * Añade un único plan de ruta a Firestore.
- * @param {Omit<RoutePlan, 'id' | 'createdAt'>} routeData - El objeto de ruta a guardar. La fecha debe ser un Timestamp.
- * @returns {Promise<string>} Una promesa que se resuelve con el ID del documento creado.
- */
 export const addRoute = async (routeData: Omit<RoutePlan, 'id' | 'createdAt'>): Promise<string> => {
-    // Convert client dates to Timestamps
-    const clientsWithTimestamps = (routeData.clients as ClientInRoute[]).map(client => ({
+    const clientsWithTimestamps = routeData.clients.map(client => ({
         ...client,
-        date: client.date ? Timestamp.fromDate(client.date) : null,
-        dayOfWeek: client.dayOfWeek || null,
-        startTime: client.startTime || null,
-        endTime: client.endTime || null,
+        date: client.date ? Timestamp.fromDate(new Date(client.date as any)) : null,
     }));
-
     const newDocRef = await addDoc(routesCollection, {
         ...routeData,
-        date: routeData.date ? Timestamp.fromDate(routeData.date) : serverTimestamp(),
+        date: routeData.date ? Timestamp.fromDate(new Date(routeData.date as any)) : serverTimestamp(),
         clients: clientsWithTimestamps,
         createdAt: serverTimestamp()
     });
@@ -336,131 +191,57 @@ export const addRoute = async (routeData: Omit<RoutePlan, 'id' | 'createdAt'>): 
 };
 
 /**
- * Obtiene todas las rutas planificadas, ordenadas por la fecha del primer cliente.
- * @returns {Promise<RoutePlan[]>} Una promesa que se resuelve con un array de objetos RoutePlan.
+ * Obtiene rutas filtradas por usuario o supervisor para ahorrar cuota.
  */
-export const getRoutes = async (): Promise<RoutePlan[]> => {
-    const q = query(routesCollection, orderBy('createdAt', 'desc'));
+export const getRoutes = async (filters?: { createdBy?: string, supervisorId?: string }): Promise<RoutePlan[]> => {
+    let q = query(routesCollection, orderBy('createdAt', 'desc'), limit(100)); // Limit per user
+    if (filters?.createdBy) {
+        q = query(routesCollection, where('createdBy', '==', filters.createdBy), orderBy('createdAt', 'desc'));
+    } else if (filters?.supervisorId) {
+        q = query(routesCollection, where('supervisorId', '==', filters.supervisorId), orderBy('createdAt', 'desc'));
+    }
+    
     const snapshot = await getDocs(q);
-    const routes = snapshot.docs.map(doc => {
+    return snapshot.docs.map(doc => {
         const data = doc.data();
-        const routeDate = data.date ? (data.date as Timestamp).toDate() : new Date();
-        const clients = (data.clients as any[]).map(client => ({
-            ...client,
-            date: client.date ? (client.date as Timestamp).toDate() : undefined
-        }));
         return {
             id: doc.id,
             ...data,
-            date: routeDate,
-            clients,
+            date: data.date ? (data.date as Timestamp).toDate() : new Date(),
+            clients: (data.clients as any[]).map(c => ({ ...c, date: c.date ? (c.date as Timestamp).toDate() : undefined }))
         } as RoutePlan;
-    });
-
-    return routes.sort((a, b) => {
-        const dateA = a.date instanceof Date ? a.date : null;
-        const dateB = b.date instanceof Date ? b.date : null;
-        if (dateA && dateB && !isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) return dateB.getTime() - dateA.getTime();
-        if (dateA && !isNaN(dateA.getTime())) return -1;
-        if (dateB && !isNaN(dateB.getTime())) return 1;
-        return 0;
     });
 };
 
-/**
- * Obtiene un único plan de ruta por su ID.
- * @param {string} id - El ID del documento de la ruta a obtener.
- * @returns {Promise<RoutePlan | null>} Una promesa que se resuelve con el objeto RoutePlan o null si no se encuentra.
- */
 export const getRoute = async (id: string): Promise<RoutePlan | null> => {
     const docRef = doc(db, 'routes', id);
     const docSnap = await getDoc(docRef);
     if(docSnap.exists()) {
         const data = docSnap.data();
-        const routeDate = data.date ? (data.date as Timestamp).toDate() : new Date();
-        // Convierte los Timestamps de cliente a objetos Date de JavaScript.
-        const clients = (data.clients as any[]).map(client => ({
-            ...client,
-            date: client.date ? (client.date as Timestamp).toDate() : undefined
-        }));
         return {
             id: docSnap.id,
             ...data,
-            date: routeDate,
-            clients,
+            date: data.date ? (data.date as Timestamp).toDate() : new Date(),
+            clients: (data.clients as any[]).map(c => ({ ...c, date: c.date ? (c.date as Timestamp).toDate() : undefined }))
         } as RoutePlan;
     }
     return null;
 };
 
-/**
- * Actualiza los datos de un plan de ruta existente.
- * @param {string} id - El ID del documento de la ruta a actualizar.
- * @param {Partial<RoutePlan>} routeData - Los campos de la ruta a actualizar.
- * @returns {Promise<void>} Una promesa que se resuelve cuando la ruta ha sido actualizada.
- */
 export const updateRoute = (id: string, routeData: Partial<Omit<RoutePlan, 'id'>>) => {
     const routeDoc = doc(db, 'routes', id);
     return updateDoc(routeDoc, routeData);
 };
 
-
-/**
- * Obtiene todas las rutas asignadas a un supervisor específico, ordenadas por fecha descendente.
- * @param {string} supervisorId - El ID del supervisor.
- * @returns {Promise<RoutePlan[]>} Una promesa que se resuelve con un array de objetos RoutePlan.
- */
-export const getRoutesBySupervisor = async (supervisorId: string): Promise<RoutePlan[]> => {
-    const q = query(routesCollection, where("supervisorId", "==", supervisorId));
-    const snapshot = await getDocs(q);
-    const routes = snapshot.docs.map(doc => {
-        const data = doc.data();
-        const routeDate = data.date ? (data.date as Timestamp).toDate() : new Date();
-         const clients = (data.clients as any[]).map(client => ({
-            ...client,
-            date: client.date ? (client.date as Timestamp).toDate() : undefined
-        }));
-        return {
-            id: doc.id,
-            ...data,
-            date: routeDate,
-            clients,
-        } as RoutePlan;
-    });
-
-    return routes.sort((a, b) => {
-        const dateA = a.date instanceof Date ? a.date : null;
-        const dateB = b.date instanceof Date ? b.date : null;
-        if (dateA && dateB && !isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) return dateB.getTime() - dateA.getTime();
-        if (dateA && !isNaN(dateA.getTime())) return -1;
-        if (dateB && !isNaN(dateB.getTime())) return 1;
-        return 0;
-    });
-};
-
-/**
- * Elimina una ruta de la colección 'routes'.
- * @param {string} id - El ID del documento de la ruta a eliminar.
- * @returns {Promise<void>} Una promesa que se resuelve cuando la ruta ha sido eliminada.
- */
 export const deleteRoute = (id: string) => {
   const routeDoc = doc(db, 'routes', id);
   return deleteDoc(routeDoc);
 };
 
+// --- NOTIFICACIONES ---
 
-// --- COLECCIÓN DE NOTIFICACIONES ---
-
-/**
- * Referencia a la colección 'notifications' en Firestore.
- */
 const notificationsCollection = collection(db, 'notifications');
 
-/**
- * Añade una nueva notificación a Firestore.
- * @param {Omit<Notification, 'id' | 'createdAt' | 'read'>} notificationData - Los datos de la notificación a añadir.
- * @returns {Promise<void>}
- */
 export const addNotification = (notificationData: Omit<Notification, 'id' | 'createdAt' | 'read'>) => {
     return addDoc(notificationsCollection, {
         ...notificationData,
@@ -469,66 +250,36 @@ export const addNotification = (notificationData: Omit<Notification, 'id' | 'cre
     });
 };
 
-/**
- * Marca una notificación específica como leída.
- * @param {string} notificationId - El ID de la notificación a marcar como leída.
- * @returns {Promise<void>}
- */
 export const markNotificationAsRead = (notificationId: string) => {
     const notificationDoc = doc(db, 'notifications', notificationId);
     return updateDoc(notificationDoc, { read: true });
 };
 
-/**
- * Marca todas las notificaciones de un usuario como leídas.
- * @param {string} userId - El ID del usuario cuyas notificaciones se marcarán como leídas.
- * @returns {Promise<void>}
- */
 export const markAllNotificationsAsRead = async (userId: string) => {
     const q = query(notificationsCollection, where('userId', '==', userId), where('read', '==', false));
     const snapshot = await getDocs(q);
     const batch = writeBatch(db);
-    snapshot.docs.forEach(doc => {
-        batch.update(doc.ref, { read: true });
-    });
+    snapshot.docs.forEach(doc => batch.update(doc.ref, { read: true }));
     return batch.commit();
 };
 
+// --- CRM ---
 
-// --- COLECCIÓN DE CONTACTOS TELEFÓNICOS (CRM) ---
 const phoneContactsCollection = collection(db, 'phoneContacts');
 
-/**
- * Obtiene todos los contactos telefónicos de la base de datos.
- * @returns {Promise<PhoneContact[]>} Una promesa que se resuelve con un array de objetos PhoneContact.
- */
 export const getPhoneContacts = async (): Promise<PhoneContact[]> => {
-    const snapshot = await getDocs(phoneContactsCollection);
+    const snapshot = await getDocs(query(phoneContactsCollection, limit(500)));
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as PhoneContact[];
 };
 
-/**
- * Añade un nuevo contacto telefónico a la colección.
- * @param {Omit<PhoneContact, 'id'>} contactData - Los datos del contacto a añadir.
- * @returns {Promise<void>} Una promesa que se resuelve cuando el contacto ha sido añadido.
- */
 export const addPhoneContact = async (contactData: Omit<PhoneContact, 'id'>): Promise<void> => {
     await addDoc(phoneContactsCollection, contactData);
 };
 
-
-/**
- * Añade múltiples contactos telefónicos en un lote (batch).
- * @param {Omit<PhoneContact, 'id'>[]} contactsData - Un array de objetos de contacto a añadir.
- * @returns {Promise<void>}
- */
 export const addPhoneContactsBatch = async (contactsData: Omit<PhoneContact, 'id'>[]) => {
     const batch = writeBatch(db);
-    
     for (const contact of contactsData) {
-        const newContactRef = doc(phoneContactsCollection);
-        batch.set(newContactRef, contact);
+        batch.set(doc(phoneContactsCollection), contact);
     }
-
     await batch.commit();
 }
