@@ -79,25 +79,23 @@ export default function RouteManagementPage() {
     };
   }, []);
 
-  const SELECTION_KEY = user ? `mgmt_selected_route_v2_${user.id}` : null;
+  const SELECTION_KEY = user ? `mgmt_selected_route_v3_${user.id}` : null;
 
   // Filtro inteligente de rutas para hoy
   const selectableRoutes = useMemo(() => {
     return allRoutes.filter(r => {
-        if (r.createdBy !== user?.id) return false;
+        const isOwner = r.createdBy === user?.id;
+        if (!isOwner) return false;
         
-        // Rutas válidas: Planificadas, En Progreso, Incompletas, o incluso Completadas si tienen actividad hoy
         const basicStatus = ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada', 'Completada'].includes(r.status);
         if (!basicStatus) return false;
 
-        // Comprobar si tiene clientes para hoy (pendientes o completados)
         const hasActivityToday = r.clients?.some(c => {
             if (c.status === 'Eliminado' || !c.date) return false;
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
             return isToday(cDate);
         });
 
-        // Si ya está seleccionada o tiene actividad hoy, la mostramos
         if (r.id === selectedRouteId) return true;
         if (r.status === 'En Progreso') return true;
 
@@ -110,21 +108,39 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Rehidratación de sesión mejorada para evitar carga infinita
+  // Rehidratación de sesión robusta: espera a que la data esté cargada
   useEffect(() => {
-    if (!authLoading && !dataLoading && !isInitialRehydrationDone.current && SELECTION_KEY) {
-      const savedId = localStorage.getItem(SELECTION_KEY);
-      if (savedId && allRoutes.length > 0) {
+    if (authLoading || dataLoading) return;
+    if (isInitialRehydrationDone.current || !SELECTION_KEY) return;
+
+    const savedId = localStorage.getItem(SELECTION_KEY);
+    
+    // Prioridad 1: Sesión guardada
+    if (savedId && allRoutes.length > 0) {
         const found = allRoutes.find(r => r.id === savedId);
         if (found) {
             setSelectedRouteId(savedId);
             setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(found.status));
+            isInitialRehydrationDone.current = true;
+            return;
         }
-      }
-      // Marcamos como finalizado siempre para liberar la UI
-      isInitialRehydrationDone.current = true;
     }
-  }, [authLoading, dataLoading, SELECTION_KEY, allRoutes]);
+
+    // Prioridad 2: Auto-seleccionar si ya hay una "En Progreso"
+    const activeRoute = allRoutes.find(r => r.status === 'En Progreso' && r.createdBy === user?.id);
+    if (activeRoute) {
+        setSelectedRouteId(activeRoute.id);
+        setIsRouteStarted(true);
+        localStorage.setItem(SELECTION_KEY, activeRoute.id);
+        isInitialRehydrationDone.current = true;
+        return;
+    }
+
+    // Si llegamos aquí y hay data, marcamos como terminado
+    if (allRoutes.length > 0 || !dataLoading) {
+        isInitialRehydrationDone.current = true;
+    }
+  }, [authLoading, dataLoading, SELECTION_KEY, allRoutes, user]);
 
   // Motor de Reactivación Automática y Sincronización
   useEffect(() => {
@@ -133,7 +149,6 @@ export default function RouteManagementPage() {
     const clients = selectedRoute.clients || [];
     setCurrentRouteClientsFull(clients);
     
-    // Si la ruta está "Completada" pero detectamos clientes pendientes para HOY, la reactivamos sola
     const hasPendingToday = clients.some(c => {
         if (c.status === 'Eliminado' || !c.date) return false;
         const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
@@ -172,10 +187,10 @@ export default function RouteManagementPage() {
 
   const filteredAvailableClients = useMemo(() => {
     if (!isAddClientDialogOpen) return [];
-    const search = addClientSearchTerm.toLowerCase();
+    const search = addClientSearchTerm.toLowerCase().trim();
     
     return availableClients
-        .filter(c => c.ejecutivo?.trim() === user?.name?.trim())
+        .filter(c => c.ejecutivo?.trim().toLowerCase() === user?.name?.trim().toLowerCase())
         .filter(c => {
             if (!search) return true;
             return (
@@ -404,7 +419,7 @@ export default function RouteManagementPage() {
         </Card>
     ) : (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="lg:col-span-1 shadow-md">
+        <Card className="lg:col-span-1 shadow-md h-fit">
             <CardHeader className="pb-3 px-4">
                 <CardTitle className="text-lg truncate">{selectedRoute?.routeName}</CardTitle>
                 <p className="text-muted-foreground text-xs capitalize">{todayFormatted}</p>
@@ -523,24 +538,28 @@ export default function RouteManagementPage() {
 
         <div className="lg:col-span-2 space-y-6">
             <Card className="shadow-lg border-t-4 border-t-primary">
-                <CardHeader className="bg-muted/10 pb-6">
+                <CardHeader className="bg-muted/10 pb-6 rounded-t-lg">
                     {activeClient ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                             <div className="flex items-start justify-between gap-4">
                                 <div className="space-y-1 flex-1 min-w-0">
-                                    <h3 className="text-2xl font-black text-primary leading-tight break-words">{activeClient.nombre_comercial}</h3>
-                                    <p className="text-[10px] font-mono text-muted-foreground tracking-widest">{activeClient.ruc}</p>
+                                    <h3 className="text-2xl font-black text-primary leading-tight break-words uppercase">{activeClient.nombre_comercial}</h3>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Badge variant="outline" className="font-mono text-[10px] tracking-widest">{activeClient.ruc}</Badge>
+                                        <Badge variant="secondary" className="text-[9px] font-bold uppercase">{activeClient.ejecutivo}</Badge>
+                                    </div>
                                 </div>
-                                <Badge variant="outline" className="shrink-0 bg-background text-[10px] px-2 py-0 h-6 font-bold">{activeClient.ejecutivo}</Badge>
                             </div>
-                            <div className="flex items-start gap-2 p-3 bg-white/50 rounded-xl border border-dashed border-primary/20">
-                                <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                                <p className="text-sm font-medium leading-relaxed">{activeClient.direccion}</p>
+                            <div className="flex items-start gap-3 p-4 bg-white/80 rounded-2xl border border-primary/10 shadow-sm">
+                                <div className="bg-primary/10 p-2 rounded-full mt-0.5">
+                                    <MapPin className="h-4 w-4 text-primary" />
+                                </div>
+                                <p className="text-sm font-semibold leading-relaxed text-muted-foreground">{activeClient.direccion}</p>
                             </div>
                         </div>
                     ) : (
                         <div className="text-center py-4">
-                            <CardTitle className="text-muted-foreground">Selecciona un cliente de la lista</CardTitle>
+                            <CardTitle className="text-muted-foreground">Selecciona un cliente para gestionar</CardTitle>
                         </div>
                     )}
                 </CardHeader>
@@ -551,8 +570,8 @@ export default function RouteManagementPage() {
                                 "p-5 rounded-2xl border-2 transition-all duration-500", 
                                 activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-muted/20 border-dashed border-muted-foreground/30"
                             )}>
-                                <div className="flex items-center justify-between gap-4">
-                                    <div className="flex items-center gap-4">
+                                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <div className="flex items-center gap-4 w-full sm:w-auto">
                                         <div className={cn(
                                             "p-3 rounded-xl shadow-sm transition-colors", 
                                             activeClient.checkInTime ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"
@@ -566,12 +585,12 @@ export default function RouteManagementPage() {
                                                     <span className="text-green-600 flex items-center gap-1">
                                                         <Clock className="h-3 w-3" /> LLEGADA: {activeClient.checkInTime}
                                                     </span>
-                                                ) : 'Pendiente de registrar'}
+                                                ) : 'Presiona el botón al llegar'}
                                             </p>
                                         </div>
                                     </div>
                                     {!activeClient.checkInTime && (
-                                        <Button size="lg" onClick={handleCheckIn} disabled={isSaving || isLocating} className="h-14 px-8 font-black shadow-lg shadow-primary/20">
+                                        <Button size="lg" onClick={handleCheckIn} disabled={isSaving || isLocating} className="w-full sm:w-auto h-14 px-8 font-black shadow-lg shadow-primary/20">
                                             {isLocating ? <LoaderCircle className="animate-spin mr-2" /> : "MARCAR ENTRADA"}
                                         </Button>
                                     )}
@@ -638,7 +657,7 @@ export default function RouteManagementPage() {
                                         {isLocating ? (
                                             <div className="flex items-center gap-3">
                                                 <LoaderCircle className="animate-spin h-6 w-6" />
-                                                <span>UBICANDO...</span>
+                                                <span>Sincronizando GPS...</span>
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-3">
@@ -656,8 +675,8 @@ export default function RouteManagementPage() {
                                 <CheckCircle className="h-16 w-16 opacity-20" />
                             </div>
                             <div className="space-y-1">
-                                <h3 className="text-xl font-black uppercase tracking-tight">Sin cliente activo</h3>
-                                <p className="text-sm font-medium">Selecciona un cliente de la izquierda para iniciar la gestión.</p>
+                                <h3 className="text-xl font-black uppercase tracking-tight">Sin cliente seleccionado</h3>
+                                <p className="text-sm font-medium">Elige una parada de la lista para registrar tu gestión.</p>
                             </div>
                         </div>
                     )}

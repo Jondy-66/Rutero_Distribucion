@@ -51,19 +51,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     
     const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor';
     
-    // Ejecutamos cargas de forma independiente para que el fallo de una no bloquee a las demás
     try {
-        const [usersRes, clientsRes, routesRes, phoneRes] = await Promise.allSettled([
+        // Ejecutamos cargas de forma independiente para que el fallo de una no bloquee a las demás
+        const results = await Promise.allSettled([
             getUsers(),
             isSourcingAll ? getClients() : getMyClients(currentUser.name),
             isSourcingAll ? getRoutes() : getMyRoutes(currentUser.id),
             getPhoneContacts()
         ]);
 
-        if (usersRes.status === 'fulfilled') setUsers(usersRes.value);
-        if (clientsRes.status === 'fulfilled') setClients(clientsRes.value);
-        if (routesRes.status === 'fulfilled') setRoutes(routesRes.value);
-        if (phoneRes.status === 'fulfilled') setPhoneContacts(phoneRes.value);
+        if (results[0].status === 'fulfilled') setUsers(results[0].value);
+        if (results[1].status === 'fulfilled') setClients(results[1].value);
+        if (results[2].status === 'fulfilled') setRoutes(results[2].value);
+        if (results[3].status === 'fulfilled') setPhoneContacts(results[3].value);
         
         isDataInitialized.current = true;
     } catch(error) {
