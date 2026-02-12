@@ -91,7 +91,8 @@ export default function NewRoutePage() {
             const clientsFromPrediction: ClientInRoute[] = predictionData.clients.map((c: any) => ({
                 ...c,
                 date: c.date ? new Date(c.date) : new Date(),
-                origin: 'predicted'
+                origin: 'predicted',
+                status: 'Activo'
             }));
             
             setRouteName(predictionData.routeName || '');
@@ -163,7 +164,7 @@ export default function NewRoutePage() {
         tempId: Date.now(),
         routeName,
         date: routeDate,
-        clients: selectedClients,
+        clients: [...selectedClients], // Ensure we capture individual dates
         status: 'Planificada',
         supervisorId: selectedSupervisorId,
         supervisorName: supervisor.name,
@@ -214,7 +215,7 @@ export default function NewRoutePage() {
     try {
         const routesToSave = stagedRoutes.map(({ tempId, ...rest }) => ({
             ...rest,
-            status: sendForApproval ? 'Pendiente de Aprobación' : 'Planificada'
+            status: (sendForApproval ? 'Pendiente de Aprobación' : 'Planificada') as RoutePlan['status']
         }));
 
         const routeIds = await addRoutesBatch(routesToSave);
@@ -262,35 +263,38 @@ export default function NewRoutePage() {
   };
 
   const handleConfirmClientSelection = () => {
+    const mainRouteDateObj = routeDate instanceof Date ? routeDate : (routeDate ? new Date(routeDate) : new Date());
+    
     const newClientsInRoute: ClientInRoute[] = dialogSelectedClients.map(client => {
         const existingClient = selectedClients.find(sc => sc.ruc === client.ruc);
         if (existingClient) {
-            // CRITICAL: Preserve existing individual client date if it exists
-            return { ...existingClient, status: 'Activo', date: existingClient.date || routeDate };
+            // CRITICAL: Strictly preserve existing individual client date
+            return { 
+                ...existingClient, 
+                status: 'Activo', 
+                date: existingClient.date ? new Date(existingClient.date) : mainRouteDateObj 
+            };
         }
-        // This is a newly added client
         return {
             ruc: client.ruc,
             nombre_comercial: client.nombre_comercial,
-            date: routeDate || new Date(),
+            date: mainRouteDateObj,
             origin: 'manual',
             status: 'Activo'
         };
     });
-    // This logic ensures unselected clients are marked as 'Eliminado'
+
     const finalClients = selectedClients.map(originalClient => {
         const isStillSelected = newClientsInRoute.some(nc => nc.ruc === originalClient.ruc);
         if (isStillSelected) {
             return newClientsInRoute.find(nc => nc.ruc === originalClient.ruc)!;
         }
-        // If it's not in the new selection, but was in the old one, mark it
         return {
             ...originalClient,
             status: 'Eliminado' as const,
             removalObservation: originalClient.removalObservation || 'Eliminado de la selección',
         };
     }).concat(
-        // Add clients that are in the new selection but not in the old one
         newClientsInRoute.filter(nc => !selectedClients.some(oc => oc.ruc === nc.ruc))
     );
 
@@ -357,7 +361,7 @@ export default function NewRoutePage() {
     const dateKey = format(currentAddDate, 'yyyy-MM-dd');
     const existingRucsForDate = new Set(
       selectedClients
-        .filter(c => c.date && format(c.date, 'yyyy-MM-dd') === dateKey && c.status !== 'Eliminado')
+        .filter(c => c.date && format(new Date(c.date), 'yyyy-MM-dd') === dateKey && c.status !== 'Eliminado')
         .map(c => c.ruc)
     );
     
@@ -378,7 +382,7 @@ export default function NewRoutePage() {
 
   const activeClientsWithIndex = useMemo(() => 
     selectedClients
-      .map((c, i) => ({...c, originalIndex: i})) // keep original index if needed
+      .map((c, i) => ({...c, originalIndex: i})) 
       .filter(c => c.status !== 'Eliminado')
       .map((c, i) => ({...c, globalIndex: i}))
   , [selectedClients]);
@@ -387,7 +391,8 @@ export default function NewRoutePage() {
     const groups: { [date: string]: typeof activeClientsWithIndex } = {};
     
     activeClientsWithIndex.forEach(client => {
-        const clientDateKey = client.date ? format(client.date, 'yyyy-MM-dd') : 'Sin Fecha';
+        const dateObj = client.date ? new Date(client.date) : null;
+        const clientDateKey = dateObj && !isNaN(dateObj.getTime()) ? format(dateObj, 'yyyy-MM-dd') : 'Sin Fecha';
         if (!groups[clientDateKey]) {
           groups[clientDateKey] = [];
         }
@@ -452,13 +457,13 @@ export default function NewRoutePage() {
                                 disabled={isFormDisabled}
                             >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                {routeDate ? format(routeDate, "PPP", {locale: es}) : <span>Elige una fecha</span>}
+                                {routeDate ? format(new Date(routeDate), "PPP", {locale: es}) : <span>Elige una fecha</span>}
                             </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-auto p-0">
                             <Calendar
                                 mode="single"
-                                selected={routeDate}
+                                selected={routeDate ? new Date(routeDate) : undefined}
                                 onSelect={setRouteDate}
                                 initialFocus
                                 locale={es}
@@ -476,7 +481,48 @@ export default function NewRoutePage() {
             <Separator />
 
             <div className="space-y-2">
-              <Label>Clientes en la Ruta</Label>
+              <div className="flex items-center justify-between">
+                <Label>Clientes en la Ruta</Label>
+                <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button variant="link" size="sm" className="h-auto p-0" disabled={isFormDisabled}>
+                            Gestionar Selección ({selectedClients.filter(c => c.status !== 'Eliminado').length})
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="max-w-2xl">
+                        <DialogHeader>
+                            <DialogTitle>Seleccionar Clientes</DialogTitle>
+                            <DialogDescription>Añade o quita clientes de tu plan general.</DialogDescription>
+                        </DialogHeader>
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input placeholder="Buscar..." className="pl-8" value={dialogSearchTerm} onChange={(e) => setDialogSearchTerm(e.target.value)}/>
+                        </div>
+                        <ScrollArea className="h-72">
+                            <div className="space-y-2 p-1">
+                            {filteredAvailableClients.map(client => (
+                                <div key={client.id} className="flex items-center justify-between p-2 rounded-md hover:bg-muted">
+                                    <div className="flex items-center space-x-3">
+                                        <Checkbox 
+                                            id={`client-diag-${client.id}`}
+                                            checked={dialogSelectedClients.some(c => c.ruc === client.ruc)}
+                                            onCheckedChange={() => handleDialogClientToggle(client)}
+                                        />
+                                        <Label htmlFor={`client-diag-${client.id}`} className="font-normal cursor-pointer">
+                                            <p className="font-medium">{client.nombre_comercial}</p>
+                                            <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                                        </Label>
+                                    </div>
+                                </div>
+                            ))}
+                            </div>
+                        </ScrollArea>
+                        <DialogFooter>
+                            <Button onClick={handleConfirmClientSelection}>Confirmar Selección</Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+              </div>
                <div className="flex h-10 w-full items-center rounded-md border border-input bg-background/50 px-3 py-2 text-sm text-muted-foreground">
                   <Users className="mr-2 h-4 w-4"/>
                   <span>{selectedClients.filter(c => c.status !== 'Eliminado').length} cliente(s) en la ruta</span>
@@ -507,7 +553,7 @@ export default function NewRoutePage() {
                                       disabled={isFormDisabled || date === 'Sin Fecha'}
                                   >
                                       <PlusCircle className="h-4 w-4 mr-1" />
-                                      Añadir clientes
+                                      Añadir
                                   </Button>
                                    <div className="p-1.5">
                                       <ChevronsUpDown className="h-4 w-4 text-muted-foreground" />
@@ -556,11 +602,11 @@ export default function NewRoutePage() {
                                             <PopoverTrigger asChild>
                                                 <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !client.date && 'text-muted-foreground')} disabled={isFormDisabled}>
                                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                                {client.date ? format(client.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
+                                                {client.date ? format(new Date(client.date), 'PPP', { locale: es }) : <span>Elige una fecha</span>}
                                                 </Button>
                                             </PopoverTrigger>
                                             <PopoverContent className="p-0">
-                                                <Calendar mode="single" selected={client.date} onSelect={(date) => handleClientDetailChange(client.ruc, 'date', date)} initialFocus locale={es} />
+                                                <Calendar mode="single" selected={client.date ? new Date(client.date) : undefined} onSelect={(date) => handleClientDetailChange(client.ruc, 'date', date)} initialFocus locale={es} />
                                                 <div className="p-2 border-t border-border"><Button onClick={() => setCalendarOpen(prev => ({ ...prev, [client.ruc]: false }))} className="w-full">Seleccionar</Button></div>
                                             </PopoverContent>
                                             </Popover>
@@ -580,41 +626,6 @@ export default function NewRoutePage() {
                                             </Select>
                                         </div>
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-2">
-                                        <div className="space-y-2">
-                                            <Label htmlFor={`valor-venta-${client.ruc}`}>Valor de Venta ($)</Label>
-                                            <Input id={`valor-venta-${client.ruc}`} type="text" placeholder="0.00" value={client.valorVenta ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor={`valor-cobro-${client.ruc}`}>Valor a Cobrar ($)</Label>
-                                            <Input id={`valor-cobro-${client.ruc}`} type="text" placeholder="0.00" value={client.valorCobro ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor={`tipo-cobro-${client.ruc}`}>Tipo de Cobro</Label>
-                                            <Select value={client.tipoCobro} onValueChange={(value: any) => handleClientDetailChange(client.ruc, 'tipoCobro', value)} disabled={isFormDisabled}>
-                                            <SelectTrigger id={`tipo-cobro-${client.ruc}`}><SelectValue placeholder="Seleccionar tipo" /></SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="Efectivo">Efectivo</SelectItem><SelectItem value="Transferencia">Transferencia</SelectItem><SelectItem value="Cheque">Cheque</SelectItem>
-                                            </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label htmlFor={`devoluciones-${client.ruc}`}>Devoluciones ($)</Label>
-                                            <Input id={`devoluciones-${client.ruc}`} type="text" placeholder="0.00" value={client.devoluciones ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'devoluciones', e.target.value)} disabled={isFormDisabled} />
-                                        </div>
-                                        {hasDescuento && (
-                                            <>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor={`promociones-${client.ruc}`}>Promociones ($)</Label>
-                                                    <Input id={`promociones-${client.ruc}`} type="text" placeholder="0.00" value={client.promociones ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'promociones', e.target.value)} disabled={isFormDisabled} />
-                                                </div>
-                                                <div className="space-y-2">
-                                                    <Label htmlFor={`medicacionFrecuente-${client.ruc}`}>Medicación Frecuente ($)</Label>
-                                                    <Input id={`medicacionFrecuente-${client.ruc}`} type="text" placeholder="0.00" value={client.medicacionFrecuente ?? ''} onChange={(e) => handleClientDetailChange(client.ruc, 'medicacionFrecuente', e.target.value)} disabled={isFormDisabled} />
-                                                </div>
-                                            </>
-                                        )}
-                                    </div>
                                 </Card>
                                 )
                             })}
@@ -632,7 +643,6 @@ export default function NewRoutePage() {
                                 </div>
                                 <Button variant="ghost" size="sm" className="w-9 p-0 text-destructive">
                                     <ChevronsUpDown className="h-4 w-4" />
-                                    <span className="sr-only">Toggle</span>
                                 </Button>
                             </div>
                         </CollapsibleTrigger>

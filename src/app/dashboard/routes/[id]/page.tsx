@@ -71,7 +71,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     if (!currentUser || !route) return false;
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
     const isOwner = currentUser.id === route.createdBy;
-    const isEditableStatus = route.status === 'Planificada' || route.status === 'Rechazada';
+    const isEditableStatus = route.status === 'Planificada' || route.status === 'Rechazada' || route.status === 'En Progreso';
     return isOwner && isEditableStatus;
 }, [currentUser, route]);
 
@@ -158,18 +158,24 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     setIsSaving(true);
     try {
       const supervisor = supervisors.find(s => s.id === route.supervisorId);
+      
+      const sanitizedClients = clientsInRoute.map(c => {
+          const clientDate = c.date instanceof Date ? c.date : (c.date ? new Date(c.date) : null);
+          return {
+            ...c,
+            valorVenta: parseFloat(String(c.valorVenta)) || 0,
+            valorCobro: parseFloat(String(c.valorCobro)) || 0,
+            devoluciones: parseFloat(String(c.devoluciones)) || 0,
+            promociones: parseFloat(String(c.promociones)) || 0,
+            medicacionFrecuente: parseFloat(String(c.medicacionFrecuente)) || 0,
+            date: clientDate ? Timestamp.fromDate(clientDate) : null
+          };
+      });
+
       const dataToUpdate: Partial<RoutePlan> = {
         ...route,
         supervisorName: supervisor?.name || '',
-        clients: clientsInRoute.map(c => ({
-          ...c,
-          valorVenta: parseFloat(String(c.valorVenta)) || 0,
-          valorCobro: parseFloat(String(c.valorCobro)) || 0,
-          devoluciones: parseFloat(String(c.devoluciones)) || 0,
-          promociones: parseFloat(String(c.promociones)) || 0,
-          medicacionFrecuente: parseFloat(String(c.medicacionFrecuente)) || 0,
-          date: c.date ? Timestamp.fromDate(c.date) : null
-        })),
+        clients: sanitizedClients,
       };
       
       if(newStatus) {
@@ -231,13 +237,17 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
   const handleConfirmClientSelection = () => {
     const existingClientsMap = new Map(clientsInRoute.map(c => [c.ruc, c]));
-    const mainRouteDate = route?.date instanceof Timestamp ? route.date.toDate() : (route?.date instanceof Date ? route.date : new Date());
+    const mainRouteDate = route?.date instanceof Date ? route.date : (route?.date ? new Date(route.date) : new Date());
     
     const newClientsList = dialogSelectedClients.map(selectedClient => {
         const existingClientData = existingClientsMap.get(selectedClient.ruc);
         if (existingClientData) {
-            // PRESERVE individual client date if it exists, otherwise use main route date
-            return { ...existingClientData, status: 'Activo' as const, date: existingClientData.date || mainRouteDate };
+            // PRESERVE individual client date strictly if it exists
+            return { 
+                ...existingClientData, 
+                status: 'Activo' as const, 
+                date: existingClientData.date || mainRouteDate 
+            };
         }
         return {
             ruc: selectedClient.ruc,
@@ -514,11 +524,11 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                                                 <PopoverTrigger asChild>
                                                     <Button variant={'outline'} className={cn('w-full justify-start text-left font-normal', !client.date && 'text-muted-foreground')} disabled={isFormDisabled}>
                                                     <CalendarIcon className="mr-2 h-4 w-4" />
-                                                    {client.date ? format(client.date, 'PPP', { locale: es }) : <span>Elige una fecha</span>}
+                                                    {client.date ? format(new Date(client.date), 'PPP', { locale: es }) : <span>Elige una fecha</span>}
                                                     </Button>
                                                 </PopoverTrigger>
                                                 <PopoverContent className="p-0">
-                                                    <Calendar mode="single" selected={client.date} onSelect={(date) => handleClientValueChange(client.ruc, 'date', date)} initialFocus locale={es} />
+                                                    <Calendar mode="single" selected={client.date ? new Date(client.date) : undefined} onSelect={(date) => handleClientValueChange(client.ruc, 'date', date)} initialFocus locale={es} />
                                                     <div className="p-2 border-t border-border"><Button onClick={() => setCalendarOpen(prev => ({ ...prev, [client.ruc]: false }))} className="w-full">Seleccionar</Button></div>
                                                 </PopoverContent>
                                                 </Popover>
