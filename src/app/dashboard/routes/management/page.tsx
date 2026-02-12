@@ -129,6 +129,29 @@ export default function RouteManagementPage() {
         });
   }, [currentRouteClientsFull, availableClients, user]);
 
+  // Filtrado optimizado para el diálogo de añadir clientes
+  const filteredAvailableClients = useMemo(() => {
+    if (!isAddClientDialogOpen) return [];
+    
+    return availableClients
+        .filter(c => {
+            // Solo mostrar clientes asignados a este usuario si es Vendedor
+            if (user?.role === 'Usuario' || user?.role === 'Telemercaderista') {
+                return c.ejecutivo === user.name;
+            }
+            return true;
+        })
+        .filter(c => {
+            if (!addClientSearchTerm) return true;
+            const search = addClientSearchTerm.toLowerCase();
+            return (
+                c.nombre_comercial.toLowerCase().includes(search) ||
+                c.nombre_cliente.toLowerCase().includes(search) ||
+                c.ruc.includes(search)
+            );
+        });
+  }, [availableClients, addClientSearchTerm, user, isAddClientDialogOpen]);
+
   useEffect(() => {
     if (!activeRuc && routeClients.length > 0) {
         const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
@@ -331,7 +354,7 @@ export default function RouteManagementPage() {
         <Card className="max-w-2xl mx-auto shadow-lg">
             <CardHeader><CardTitle>Selecciona una Ruta</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-                <Select onValueChange={handleRouteSelect} value={selectedRouteId}>
+                <Select onDragEnter={e => e.preventDefault()} onValueChange={handleRouteSelect} value={selectedRouteId}>
                     <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta para hoy" /></SelectTrigger>
                     <SelectContent>
                         {selectableRoutes.length > 0 ? (
@@ -372,24 +395,33 @@ export default function RouteManagementPage() {
                         </Button>
                     </DialogTrigger>
                     <DialogContent className="max-w-2xl h-[80vh] flex flex-col">
-                        <DialogHeader><DialogTitle>Añadir Clientes</DialogTitle></DialogHeader>
+                        <DialogHeader>
+                            <DialogTitle>Añadir Clientes a mi Ruta</DialogTitle>
+                            <DialogDescription>Solo se muestran clientes asignados a tu nombre.</DialogDescription>
+                        </DialogHeader>
                         <div className="relative mb-4">
                             <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input placeholder="Buscar clientes..." className="pl-9" value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)}/>
+                            <Input placeholder="Buscar por Nombre, RUC o Razón Social..." className="pl-9" value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)}/>
                         </div>
                         <ScrollArea className="flex-1">
                             <div className="space-y-2">
-                                {availableClients.filter(c => c.nombre_comercial.toLowerCase().includes(addClientSearchTerm.toLowerCase())).map(client => (
+                                {filteredAvailableClients.map(client => (
                                     <div key={client.id} className="flex items-center gap-3 p-3 rounded-lg border cursor-pointer hover:bg-accent" onClick={() => {
                                         setMultiSelectedClients(prev => prev.some(c => c.ruc === client.ruc) ? prev.filter(c => c.ruc !== client.ruc) : [...prev, client]);
                                     }}>
                                         <Checkbox checked={multiSelectedClients.some(c => c.ruc === client.ruc)} />
                                         <div className="min-w-0">
                                             <p className="font-bold text-sm truncate">{client.nombre_comercial}</p>
-                                            <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                                            <p className="text-xs text-muted-foreground truncate">{client.nombre_cliente}</p>
+                                            <p className="text-[10px] text-muted-foreground">{client.ruc}</p>
                                         </div>
                                     </div>
                                 ))}
+                                {filteredAvailableClients.length === 0 && (
+                                    <div className="text-center py-8 text-muted-foreground">
+                                        No se encontraron clientes asignados con ese criterio.
+                                    </div>
+                                )}
                             </div>
                         </ScrollArea>
                         <DialogFooter className="pt-4">
