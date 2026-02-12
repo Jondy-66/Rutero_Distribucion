@@ -82,7 +82,8 @@ export const getClients = async (): Promise<Client[]> => {
 };
 
 export const getMyClients = async (userName: string): Promise<Client[]> => {
-    const q = query(clientsCollection, where('ejecutivo', '==', userName));
+    // Buscamos clientes asignados al nombre del ejecutivo (trim para evitar errores de espacios)
+    const q = query(clientsCollection, where('ejecutivo', '==', userName.trim()));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
 };
@@ -205,7 +206,7 @@ export const getMyRoutes = async (userId: string): Promise<RoutePlan[]> => {
             date: data.date ? (data.date as Timestamp).toDate() : new Date(),
             clients: (data.clients as any[]).map(c => ({ 
                 ...c, 
-                date: c.date ? (c.date as Timestamp).toDate() : undefined 
+                date: c.date ? (data.date as Timestamp).toDate() : undefined 
             }))
         } as RoutePlan;
     });
@@ -222,7 +223,7 @@ export const getRoute = async (id: string): Promise<RoutePlan | null> => {
             date: data.date ? (data.date as Timestamp).toDate() : new Date(),
             clients: (data.clients as any[]).map(c => ({ 
                 ...c, 
-                date: c.date ? (c.date as Timestamp).toDate() : undefined 
+                date: c.date ? (data.date as Timestamp).toDate() : undefined 
             }))
         } as RoutePlan;
     }

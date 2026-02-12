@@ -50,7 +50,7 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
 type RouteClient = Client & ClientInRoute;
 
 export default function RouteManagementPage() {
-  const { user, clients: availableClients, routes: allRoutes, loading: authLoading, refetchData } = useAuth();
+  const { user, clients: availableClients, routes: allRoutes, loading: authLoading, dataLoading, refetchData } = useAuth();
   const { toast } = useToast();
   
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
@@ -86,24 +86,22 @@ export default function RouteManagementPage() {
     return allRoutes.filter(r => {
         if (r.createdBy !== user?.id) return false;
         
-        // Rutas válidas: Planificadas, En Progreso, o Incompletas que tengan actividad para hoy
+        // Rutas válidas: Planificadas, En Progreso, Incompletas, o incluso Completadas si tienen actividad hoy
         const basicStatus = ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada', 'Completada'].includes(r.status);
         if (!basicStatus) return false;
 
-        // Si ya está seleccionada, mantenerla
-        if (r.id === selectedRouteId) return true;
-
-        // Comprobar si tiene clientes para hoy que no estén completados
-        const hasClientsForToday = r.clients?.some(c => {
+        // Comprobar si tiene clientes para hoy (pendientes o completados)
+        const hasActivityToday = r.clients?.some(c => {
             if (c.status === 'Eliminado' || !c.date) return false;
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
-            return isToday(cDate) && c.visitStatus !== 'Completado';
+            return isToday(cDate);
         });
 
-        // O si ya está en progreso
+        // Si ya está seleccionada o tiene actividad hoy, la mostramos
+        if (r.id === selectedRouteId) return true;
         if (r.status === 'En Progreso') return true;
 
-        return hasClientsForToday;
+        return hasActivityToday;
     });
   }, [allRoutes, user, selectedRouteId]);
 
@@ -114,19 +112,19 @@ export default function RouteManagementPage() {
   
   // Rehidratación de sesión mejorada
   useEffect(() => {
-    if (!authLoading && !isInitialRehydrationDone.current && SELECTION_KEY && allRoutes.length > 0) {
+    // Esperamos a que la carga inicial de datos termine para evitar que la ruta "desaparezca" al arrancar
+    if (!authLoading && !dataLoading && !isInitialRehydrationDone.current && SELECTION_KEY && allRoutes.length > 0) {
       const savedId = localStorage.getItem(SELECTION_KEY);
       if (savedId) {
         const found = allRoutes.find(r => r.id === savedId);
         if (found) {
             setSelectedRouteId(savedId);
-            // Si la ruta estaba completada pero tiene clientes para hoy, se reactiva automáticamente más adelante
             setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(found.status));
         }
       }
       isInitialRehydrationDone.current = true;
     }
-  }, [authLoading, SELECTION_KEY, allRoutes]);
+  }, [authLoading, dataLoading, SELECTION_KEY, allRoutes]);
 
   // Motor de Reactivación Automática y Sincronización
   useEffect(() => {
@@ -176,8 +174,9 @@ export default function RouteManagementPage() {
     if (!isAddClientDialogOpen) return [];
     const search = addClientSearchTerm.toLowerCase();
     
+    // Filtro multicriterio y solo mis clientes
     return availableClients
-        .filter(c => (user?.role === 'Usuario' || user?.role === 'Telemercaderista') ? c.ejecutivo === user.name : true)
+        .filter(c => c.ejecutivo === user?.name)
         .filter(c => {
             if (!search) return true;
             return (
@@ -375,7 +374,7 @@ export default function RouteManagementPage() {
     setMultiSelectedClients([]);
   };
 
-  if (authLoading) return <div className="flex items-center justify-center h-64"><LoaderCircle className="animate-spin h-8 w-8 text-primary" /></div>;
+  if (authLoading || (isInitialRehydrationDone.current === false && SELECTION_KEY)) return <div className="flex items-center justify-center h-64"><LoaderCircle className="animate-spin h-8 w-8 text-primary" /></div>;
 
   return (
     <>

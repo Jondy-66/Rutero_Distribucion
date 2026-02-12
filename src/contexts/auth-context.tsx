@@ -52,6 +52,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     try {
         const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor';
         
+        // Optimizamos: Los vendedores solo cargan sus datos. Los admin/super cargan todo.
         const [usersData, clientsData, routesData, phoneData] = await Promise.all([
             getUsers(),
             isSourcingAll ? getClients() : getMyClients(currentUser.name),
