@@ -52,18 +52,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor';
     
     try {
-        // Ejecutamos cargas de forma independiente para que el fallo de una no bloquee a las demás
-        const results = await Promise.allSettled([
-            getUsers(),
-            isSourcingAll ? getClients() : getMyClients(currentUser.name),
-            isSourcingAll ? getRoutes() : getMyRoutes(currentUser.id),
-            getPhoneContacts()
-        ]);
+        // Cargamos los datos de forma independiente para mayor resiliencia
+        const usersRes = await getUsers().catch(e => { console.error("Error cargando usuarios:", e); return []; });
+        setUsers(usersRes);
 
-        if (results[0].status === 'fulfilled') setUsers(results[0].value);
-        if (results[1].status === 'fulfilled') setClients(results[1].value);
-        if (results[2].status === 'fulfilled') setRoutes(results[2].value);
-        if (results[3].status === 'fulfilled') setPhoneContacts(results[3].value);
+        const clientsRes = await (isSourcingAll ? getClients() : getMyClients(currentUser.name)).catch(e => { console.error("Error cargando clientes:", e); return []; });
+        setClients(clientsRes);
+
+        const routesRes = await (isSourcingAll ? getRoutes() : getMyRoutes(currentUser.id)).catch(e => { console.error("Error cargando rutas:", e); return []; });
+        setRoutes(routesRes);
+
+        const phoneRes = await getPhoneContacts().catch(e => { console.error("Error cargando CRM:", e); return []; });
+        setPhoneContacts(phoneRes);
         
         isDataInitialized.current = true;
     } catch(error) {
@@ -103,9 +103,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
         
-        const unsubscribeUser = onSnapshot(userDocRef, (doc) => {
-          if (doc.exists()) {
-            const userData = { id: fbUser.uid, ...doc.data() } as User;
+        const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const userData = { id: fbUser.uid, ...docSnap.data() } as User;
             setUser(userData);
             setLoading(false);
             fetchInitialData(userData);

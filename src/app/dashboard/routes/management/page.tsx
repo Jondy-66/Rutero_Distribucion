@@ -81,7 +81,7 @@ export default function RouteManagementPage() {
 
   const SELECTION_KEY = user ? `mgmt_selected_route_v3_${user.id}` : null;
 
-  // Filtro inteligente de rutas para hoy
+  // Filtro inteligente de rutas: Solo las mías que tengan actividad hoy o estén en progreso
   const selectableRoutes = useMemo(() => {
     return allRoutes.filter(r => {
         const isOwner = r.createdBy === user?.id;
@@ -90,16 +90,22 @@ export default function RouteManagementPage() {
         const basicStatus = ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada', 'Completada'].includes(r.status);
         if (!basicStatus) return false;
 
+        // Si la ruta está "En Progreso", debe ser visible siempre
+        if (r.status === 'En Progreso') return true;
+
+        // Si tiene clientes programados para hoy, debe ser visible
         const hasActivityToday = r.clients?.some(c => {
             if (c.status === 'Eliminado' || !c.date) return false;
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
             return isToday(cDate);
         });
 
-        if (r.id === selectedRouteId) return true;
-        if (r.status === 'En Progreso') return true;
+        if (hasActivityToday) return true;
 
-        return hasActivityToday;
+        // Si es la ruta seleccionada actualmente por persistencia
+        if (r.id === selectedRouteId) return true;
+
+        return false;
     });
   }, [allRoutes, user, selectedRouteId]);
 

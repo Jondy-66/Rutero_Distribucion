@@ -1,5 +1,3 @@
-
-
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -15,7 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
-import { getRoutes, deleteRoute } from '@/lib/firebase/firestore';
+import { deleteRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
 import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock, Trash2 } from 'lucide-react';
@@ -43,42 +41,19 @@ import {
 } from "@/components/ui/alert-dialog"
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
+import { Timestamp } from 'firebase/firestore';
 
 export default function RoutesListPage() {
-  const { user, users } = useAuth();
+  const { user, routes: allRoutesFromContext, loading: authLoading, dataLoading, refetchData } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
-  const [allRoutes, setAllRoutes] = useState<RoutePlan[]>([]);
-  const [loading, setLoading] = useState(true);
 
-  const fetchRoutes = async () => {
-    setLoading(true);
-    try {
-      const routesData = await getRoutes();
-      setAllRoutes(routesData);
-    } catch (error: any) {
-      console.error("Failed to fetch routes:", error);
-      toast({
-        title: "Error al Cargar Rutas",
-        description: "No se pudieron cargar las rutas planificadas.",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (user) {
-        fetchRoutes();
-    }
-  }, [user]);
-
+  // Usamos las rutas del contexto para consistencia total entre módulos
   const filteredRoutes = useMemo(() => {
     if (!user) return [];
-    // Esta página ahora solo muestra las rutas creadas por el usuario actual.
-    return allRoutes.filter(route => route.createdBy === user.id);
-  }, [allRoutes, user]);
+    // Filtramos por el ID del creador para seguridad
+    return allRoutesFromContext.filter(route => route.createdBy === user.id);
+  }, [allRoutesFromContext, user]);
 
   const handleAction = (routeId: string) => {
     router.push(`/dashboard/routes/${routeId}`);
@@ -88,7 +63,7 @@ export default function RoutesListPage() {
     try {
       await deleteRoute(routeId);
       toast({ title: "Éxito", description: "Ruta eliminada correctamente." });
-      fetchRoutes(); // Refresh the list
+      await refetchData('routes');
     } catch (error: any) {
       console.error("Failed to delete route:", error);
       toast({ title: "Error", description: "No se pudo eliminar la ruta.", variant: "destructive" });
@@ -108,11 +83,18 @@ export default function RoutesListPage() {
   }
 
   const getRouteDate = (route: RoutePlan) => {
+    if (route.date) {
+        const d = route.date instanceof Timestamp ? route.date.toDate() : (route.date instanceof Date ? route.date : new Date(route.date));
+        return format(d, 'PPP', { locale: es });
+    }
     if (route.clients && route.clients.length > 0 && route.clients[0].date) {
-      return format(route.clients[0].date, 'PPP', { locale: es });
+      const d = route.clients[0].date instanceof Timestamp ? (route.clients[0].date as any).toDate() : route.clients[0].date;
+      return format(d, 'PPP', { locale: es });
     }
     return 'N/A';
   };
+
+  const isLoading = authLoading || dataLoading;
 
   return (
     <>
@@ -149,7 +131,7 @@ export default function RoutesListPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {loading ? (
+                        {isLoading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <TableRow key={i}>
                                     <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
@@ -179,7 +161,7 @@ export default function RoutesListPage() {
                                     <TableCell>
                                         {getBadgeForStatus(route.status)}
                                     </TableCell>
-                                    <TableCell className="text-center">{route.clients.length}</TableCell>
+                                    <TableCell className="text-center">{route.clients?.length || 0}</TableCell>
                                     <TableCell className="text-right">
                                       <AlertDialog>
                                         <DropdownMenu>
@@ -235,7 +217,7 @@ export default function RoutesListPage() {
                 </Table>
             </div>
         </CardContent>
-    </Card>
+      </Card>
     </>
   );
 }

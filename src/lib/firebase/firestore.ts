@@ -83,6 +83,7 @@ export const getClients = async (): Promise<Client[]> => {
 
 export const getMyClients = async (userName: string): Promise<Client[]> => {
     // Buscamos clientes asignados al nombre del ejecutivo (trim para evitar errores de espacios)
+    // No usamos orderBy para evitar requerir índices compuestos que puedan fallar silenciosamente
     const q = query(clientsCollection, where('ejecutivo', '==', userName.trim()));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
@@ -196,9 +197,10 @@ export const getRoutes = async (): Promise<RoutePlan[]> => {
 };
 
 export const getMyRoutes = async (userId: string): Promise<RoutePlan[]> => {
-    const q = query(routesCollection, where('createdBy', '==', userId), orderBy('createdAt', 'desc'), limit(50));
+    // Eliminamos el orderBy para evitar fallos por falta de índices compuestos en Firestore
+    const q = query(routesCollection, where('createdBy', '==', userId), limit(50));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => {
+    const routes = snapshot.docs.map(doc => {
         const data = doc.data();
         return {
             id: doc.id,
@@ -206,9 +208,15 @@ export const getMyRoutes = async (userId: string): Promise<RoutePlan[]> => {
             date: data.date ? (data.date as Timestamp).toDate() : new Date(),
             clients: (data.clients as any[]).map(c => ({ 
                 ...c, 
-                date: c.date ? (data.date as Timestamp).toDate() : undefined 
+                date: c.date ? (c.date as Timestamp).toDate() : undefined 
             }))
         } as RoutePlan;
+    });
+    // Ordenamos en memoria para garantizar consistencia sin índices complejos
+    return routes.sort((a, b) => {
+        const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toDate().getTime() : 0;
+        const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toDate().getTime() : 0;
+        return dateB - dateA;
     });
 };
 
