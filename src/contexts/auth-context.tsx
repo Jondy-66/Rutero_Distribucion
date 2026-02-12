@@ -1,5 +1,5 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales optimizada para cuota.
+ * @fileoverview Gestión de estado de autenticación y datos globales optimizada para cuota y resiliencia.
  */
 
 'use client';
@@ -43,30 +43,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isDataInitialized = useRef(false);
 
   /**
-   * Carga inicial de datos globales con filtros por rol para ahorrar cuota.
+   * Carga inicial de datos globales con filtros por rol y manejo individual de errores.
    */
   const fetchInitialData = useCallback(async (currentUser: User) => {
     if (isDataInitialized.current) return;
     setDataLoading(true);
     
+    const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor';
+    
+    // Ejecutamos cargas de forma independiente para que el fallo de una no bloquee a las demás
     try {
-        const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor';
-        
-        // Optimizamos: Los vendedores solo cargan sus datos. Los admin/super cargan todo.
-        const [usersData, clientsData, routesData, phoneData] = await Promise.all([
+        const [usersRes, clientsRes, routesRes, phoneRes] = await Promise.allSettled([
             getUsers(),
             isSourcingAll ? getClients() : getMyClients(currentUser.name),
             isSourcingAll ? getRoutes() : getMyRoutes(currentUser.id),
             getPhoneContacts()
         ]);
 
-        setUsers(usersData);
-        setClients(clientsData);
-        setRoutes(routesData);
-        setPhoneContacts(phoneData);
+        if (usersRes.status === 'fulfilled') setUsers(usersRes.value);
+        if (clientsRes.status === 'fulfilled') setClients(clientsRes.value);
+        if (routesRes.status === 'fulfilled') setRoutes(routesRes.value);
+        if (phoneRes.status === 'fulfilled') setPhoneContacts(phoneRes.value);
+        
         isDataInitialized.current = true;
     } catch(error) {
-        console.error("Error cargando datos iniciales:", error);
+        console.error("Error crítico cargando datos iniciales:", error);
     } finally {
         setDataLoading(false);
     }

@@ -110,18 +110,18 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Rehidratación de sesión mejorada
+  // Rehidratación de sesión mejorada para evitar carga infinita
   useEffect(() => {
-    // Esperamos a que la carga inicial de datos termine para evitar que la ruta "desaparezca" al arrancar
-    if (!authLoading && !dataLoading && !isInitialRehydrationDone.current && SELECTION_KEY && allRoutes.length > 0) {
+    if (!authLoading && !dataLoading && !isInitialRehydrationDone.current && SELECTION_KEY) {
       const savedId = localStorage.getItem(SELECTION_KEY);
-      if (savedId) {
+      if (savedId && allRoutes.length > 0) {
         const found = allRoutes.find(r => r.id === savedId);
         if (found) {
             setSelectedRouteId(savedId);
             setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(found.status));
         }
       }
+      // Marcamos como finalizado siempre para liberar la UI
       isInitialRehydrationDone.current = true;
     }
   }, [authLoading, dataLoading, SELECTION_KEY, allRoutes]);
@@ -174,9 +174,8 @@ export default function RouteManagementPage() {
     if (!isAddClientDialogOpen) return [];
     const search = addClientSearchTerm.toLowerCase();
     
-    // Filtro multicriterio y solo mis clientes
     return availableClients
-        .filter(c => c.ejecutivo === user?.name)
+        .filter(c => c.ejecutivo?.trim() === user?.name?.trim())
         .filter(c => {
             if (!search) return true;
             return (
@@ -238,11 +237,9 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeClient) return;
     const time = format(new Date(), 'HH:mm:ss');
     
-    // Marcado instantáneo en la UI
     handleFieldChange('checkInTime', time);
     setIsLocating(true);
     
-    // El resto ocurre en segundo plano para no bloquear
     getCurrentLocation(4000).then(async (coords) => {
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         let nextClients: ClientInRoute[] = [];
@@ -266,13 +263,11 @@ export default function RouteManagementPage() {
     }
     const time = format(new Date(), 'HH:mm:ss');
     
-    // TRANSICIÓN INSTANTÁNEA: Liberamos el cliente en la UI de inmediato
     const currentRucToFinalize = activeRuc;
-    setActiveRuc(null); // Pasamos al siguiente o pantalla vacía al instante
+    setActiveRuc(null); 
     setIsSaving(true);
     setIsLocating(true);
 
-    // Proceso en segundo plano para obtener ubicación y guardar
     getCurrentLocation(4000).then(async (coords) => {
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         let nextClients: ClientInRoute[] = [];
@@ -316,7 +311,6 @@ export default function RouteManagementPage() {
     const [moved] = displayed.splice(source.index, 1);
     displayed.splice(destination.index, 0, moved);
     
-    // Si movemos al #1 y no está completado, lo seleccionamos automáticamente
     if (destination.index === 0 && moved.visitStatus !== 'Completado') {
         setActiveRuc(moved.ruc);
     }
@@ -374,7 +368,14 @@ export default function RouteManagementPage() {
     setMultiSelectedClients([]);
   };
 
-  if (authLoading || (isInitialRehydrationDone.current === false && SELECTION_KEY)) return <div className="flex items-center justify-center h-64"><LoaderCircle className="animate-spin h-8 w-8 text-primary" /></div>;
+  if (authLoading || (isInitialRehydrationDone.current === false && SELECTION_KEY)) {
+      return (
+        <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+            <LoaderCircle className="animate-spin h-12 w-12 text-primary" />
+            <p className="text-muted-foreground animate-pulse">Sincronizando gestión diaria...</p>
+        </div>
+      );
+  }
 
   return (
     <>
