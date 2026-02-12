@@ -1,5 +1,5 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales.
+ * @fileoverview Gestión de estado de autenticación y datos globales optimizada para cuota.
  */
 
 'use client';
@@ -9,7 +9,7 @@ import { User as FirebaseAuthUser, onAuthStateChanged, signOut } from 'firebase/
 import { db, auth } from '@/lib/firebase/config';
 import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
 import { collection, doc, onSnapshot, query, where, Timestamp, orderBy, limit } from 'firebase/firestore';
-import { getClients, getUsers, getRoutes, getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore } from '@/lib/firebase/firestore';
+import { getClients, getUsers, getRoutes, getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore, getMyClients, getMyRoutes } from '@/lib/firebase/firestore';
 
 interface AuthContextType {
   user: User | null;
@@ -43,17 +43,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isDataInitialized = useRef(false);
 
   /**
-   * Carga inicial de datos globales.
+   * Carga inicial de datos globales con filtros por rol para ahorrar cuota.
    */
-  const fetchInitialData = useCallback(async () => {
+  const fetchInitialData = useCallback(async (currentUser: User) => {
     if (isDataInitialized.current) return;
     setDataLoading(true);
     
     try {
+        const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor';
+        
         const [usersData, clientsData, routesData, phoneData] = await Promise.all([
             getUsers(),
-            getClients(),
-            getRoutes(),
+            isSourcingAll ? getClients() : getMyClients(currentUser.name),
+            isSourcingAll ? getRoutes() : getMyRoutes(currentUser.id),
             getPhoneContacts()
         ]);
 
@@ -70,15 +72,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, []);
   
   const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'routes' | 'phoneContacts') => {
+      if (!user) return;
+      const isSourcingAll = user.role === 'Administrador' || user.role === 'Supervisor';
+      
       try {
-          if (dataType === 'clients') setClients(await getClients());
+          if (dataType === 'clients') setClients(isSourcingAll ? await getClients() : await getMyClients(user.name));
           if (dataType === 'users') setUsers(await getUsers());
-          if (dataType === 'routes') setRoutes(await getRoutes());
+          if (dataType === 'routes') setRoutes(isSourcingAll ? await getRoutes() : await getMyRoutes(user.id));
           if (dataType === 'phoneContacts') setPhoneContacts(await getPhoneContacts());
       } catch (error) {
           console.error(`Error al refrescar ${dataType}:`, error);
       }
-  }, []);
+  }, [user]);
 
   const handleMarkNotificationAsRead = async (notificationId: string) => {
     try { await markAsReadFirestore(notificationId); } catch (error) { console.error(error); }
@@ -101,7 +106,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             const userData = { id: fbUser.uid, ...doc.data() } as User;
             setUser(userData);
             setLoading(false);
-            fetchInitialData();
+            fetchInitialData(userData);
           } else {
             setLoading(false);
             signOut(auth);

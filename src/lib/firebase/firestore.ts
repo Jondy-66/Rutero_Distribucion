@@ -81,6 +81,12 @@ export const getClients = async (): Promise<Client[]> => {
   return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
 };
 
+export const getMyClients = async (userName: string): Promise<Client[]> => {
+    const q = query(clientsCollection, where('ejecutivo', '==', userName));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
+};
+
 export const getClient = async (id: string): Promise<Client | null> => {
     const docRef = doc(db, 'clients', id);
     const docSnap = await getDoc(docRef);
@@ -172,7 +178,24 @@ export const addRoute = async (routeData: Omit<RoutePlan, 'id' | 'createdAt'>): 
 };
 
 export const getRoutes = async (): Promise<RoutePlan[]> => {
-    const q = query(routesCollection, orderBy('createdAt', 'desc'), limit(50));
+    const q = query(routesCollection, orderBy('createdAt', 'desc'), limit(100));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            id: doc.id,
+            ...data,
+            date: data.date ? (data.date as Timestamp).toDate() : new Date(),
+            clients: (data.clients as any[]).map(c => ({ 
+                ...c, 
+                date: c.date ? (c.date as Timestamp).toDate() : undefined 
+            }))
+        } as RoutePlan;
+    });
+};
+
+export const getMyRoutes = async (userId: string): Promise<RoutePlan[]> => {
+    const q = query(routesCollection, where('createdBy', '==', userId), orderBy('createdAt', 'desc'), limit(50));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => {
         const data = doc.data();
