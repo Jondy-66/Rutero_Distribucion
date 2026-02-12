@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter, notFound } from 'next/navigation';
@@ -230,16 +231,18 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
   const handleConfirmClientSelection = () => {
     const existingClientsMap = new Map(clientsInRoute.map(c => [c.ruc, c]));
+    const mainRouteDate = route?.date instanceof Timestamp ? route.date.toDate() : (route?.date instanceof Date ? route.date : new Date());
     
     const newClientsList = dialogSelectedClients.map(selectedClient => {
         const existingClientData = existingClientsMap.get(selectedClient.ruc);
         if (existingClientData) {
-            return { ...existingClientData, status: 'Activo' as const };
+            // PRESERVE individual client date if it exists, otherwise use main route date
+            return { ...existingClientData, status: 'Activo' as const, date: existingClientData.date || mainRouteDate };
         }
         return {
             ruc: selectedClient.ruc,
             nombre_comercial: selectedClient.nombre_comercial,
-            date: new Date(),
+            date: mainRouteDate,
             origin: 'manual' as const,
             status: 'Activo' as const,
         };

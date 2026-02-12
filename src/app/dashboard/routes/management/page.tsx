@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -87,11 +88,11 @@ export default function RouteManagementPage() {
         const isOwner = r.createdBy === user?.id;
         if (!isOwner) return false;
         
-        const basicStatus = ['Planificada', 'En Progreso', 'Incompleta', 'Rechazada', 'Completada'].includes(r.status);
-        if (!basicStatus) return false;
-
-        // Si la ruta está "En Progreso", debe ser visible siempre
+        // Si la ruta está "En Progreso", debe ser visible siempre (PRIORIDAD)
         if (r.status === 'En Progreso') return true;
+
+        const basicStatus = ['Planificada', 'Incompleta', 'Rechazada', 'Completada'].includes(r.status);
+        if (!basicStatus) return false;
 
         // Si tiene clientes programados para hoy, debe ser visible
         const hasActivityToday = r.clients?.some(c => {

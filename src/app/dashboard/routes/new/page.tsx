@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -266,8 +265,8 @@ export default function NewRoutePage() {
     const newClientsInRoute: ClientInRoute[] = dialogSelectedClients.map(client => {
         const existingClient = selectedClients.find(sc => sc.ruc === client.ruc);
         if (existingClient) {
-            // Keep existing data, but ensure date is updated if main route date changed
-            return { ...existingClient, status: 'Activo', date: routeDate || existingClient.date };
+            // CRITICAL: Preserve existing individual client date if it exists
+            return { ...existingClient, status: 'Activo', date: existingClient.date || routeDate };
         }
         // This is a newly added client
         return {
@@ -395,7 +394,7 @@ export default function NewRoutePage() {
         groups[clientDateKey].push(client);
       });
       
-    return Object.entries(groups).sort(([dateA, dateB]) => {
+    return Object.entries(groups).sort(([dateA], [dateB]) => {
         if (dateA === 'Sin Fecha') return 1;
         if (dateB === 'Sin Fecha') return -1;
         return new Date(dateA).getTime() - new Date(dateB).getTime();
@@ -521,7 +520,7 @@ export default function NewRoutePage() {
                                 const hasDescuento = client.nombre_comercial.toLowerCase().includes('descuento');
                                 const isNew = client.origin === 'manual';
                                 const isFromPrediction = client.origin === 'predicted';
-                                const isRemoved = client.status === 'Eliminado'; // This should be false here
+                                
                                 return (
                                 <Card key={client.ruc} className={cn(
                                     "p-4 bg-muted/50 relative", 
