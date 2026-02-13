@@ -310,32 +310,32 @@ export default function RouteManagementPage() {
                                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente a mi Ruta
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden bg-white">
-                            <DialogHeader className="p-6 pb-2">
-                                <DialogTitle className="text-2xl font-bold text-[#011688]">Añadir Clientes</DialogTitle>
-                                <DialogDescription className="text-muted-foreground text-sm font-medium">
+                        <DialogContent className="w-[95vw] sm:max-w-[600px] p-0 overflow-hidden bg-white max-h-[90vh] flex flex-col rounded-2xl">
+                            <DialogHeader className="p-4 sm:p-6 pb-2">
+                                <DialogTitle className="text-xl sm:text-2xl font-bold text-[#011688]">Añadir Clientes</DialogTitle>
+                                <DialogDescription className="text-muted-foreground text-xs sm:text-sm font-medium">
                                     Buscador multicriterio por RUC, Nombre Comercial o Razón Social.
                                 </DialogDescription>
                             </DialogHeader>
-                            <div className="p-6 space-y-6">
+                            <div className="flex-1 overflow-hidden flex flex-col p-4 sm:p-6 space-y-4 sm:space-y-6">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
                                     <Input 
                                         placeholder="Nombre, RUC, Comercial..." 
-                                        className="h-12 pl-10 border-[#011688] border-2 focus-visible:ring-0 focus-visible:border-[#011688] rounded-xl text-base" 
+                                        className="h-12 pl-10 border-[#011688] border-2 focus-visible:ring-0 focus-visible:border-[#011688] rounded-xl text-base w-full" 
                                         value={addClientSearchTerm} 
                                         onChange={e => setAddClientSearchTerm(e.target.value)} 
                                     />
                                 </div>
-                                <ScrollArea className="h-[400px] pr-4">
-                                    <div className="space-y-3">
+                                <ScrollArea className="flex-1 pr-2">
+                                    <div className="space-y-3 pb-2">
                                         {filteredSearchClients.map(c => {
                                             const isSel = multiSelectedClients.some(sc => sc.ruc === c.ruc);
                                             return (
                                                 <div 
                                                     key={c.ruc} 
                                                     className={cn(
-                                                        "flex items-start space-x-4 p-4 rounded-xl border transition-all cursor-pointer",
+                                                        "flex items-start space-x-3 sm:space-x-4 p-3 sm:p-4 rounded-xl border transition-all cursor-pointer",
                                                         isSel ? "bg-[#011688]/5 border-[#011688]" : "bg-[#f8f9ff] border-[#e2e8f0] hover:border-[#cbd5e1]"
                                                     )}
                                                     onClick={() => {
@@ -347,9 +347,9 @@ export default function RouteManagementPage() {
                                                         className="mt-1 h-5 w-5 border-[#011688] data-[state=checked]:bg-[#011688]"
                                                     />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-base font-black text-[#011688] uppercase truncate">{c.nombre_comercial}</p>
-                                                        <p className="text-xs font-bold text-muted-foreground uppercase">{c.nombre_cliente}</p>
-                                                        <p className="text-xs font-mono text-muted-foreground mt-1">{c.ruc}</p>
+                                                        <p className="text-sm sm:text-base font-black text-[#011688] uppercase truncate">{c.nombre_comercial}</p>
+                                                        <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase truncate">{c.nombre_cliente}</p>
+                                                        <p className="text-[10px] sm:text-xs font-mono text-muted-foreground mt-1">{c.ruc}</p>
                                                     </div>
                                                 </div>
                                             );
@@ -357,21 +357,21 @@ export default function RouteManagementPage() {
                                     </div>
                                 </ScrollArea>
                             </div>
-                            <DialogFooter className="p-6 bg-[#f8f9ff] border-t flex flex-row items-center justify-between sm:justify-between">
-                                <span className="text-sm font-black text-[#011688] uppercase">
+                            <DialogFooter className="p-4 sm:p-6 bg-[#f8f9ff] border-t flex flex-row items-center justify-between sm:justify-between gap-2">
+                                <span className="text-[10px] sm:text-sm font-black text-[#011688] uppercase truncate mr-2">
                                     {multiSelectedClients.length} seleccionados
                                 </span>
-                                <div className="flex gap-3">
+                                <div className="flex gap-2 sm:gap-3 shrink-0">
                                     <DialogClose asChild>
-                                        <Button variant="ghost" className="font-bold text-[#011688]">Cerrar</Button>
+                                        <Button variant="ghost" className="h-9 sm:h-10 text-xs sm:text-base font-bold text-[#011688]">Cerrar</Button>
                                     </DialogClose>
                                     <Button 
-                                        className="font-bold bg-[#011688] hover:bg-[#011688]/90 px-8 rounded-xl" 
+                                        className="h-9 sm:h-10 text-xs sm:text-base font-bold bg-[#011688] hover:bg-[#011688]/90 px-4 sm:px-8 rounded-xl" 
                                         disabled={multiSelectedClients.length === 0 || isSaving} 
                                         onClick={handleAddClientsToRoute}
                                     >
                                         {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : null}
-                                        Añadir a Hoy
+                                        Añadir
                                     </Button>
                                 </div>
                             </DialogFooter>
