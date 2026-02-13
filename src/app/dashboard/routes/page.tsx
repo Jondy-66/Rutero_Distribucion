@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -16,7 +17,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { deleteRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock, Trash2 } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock, Trash2, Users } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -42,6 +43,7 @@ import {
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Timestamp } from 'firebase/firestore';
+import { cn } from '@/lib/utils';
 
 export default function RoutesListPage() {
   const { user, routes: allRoutesFromContext, loading: authLoading, dataLoading, refetchData } = useAuth();
@@ -118,7 +120,7 @@ export default function RoutesListPage() {
             </CardDescription>
         </CardHeader>
         <CardContent>
-             <div className="border rounded-lg">
+             <div className="border rounded-lg overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -145,13 +147,12 @@ export default function RoutesListPage() {
                         ) : filteredRoutes.length > 0 ? (
                             filteredRoutes.map((route) => {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
-                                const canEdit = user?.id === route.createdBy && route.status === 'Rechazada';
+                                const canEdit = user?.id === route.createdBy && (route.status === 'Rechazada' || route.status === 'Planificada' || route.status === 'En Progreso');
                                 const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada';
-                                let canViewDetails = !canReview && !canEdit && !canAdminEdit;
-                                if (user?.id === route.createdBy && (route.status === 'En Progreso' || route.status === 'Pendiente de Aprobación' || route.status === 'Planificada')) {
-                                    canViewDetails = true;
-                                }
+                                let canViewDetails = true;
                                 const canDelete = user?.role === 'Administrador' || (user?.id === route.createdBy && route.status === 'Rechazada');
+                                
+                                const clientCount = route.clients?.length || 0;
 
                                 return (
                                 <TableRow key={route.id}>
@@ -161,7 +162,12 @@ export default function RoutesListPage() {
                                     <TableCell>
                                         {getBadgeForStatus(route.status)}
                                     </TableCell>
-                                    <TableCell className="text-center">{route.clients?.length || 0}</TableCell>
+                                    <TableCell className="text-center">
+                                        <div className={cn("flex items-center justify-center gap-1.5 font-bold", clientCount === 0 && "text-destructive animate-pulse")}>
+                                            <Users className="h-4 w-4" />
+                                            {clientCount}
+                                        </div>
+                                    </TableCell>
                                     <TableCell className="text-right">
                                       <AlertDialog>
                                         <DropdownMenu>
@@ -174,8 +180,8 @@ export default function RoutesListPage() {
                                           <DropdownMenuContent align="end">
                                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                                             {canReview && <DropdownMenuItem onClick={() => handleAction(route.id)}>Revisar</DropdownMenuItem>}
-                                            {(canEdit || canAdminEdit) && <DropdownMenuItem onClick={() => handleAction(route.id)}>Editar</DropdownMenuItem>}
-                                            {canViewDetails && <DropdownMenuItem onClick={() => handleAction(route.id)}>Ver Detalles</DropdownMenuItem>}
+                                            {(canEdit || canAdminEdit) && <DropdownMenuItem onClick={() => handleAction(route.id)}>Editar / Ver Detalle</DropdownMenuItem>}
+                                            {!canReview && !canEdit && !canAdminEdit && <DropdownMenuItem onClick={() => handleAction(route.id)}>Ver Detalles</DropdownMenuItem>}
                                             {canDelete && (
                                                 <>
                                                     <DropdownMenuSeparator />

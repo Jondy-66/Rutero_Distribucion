@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -31,7 +32,7 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         if (c.date instanceof Date) {
             cleaned.date = Timestamp.fromDate(c.date);
         } else if (c.date && typeof (c.date as any).toDate === 'function') {
-            // Ya es un Timestamp
+            // Already a Timestamp
         } else if (c.date) {
             cleaned.date = Timestamp.fromDate(new Date(c.date as any));
         }
@@ -87,21 +88,13 @@ export default function RouteManagementPage() {
         const isOwner = r.createdBy === user?.id;
         if (!isOwner) return false;
         
-        if (r.status === 'En Progreso') return true;
-
-        const hasPendingClients = r.clients?.some(c => 
-            c.status !== 'Eliminado' && c.visitStatus !== 'Completado'
-        );
-        if (hasPendingClients) return true;
-
-        const hasActivityToday = r.clients?.some(c => {
-            if (c.status === 'Eliminado' || !c.date) return false;
-            const cDate = c.date instanceof Date ? c.date : new Date(c.date as any);
-            return isToday(cDate);
-        });
-
-        if (hasActivityToday) return true;
+        // ONLY show active routes for management
+        // We filter out 'Completada', 'Incompleta' or 'Rechazada' unless it's the one currently being viewed
         if (r.id === selectedRouteId) return true;
+        if (['Completada', 'Incompleta', 'Rechazada'].includes(r.status)) return false;
+
+        // Show routes that are En Progreso or Planificada
+        if (r.status === 'En Progreso' || r.status === 'Planificada') return true;
 
         return false;
     });
@@ -145,7 +138,6 @@ export default function RouteManagementPage() {
   useEffect(() => {
     if (!selectedRoute) return;
     
-    // Solo actualizamos el estado local si cambiamos de ruta o si el estado actual está vacío
     if (lastKnownRouteId.current !== selectedRoute.id || currentRouteClientsFull.length === 0) {
         const clients = selectedRoute.clients || [];
         if (clients.length > 0) {
@@ -255,7 +247,7 @@ export default function RouteManagementPage() {
 
   const handleCheckIn = async () => {
     if (!selectedRoute || !activeClient || currentRouteClientsFull.length === 0) {
-        toast({ title: "Error", description: "No se pudieron sincronizar los datos de la ruta.", variant: "destructive" });
+        toast({ title: "Atención", description: "Los datos aún se están sincronizando. Reintenta en unos segundos.", variant: "destructive" });
         return;
     }
     const time = format(new Date(), 'HH:mm:ss');
@@ -266,15 +258,19 @@ export default function RouteManagementPage() {
     getCurrentLocation(4000).then(async (coords) => {
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
         let nextClients: ClientInRoute[] = [];
+        
         setCurrentRouteClientsFull(prev => {
+            if (prev.length === 0) return prev; // ANTI-WIPE GUARD
             nextClients = prev.map(c => 
                 c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
             );
             return nextClients;
         });
 
-        // SEGURIDAD: Nunca guardar si por error la lista se vació
-        if (nextClients.length === 0) return;
+        if (nextClients.length === 0) {
+            setIsLocating(false);
+            return;
+        }
 
         const sanitized = sanitizeClientsForFirestore(nextClients);
         await updateRoute(selectedRoute.id, { clients: sanitized });
@@ -285,7 +281,7 @@ export default function RouteManagementPage() {
 
   const handleConfirmCheckOut = async () => {
     if (!selectedRoute || !activeClient || !activeClient.visitType || currentRouteClientsFull.length === 0) {
-        toast({ title: "Atención", description: "Datos incompletos o falla de sincronización.", variant: "destructive" });
+        toast({ title: "Atención", description: "La lista de clientes está vacía o en sincronización. Refresca la página.", variant: "destructive" });
         return;
     }
     const time = format(new Date(), 'HH:mm:ss');
@@ -308,7 +304,7 @@ export default function RouteManagementPage() {
             return c;
         });
 
-        // SEGURIDAD: Nunca guardar si por error la lista se vació
+        // SAFETY: Never save if the list is empty to prevent wiping the DB route
         if (updatedClients.length === 0) {
             setIsSaving(false);
             setIsLocating(false);
@@ -332,13 +328,12 @@ export default function RouteManagementPage() {
   };
 
   const onDragEnd = async (result: DropResult) => {
-    const { source, destination } = result;
-    if (!destination || !selectedRoute || source.index === destination.index) return;
+    if (!result.destination || !selectedRoute || result.source.index === result.destination.index) return;
     const displayed = Array.from(routeClients);
-    const [moved] = displayed.splice(source.index, 1);
-    displayed.splice(destination.index, 0, moved);
+    const [moved] = displayed.splice(result.source.index, 1);
+    displayed.splice(result.destination.index, 0, moved);
     
-    if (destination.index === 0 && moved.visitStatus !== 'Completado') {
+    if (result.destination.index === 0 && moved.visitStatus !== 'Completado') {
         setActiveRuc(moved.ruc);
     }
     
@@ -412,7 +407,7 @@ export default function RouteManagementPage() {
             <CardHeader><CardTitle>Selecciona una Ruta</CardTitle></CardHeader>
             <CardContent className="space-y-4">
                 <Select onValueChange={handleRouteSelect} value={selectedRouteId}>
-                    <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta para hoy" /></SelectTrigger>
+                    <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta activa" /></SelectTrigger>
                     <SelectContent>
                         {selectableRoutes.length > 0 ? (
                             selectableRoutes.map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName} ({r.status})</SelectItem>))
