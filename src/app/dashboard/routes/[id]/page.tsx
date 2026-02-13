@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, Check, ChevronsUpDown, LoaderCircle, Clock, Trash2, PlusCircle, Search, ThumbsUp, ThumbsDown, Eye, Send } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Users, ChevronsUpDown, LoaderCircle, Clock, Trash2, PlusCircle, Search, ThumbsUp, ThumbsDown, Eye, Send, LifeBuoy, AlertTriangle } from 'lucide-react';
 import { getRoute, updateRoute, addNotification } from '@/lib/firebase/firestore';
+import { getPredicciones } from '@/services/api';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -28,7 +29,16 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogHeader, AlertDialogContent, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter } from '@/components/ui/alert-dialog';
+import { 
+  AlertDialog, 
+  AlertDialogAction, 
+  AlertDialogCancel, 
+  AlertDialogHeader, 
+  AlertDialogContent, 
+  AlertDialogTitle, 
+  AlertDialogDescription, 
+  AlertDialogFooter 
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 
 const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
@@ -66,6 +76,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isRecovering, setIsRecovering] = useState(false);
   
   const [calendarOpen, setCalendarOpen] = useState<{[key: string]: boolean}>({});
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
@@ -152,12 +163,62 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       );
   }, []);
 
+  const handleRecoverClients = async () => {
+    if (!route || !route.routeName.includes("Ruta Predicha")) {
+        toast({ title: "Acción no permitida", description: "Solo se pueden recuperar clientes de rutas generadas por predicción.", variant: "destructive"});
+        return;
+    }
+    
+    setIsRecovering(true);
+    try {
+        const execMatch = route.routeName.match(/para (.*?) -/);
+        const ejecutivo = execMatch ? execMatch[1] : '';
+        const dateObj = route.date instanceof Timestamp ? route.date.toDate() : new Date(route.date);
+        const fecha_inicio = format(dateObj, 'yyyy-MM-dd');
+
+        toast({ title: "Recuperando...", description: "Buscando datos de la predicción original." });
+
+        const predictions = await getPredicciones({ ejecutivo, fecha_inicio, dias: 7 });
+
+        if (predictions.length === 0) {
+            toast({ title: "No se encontró respaldo", description: "No hay predicciones activas para este ejecutivo en la fecha seleccionada.", variant: "destructive" });
+            return;
+        }
+
+        const recovered: ClientInRoute[] = predictions.map(p => {
+            const ruc = (p as any).ruc || (p as any).RUC || (p as any).cliente_id;
+            return {
+                ruc,
+                nombre_comercial: (p as any).nombre_comercial || (p as any).Cliente || 'Cliente Recuperado',
+                date: p.fecha_predicha ? new Date(p.fecha_predicha) : dateObj,
+                valorVenta: parseFloat(String(p.ventas)) || 0,
+                valorCobro: parseFloat(String(p.cobros)) || 0,
+                promociones: parseFloat(String(p.promociones)) || 0,
+                origin: 'predicted',
+                status: 'Activo',
+                visitStatus: 'Pendiente'
+            };
+        });
+
+        setClientsInRoute(recovered);
+        toast({ title: "Recuperación Exitosa", description: `Se han restaurado ${recovered.length} clientes. Guarda los cambios para finalizar.` });
+
+    } catch (error: any) {
+        console.error(error);
+        toast({ title: "Fallo de Recuperación", description: "Ocurrió un error al intentar re-ejecutar la predicción.", variant: "destructive" });
+    } finally {
+        setIsRecovering(false);
+    }
+  };
+
   const handleUpdateRoute = async (e: React.FormEvent, newStatus?: RoutePlan['status']) => {
     e.preventDefault();
     if (!route || !currentUser) return;
 
+    const activeClients = clientsInRoute.filter(c => c.status !== 'Eliminado');
+
     if (!newStatus) {
-        if (!route.routeName || clientsInRoute.filter(c => c.status !== 'Eliminado').length === 0 || !route.supervisorId) {
+        if (!route.routeName || activeClients.length === 0 || !route.supervisorId) {
             toast({ title: 'Faltan datos', description: 'Por favor completa el nombre de la ruta, el supervisor y añade al menos un cliente activo.', variant: 'destructive' });
             return;
         }
@@ -256,7 +317,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     const newClientsList = dialogSelectedClients.map(selectedClient => {
         const existingClientData = existingClientsMap.get(selectedClient.ruc);
         if (existingClientData) {
-            // PRESERVE individual client date strictly if it exists
             return { 
                 ...existingClientData, 
                 status: 'Activo' as const, 
@@ -421,6 +481,10 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       return currentUser.id === route.createdBy && (route.status === 'Planificada' || route.status === 'Rechazada');
   }, [currentUser, route]);
 
+  const showRecoveryButton = useMemo(() => {
+      return route?.routeName.includes("Ruta Predicha") && activeClientsWithIndex.length === 0 && !loading;
+  }, [route, activeClientsWithIndex, loading]);
+
   if (loading || authLoading) {
     return (
       <>
@@ -450,7 +514,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     return notFound();
   }
   
-  const isFormDisabled = isSaving || !canEdit;
+  const isFormDisabled = isSaving || !canEdit || isRecovering;
   
   return (
     <>
@@ -481,6 +545,20 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
             Esta ruta está esperando la aprobación de tu supervisor. No podrás editarla hasta que sea aprobada o rechazada.
           </AlertDescription>
         </Alert>
+      )}
+
+      {showRecoveryButton && (
+          <Alert className="mb-6 border-blue-500 bg-blue-50">
+              <AlertTriangle className="h-4 w-4 text-blue-600" />
+              <AlertTitle className="text-blue-800 font-bold">Ruta Vacía Detectada</AlertTitle>
+              <AlertDescription className="text-blue-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                  <span>Esta ruta parece haber perdido sus clientes. Al ser una ruta predicha, puedes intentar recuperarlos automáticamente.</span>
+                  <Button onClick={handleRecoverClients} disabled={isRecovering} variant="default" className="bg-blue-600 hover:bg-blue-700 shrink-0">
+                      {isRecovering ? <LoaderCircle className="animate-spin mr-2" /> : <LifeBuoy className="mr-2 h-4 w-4" />}
+                      Recuperar Clientes
+                  </Button>
+              </AlertDescription>
+          </Alert>
       )}
 
       <form onSubmit={(e) => handleUpdateRoute(e)}>
@@ -724,7 +802,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                                     <div className="flex w-full items-center justify-between rounded-lg p-2 cursor-pointer hover:bg-muted/50">
                                         <div className="flex items-center gap-3 text-destructive">
                                             <Trash2 className="h-5 w-5" />
-                                            <h4 className="font-semibold">Clientes Eliminados</h4>
+                                            <h4 className="font-semibold text-destructive">Clientes Eliminados</h4>
                                             <Badge variant="destructive">{removedClients.length}</Badge>
                                         </div>
                                         <Button variant="ghost" size="sm" className="w-9 p-0 text-destructive">
@@ -754,7 +832,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                                     ))}
                                 </CollapsibleContent>
                             </Collapsible>
-                        )}
+                        ))}
                     </div>
                 </CardContent>
             </Card>

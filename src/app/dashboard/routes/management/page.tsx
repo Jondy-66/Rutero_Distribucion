@@ -6,12 +6,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, GripVertical, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, Clock } from 'lucide-react';
+import { Route, Search, GripVertical, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, Clock, AlertTriangle } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { updateRoute, getRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, isToday } from 'date-fns';
+import { format, isToday, isFuture } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
@@ -32,7 +32,7 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         if (c.date instanceof Date) {
             cleaned.date = Timestamp.fromDate(c.date);
         } else if (c.date && typeof (c.date as any).toDate === 'function') {
-            // Already a Timestamp
+            // Ya es Timestamp
         } else if (c.date) {
             cleaned.date = Timestamp.fromDate(new Date(c.date as any));
         }
@@ -81,22 +81,15 @@ export default function RouteManagementPage() {
     };
   }, []);
 
-  const SELECTION_KEY = user ? `mgmt_selected_route_v3_${user.id}` : null;
+  const SELECTION_KEY = user ? `mgmt_selected_route_v4_${user.id}` : null;
 
   const selectableRoutes = useMemo(() => {
     return allRoutes.filter(r => {
         const isOwner = r.createdBy === user?.id;
         if (!isOwner) return false;
-        
-        // ONLY show active routes for management
-        // We filter out 'Completada', 'Incompleta' or 'Rechazada' unless it's the one currently being viewed
         if (r.id === selectedRouteId) return true;
         if (['Completada', 'Incompleta', 'Rechazada'].includes(r.status)) return false;
-
-        // Show routes that are En Progreso or Planificada
-        if (r.status === 'En Progreso' || r.status === 'Planificada') return true;
-
-        return false;
+        return r.status === 'En Progreso' || r.status === 'Planificada';
     });
   }, [allRoutes, user, selectedRouteId]);
 
@@ -110,12 +103,11 @@ export default function RouteManagementPage() {
     if (isInitialRehydrationDone.current || !SELECTION_KEY) return;
 
     const savedId = localStorage.getItem(SELECTION_KEY);
-    
     if (savedId && allRoutes.length > 0) {
         const found = allRoutes.find(r => r.id === savedId);
-        if (found) {
+        if (found && found.status !== 'Completada') {
             setSelectedRouteId(savedId);
-            setIsRouteStarted(['En Progreso', 'Incompleta', 'Completada'].includes(found.status));
+            setIsRouteStarted(found.status === 'En Progreso');
             isInitialRehydrationDone.current = true;
             return;
         }
@@ -137,7 +129,6 @@ export default function RouteManagementPage() {
 
   useEffect(() => {
     if (!selectedRoute) return;
-    
     if (lastKnownRouteId.current !== selectedRoute.id || currentRouteClientsFull.length === 0) {
         const clients = selectedRoute.clients || [];
         if (clients.length > 0) {
@@ -145,19 +136,7 @@ export default function RouteManagementPage() {
             lastKnownRouteId.current = selectedRoute.id;
         }
     }
-    
-    const hasPendingToday = (selectedRoute.clients || []).some(c => {
-        if (c.status === 'Eliminado' || !c.date) return false;
-        const cDate = c.date instanceof Date ? c.date : new Date(c.date as any);
-        return isToday(cDate) && c.visitStatus !== 'Completado';
-    });
-
-    if (selectedRoute.status === 'Completada' && hasPendingToday) {
-        updateRoute(selectedRoute.id, { status: 'En Progreso' });
-        setIsRouteStarted(true);
-    } else {
-        setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status) || (selectedRoute.status === 'Completada' && !hasPendingToday));
-    }
+    setIsRouteStarted(selectedRoute.status === 'En Progreso');
   }, [selectedRoute, currentRouteClientsFull.length]);
 
   const routeClients = useMemo(() => {
@@ -181,22 +160,6 @@ export default function RouteManagementPage() {
             } as RouteClient;
         });
   }, [currentRouteClientsFull, availableClients, user]);
-
-  const filteredAvailableClients = useMemo(() => {
-    if (!isAddClientDialogOpen) return [];
-    const search = addClientSearchTerm.toLowerCase().trim();
-    
-    return availableClients
-        .filter(c => c.ejecutivo?.trim().toLowerCase() === user?.name?.trim().toLowerCase())
-        .filter(c => {
-            if (!search) return true;
-            return (
-                c.nombre_comercial.toLowerCase().includes(search) ||
-                c.nombre_cliente.toLowerCase().includes(search) ||
-                c.ruc.includes(search)
-            );
-        });
-  }, [availableClients, addClientSearchTerm, user, isAddClientDialogOpen]);
 
   useEffect(() => {
     if (!activeRuc && routeClients.length > 0) {
@@ -247,41 +210,45 @@ export default function RouteManagementPage() {
 
   const handleCheckIn = async () => {
     if (!selectedRoute || !activeClient || currentRouteClientsFull.length === 0) {
-        toast({ title: "Atención", description: "Los datos aún se están sincronizando. Reintenta en unos segundos.", variant: "destructive" });
+        toast({ title: "Error de Sincronización", description: "Los datos de la ruta no se han cargado. Refresca la página.", variant: "destructive" });
         return;
     }
     const time = format(new Date(), 'HH:mm:ss');
-    
     handleFieldChange('checkInTime', time);
     setIsLocating(true);
     
-    getCurrentLocation(4000).then(async (coords) => {
-        const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
-        let nextClients: ClientInRoute[] = [];
-        
-        setCurrentRouteClientsFull(prev => {
-            if (prev.length === 0) return prev; // ANTI-WIPE GUARD
-            nextClients = prev.map(c => 
-                c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
-            );
-            return nextClients;
-        });
+    const coords = await getCurrentLocation(4000);
+    const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
+    
+    let nextClients: ClientInRoute[] = [];
+    let inconsistent = false;
 
-        if (nextClients.length === 0) {
-            setIsLocating(false);
-            return;
+    setCurrentRouteClientsFull(prev => {
+        if (prev.length === 0 && (selectedRoute.clients?.length || 0) > 0) {
+            inconsistent = true;
+            return prev;
         }
-
-        const sanitized = sanitizeClientsForFirestore(nextClients);
-        await updateRoute(selectedRoute.id, { clients: sanitized });
-        setIsLocating(false);
-        toast({ title: "Entrada Registrada" });
+        nextClients = prev.map(c => 
+            c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
+        );
+        return nextClients;
     });
+
+    if (inconsistent || nextClients.length === 0) {
+        setIsLocating(false);
+        toast({ title: "Error de Protección", description: "Inconsistencia de datos. Abortando guardado.", variant: "destructive" });
+        return;
+    }
+
+    const sanitized = sanitizeClientsForFirestore(nextClients);
+    await updateRoute(selectedRoute.id, { clients: sanitized });
+    setIsLocating(false);
+    toast({ title: "Entrada Registrada" });
   };
 
   const handleConfirmCheckOut = async () => {
     if (!selectedRoute || !activeClient || !activeClient.visitType || currentRouteClientsFull.length === 0) {
-        toast({ title: "Atención", description: "La lista de clientes está vacía o en sincronización. Refresca la página.", variant: "destructive" });
+        toast({ title: "Error de Sincronización", description: "La lista de clientes está vacía. Refresca.", variant: "destructive" });
         return;
     }
     const time = format(new Date(), 'HH:mm:ss');
@@ -290,9 +257,18 @@ export default function RouteManagementPage() {
     setIsSaving(true);
     setIsLocating(true);
 
-    getCurrentLocation(4000).then(async (coords) => {
-        const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
-        const updatedClients = currentRouteClientsFull.map(c => {
+    const coords = await getCurrentLocation(4000);
+    const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
+    
+    let nextClients: ClientInRoute[] = [];
+    let inconsistent = false;
+
+    setCurrentRouteClientsFull(prev => {
+        if (prev.length === 0 && (selectedRoute.clients?.length || 0) > 0) {
+            inconsistent = true;
+            return prev;
+        }
+        nextClients = prev.map(c => {
             if (c.ruc === currentRucToFinalize) {
                 return { 
                     ...c, 
@@ -303,28 +279,28 @@ export default function RouteManagementPage() {
             }
             return c;
         });
+        return nextClients;
+    });
 
-        // SAFETY: Never save if the list is empty to prevent wiping the DB route
-        if (updatedClients.length === 0) {
-            setIsSaving(false);
-            setIsLocating(false);
-            return;
-        }
-
-        const allClientsDone = updatedClients
-            .filter(c => c.status !== 'Eliminado')
-            .every(c => c.visitStatus === 'Completado');
-
-        const newStatus = allClientsDone ? 'Completada' : 'En Progreso';
-        const sanitized = sanitizeClientsForFirestore(updatedClients);
-        
-        await updateRoute(selectedRoute.id, { clients: sanitized, status: newStatus });
-        await refetchData('routes');
-        setCurrentRouteClientsFull(updatedClients);
+    if (inconsistent || nextClients.length === 0) {
         setIsSaving(false);
         setIsLocating(false);
-        toast({ title: "Visita Finalizada" });
-    });
+        toast({ title: "Error de Protección", description: "Datos inconsistentes. Operación abortada.", variant: "destructive" });
+        return;
+    }
+
+    const allClientsDone = nextClients
+        .filter(c => c.status !== 'Eliminado')
+        .every(c => c.visitStatus === 'Completado');
+
+    const newStatus = allClientsDone ? 'Completada' : 'En Progreso';
+    const sanitized = sanitizeClientsForFirestore(nextClients);
+    
+    await updateRoute(selectedRoute.id, { clients: sanitized, status: newStatus });
+    await refetchData('routes');
+    setIsSaving(false);
+    setIsLocating(false);
+    toast({ title: "Visita Finalizada" });
   };
 
   const onDragEnd = async (result: DropResult) => {
@@ -358,6 +334,7 @@ export default function RouteManagementPage() {
     if (!selectedRoute || multiSelectedClients.length === 0) return;
     const todayDate = new Date();
     const updatedFullList = [...currentRouteClientsFull];
+    
     for (const selected of multiSelectedClients) {
         const idx = updatedFullList.findIndex(c => c.ruc === selected.ruc);
         if (idx !== -1) {
@@ -381,6 +358,7 @@ export default function RouteManagementPage() {
             });
         }
     }
+    
     setCurrentRouteClientsFull(updatedFullList);
     const sanitized = sanitizeClientsForFirestore(updatedFullList);
     await updateRoute(selectedRoute.id, { clients: sanitized });
@@ -389,6 +367,10 @@ export default function RouteManagementPage() {
     setIsAddClientDialogOpen(false);
     setMultiSelectedClients([]);
   };
+
+  const isDataInconsistent = useMemo(() => {
+      return selectedRoute && (selectedRoute.clients?.length || 0) > 0 && currentRouteClientsFull.length === 0;
+  }, [selectedRoute, currentRouteClientsFull]);
 
   if (authLoading || (isInitialRehydrationDone.current === false && SELECTION_KEY)) {
       return (
@@ -402,7 +384,19 @@ export default function RouteManagementPage() {
   return (
     <>
     <PageHeader title="Gestión de Ruta" description="Gestión diaria de visitas."/>
-    {!isRouteStarted ? (
+    
+    {isDataInconsistent ? (
+        <div className="flex flex-col items-center justify-center h-[40vh] gap-4 p-6 border-2 border-dashed rounded-xl">
+            <AlertTriangle className="h-12 w-12 text-amber-500" />
+            <div className="text-center space-y-2">
+                <h3 className="text-xl font-bold">Inconsistencia Detectada</h3>
+                <p className="text-muted-foreground max-w-md">La ruta tiene clientes pero el sistema no ha terminado de leerlos. Presiona refrescar.</p>
+            </div>
+            <Button onClick={() => refetchData('routes')} variant="outline">
+                <Clock className="mr-2 h-4 w-4" /> Forzar Sincronización
+            </Button>
+        </div>
+    ) : !isRouteStarted ? (
         <Card className="max-w-2xl mx-auto shadow-lg">
             <CardHeader><CardTitle>Selecciona una Ruta</CardTitle></CardHeader>
             <CardContent className="space-y-4">
@@ -459,7 +453,15 @@ export default function RouteManagementPage() {
                         </div>
                         <ScrollArea className="flex-1 px-6">
                             <div className="space-y-2 pb-4">
-                                {filteredAvailableClients.map(client => (
+                                {availableClients.filter(c => {
+                                    if (user?.role === 'Usuario') return c.ejecutivo === user.name;
+                                    return true;
+                                }).filter(c => {
+                                    const search = addClientSearchTerm.toLowerCase();
+                                    return c.nombre_comercial.toLowerCase().includes(search) || 
+                                           c.nombre_cliente.toLowerCase().includes(search) || 
+                                           c.ruc.includes(addClientSearchTerm);
+                                }).map(client => (
                                     <div key={client.id} className={cn(
                                         "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors hover:bg-accent",
                                         multiSelectedClients.some(c => c.ruc === client.ruc) && "border-primary bg-primary/5"
@@ -474,12 +476,6 @@ export default function RouteManagementPage() {
                                         </div>
                                     </div>
                                 ))}
-                                {filteredAvailableClients.length === 0 && (
-                                    <div className="text-center py-12 text-muted-foreground flex flex-col items-center gap-2">
-                                        <Search className="h-8 w-8 opacity-20" />
-                                        <p className="text-sm">No hay clientes asignados que coincidan.</p>
-                                    </div>
-                                )}
                             </div>
                         </ScrollArea>
                         <DialogFooter className="p-6 pt-2 border-t bg-muted/20">
