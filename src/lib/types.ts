@@ -1,5 +1,3 @@
-
-
 /**
  * @fileoverview Define los tipos de datos principales utilizados en la aplicación.
  * Estos tipos aseguran la consistencia de los datos entre los componentes y la base de datos de Firestore.
@@ -19,6 +17,7 @@ export type User = {
   status?: 'active' | 'inactive'; // Estado del usuario, para activarlo o desactivarlo.
   supervisorId?: string; // ID del supervisor asignado, si el rol es 'Usuario'.
   failedLoginAttempts?: number; // Contador de intentos fallidos de inicio de sesión.
+  permissions?: string[]; // Lista de IDs de módulos/acciones permitidas para este usuario.
 };
 
 /**

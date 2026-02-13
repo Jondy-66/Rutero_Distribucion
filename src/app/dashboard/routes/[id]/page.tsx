@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter, notFound } from 'next/navigation';
@@ -7,15 +6,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, ChevronsUpDown, LoaderCircle, Clock, Trash2, PlusCircle, Search, ThumbsUp, ThumbsDown, Eye, Send, LifeBuoy, AlertTriangle } from 'lucide-react';
-import { getRoute, updateRoute, addNotification } from '@/lib/firebase/firestore';
+import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle } from 'lucide-react';
+import { getRoute, updateRoute } from '@/lib/firebase/firestore';
 import { getPredicciones } from '@/services/api';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { Timestamp } from 'firebase/firestore';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -24,10 +22,6 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { 
   AlertDialog, 
@@ -40,21 +34,7 @@ import {
   AlertDialogFooter 
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
-
-const generateTimeSlots = (startHour: number, endHour: number, interval: number, startMinute = 0) => {
-    const slots = [];
-    for (let hour = startHour; hour <= endHour; hour++) {
-        for (let minute = (hour === startHour ? startMinute : 0); minute < 60; minute += interval) {
-            if (hour === endHour && minute > 0) break;
-            const time = new Date(1970, 0, 1, hour, minute);
-            slots.push(format(time, 'HH:mm'));
-        }
-    }
-    return slots;
-};
-
-const startTimeSlots = generateTimeSlots(8, 18, 30);
-const endTimeSlots = generateTimeSlots(8, 18, 30, 30);
+import { Textarea } from '@/components/ui/textarea';
 
 const ensureDate = (d: any): Date => {
   if (!d) return new Date();
@@ -68,7 +48,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   const { id: routeId } = use(params);
   const router = useRouter();
   const { toast } = useToast();
-  const { user: currentUser, users, clients, loading: authLoading, refetchData } = useAuth();
+  const { user: currentUser, users, loading: authLoading, refetchData } = useAuth();
 
   const [route, setRoute] = useState<RoutePlan | null>(null);
   const [clientsInRoute, setClientsInRoute] = useState<ClientInRoute[]>([]);
@@ -79,17 +59,8 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   const [isRecovering, setIsRecovering] = useState(false);
   
   const [calendarOpen, setCalendarOpen] = useState<{[key: string]: boolean}>({});
-  const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
-  const [dialogSearchTerm, setDialogSearchTerm] = useState('');
-  const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
-
   const [clientToRemove, setClientToRemove] = useState<ClientInRoute | null>(null);
   const [removalObservation, setRemovalObservation] = useState('');
-
-  const [currentAddDate, setCurrentAddDate] = useState<Date | null>(null);
-  const [isAddClientToDateDialogOpen, setIsAddClientToDateDialogOpen] = useState(false);
-  const [addDialogSelectedClients, setAddDialogSelectedClients] = useState<Client[]>([]);
-  const [addDialogSearchTerm, setAddDialogSearchTerm] = useState('');
 
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
@@ -104,6 +75,13 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
      if (currentUser.role === 'Administrador' && route.status === 'Pendiente de Aprobación') return true;
      return currentUser.id === route.supervisorId && route.status === 'Pendiente de Aprobación';
   }, [currentUser, route]);
+
+  // Nuevo permiso granular
+  const canRecoverClients = useMemo(() => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'Administrador') return true;
+    return currentUser.permissions?.includes('recover-clients') || false;
+  }, [currentUser]);
 
   useEffect(() => {
     const fetchRouteData = async () => {
@@ -134,12 +112,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
           setSupervisors(users.filter(u => u.role === 'Supervisor'));
       }
   }, [users]);
-  
-  useEffect(() => {
-      if (route && !route.supervisorId && currentUser?.role === 'Usuario' && currentUser.supervisorId) {
-          handleInputChange('supervisorId', currentUser.supervisorId);
-      }
-  }, [route, currentUser]);
 
   const handleInputChange = <K extends keyof RoutePlan>(field: K, value: RoutePlan[K]) => {
     setRoute(prev => (prev ? { ...prev, [field]: value } : null));
@@ -244,9 +216,8 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         dataToUpdate.status = newStatus;
       }
 
-      delete (dataToUpdate as any).id;
-      
-      await updateRoute(routeId, dataToUpdate);
+      const { id, ...cleanedData } = dataToUpdate as any;
+      await updateRoute(routeId, cleanedData);
       await refetchData('routes');
 
       toast({ title: 'Éxito', description: `Ruta actualizada correctamente.` });
@@ -259,61 +230,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       setIsSaving(false);
     }
   };
-
-  const handleConfirmClientSelection = () => {
-    const existingClientsMap = new Map(clientsInRoute.map(c => [c.ruc, c]));
-    const mainRouteDate = ensureDate(route?.date);
-    
-    const newClientsList = dialogSelectedClients.map(selectedClient => {
-        const existingClientData = existingClientsMap.get(selectedClient.ruc);
-        if (existingClientData) {
-            return { 
-                ...existingClientData, 
-                status: 'Activo' as const, 
-                date: existingClientData.date ? ensureDate(existingClientData.date) : mainRouteDate 
-            };
-        }
-        return {
-            ruc: selectedClient.ruc,
-            nombre_comercial: selectedClient.nombre_comercial,
-            date: mainRouteDate,
-            origin: 'manual' as const,
-            status: 'Activo' as const,
-        };
-    });
-
-    const unselectedClients = clientsInRoute.filter(originalClient => 
-        !dialogSelectedClients.some(selectedClient => selectedClient.ruc === originalClient.ruc)
-    );
-
-    const markedAsRemoved = unselectedClients.map(client => ({
-        ...client,
-        status: 'Eliminado' as const,
-        removalObservation: client.removalObservation || 'Eliminado de la lista',
-    }));
-    
-    setClientsInRoute([...newClientsList, ...markedAsRemoved]);
-    setIsClientDialogOpen(false);
-  };
-
-  const handleConfirmAddClientToDate = () => {
-    if (addDialogSelectedClients.length === 0 || !currentAddDate) {
-        setIsAddClientToDateDialogOpen(false);
-        return;
-    }
-
-    const newClientsToAdd: ClientInRoute[] = addDialogSelectedClients.map(client => ({
-        ruc: client.ruc,
-        nombre_comercial: client.nombre_comercial,
-        date: currentAddDate,
-        origin: 'manual' as const,
-        status: 'Activo' as const,
-        visitStatus: 'Pendiente' as const
-    }));
-
-    setClientsInRoute(prev => [...prev, ...newClientsToAdd]);
-    setIsAddClientToDateDialogOpen(false);
-  }
 
   const handleConfirmRemoval = () => {
     if (!clientToRemove) return;
@@ -388,14 +304,14 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         </Alert>
       )}
 
-      {activeClientsWithIndex.length === 0 && !loading && route.routeName.includes("Ruta Predicha") && (
-          <Alert className="mb-6 border-blue-500 bg-blue-50">
+      {activeClientsWithIndex.length === 0 && canRecoverClients && !loading && route.routeName.includes("Ruta Predicha") && (
+          <Alert className="mb-6 border-blue-500 bg-blue-50 shadow-md">
               <AlertTriangle className="h-4 w-4 text-blue-600" />
               <AlertTitle className="text-blue-800 font-bold">Ruta Vacía Detectada</AlertTitle>
-              <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <span className="text-blue-700">Esta ruta parece haber perdido sus clientes. Puedes recuperarlos automáticamente.</span>
-                  <Button onClick={handleRecoverClients} disabled={isRecovering} variant="default" className="bg-blue-600 hover:bg-blue-700 shrink-0">
-                      {isRecovering ? <LoaderCircle className="animate-spin mr-2" /> : <LifeBuoy className="mr-2 h-4 w-4" />}
+              <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
+                  <span className="text-blue-700">Esta ruta parece haber perdido sus clientes. Puedes recuperarlos automáticamente usando la predicción original.</span>
+                  <Button onClick={handleRecoverClients} disabled={isRecovering} variant="default" className="bg-blue-600 hover:bg-blue-700 shrink-0 font-bold">
+                      {isRecovering ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : <LifeBuoy className="mr-2 h-4 w-4" />}
                       Recuperar Clientes
                   </Button>
               </AlertDescription>
@@ -422,7 +338,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="status">Estado</Label>
-                    <Badge variant="outline" className="h-10 w-full flex items-center justify-center">{route.status}</Badge>
+                    <Badge variant="outline" className="h-10 w-full flex items-center justify-center font-bold">{route.status}</Badge>
                 </div>
             </CardContent>
             </Card>
@@ -430,69 +346,60 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
             <Card>
                 <CardHeader>
                     <CardTitle>Clientes en Ruta</CardTitle>
-                    <CardDescription>Planificación por día (Lunes a Viernes).</CardDescription>
+                    <CardDescription>Visualización y ajuste de visitas por día.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <Label>Gestionar Selección</Label>
-                            <Button variant="outline" size="sm" onClick={() => setIsClientDialogOpen(true)} disabled={isFormDisabled}>
-                                Seleccionar Clientes ({activeClientsWithIndex.length})
-                            </Button>
-                        </div>
-                    </div>
-
-                    <div className="space-y-2 mt-6">
+                    <div className="space-y-2">
                         {groupedClients.map(([date, clientsInGroup]) => (
                             <Collapsible key={date} defaultOpen className="border-l-2 pl-4 py-2 border-slate-200">
                                 <CollapsibleTrigger asChild>
-                                    <div className="flex w-full items-center justify-between rounded-lg p-2 cursor-pointer hover:bg-muted/50">
+                                    <div className="flex w-full items-center justify-between rounded-lg p-2 cursor-pointer hover:bg-muted/50 transition-colors">
                                         <div className="flex items-center gap-3">
                                             <CalendarIcon className="h-5 w-5 text-muted-foreground" />
-                                            <h4 className="font-semibold">
+                                            <h4 className="font-semibold text-sm">
                                                 {date === 'Sin Fecha' 
                                                     ? 'Sin Fecha' 
                                                     : format(new Date(date + 'T00:00:00'), 'EEEE, dd \'de\' MMMM', { locale: es })}
                                             </h4>
-                                            <Badge variant="secondary">{clientsInGroup.length}</Badge>
+                                            <Badge variant="secondary" className="font-black">{clientsInGroup.length}</Badge>
                                         </div>
                                     </div>
                                 </CollapsibleTrigger>
                                 <CollapsibleContent className="space-y-4 p-2">
                                     {clientsInGroup.map((client) => (
-                                        <Card key={client.ruc} className="p-4 relative">
+                                        <Card key={client.ruc} className="p-4 relative hover:shadow-md transition-shadow">
                                             <div className="flex justify-between items-start">
-                                                <div>
-                                                    <p className="font-semibold">{client.globalIndex + 1}. {client.nombre_comercial}</p>
-                                                    <p className="text-xs text-muted-foreground">{client.ruc}</p>
+                                                <div className="space-y-1">
+                                                    <p className="font-bold text-sm text-primary">{client.globalIndex + 1}. {client.nombre_comercial}</p>
+                                                    <p className="text-[10px] font-mono text-muted-foreground uppercase">{client.ruc}</p>
                                                 </div>
                                                 <Button type="button" variant="ghost" size="icon" onClick={() => setClientToRemove(client)} disabled={isFormDisabled}>
                                                     <Trash2 className="h-4 w-4 text-destructive" />
                                                 </Button>
                                             </div>
-                                            <Separator className="my-2" />
-                                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-2">
-                                                <div className="space-y-2">
-                                                    <Label>Fecha</Label>
+                                            <Separator className="my-3" />
+                                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] uppercase font-black">Fecha Visita</Label>
                                                     <Popover open={calendarOpen[client.ruc]} onOpenChange={(isOpen) => setCalendarOpen(prev => ({ ...prev, [client.ruc]: isOpen }))}>
                                                     <PopoverTrigger asChild>
-                                                        <Button variant="outline" className="w-full justify-start" disabled={isFormDisabled}>
-                                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                                            {client.date ? format(ensureDate(client.date), 'PPP', { locale: es }) : 'Elige fecha'}
+                                                        <Button variant="outline" className="w-full justify-start h-9 text-xs" disabled={isFormDisabled}>
+                                                            <CalendarIcon className="mr-2 h-3 w-3" />
+                                                            {client.date ? format(ensureDate(client.date), 'dd/MM/yyyy') : 'Elije'}
                                                         </Button>
                                                     </PopoverTrigger>
-                                                    <PopoverContent className="p-0">
+                                                    <PopoverContent className="p-0" align="start">
                                                         <Calendar mode="single" selected={ensureDate(client.date)} onSelect={(d) => handleClientValueChange(client.ruc, 'date', d)} locale={es} />
                                                     </PopoverContent>
                                                     </Popover>
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <Label>Venta ($)</Label>
-                                                    <Input type="number" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] uppercase font-black">Venta ($)</Label>
+                                                    <Input type="number" className="h-9 text-xs" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
                                                 </div>
-                                                <div className="space-y-2">
-                                                    <Label>Cobro ($)</Label>
-                                                    <Input type="number" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] uppercase font-black">Cobro ($)</Label>
+                                                    <Input type="number" className="h-9 text-xs" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
                                                 </div>
                                             </div>
                                         </Card>
@@ -504,10 +411,10 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                 </CardContent>
             </Card>
 
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 p-4 bg-background sticky bottom-0 border-t z-10">
                 {canEdit && (
-                    <Button type="submit" disabled={isFormDisabled}>
-                        {isSaving && <LoaderCircle className="animate-spin mr-2" />}
+                    <Button type="submit" disabled={isFormDisabled} className="font-bold shadow-lg">
+                        {isSaving && <LoaderCircle className="animate-spin mr-2 h-4 w-4" />}
                         Guardar Cambios
                     </Button>
                 )}
@@ -517,14 +424,14 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
       <AlertDialog open={!!clientToRemove} onOpenChange={() => setClientToRemove(null)}>
         <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>¿Eliminar cliente?</AlertDialogTitle></AlertDialogHeader>
+            <AlertDialogHeader><AlertDialogTitle>¿Eliminar cliente de la ruta?</AlertDialogTitle></AlertDialogHeader>
              <div className="py-4 space-y-2">
-                <Label>Observación requerida</Label>
-                <Textarea value={removalObservation} onChange={(e) => setRemovalObservation(e.target.value)} placeholder="Ej: Cliente no disponible." />
+                <Label className="font-bold">Observación de la eliminación</Label>
+                <Textarea value={removalObservation} onChange={(e) => setRemovalObservation(e.target.value)} placeholder="Ej: Cliente cerrado, cambio de día, etc." />
             </div>
             <AlertDialogFooter>
                 <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleConfirmRemoval}>Confirmar</AlertDialogAction>
+                <AlertDialogAction onClick={handleConfirmRemoval} className="bg-destructive hover:bg-destructive/90">Confirmar Eliminación</AlertDialogAction>
             </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
