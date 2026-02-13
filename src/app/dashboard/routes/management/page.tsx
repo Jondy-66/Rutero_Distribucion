@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Route, Search, GripVertical, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, Clock } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
-import { updateRoute } from '@/lib/firebase/firestore';
+import { updateRoute, getRoute } from '@/lib/firebase/firestore';
 import type { Client, RoutePlan, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format, isToday } from 'date-fns';
@@ -69,6 +69,7 @@ export default function RouteManagementPage() {
 
   const [dndEnabled, setDndEnabled] = useState(false);
   const isInitialRehydrationDone = useRef(false);
+  const lastKnownRouteId = useRef<string | null>(null);
 
   useEffect(() => {
     setTodayFormatted(format(new Date(), "EEEE, d 'de' MMMM", { locale: es }));
@@ -95,7 +96,7 @@ export default function RouteManagementPage() {
 
         const hasActivityToday = r.clients?.some(c => {
             if (c.status === 'Eliminado' || !c.date) return false;
-            const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
+            const cDate = c.date instanceof Date ? c.date : new Date(c.date as any);
             return isToday(cDate);
         });
 
@@ -143,12 +144,19 @@ export default function RouteManagementPage() {
 
   useEffect(() => {
     if (!selectedRoute) return;
-    const clients = selectedRoute.clients || [];
-    setCurrentRouteClientsFull(clients);
     
-    const hasPendingToday = clients.some(c => {
+    // Solo actualizamos el estado local si cambiamos de ruta o si el estado actual está vacío
+    if (lastKnownRouteId.current !== selectedRoute.id || currentRouteClientsFull.length === 0) {
+        const clients = selectedRoute.clients || [];
+        if (clients.length > 0) {
+            setCurrentRouteClientsFull(clients);
+            lastKnownRouteId.current = selectedRoute.id;
+        }
+    }
+    
+    const hasPendingToday = (selectedRoute.clients || []).some(c => {
         if (c.status === 'Eliminado' || !c.date) return false;
-        const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
+        const cDate = c.date instanceof Date ? c.date : new Date(c.date as any);
         return isToday(cDate) && c.visitStatus !== 'Completado';
     });
 
@@ -158,13 +166,13 @@ export default function RouteManagementPage() {
     } else {
         setIsRouteStarted(['En Progreso', 'Incompleta'].includes(selectedRoute.status) || (selectedRoute.status === 'Completada' && !hasPendingToday));
     }
-  }, [selectedRoute]);
+  }, [selectedRoute, currentRouteClientsFull.length]);
 
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
         .filter(c => {
             if (c.status === 'Eliminado' || !c.date) return false;
-            const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
+            const cDate = c.date instanceof Date ? c.date : new Date(c.date as any);
             return isToday(cDate);
         })
         .map(c => {
@@ -246,7 +254,10 @@ export default function RouteManagementPage() {
   }
 
   const handleCheckIn = async () => {
-    if (!selectedRoute || !activeClient) return;
+    if (!selectedRoute || !activeClient || currentRouteClientsFull.length === 0) {
+        toast({ title: "Error", description: "No se pudieron sincronizar los datos de la ruta.", variant: "destructive" });
+        return;
+    }
     const time = format(new Date(), 'HH:mm:ss');
     
     handleFieldChange('checkInTime', time);
@@ -261,6 +272,10 @@ export default function RouteManagementPage() {
             );
             return nextClients;
         });
+
+        // SEGURIDAD: Nunca guardar si por error la lista se vació
+        if (nextClients.length === 0) return;
+
         const sanitized = sanitizeClientsForFirestore(nextClients);
         await updateRoute(selectedRoute.id, { clients: sanitized });
         setIsLocating(false);
@@ -269,8 +284,8 @@ export default function RouteManagementPage() {
   };
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || !activeClient || !activeClient.visitType) {
-        toast({ title: "Atención", description: "Selecciona el tipo de visita.", variant: "destructive" });
+    if (!selectedRoute || !activeClient || !activeClient.visitType || currentRouteClientsFull.length === 0) {
+        toast({ title: "Atención", description: "Datos incompletos o falla de sincronización.", variant: "destructive" });
         return;
     }
     const time = format(new Date(), 'HH:mm:ss');
@@ -292,6 +307,13 @@ export default function RouteManagementPage() {
             }
             return c;
         });
+
+        // SEGURIDAD: Nunca guardar si por error la lista se vació
+        if (updatedClients.length === 0) {
+            setIsSaving(false);
+            setIsLocating(false);
+            return;
+        }
 
         const allClientsDone = updatedClients
             .filter(c => c.status !== 'Eliminado')

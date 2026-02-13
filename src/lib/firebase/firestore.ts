@@ -142,6 +142,29 @@ export const updateClientLocations = async (locations: { ruc: string; provincia:
 
 const routesCollection = collection(db, 'routes');
 
+/**
+ * Mapea los datos de un documento de ruta de Firestore a un objeto RoutePlan robusto.
+ */
+const mapRouteDoc = (doc: any): RoutePlan => {
+    const data = doc.data();
+    const clientsData = Array.isArray(data.clients) ? data.clients : [];
+    
+    return {
+        id: doc.id,
+        ...data,
+        date: data.date instanceof Timestamp ? data.date.toDate() : (data.date ? new Date(data.date) : new Date()),
+        clients: clientsData.map((c: any) => ({
+            ...c,
+            date: c.date instanceof Timestamp ? c.date.toDate() : (c.date ? new Date(c.date) : undefined),
+            valorVenta: parseFloat(String(c.valorVenta || 0)) || 0,
+            valorCobro: parseFloat(String(c.valorCobro || 0)) || 0,
+            devoluciones: parseFloat(String(c.devoluciones || 0)) || 0,
+            promociones: parseFloat(String(c.promociones || 0)) || 0,
+            medicacionFrecuente: parseFloat(String(c.medicacionFrecuente || 0)) || 0,
+        }))
+    } as RoutePlan;
+};
+
 export const addRoutesBatch = async (routesData: Omit<RoutePlan, 'id' | 'createdAt'>[]): Promise<string[]> => {
     const batch = writeBatch(db);
     const newRouteIds: string[] = [];
@@ -180,38 +203,18 @@ export const addRoute = async (routeData: Omit<RoutePlan, 'id' | 'createdAt'>): 
 export const getRoutes = async (): Promise<RoutePlan[]> => {
     const q = query(routesCollection, orderBy('createdAt', 'desc'), limit(100));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            ...data,
-            date: data.date ? (data.date as Timestamp).toDate() : new Date(),
-            clients: Array.isArray(data.clients) ? data.clients.map(c => ({ 
-                ...c, 
-                date: c.date ? (c.date as Timestamp).toDate() : undefined 
-            })) : []
-        } as RoutePlan;
-    });
+    return snapshot.docs.map(mapRouteDoc);
 };
 
 export const getMyRoutes = async (userId: string): Promise<RoutePlan[]> => {
-    const q = query(routesCollection, where('createdBy', '==', userId), limit(50));
+    const q = query(routesCollection, where('createdBy', '==', userId), limit(100));
     const snapshot = await getDocs(q);
-    const routes = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            id: doc.id,
-            ...data,
-            date: data.date ? (data.date as Timestamp).toDate() : new Date(),
-            clients: Array.isArray(data.clients) ? data.clients.map(c => ({ 
-                ...c, 
-                date: c.date ? (c.date as Timestamp).toDate() : undefined 
-            })) : []
-        } as RoutePlan;
-    });
+    const routes = snapshot.docs.map(mapRouteDoc);
     return routes.sort((a, b) => {
-        const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toDate().getTime() : 0;
-        const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toDate().getTime() : 0;
+        const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toDate().getTime() : 
+                     (a.createdAt instanceof Date ? a.createdAt.getTime() : 0);
+        const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toDate().getTime() : 
+                     (b.createdAt instanceof Date ? b.createdAt.getTime() : 0);
         return dateB - dateA;
     });
 };
@@ -220,16 +223,7 @@ export const getRoute = async (id: string): Promise<RoutePlan | null> => {
     const docRef = doc(db, 'routes', id);
     const docSnap = await getDoc(docRef);
     if(docSnap.exists()) {
-        const data = docSnap.data();
-        return {
-            id: docSnap.id,
-            ...data,
-            date: data.date ? (data.date as Timestamp).toDate() : new Date(),
-            clients: Array.isArray(data.clients) ? data.clients.map(c => ({ 
-                ...c, 
-                date: c.date ? (c.date as Timestamp).toDate() : undefined 
-            })) : []
-        } as RoutePlan;
+        return mapRouteDoc(docSnap);
     }
     return null;
 };
