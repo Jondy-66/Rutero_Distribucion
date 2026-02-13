@@ -85,6 +85,20 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
+  // Sync DB data to local state
+  useEffect(() => {
+    if (authLoading || dataLoading || !selectedRoute) return;
+    
+    // Solo sincronizar si no estamos en medio de un guardado local
+    if (!isSaving) {
+        const clients = selectedRoute.clients || [];
+        setCurrentRouteClientsFull(clients);
+        lastKnownRouteId.current = selectedRoute.id;
+        setIsRouteStarted(selectedRoute.status === 'En Progreso');
+    }
+  }, [selectedRoute, authLoading, dataLoading, isSaving]);
+
+  // Initial rehydration from localStorage
   useEffect(() => {
     if (authLoading || dataLoading) return;
     if (isInitialRehydrationDone.current || !SELECTION_KEY) return;
@@ -111,16 +125,6 @@ export default function RouteManagementPage() {
 
     isInitialRehydrationDone.current = true;
   }, [authLoading, dataLoading, SELECTION_KEY, allRoutes, user]);
-
-  useEffect(() => {
-    if (!selectedRoute) return;
-    const clients = selectedRoute.clients || [];
-    if (lastKnownRouteId.current !== selectedRoute.id || currentRouteClientsFull.length !== clients.length) {
-        setCurrentRouteClientsFull(clients);
-        lastKnownRouteId.current = selectedRoute.id;
-    }
-    setIsRouteStarted(selectedRoute.status === 'En Progreso');
-  }, [selectedRoute, currentRouteClientsFull.length]);
 
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
@@ -155,35 +159,44 @@ export default function RouteManagementPage() {
     return routeClients.find(c => c.ruc === activeRuc) || null;
   }, [routeClients, activeRuc]);
 
-  // Reglas de estado
-  const isCurrentClientInProgress = activeClient?.checkInTime && !activeClient?.checkOutTime;
+  const isCurrentClientInProgress = !!(activeClient?.checkInTime && !activeClient?.checkOutTime);
   const isCurrentClientCompleted = activeClient?.visitStatus === 'Completado';
 
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
-    if (!activeRuc || isCurrentClientCompleted) return;
+    if (!activeRuc || isCurrentClientCompleted || isSaving) return;
     setCurrentRouteClientsFull(prev => prev.map(c => 
         c.ruc === activeRuc ? { ...c, [field]: value } : c
     ));
   };
 
   const handleCheckIn = async () => {
-    if (!selectedRoute || currentRouteClientsFull.length === 0 || isCurrentClientCompleted) {
-        toast({ title: "Acción no permitida", description: "Los datos no están listos o la visita ya finalizó.", variant: "destructive" });
+    if (!selectedRoute || !activeRuc || isCurrentClientCompleted || isSaving) {
+        toast({ title: "Acción no permitida", variant: "destructive" });
         return;
     }
-    const time = format(new Date(), 'HH:mm:ss');
-    handleFieldChange('checkInTime', time);
     
-    const nextClients = currentRouteClientsFull.map(c => 
-        c.ruc === activeRuc ? { ...c, checkInTime: time } : c
-    );
+    const time = format(new Date(), 'HH:mm:ss');
+    setIsSaving(true);
 
-    await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextClients) });
-    toast({ title: "Entrada Registrada" });
+    try {
+        // Actualizar estado local inmediatamente
+        const nextClients = currentRouteClientsFull.map(c => 
+            c.ruc === activeRuc ? { ...c, checkInTime: time } : c
+        );
+        setCurrentRouteClientsFull(nextClients);
+
+        await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextClients) });
+        await refetchData('routes');
+        toast({ title: "Entrada Registrada" });
+    } catch (e) {
+        toast({ title: "Error al registrar entrada", variant: "destructive" });
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || currentRouteClientsFull.length === 0 || isCurrentClientCompleted) {
+    if (!selectedRoute || !activeRuc || isCurrentClientCompleted || isSaving) {
         toast({ title: "Error de Datos", description: "No se puede guardar.", variant: "destructive" });
         return;
     }
@@ -191,28 +204,37 @@ export default function RouteManagementPage() {
     const time = format(new Date(), 'HH:mm:ss');
     setIsSaving(true);
 
-    const nextClients = currentRouteClientsFull.map(c => {
-        if (c.ruc === activeRuc) {
-            return { ...c, checkOutTime: time, visitStatus: 'Completado' as const };
-        }
-        return c;
-    });
+    try {
+        const nextClients = currentRouteClientsFull.map(c => {
+            if (c.ruc === activeRuc) {
+                return { ...c, checkOutTime: time, visitStatus: 'Completado' as const };
+            }
+            return c;
+        });
 
-    const allTotalClientsDone = nextClients
-        .filter(c => c.status !== 'Eliminado')
-        .every(c => c.visitStatus === 'Completado');
+        const allTotalClientsDone = nextClients
+            .filter(c => c.status !== 'Eliminado')
+            .every(c => c.visitStatus === 'Completado');
 
-    const newStatus = allTotalClientsDone ? 'Completada' : 'En Progreso';
-    
-    await updateRoute(selectedRoute.id, { 
-        clients: sanitizeClientsForFirestore(nextClients), 
-        status: newStatus 
-    });
-    
-    await refetchData('routes');
-    setActiveRuc(null);
-    setIsSaving(false);
-    toast({ title: "Visita Finalizada" });
+        const newStatus = allTotalClientsDone ? 'Completada' : 'En Progreso';
+        
+        // Actualizar estado local inmediatamente para evitar recargas
+        setCurrentRouteClientsFull(nextClients);
+
+        await updateRoute(selectedRoute.id, { 
+            clients: sanitizeClientsForFirestore(nextClients), 
+            status: newStatus 
+        });
+        
+        await refetchData('routes');
+        
+        setActiveRuc(null);
+        toast({ title: "Visita Finalizada" });
+    } catch (e) {
+        toast({ title: "Error al finalizar visita", variant: "destructive" });
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const myAssignedClients = useMemo(() => {
@@ -229,7 +251,7 @@ export default function RouteManagementPage() {
   }, [myAssignedClients, addClientSearchTerm]);
 
   const handleAddClientsToRoute = async () => {
-    if (!selectedRoute || multiSelectedClients.length === 0) return;
+    if (!selectedRoute || multiSelectedClients.length === 0 || isSaving) return;
 
     setIsSaving(true);
     const newClientsToAdd: ClientInRoute[] = multiSelectedClients.map(c => ({
@@ -260,8 +282,6 @@ export default function RouteManagementPage() {
 
   const handleSelectClient = (ruc: string) => {
       if (isSaving) return;
-      
-      // Regla: Si hay una gestión en curso, no dejar cambiar
       if (isCurrentClientInProgress && activeRuc !== ruc) {
           toast({
               title: "Gestión en curso",
@@ -270,7 +290,6 @@ export default function RouteManagementPage() {
           });
           return;
       }
-
       setActiveRuc(ruc);
   };
 
@@ -476,14 +495,14 @@ export default function RouteManagementPage() {
                                             <p className="text-xs font-bold text-muted-foreground">{activeClient.checkInTime ? `REGISTRADO A LAS: ${activeClient.checkInTime}` : 'Presiona al llegar al local'}</p>
                                         </div>
                                     </div>
-                                    {!activeClient.checkInTime && <Button size="lg" onClick={handleCheckIn} className="w-full sm:w-auto font-black shadow-lg">REGISTRAR LLEGADA</Button>}
+                                    {!activeClient.checkInTime && <Button size="lg" onClick={handleCheckIn} disabled={isSaving} className="w-full sm:w-auto font-black shadow-lg">REGISTRAR LLEGADA</Button>}
                                 </div>
                             </div>
 
                             <div className={cn("space-y-8 transition-opacity duration-500", !activeClient.checkInTime && "opacity-20 pointer-events-none")}>
                                 <div className="space-y-4">
                                     <h4 className="font-black text-sm uppercase flex items-center gap-2"><Phone className="h-4 w-4 text-primary" /> 2. Datos de Gestión</h4>
-                                    <RadioGroup onValueChange={(v: any) => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4" disabled={isCurrentClientCompleted}>
+                                    <RadioGroup onValueChange={(v: any) => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4" disabled={isCurrentClientCompleted || isSaving}>
                                         <Label className={cn("flex flex-col items-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-muted")}>
                                             <RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-6 w-6" /><span className="text-[10px] font-black uppercase">PRESENCIAL</span>
                                         </Label>
@@ -491,13 +510,13 @@ export default function RouteManagementPage() {
                                             <RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-6 w-6" /><span className="text-[10px] font-black uppercase">TELEFÓNICA</span>
                                         </Label>
                                     </RadioGroup>
-                                    {activeClient.visitType === 'telefonica' && <Textarea placeholder="Observaciones de la llamada (Ej: No contestó, volver a intentar...)" className="font-semibold" value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} disabled={isCurrentClientCompleted} />}
+                                    {activeClient.visitType === 'telefonica' && <Textarea placeholder="Observaciones de la llamada..." className="font-semibold" value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} disabled={isCurrentClientCompleted || isSaving} />}
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-primary">Venta ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={isCurrentClientCompleted} /></div>
-                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-orange-600">Cobro ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={isCurrentClientCompleted} /></div>
-                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-destructive">Devolución ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={isCurrentClientCompleted} /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-primary">Venta ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={isCurrentClientCompleted || isSaving} /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-orange-600">Cobro ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={isCurrentClientCompleted || isSaving} /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-destructive">Devolución ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={isCurrentClientCompleted || isSaving} /></div>
                                 </div>
                                 
                                 <Button 

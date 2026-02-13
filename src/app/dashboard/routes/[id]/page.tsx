@@ -91,22 +91,17 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
           notFound();
         }
       } catch (error) {
-        console.error("Failed to fetch route data:", error);
         toast({ title: "Error", description: "No se pudo cargar la ruta.", variant: "destructive" });
         notFound();
       } finally {
         setLoading(false);
       }
     };
-    if (routeId) {
-        fetchRouteData();
-    }
+    if (routeId) fetchRouteData();
   }, [routeId, toast]);
   
   useEffect(() => {
-      if (users) {
-          setSupervisors(users.filter(u => u.role === 'Supervisor'));
-      }
+      if (users) setSupervisors(users.filter(u => u.role === 'Supervisor'));
   }, [users]);
 
   const handleInputChange = <K extends keyof RoutePlan>(field: K, value: RoutePlan[K]) => {
@@ -124,16 +119,12 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   }, []);
 
   const handleRecoverClients = async () => {
-    if (!route || !route.routeName.includes("Ruta Predicha")) {
-        toast({ title: "Acción no permitida", description: "Solo se pueden recuperar rutas de predicción.", variant: "destructive"});
-        return;
-    }
-    
+    if (!route) return;
     setIsRecovering(true);
     try {
         const execMatch = route.routeName.match(/para (.*?) -/);
         const ejecutivo = execMatch ? execMatch[1] : '';
-        const dateObj = route.date instanceof Timestamp ? route.date.toDate() : new Date(route.date);
+        const dateObj = ensureDate(route.date);
         const fecha_inicio = format(dateObj, 'yyyy-MM-dd');
 
         const predictions = await getPredicciones({ ejecutivo, fecha_inicio, dias: 7 });
@@ -143,44 +134,31 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
             return;
         }
 
-        const recovered: ClientInRoute[] = predictions.map(p => {
-            const ruc = (p as any).ruc || (p as any).RUC || (p as any).cliente_id;
-            return {
-                ruc,
-                nombre_comercial: (p as any).nombre_comercial || (p as any).Cliente || 'Cliente Recuperado',
-                date: p.fecha_predicha ? new Date(p.fecha_predicha + 'T00:00:00') : dateObj,
-                valorVenta: parseFloat(String(p.ventas)) || 0,
-                valorCobro: parseFloat(String(p.cobros)) || 0,
-                status: 'Activo',
-                visitStatus: 'Pendiente'
-            };
-        });
+        const recovered: ClientInRoute[] = predictions.map(p => ({
+            ruc: (p as any).ruc || (p as any).RUC || (p as any).cliente_id,
+            nombre_comercial: (p as any).nombre_comercial || (p as any).Cliente || 'Cliente Recuperado',
+            date: p.fecha_predicha ? new Date(p.fecha_predicha + 'T00:00:00') : dateObj,
+            valorVenta: parseFloat(String(p.ventas)) || 0,
+            valorCobro: parseFloat(String(p.cobros)) || 0,
+            status: 'Activo',
+            visitStatus: 'Pendiente'
+        }));
 
         setClientsInRoute(recovered);
-        toast({ title: "Recuperación Exitosa", description: `Restaurados ${recovered.length} clientes. Guarda para finalizar.` });
-
-    } catch (error: any) {
+        toast({ title: "Recuperación Exitosa" });
+    } catch (error) {
         toast({ title: "Error de Recuperación", variant: "destructive" });
     } finally {
         setIsRecovering(false);
     }
   };
 
-  const handleUpdateRoute = async (e: React.FormEvent, newStatus?: RoutePlan['status']) => {
+  const handleUpdateRoute = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!route || !currentUser) return;
-
-    const activeClients = clientsInRoute.filter(c => c.status !== 'Eliminado');
-
-    if (!newStatus && (activeClients.length === 0 || !route.routeName)) {
-        toast({ title: 'Faltan datos', variant: 'destructive' });
-        return;
-    }
-
     setIsSaving(true);
     try {
       const supervisor = supervisors.find(s => s.id === route.supervisorId);
-      
       const sanitizedClients = clientsInRoute.map(c => ({
         ...c,
         valorVenta: parseFloat(String(c.valorVenta)) || 0,
@@ -188,23 +166,15 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         date: c.date ? Timestamp.fromDate(ensureDate(c.date)) : null
       }));
 
-      const dataToUpdate: Partial<RoutePlan> = {
+      await updateRoute(routeId, {
         ...route,
         supervisorName: supervisor?.name || route.supervisorName,
         clients: sanitizedClients,
-        date: route.date ? Timestamp.fromDate(ensureDate(route.date)) : Timestamp.now(),
-      };
-      
-      if(newStatus) dataToUpdate.status = newStatus;
-
-      const { id, ...cleanedData } = dataToUpdate as any;
-      await updateRoute(routeId, cleanedData);
+        date: Timestamp.fromDate(ensureDate(route.date)),
+      });
       await refetchData('routes');
-
       toast({ title: 'Éxito', description: `Ruta actualizada.` });
-      if (newStatus) router.push('/dashboard/routes');
-
-    } catch (error: any) {
+    } catch (error) {
       toast({ title: 'Error al actualizar', variant: 'destructive' });
     } finally {
       setIsSaving(false);
@@ -212,11 +182,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   };
 
   const handleConfirmRemoval = () => {
-    if (!clientToRemove) return;
-    if (!removalObservation.trim()) {
-        toast({ title: 'Observación requerida', variant: 'destructive'});
-        return;
-    }
+    if (!clientToRemove || !removalObservation.trim()) return;
     setClientsInRoute(prev => prev.map(c => 
         c.ruc === clientToRemove.ruc ? { ...c, status: 'Eliminado', removalObservation: removalObservation } : c
     ));
@@ -242,24 +208,14 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
   }, [activeClientsWithIndex]);
 
-  if (loading || authLoading) {
-    return (
-      <>
-        <PageHeader title="Cargando..." />
-        <Skeleton className="h-96 w-full" />
-      </>
-    );
-  }
-
+  if (loading || authLoading) return <Skeleton className="h-96 w-full" />;
   if (!route) return notFound();
   const isFormDisabled = isSaving || !canEdit || isRecovering;
   
   return (
     <>
-      <PageHeader title={canApprove ? "Revisar Ruta" : "Detalles de la Ruta"} description="Información detallada y gestión de visitas.">
-        <Link href="/dashboard/routes">
-          <Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" /> Volver</Button>
-        </Link>
+      <PageHeader title={canApprove ? "Revisar Ruta" : "Detalles de la Ruta"} description="Gestión de paradas y cronograma.">
+        <Link href="/dashboard/routes"><Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" /> Volver</Button></Link>
       </PageHeader>
 
       {route.status === 'Rechazada' && (
@@ -270,15 +226,14 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         </Alert>
       )}
 
-      {activeClientsWithIndex.length === 0 && canRecoverClients && route.routeName.includes("Ruta Predicha") && (
-          <Alert className="mb-6 border-blue-500 bg-blue-50 shadow-md">
+      {activeClientsWithIndex.length === 0 && canRecoverClients && (
+          <Alert className="mb-6 border-blue-500 bg-blue-50">
               <AlertTriangle className="h-4 w-4 text-blue-600" />
-              <AlertTitle className="text-blue-800 font-bold">Ruta con 0 Clientes</AlertTitle>
-              <AlertDescription className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mt-2">
-                  <span className="text-blue-700 font-medium">Parece que los clientes se borraron. Puedes restaurar la predicción original aquí.</span>
+              <AlertTitle className="text-blue-800 font-bold">Ruta sin Clientes</AlertTitle>
+              <AlertDescription className="flex items-center justify-between gap-4 mt-2">
+                  <span className="text-blue-700">Puedes restaurar los clientes de la predicción original aquí.</span>
                   <Button onClick={handleRecoverClients} disabled={isRecovering} className="bg-blue-600 hover:bg-blue-700 shrink-0 font-bold">
-                      {isRecovering ? <LoaderCircle className="animate-spin mr-2" /> : <LifeBuoy className="mr-2" />}
-                      RECUPERAR CLIENTES
+                      {isRecovering ? <LoaderCircle className="animate-spin mr-2" /> : <LifeBuoy className="mr-2" />} RECUPERAR
                   </Button>
               </AlertDescription>
           </Alert>
@@ -299,18 +254,12 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                         <SelectContent>{supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
                     </Select>
                 </div>
-                <div className="space-y-2">
-                    <Label>Estado Actual</Label>
-                    <Badge variant="outline" className="h-10 w-full flex items-center justify-center font-black uppercase tracking-widest">{route.status}</Badge>
-                </div>
+                <div className="space-y-2"><Label>Estado</Label><Badge variant="outline" className="h-10 w-full flex items-center justify-center font-black uppercase">{route.status}</Badge></div>
             </CardContent>
           </Card>
 
           <Card>
-              <CardHeader>
-                  <CardTitle>Cronograma de Visitas (Lunes a Viernes)</CardTitle>
-                  <CardDescription>Los clientes están organizados por su fecha de visita individual.</CardDescription>
-              </CardHeader>
+              <CardHeader><CardTitle>Visitas (Lunes a Viernes)</CardTitle></CardHeader>
               <CardContent>
                   <div className="space-y-4">
                       {groupedClients.map(([date, clientsInGroup]) => (
@@ -320,9 +269,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                                       <div className="flex items-center gap-3">
                                           <CalendarIcon className="h-5 w-5 text-primary" />
                                           <h4 className="font-black text-sm uppercase tracking-tighter">
-                                              {date === 'Sin Fecha' 
-                                                  ? 'Sin Fecha Asignada' 
-                                                  : format(new Date(date + 'T00:00:00'), 'EEEE, dd \'de\' MMMM', { locale: es })}
+                                              {date === 'Sin Fecha' ? 'Sin Fecha' : format(new Date(date + 'T00:00:00'), 'EEEE, dd \'de\' MMMM', { locale: es })}
                                           </h4>
                                           <Badge variant="secondary" className="font-black">{clientsInGroup.length}</Badge>
                                       </div>
@@ -330,40 +277,25 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                               </CollapsibleTrigger>
                               <CollapsibleContent className="space-y-4 p-2 mt-2">
                                   {clientsInGroup.map((client) => (
-                                      <Card key={client.ruc} className="p-4 relative hover:shadow-md transition-shadow border-l-2 border-l-primary/10">
+                                      <Card key={client.ruc} className="p-4 relative hover:shadow-md border-l-2 border-l-primary/10">
                                           <div className="flex justify-between items-start">
                                               <div className="space-y-1">
                                                   <p className="font-bold text-sm text-primary uppercase">{client.globalIndex + 1}. {client.nombre_comercial}</p>
                                                   <p className="text-[10px] font-mono text-muted-foreground uppercase">{client.ruc}</p>
                                               </div>
-                                              <Button type="button" variant="ghost" size="icon" onClick={() => setClientToRemove(client)} disabled={isFormDisabled}>
-                                                  <Trash2 className="h-4 w-4 text-destructive" />
-                                              </Button>
+                                              <Button type="button" variant="ghost" size="icon" onClick={() => setClientToRemove(client)} disabled={isFormDisabled}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                                           </div>
                                           <Separator className="my-3" />
                                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                               <div className="space-y-1">
-                                                  <Label className="text-[10px] uppercase font-black">Fecha Visita</Label>
+                                                  <Label className="text-[10px] uppercase font-black">Fecha</Label>
                                                   <Popover open={calendarOpen[client.ruc]} onOpenChange={(o) => setCalendarOpen(p => ({ ...p, [client.ruc]: o }))}>
-                                                      <PopoverTrigger asChild>
-                                                          <Button variant="outline" className="w-full justify-start h-9 text-xs font-bold" disabled={isFormDisabled}>
-                                                              <CalendarIcon className="mr-2 h-3 w-3" />
-                                                              {client.date ? format(ensureDate(client.date), 'dd/MM/yyyy') : 'Sin Fecha'}
-                                                          </Button>
-                                                      </PopoverTrigger>
-                                                      <PopoverContent className="p-0" align="start">
-                                                          <Calendar mode="single" selected={ensureDate(client.date)} onSelect={(d) => handleClientValueChange(client.ruc, 'date', d)} locale={es} />
-                                                      </PopoverContent>
+                                                      <PopoverTrigger asChild><Button variant="outline" className="w-full justify-start h-9 text-xs font-bold" disabled={isFormDisabled}><CalendarIcon className="mr-2 h-3 w-3" />{client.date ? format(ensureDate(client.date), 'dd/MM/yyyy') : 'Sin Fecha'}</Button></PopoverTrigger>
+                                                      <PopoverContent className="p-0" align="start"><Calendar mode="single" selected={ensureDate(client.date)} onSelect={(d) => handleClientValueChange(client.ruc, 'date', d)} locale={es} /></PopoverContent>
                                                   </Popover>
                                               </div>
-                                              <div className="space-y-1">
-                                                  <Label className="text-[10px] uppercase font-black">Venta Est. ($)</Label>
-                                                  <Input type="number" className="h-9 text-xs font-bold" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
-                                              </div>
-                                              <div className="space-y-1">
-                                                  <Label className="text-[10px] uppercase font-black">Cobro Est. ($)</Label>
-                                                  <Input type="number" className="h-9 text-xs font-bold" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
-                                              </div>
+                                              <div className="space-y-1"><Label className="text-[10px] uppercase font-black">Venta ($)</Label><Input type="number" className="h-9 text-xs font-bold" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} /></div>
+                                              <div className="space-y-1"><Label className="text-[10px] uppercase font-black">Cobro ($)</Label><Input type="number" className="h-9 text-xs font-bold" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} /></div>
                                           </div>
                                       </Card>
                                   ))}
@@ -374,27 +306,19 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
               </CardContent>
           </Card>
 
-          <div className="flex justify-end gap-3 p-4 bg-background sticky bottom-0 border-t z-10 shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
-              {canEdit && (
-                  <Button type="button" onClick={(e) => handleUpdateRoute(e as any)} disabled={isFormDisabled} className="font-black px-8 shadow-lg">
-                      {isSaving && <LoaderCircle className="animate-spin mr-2" />}
-                      GUARDAR CAMBIOS
-                  </Button>
-              )}
+          <div className="flex justify-end p-4 bg-background sticky bottom-0 border-t z-10 shadow-lg">
+              {canEdit && <Button type="button" onClick={handleUpdateRoute} disabled={isFormDisabled} className="font-black px-8"> {isSaving && <LoaderCircle className="animate-spin mr-2" />} GUARDAR CAMBIOS</Button>}
           </div>
       </div>
 
       <AlertDialog open={!!clientToRemove} onOpenChange={() => setClientToRemove(null)}>
         <AlertDialogContent>
-            <AlertDialogHeader><AlertDialogTitle>¿Quitar cliente de la ruta?</AlertDialogTitle></AlertDialogHeader>
+            <AlertDialogHeader><AlertDialogTitle>¿Quitar cliente?</AlertDialogTitle></AlertDialogHeader>
              <div className="py-4 space-y-2">
-                <Label className="font-bold uppercase text-[10px]">Motivo de la eliminación</Label>
-                <Textarea value={removalObservation} onChange={(e) => setRemovalObservation(e.target.value)} placeholder="Ej: Negocio cerrado, cambio de zona, etc." />
+                <Label className="font-bold uppercase text-[10px]">Motivo</Label>
+                <Textarea value={removalObservation} onChange={(e) => setRemovalObservation(e.target.value)} placeholder="Ej: Negocio cerrado..." />
             </div>
-            <AlertDialogFooter>
-                <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                <AlertDialogAction onClick={handleConfirmRemoval} className="bg-destructive hover:bg-destructive/90 font-bold">CONFIRMAR</AlertDialogAction>
-            </AlertDialogFooter>
+            <AlertDialogFooter><AlertDialogCancel>Cancelar</AlertDialogCancel><AlertDialogAction onClick={handleConfirmRemoval} className="bg-destructive hover:bg-destructive/90 font-bold">CONFIRMAR</AlertDialogAction></AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     </>
