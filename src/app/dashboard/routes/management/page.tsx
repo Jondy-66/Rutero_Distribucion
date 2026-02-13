@@ -88,7 +88,6 @@ export default function RouteManagementPage() {
         const isOwner = r.createdBy === user?.id;
         if (!isOwner) return false;
         if (r.id === selectedRouteId) return true;
-        if (['Completada', 'Incompleta', 'Rechazada'].includes(r.status)) return false;
         return r.status === 'En Progreso' || r.status === 'Planificada';
     });
   }, [allRoutes, user, selectedRouteId]);
@@ -102,6 +101,15 @@ export default function RouteManagementPage() {
     if (authLoading || dataLoading) return;
     if (isInitialRehydrationDone.current || !SELECTION_KEY) return;
 
+    const activeRoute = allRoutes.find(r => r.status === 'En Progreso' && r.createdBy === user?.id);
+    if (activeRoute) {
+        setSelectedRouteId(activeRoute.id);
+        setIsRouteStarted(true);
+        localStorage.setItem(SELECTION_KEY, activeRoute.id);
+        isInitialRehydrationDone.current = true;
+        return;
+    }
+
     const savedId = localStorage.getItem(SELECTION_KEY);
     if (savedId && allRoutes.length > 0) {
         const found = allRoutes.find(r => r.id === savedId);
@@ -113,49 +121,38 @@ export default function RouteManagementPage() {
         }
     }
 
-    const activeRoute = allRoutes.find(r => r.status === 'En Progreso' && r.createdBy === user?.id);
-    if (activeRoute) {
-        setSelectedRouteId(activeRoute.id);
-        setIsRouteStarted(true);
-        localStorage.setItem(SELECTION_KEY, activeRoute.id);
-        isInitialRehydrationDone.current = true;
-        return;
-    }
-
-    if (allRoutes.length > 0 || !dataLoading) {
-        isInitialRehydrationDone.current = true;
-    }
+    isInitialRehydrationDone.current = true;
   }, [authLoading, dataLoading, SELECTION_KEY, allRoutes, user]);
 
   useEffect(() => {
     if (!selectedRoute) return;
-    if (lastKnownRouteId.current !== selectedRoute.id || currentRouteClientsFull.length === 0) {
-        const clients = selectedRoute.clients || [];
+    const clients = selectedRoute.clients || [];
+    if (lastKnownRouteId.current !== selectedRoute.id || currentRouteClientsFull.length !== clients.length) {
         if (clients.length > 0) {
             setCurrentRouteClientsFull(clients);
             lastKnownRouteId.current = selectedRoute.id;
         }
     }
     setIsRouteStarted(selectedRoute.status === 'En Progreso');
-  }, [selectedRoute, currentRouteClientsFull.length]);
+  }, [selectedRoute]);
 
   const routeClients = useMemo(() => {
     return currentRouteClientsFull
         .filter(c => {
             if (c.status === 'Eliminado' || !c.date) return false;
-            const cDate = c.date instanceof Date ? c.date : new Date(c.date as any);
+            const cDate = c.date instanceof Timestamp ? c.date.toDate() : new Date(c.date as any);
             return isToday(cDate);
         })
         .map(c => {
             const details = availableClients.find(ac => ac.ruc === c.ruc);
             return {
                 id: details?.id || c.ruc,
-                ejecutivo: details?.ejecutivo || user?.name || '',
                 nombre_cliente: details?.nombre_cliente || c.nombre_comercial,
                 nombre_comercial: c.nombre_comercial,
                 direccion: details?.direccion || 'Dirección no disponible',
                 latitud: details?.latitud || 0,
                 longitud: details?.longitud || 0,
+                ejecutivo: details?.ejecutivo || user?.name || '',
                 ...c,
             } as RouteClient;
         });
@@ -172,11 +169,6 @@ export default function RouteManagementPage() {
     return routeClients.find(c => c.ruc === activeRuc) || null;
   }, [routeClients, activeRuc]);
 
-  const handleRouteSelect = (routeId: string) => {
-      setSelectedRouteId(routeId);
-      if (SELECTION_KEY) localStorage.setItem(SELECTION_KEY, routeId);
-  };
-
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (!activeRuc) return;
     setCurrentRouteClientsFull(prev => prev.map(c => 
@@ -184,61 +176,18 @@ export default function RouteManagementPage() {
     ));
   };
 
-  const getCurrentLocation = (timeout = 5000): Promise<{lat: number, lng: number} | null> => {
-    return new Promise((resolve) => {
-      if (typeof window === 'undefined' || !navigator.geolocation) return resolve(null);
-      navigator.geolocation.getCurrentPosition(
-        (p) => resolve({ lat: p.coords.latitude, lng: p.coords.longitude }),
-        () => resolve(null),
-        { enableHighAccuracy: true, timeout }
-      );
-    });
-  };
-
-  const handleStartRoute = async () => {
-      if (!selectedRoute) return;
-      setIsStarting(true);
-      try {
-          await updateRoute(selectedRoute.id, { status: 'En Progreso' });
-          await refetchData('routes');
-          setIsRouteStarted(true);
-          toast({ title: "Ruta Iniciada" });
-      } catch (error) { 
-          toast({ title: "Error al iniciar ruta", variant: "destructive" });
-      } finally { setIsStarting(false); }
-  }
-
   const handleCheckIn = async () => {
-    if (!selectedRoute || !activeClient || currentRouteClientsFull.length === 0) {
-        toast({ title: "Error de Sincronización", description: "Los datos de la ruta no se han cargado. Refresca la página.", variant: "destructive" });
+    if (!selectedRoute || currentRouteClientsFull.length === 0) {
+        toast({ title: "Error de Sincronización", description: "Los datos de la ruta no se han cargado.", variant: "destructive" });
         return;
     }
     const time = format(new Date(), 'HH:mm:ss');
     handleFieldChange('checkInTime', time);
     setIsLocating(true);
     
-    const coords = await getCurrentLocation(4000);
-    const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
-    
-    let nextClients: ClientInRoute[] = [];
-    let inconsistent = false;
-
-    setCurrentRouteClientsFull(prev => {
-        if (prev.length === 0 && (selectedRoute.clients?.length || 0) > 0) {
-            inconsistent = true;
-            return prev;
-        }
-        nextClients = prev.map(c => 
-            c.ruc === activeClient.ruc ? { ...c, checkInTime: time, checkInLocation: location } : c
-        );
-        return nextClients;
-    });
-
-    if (inconsistent || nextClients.length === 0) {
-        setIsLocating(false);
-        toast({ title: "Error de Protección", description: "Inconsistencia de datos. Abortando guardado.", variant: "destructive" });
-        return;
-    }
+    let nextClients = currentRouteClientsFull.map(c => 
+        c.ruc === activeRuc ? { ...c, checkInTime: time } : c
+    );
 
     const sanitized = sanitizeClientsForFirestore(nextClients);
     await updateRoute(selectedRoute.id, { clients: sanitized });
@@ -247,47 +196,24 @@ export default function RouteManagementPage() {
   };
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || !activeClient || !activeClient.visitType || currentRouteClientsFull.length === 0) {
-        toast({ title: "Error de Sincronización", description: "La lista de clientes está vacía. Refresca.", variant: "destructive" });
+    if (!selectedRoute || currentRouteClientsFull.length === 0) {
+        toast({ title: "Error de Sincronización", description: "Falla de red. Abortando guardado.", variant: "destructive" });
         return;
     }
     const time = format(new Date(), 'HH:mm:ss');
     const currentRucToFinalize = activeRuc;
-    setActiveRuc(null); 
     setIsSaving(true);
-    setIsLocating(true);
 
-    const coords = await getCurrentLocation(4000);
-    const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
-    
-    let nextClients: ClientInRoute[] = [];
-    let inconsistent = false;
-
-    setCurrentRouteClientsFull(prev => {
-        if (prev.length === 0 && (selectedRoute.clients?.length || 0) > 0) {
-            inconsistent = true;
-            return prev;
+    let nextClients = currentRouteClientsFull.map(c => {
+        if (c.ruc === currentRucToFinalize) {
+            return { 
+                ...c, 
+                checkOutTime: time, 
+                visitStatus: 'Completado' as const,
+            };
         }
-        nextClients = prev.map(c => {
-            if (c.ruc === currentRucToFinalize) {
-                return { 
-                    ...c, 
-                    checkOutTime: time, 
-                    checkOutLocation: location,
-                    visitStatus: 'Completado' as const,
-                };
-            }
-            return c;
-        });
-        return nextClients;
+        return c;
     });
-
-    if (inconsistent || nextClients.length === 0) {
-        setIsSaving(false);
-        setIsLocating(false);
-        toast({ title: "Error de Protección", description: "Datos inconsistentes. Operación abortada.", variant: "destructive" });
-        return;
-    }
 
     const allClientsDone = nextClients
         .filter(c => c.status !== 'Eliminado')
@@ -298,81 +224,12 @@ export default function RouteManagementPage() {
     
     await updateRoute(selectedRoute.id, { clients: sanitized, status: newStatus });
     await refetchData('routes');
+    setActiveRuc(null);
     setIsSaving(false);
-    setIsLocating(false);
     toast({ title: "Visita Finalizada" });
   };
 
-  const onDragEnd = async (result: DropResult) => {
-    if (!result.destination || !selectedRoute || result.source.index === result.destination.index) return;
-    const displayed = Array.from(routeClients);
-    const [moved] = displayed.splice(result.source.index, 1);
-    displayed.splice(result.destination.index, 0, moved);
-    
-    if (result.destination.index === 0 && moved.visitStatus !== 'Completado') {
-        setActiveRuc(moved.ruc);
-    }
-    
-    const newOrderRucs = displayed.map(c => c.ruc);
-    const activeRucsSet = new Set(routeClients.map(c => c.ruc));
-    let activePtr = 0;
-    const finalFull = currentRouteClientsFull.map(c => {
-        if (activeRucsSet.has(c.ruc)) {
-            const nextRuc = newOrderRucs[activePtr++];
-            return currentRouteClientsFull.find(oc => oc.ruc === nextRuc)!;
-        }
-        return c;
-    });
-    
-    setCurrentRouteClientsFull(finalFull);
-    const sanitized = sanitizeClientsForFirestore(finalFull);
-    await updateRoute(selectedRoute.id, { clients: sanitized });
-    toast({ title: "Orden actualizado" });
-  };
-
-  const handleConfirmMultiAdd = async () => {
-    if (!selectedRoute || multiSelectedClients.length === 0) return;
-    const todayDate = new Date();
-    const updatedFullList = [...currentRouteClientsFull];
-    
-    for (const selected of multiSelectedClients) {
-        const idx = updatedFullList.findIndex(c => c.ruc === selected.ruc);
-        if (idx !== -1) {
-            updatedFullList[idx] = { 
-                ...updatedFullList[idx], 
-                date: todayDate, 
-                status: 'Activo', 
-                origin: 'manual', 
-                visitStatus: 'Pendiente', 
-                checkInTime: null, 
-                checkOutTime: null 
-            };
-        } else {
-            updatedFullList.push({ 
-                ruc: selected.ruc, 
-                nombre_comercial: selected.nombre_comercial, 
-                date: todayDate, 
-                origin: 'manual', 
-                status: 'Activo', 
-                visitStatus: 'Pendiente' 
-            });
-        }
-    }
-    
-    setCurrentRouteClientsFull(updatedFullList);
-    const sanitized = sanitizeClientsForFirestore(updatedFullList);
-    await updateRoute(selectedRoute.id, { clients: sanitized });
-    await refetchData('routes');
-    toast({ title: "Clientes Añadidos" });
-    setIsAddClientDialogOpen(false);
-    setMultiSelectedClients([]);
-  };
-
-  const isDataInconsistent = useMemo(() => {
-      return selectedRoute && (selectedRoute.clients?.length || 0) > 0 && currentRouteClientsFull.length === 0;
-  }, [selectedRoute, currentRouteClientsFull]);
-
-  if (authLoading || (isInitialRehydrationDone.current === false && SELECTION_KEY)) {
+  if (authLoading || (dataLoading && !isRouteStarted)) {
       return (
         <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
             <LoaderCircle className="animate-spin h-12 w-12 text-primary" />
@@ -385,35 +242,19 @@ export default function RouteManagementPage() {
     <>
     <PageHeader title="Gestión de Ruta" description="Gestión diaria de visitas."/>
     
-    {isDataInconsistent ? (
-        <div className="flex flex-col items-center justify-center h-[40vh] gap-4 p-6 border-2 border-dashed rounded-xl">
-            <AlertTriangle className="h-12 w-12 text-amber-500" />
-            <div className="text-center space-y-2">
-                <h3 className="text-xl font-bold">Inconsistencia Detectada</h3>
-                <p className="text-muted-foreground max-w-md">La ruta tiene clientes pero el sistema no ha terminado de leerlos. Presiona refrescar.</p>
-            </div>
-            <Button onClick={() => refetchData('routes')} variant="outline">
-                <Clock className="mr-2 h-4 w-4" /> Forzar Sincronización
-            </Button>
-        </div>
-    ) : !isRouteStarted ? (
+    {!isRouteStarted ? (
         <Card className="max-w-2xl mx-auto shadow-lg">
             <CardHeader><CardTitle>Selecciona una Ruta</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-                <Select onValueChange={handleRouteSelect} value={selectedRouteId}>
+                <Select onValueChange={(v) => setSelectedRouteId(v)} value={selectedRouteId}>
                     <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta activa" /></SelectTrigger>
                     <SelectContent>
-                        {selectableRoutes.length > 0 ? (
-                            selectableRoutes.map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName} ({r.status})</SelectItem>))
-                        ) : (
-                            <SelectItem value="no-routes" disabled>No tienes rutas pendientes para hoy</SelectItem>
-                        )}
+                        {selectableRoutes.map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName}</SelectItem>))}
                     </SelectContent>
                 </Select>
                 {selectedRoute && (
-                    <Button onClick={handleStartRoute} disabled={isStarting} className="w-full h-12 text-lg font-bold">
-                        {isStarting ? <LoaderCircle className="animate-spin mr-2" /> : <PlayCircle className="mr-2 h-6 w-6" />}
-                        {selectedRoute.status === 'En Progreso' ? 'CONTINUAR GESTIÓN' : 'INICIAR GESTIÓN'}
+                    <Button onClick={() => { updateRoute(selectedRoute.id, {status: 'En Progreso'}).then(() => { setIsRouteStarted(true); refetchData('routes'); }); }} className="w-full h-12 text-lg font-bold">
+                        <PlayCircle className="mr-2 h-6 w-6" /> INICIAR GESTIÓN
                     </Button>
                 )}
             </CardContent>
@@ -434,252 +275,87 @@ export default function RouteManagementPage() {
                     <Progress value={(routeClients.filter(c => c.visitStatus === 'Completado').length / (routeClients.length || 1)) * 100} className="h-1.5" />
                 </div>
 
-                <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
-                    <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" className="w-full mb-4 border-dashed border-2">
-                            <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente a mi Ruta
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl h-[80vh] flex flex-col p-0">
-                        <DialogHeader className="p-6 pb-2">
-                            <DialogTitle>Añadir Clientes</DialogTitle>
-                            <DialogDescription>Buscador multicriterio por RUC, Nombre Comercial o Razón Social.</DialogDescription>
-                        </DialogHeader>
-                        <div className="px-6 pb-4">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                <Input placeholder="Nombre, RUC, Comercial..." className="pl-9" value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)}/>
+                <div className="space-y-2">
+                    {routeClients.map((c, i) => (
+                        <div key={c.ruc} onClick={() => !isSaving && setActiveRuc(c.ruc)} className={cn(
+                            "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer", 
+                            activeRuc === c.ruc ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
+                            c.visitStatus === 'Completado' && "opacity-50 grayscale bg-muted/30"
+                        )}>
+                            <div className="flex items-center gap-3 overflow-hidden">
+                                <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
+                                <div className="min-w-0">
+                                    <p className="font-bold text-sm truncate">{c.nombre_comercial}</p>
+                                    <span className="text-[9px] text-muted-foreground truncate block uppercase">{c.ruc}</span>
+                                </div>
                             </div>
+                            {c.visitStatus === 'Completado' && <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />}
                         </div>
-                        <ScrollArea className="flex-1 px-6">
-                            <div className="space-y-2 pb-4">
-                                {availableClients.filter(c => {
-                                    if (user?.role === 'Usuario') return c.ejecutivo === user.name;
-                                    return true;
-                                }).filter(c => {
-                                    const search = addClientSearchTerm.toLowerCase();
-                                    return c.nombre_comercial.toLowerCase().includes(search) || 
-                                           c.nombre_cliente.toLowerCase().includes(search) || 
-                                           c.ruc.includes(addClientSearchTerm);
-                                }).map(client => (
-                                    <div key={client.id} className={cn(
-                                        "flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors hover:bg-accent",
-                                        multiSelectedClients.some(c => c.ruc === client.ruc) && "border-primary bg-primary/5"
-                                    )} onClick={() => {
-                                        setMultiSelectedClients(prev => prev.some(c => c.ruc === client.ruc) ? prev.filter(c => c.ruc !== client.ruc) : [...prev, client]);
-                                    }}>
-                                        <Checkbox checked={multiSelectedClients.some(c => c.ruc === client.ruc)} />
-                                        <div className="min-w-0 flex-1">
-                                            <p className="font-bold text-sm truncate">{client.nombre_comercial}</p>
-                                            <p className="text-[10px] text-muted-foreground truncate">{client.nombre_cliente}</p>
-                                            <p className="text-[9px] font-mono text-muted-foreground">{client.ruc}</p>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                        </ScrollArea>
-                        <DialogFooter className="p-6 pt-2 border-t bg-muted/20">
-                            <div className="flex w-full items-center justify-between gap-4">
-                                <span className="text-xs font-bold">{multiSelectedClients.length} seleccionados</span>
-                                <div className="flex gap-2">
-                                    <Button variant="ghost" size="sm" onClick={() => setIsAddClientDialogOpen(false)}>Cerrar</Button>
-                                    <Button size="sm" onClick={handleConfirmMultiAdd} disabled={isSaving || multiSelectedClients.length === 0}>Añadir a Hoy</Button>
-                                </div>
-                            </div>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-
-                <div className="flex items-center gap-2 mb-2 text-[10px] font-bold text-muted-foreground uppercase px-1">
-                    <GripVertical className="h-3 w-3" /> 
-                    <span>Orden de Visita (Arrastra para reordenar)</span>
+                    ))}
                 </div>
-                
-                {dndEnabled && (
-                    <DragDropContext onDragEnd={onDragEnd}>
-                        <Droppable droppableId="clients">
-                            {(provided) => (
-                                <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-2">
-                                    {routeClients.map((c, i) => (
-                                        <Draggable key={c.ruc} draggableId={c.ruc} index={i} isDragDisabled={c.visitStatus === 'Completado' || isSaving}>
-                                            {(p) => (
-                                                <div 
-                                                    ref={p.innerRef} 
-                                                    {...p.draggableProps} 
-                                                    {...p.dragHandleProps} 
-                                                    onClick={() => setActiveRuc(c.ruc)}
-                                                    className={cn(
-                                                        "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer", 
-                                                        activeRuc === c.ruc ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
-                                                        c.visitStatus === 'Completado' && "opacity-50 grayscale bg-muted/30"
-                                                    )}
-                                                >
-                                                    <div className="flex items-center gap-3 overflow-hidden">
-                                                        <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
-                                                        <div className="min-w-0">
-                                                            <p className="font-bold text-sm truncate">{c.nombre_comercial}</p>
-                                                            <span className="text-[9px] text-muted-foreground uppercase truncate block">{c.ruc}</span>
-                                                        </div>
-                                                    </div>
-                                                    {c.visitStatus === 'Completado' ? (
-                                                        <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />
-                                                    ) : activeRuc === c.ruc ? (
-                                                        <div className="h-2 w-2 rounded-full bg-primary animate-ping shrink-0" />
-                                                    ) : null}
-                                                </div>
-                                            )}
-                                        </Draggable>
-                                    ))}
-                                    {provided.placeholder}
-                                </div>
-                            )}
-                        </Droppable>
-                    </DragDropContext>
-                )}
             </CardContent>
         </Card>
 
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2">
             <Card className="shadow-lg border-t-4 border-t-primary">
-                <CardHeader className="bg-muted/10 pb-6 rounded-t-lg">
+                <CardHeader className="bg-muted/10 pb-6">
                     {activeClient ? (
                         <div className="space-y-4">
-                            <div className="flex items-start justify-between gap-4">
-                                <div className="space-y-1 flex-1 min-w-0">
-                                    <h3 className="text-2xl font-black text-primary leading-tight break-words uppercase">{activeClient.nombre_comercial}</h3>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <Badge variant="outline" className="font-mono text-[10px] tracking-widest">{activeClient.ruc}</Badge>
-                                        <Badge variant="secondary" className="text-[9px] font-bold uppercase">{activeClient.ejecutivo}</Badge>
-                                    </div>
+                            <div className="space-y-1">
+                                <h3 className="text-2xl font-black text-primary leading-tight uppercase break-words">{activeClient.nombre_comercial}</h3>
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="font-mono text-[10px]">{activeClient.ruc}</Badge>
+                                    <Badge variant="secondary" className="text-[9px] font-bold uppercase">{activeClient.ejecutivo}</Badge>
                                 </div>
                             </div>
                             <div className="flex items-start gap-3 p-4 bg-white/80 rounded-2xl border border-primary/10 shadow-sm">
-                                <div className="bg-primary/10 p-2 rounded-full mt-0.5">
-                                    <MapPin className="h-4 w-4 text-primary" />
-                                </div>
-                                <p className="text-sm font-semibold leading-relaxed text-muted-foreground">{activeClient.direccion}</p>
+                                <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                                <p className="text-sm font-semibold text-muted-foreground leading-relaxed">{activeClient.direccion}</p>
                             </div>
                         </div>
                     ) : (
-                        <div className="text-center py-4">
-                            <CardTitle className="text-muted-foreground">Selecciona un cliente para gestionar</CardTitle>
-                        </div>
+                        <div className="text-center py-4 text-muted-foreground">Selecciona un cliente</div>
                     )}
                 </CardHeader>
                 <CardContent className="space-y-8 pt-6">
-                    {activeClient ? (
+                    {activeClient && (
                         <div className="space-y-8">
-                            <div className={cn(
-                                "p-5 rounded-2xl border-2 transition-all duration-500", 
-                                activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-muted/20 border-dashed border-muted-foreground/30"
-                            )}>
+                            <div className={cn("p-5 rounded-2xl border-2 transition-all", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-muted/20 border-dashed")}>
                                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                                    <div className="flex items-center gap-4 w-full sm:w-auto">
-                                        <div className={cn(
-                                            "p-3 rounded-xl shadow-sm transition-colors", 
-                                            activeClient.checkInTime ? "bg-green-500 text-white" : "bg-muted text-muted-foreground"
-                                        )}>
-                                            <LogIn className="h-6 w-6" />
-                                        </div>
+                                    <div className="flex items-center gap-4">
+                                        <LogIn className={cn("h-6 w-6", activeClient.checkInTime ? "text-green-600" : "text-muted-foreground")} />
                                         <div>
-                                            <h4 className="font-black text-sm uppercase tracking-tight">1. Registro de Entrada</h4>
-                                            <p className="text-xs font-bold text-muted-foreground">
-                                                {activeClient.checkInTime ? (
-                                                    <span className="text-green-600 flex items-center gap-1">
-                                                        <Clock className="h-3 w-3" /> LLEGADA: {activeClient.checkInTime}
-                                                    </span>
-                                                ) : 'Presiona el botón al llegar'}
-                                            </p>
+                                            <h4 className="font-black text-sm uppercase">1. Entrada</h4>
+                                            <p className="text-xs font-bold text-muted-foreground">{activeClient.checkInTime ? `HORA: ${activeClient.checkInTime}` : 'Presiona al llegar'}</p>
                                         </div>
                                     </div>
-                                    {!activeClient.checkInTime && (
-                                        <Button size="lg" onClick={handleCheckIn} disabled={isSaving || isLocating} className="w-full sm:w-auto h-14 px-8 font-black shadow-lg shadow-primary/20">
-                                            {isLocating ? <LoaderCircle className="animate-spin mr-2" /> : "MARCAR ENTRADA"}
-                                        </Button>
-                                    )}
+                                    {!activeClient.checkInTime && <Button size="lg" onClick={handleCheckIn} className="w-full sm:w-auto font-black">REGISTRAR LLEGADA</Button>}
                                 </div>
                             </div>
 
-                            <div className={cn("space-y-8 transition-all duration-500", !activeClient.checkInTime && "opacity-20 grayscale pointer-events-none")}>
+                            <div className={cn("space-y-8", !activeClient.checkInTime && "opacity-20 pointer-events-none")}>
                                 <div className="space-y-4">
-                                    <h4 className="font-black text-sm uppercase tracking-tight flex items-center gap-2">
-                                        <Phone className="h-4 w-4 text-primary" /> 2. Tipo de Gestión
-                                    </h4>
+                                    <h4 className="font-black text-sm uppercase flex items-center gap-2"><Phone className="h-4 w-4 text-primary" /> 2. Gestión</h4>
                                     <RadioGroup onValueChange={(v: any) => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4">
-                                        <Label className={cn(
-                                            "flex flex-col items-center gap-3 border-2 p-6 rounded-2xl cursor-pointer transition-all hover:scale-[1.02]", 
-                                            activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 shadow-inner" : "border-muted-foreground/10"
-                                        )}>
-                                            <RadioGroupItem value="presencial" className="sr-only" />
-                                            <MapPin className={cn("h-8 w-8", activeClient.visitType === 'presencial' ? "text-primary" : "text-muted-foreground/40")} />
-                                            <span className="font-black text-[10px] uppercase">Presencial</span>
+                                        <Label className={cn("flex flex-col items-center gap-2 border-2 p-4 rounded-xl cursor-pointer", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5" : "border-muted")}>
+                                            <RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-6 w-6" /><span className="text-[10px] font-bold">PRESENCIAL</span>
                                         </Label>
-                                        <Label className={cn(
-                                            "flex flex-col items-center gap-3 border-2 p-6 rounded-2xl cursor-pointer transition-all hover:scale-[1.02]", 
-                                            activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 shadow-inner" : "border-muted-foreground/10"
-                                        )}>
-                                            <RadioGroupItem value="telefonica" className="sr-only" />
-                                            <Phone className={cn("h-8 w-8", activeClient.visitType === 'telefonica' ? "text-primary" : "text-muted-foreground/40")} />
-                                            <span className="font-black text-[10px] uppercase">Telefónica</span>
+                                        <Label className={cn("flex flex-col items-center gap-2 border-2 p-4 rounded-xl cursor-pointer", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5" : "border-muted")}>
+                                            <RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-6 w-6" /><span className="text-[10px] font-bold">TELEFÓNICA</span>
                                         </Label>
                                     </RadioGroup>
-                                    {activeClient.visitType === 'telefonica' && (
-                                        <Textarea 
-                                            placeholder="Escribe aquí las observaciones de la llamada..." 
-                                            className="rounded-xl border-2 focus:border-primary transition-all"
-                                            value={activeClient.callObservation || ''} 
-                                            onChange={e => handleFieldChange('callObservation', e.target.value)} 
-                                        />
-                                    )}
+                                    {activeClient.visitType === 'telefonica' && <Textarea placeholder="Observaciones de llamada..." value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} />}
                                 </div>
 
-                                <div className="space-y-4">
-                                    <h4 className="font-black text-sm uppercase tracking-tight flex items-center gap-2">
-                                        <CheckCircle className="h-4 w-4 text-primary" /> 3. Resultados de Gestión
-                                    </h4>
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] font-black uppercase text-muted-foreground">Venta ($)</Label>
-                                            <Input type="number" placeholder="0.00" className="h-12 text-lg font-bold rounded-xl" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] font-black uppercase text-muted-foreground">Cobro ($)</Label>
-                                            <Input type="number" placeholder="0.00" className="h-12 text-lg font-bold rounded-xl" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} />
-                                        </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] font-black uppercase text-muted-foreground">Devolución ($)</Label>
-                                            <Input type="number" placeholder="0.00" className="h-12 text-lg font-bold rounded-xl" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} />
-                                        </div>
-                                    </div>
-                                    
-                                    <Button 
-                                        onClick={handleConfirmCheckOut} 
-                                        className="w-full h-16 text-lg font-black mt-6 rounded-2xl shadow-xl shadow-primary/30 transition-all active:scale-[0.98]" 
-                                        disabled={isSaving || !activeClient.visitType || isLocating}
-                                    >
-                                        {isLocating ? (
-                                            <div className="flex items-center gap-3">
-                                                <LoaderCircle className="animate-spin h-6 w-6" />
-                                                <span>Sincronizando GPS...</span>
-                                            </div>
-                                        ) : (
-                                            <div className="flex items-center gap-3">
-                                                <LogOut className="h-6 w-6" />
-                                                <span>FINALIZAR VISITA</span>
-                                            </div>
-                                        )}
-                                    </Button>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase">Venta ($)</Label><Input type="number" placeholder="0.00" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase">Cobro ($)</Label><Input type="number" placeholder="0.00" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase">Devolución ($)</Label><Input type="number" placeholder="0.00" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} /></div>
                                 </div>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="text-center py-20 flex flex-col items-center gap-4 text-muted-foreground">
-                            <div className="p-6 bg-muted/20 rounded-full">
-                                <CheckCircle className="h-16 w-16 opacity-20" />
-                            </div>
-                            <div className="space-y-1">
-                                <h3 className="text-xl font-black uppercase tracking-tight">Sin cliente seleccionado</h3>
-                                <p className="text-sm font-medium">Elige una parada de la lista para registrar tu gestión.</p>
+                                
+                                <Button onClick={handleConfirmCheckOut} className="w-full h-16 text-lg font-black mt-6 rounded-2xl shadow-xl" disabled={isSaving || !activeClient.visitType}>
+                                    {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <LogOut className="mr-2 h-6 w-6" />} FINALIZAR VISITA
+                                </Button>
                             </div>
                         </div>
                     )}
