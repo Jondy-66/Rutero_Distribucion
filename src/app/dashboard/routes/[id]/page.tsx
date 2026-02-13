@@ -76,7 +76,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
      return currentUser.id === route.supervisorId && route.status === 'Pendiente de Aprobación';
   }, [currentUser, route]);
 
-  // Nuevo permiso granular
   const canRecoverClients = useMemo(() => {
     if (!currentUser) return false;
     if (currentUser.role === 'Administrador') return true;

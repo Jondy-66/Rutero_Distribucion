@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -32,7 +31,7 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         if (c.date instanceof Date) {
             cleaned.date = Timestamp.fromDate(c.date);
         } else if (c.date && typeof (c.date as any).toDate === 'function') {
-            // Ya es Timestamp
+            // Already a Timestamp
         } else if (c.date) {
             cleaned.date = Timestamp.fromDate(new Date(c.date as any));
         }
@@ -200,6 +199,12 @@ export default function RouteManagementPage() {
         toast({ title: "Error de Sincronización", description: "Falla de red. Abortando guardado.", variant: "destructive" });
         return;
     }
+    
+    if (currentRouteClientsFull.length === 0) {
+        toast({ title: "Error Crítico", description: "No hay clientes cargados en memoria. Abortando escritura para proteger datos.", variant: "destructive" });
+        return;
+    }
+
     const time = format(new Date(), 'HH:mm:ss');
     const currentRucToFinalize = activeRuc;
     setIsSaving(true);
@@ -272,7 +277,8 @@ export default function RouteManagementPage() {
                         <span>Progreso Hoy</span>
                         <span className="text-primary">{routeClients.filter(c => c.visitStatus === 'Completado').length} / {routeClients.length}</span>
                     </div>
-                    <Progress value={(routeClients.filter(c => c.visitStatus === 'Completado').length / (routeClients.length || 1)) * 100} className="h-1.5" />
+                    <Progress value={(routeClients.filter(c => c.visitStatus === 'Completado').length / (routeClients.length || 1)) * 100} className="h-1.5 mb-2" />
+                    <p className="text-[11px] font-bold text-blue-600 animate-pulse uppercase tracking-tight">selecciona un cliente para empezar gestion</p>
                 </div>
 
                 <div className="space-y-2">
@@ -298,7 +304,7 @@ export default function RouteManagementPage() {
 
         <div className="lg:col-span-2">
             <Card className="shadow-lg border-t-4 border-t-primary">
-                <CardHeader className="bg-muted/10 pb-6">
+                <CardHeader className="bg-muted/10 pb-6 min-h-[200px] flex flex-col justify-center">
                     {activeClient ? (
                         <div className="space-y-4">
                             <div className="space-y-1">
@@ -314,7 +320,12 @@ export default function RouteManagementPage() {
                             </div>
                         </div>
                     ) : (
-                        <div className="text-center py-4 text-muted-foreground">Selecciona un cliente</div>
+                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-4 text-center">
+                            <div className="bg-primary/10 p-4 rounded-full">
+                                <User className="h-12 w-12 text-primary animate-bounce" />
+                            </div>
+                            <p className="font-black text-xl text-primary uppercase">selecciona un cliente para empezar gestion</p>
+                        </div>
                     )}
                 </CardHeader>
                 <CardContent className="space-y-8 pt-6">
@@ -322,7 +333,7 @@ export default function RouteManagementPage() {
                         <div className="space-y-8">
                             <div className={cn("p-5 rounded-2xl border-2 transition-all", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-muted/20 border-dashed")}>
                                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                                    <div className="flex items-center gap-4">
+                                    <div className="flex items-center gap-4 text-center sm:text-left">
                                         <LogIn className={cn("h-6 w-6", activeClient.checkInTime ? "text-green-600" : "text-muted-foreground")} />
                                         <div>
                                             <h4 className="font-black text-sm uppercase">1. Entrada</h4>
