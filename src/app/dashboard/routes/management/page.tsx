@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -82,19 +81,18 @@ export default function RouteManagementPage() {
 
   const SELECTION_KEY = user ? `mgmt_selected_route_v3_${user.id}` : null;
 
-  // Filtro inteligente de rutas: Solo las mías que tengan actividad hoy o estén en progreso
   const selectableRoutes = useMemo(() => {
     return allRoutes.filter(r => {
         const isOwner = r.createdBy === user?.id;
         if (!isOwner) return false;
         
-        // Si la ruta está "En Progreso", debe ser visible siempre (PRIORIDAD)
         if (r.status === 'En Progreso') return true;
 
-        const basicStatus = ['Planificada', 'Incompleta', 'Rechazada', 'Completada'].includes(r.status);
-        if (!basicStatus) return false;
+        const hasPendingClients = r.clients?.some(c => 
+            c.status !== 'Eliminado' && c.visitStatus !== 'Completado'
+        );
+        if (hasPendingClients) return true;
 
-        // Si tiene clientes programados para hoy, debe ser visible
         const hasActivityToday = r.clients?.some(c => {
             if (c.status === 'Eliminado' || !c.date) return false;
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
@@ -102,8 +100,6 @@ export default function RouteManagementPage() {
         });
 
         if (hasActivityToday) return true;
-
-        // Si es la ruta seleccionada actualmente por persistencia
         if (r.id === selectedRouteId) return true;
 
         return false;
@@ -115,14 +111,12 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Rehidratación de sesión robusta: espera a que la data esté cargada
   useEffect(() => {
     if (authLoading || dataLoading) return;
     if (isInitialRehydrationDone.current || !SELECTION_KEY) return;
 
     const savedId = localStorage.getItem(SELECTION_KEY);
     
-    // Prioridad 1: Sesión guardada
     if (savedId && allRoutes.length > 0) {
         const found = allRoutes.find(r => r.id === savedId);
         if (found) {
@@ -133,7 +127,6 @@ export default function RouteManagementPage() {
         }
     }
 
-    // Prioridad 2: Auto-seleccionar si ya hay una "En Progreso"
     const activeRoute = allRoutes.find(r => r.status === 'En Progreso' && r.createdBy === user?.id);
     if (activeRoute) {
         setSelectedRouteId(activeRoute.id);
@@ -143,16 +136,13 @@ export default function RouteManagementPage() {
         return;
     }
 
-    // Si llegamos aquí y hay data, marcamos como terminado
     if (allRoutes.length > 0 || !dataLoading) {
         isInitialRehydrationDone.current = true;
     }
   }, [authLoading, dataLoading, SELECTION_KEY, allRoutes, user]);
 
-  // Motor de Reactivación Automática y Sincronización
   useEffect(() => {
     if (!selectedRoute) return;
-    
     const clients = selectedRoute.clients || [];
     setCurrentRouteClientsFull(clients);
     
@@ -272,7 +262,7 @@ export default function RouteManagementPage() {
             return nextClients;
         });
         const sanitized = sanitizeClientsForFirestore(nextClients);
-        updateRoute(selectedRoute.id, { clients: sanitized });
+        await updateRoute(selectedRoute.id, { clients: sanitized });
         setIsLocating(false);
         toast({ title: "Entrada Registrada" });
     });
@@ -284,7 +274,6 @@ export default function RouteManagementPage() {
         return;
     }
     const time = format(new Date(), 'HH:mm:ss');
-    
     const currentRucToFinalize = activeRuc;
     setActiveRuc(null); 
     setIsSaving(true);
@@ -292,37 +281,31 @@ export default function RouteManagementPage() {
 
     getCurrentLocation(4000).then(async (coords) => {
         const location = coords ? new GeoPoint(coords.lat, coords.lng) : null;
-        let nextClients: ClientInRoute[] = [];
-        
-        setCurrentRouteClientsFull(prev => {
-            nextClients = prev.map(c => {
-                if (c.ruc === currentRucToFinalize) {
-                    return { 
-                        ...c, 
-                        checkOutTime: time, 
-                        checkOutLocation: location,
-                        visitStatus: 'Completado' as const,
-                    };
-                }
-                return c;
-            });
-            return nextClients;
+        const updatedClients = currentRouteClientsFull.map(c => {
+            if (c.ruc === currentRucToFinalize) {
+                return { 
+                    ...c, 
+                    checkOutTime: time, 
+                    checkOutLocation: location,
+                    visitStatus: 'Completado' as const,
+                };
+            }
+            return c;
         });
 
-        const allDoneToday = nextClients.filter(c => {
-            if (c.status === 'Eliminado' || !c.date) return false;
-            const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date));
-            return isToday(cDate);
-        }).every(c => c.visitStatus === 'Completado');
+        const allClientsDone = updatedClients
+            .filter(c => c.status !== 'Eliminado')
+            .every(c => c.visitStatus === 'Completado');
 
-        const newStatus = allDoneToday ? 'Completada' : selectedRoute.status;
-        const sanitized = sanitizeClientsForFirestore(nextClients);
+        const newStatus = allClientsDone ? 'Completada' : 'En Progreso';
+        const sanitized = sanitizeClientsForFirestore(updatedClients);
         
-        updateRoute(selectedRoute.id, { clients: sanitized, status: newStatus }).then(() => {
-            setIsSaving(false);
-            setIsLocating(false);
-            toast({ title: "Visita Finalizada" });
-        });
+        await updateRoute(selectedRoute.id, { clients: sanitized, status: newStatus });
+        await refetchData('routes');
+        setCurrentRouteClientsFull(updatedClients);
+        setIsSaving(false);
+        setIsLocating(false);
+        toast({ title: "Visita Finalizada" });
     });
   };
 
@@ -350,7 +333,7 @@ export default function RouteManagementPage() {
     
     setCurrentRouteClientsFull(finalFull);
     const sanitized = sanitizeClientsForFirestore(finalFull);
-    updateRoute(selectedRoute.id, { clients: sanitized });
+    await updateRoute(selectedRoute.id, { clients: sanitized });
     toast({ title: "Orden actualizado" });
   };
 
