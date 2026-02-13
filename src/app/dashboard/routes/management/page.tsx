@@ -1,16 +1,15 @@
 'use client';
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, GripVertical, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, Clock, AlertTriangle } from 'lucide-react';
-import { Separator } from '@/components/ui/separator';
-import { updateRoute, getRoute } from '@/lib/firebase/firestore';
-import type { Client, RoutePlan, ClientInRoute } from '@/lib/types';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X } from 'lucide-react';
+import { updateRoute } from '@/lib/firebase/firestore';
+import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, isToday, isFuture } from 'date-fns';
+import { format, isToday } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -19,7 +18,7 @@ import { PageHeader } from '@/components/page-header';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Timestamp, GeoPoint } from 'firebase/firestore';
+import { Timestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
@@ -77,7 +76,6 @@ export default function RouteManagementPage() {
     return allRoutes.filter(r => {
         const isOwner = r.createdBy === user?.id;
         if (!isOwner) return false;
-        // Solo mostramos rutas que NO estén completadas
         return r.status === 'En Progreso' || r.status === 'Planificada';
     });
   }, [allRoutes, user]);
@@ -91,7 +89,6 @@ export default function RouteManagementPage() {
     if (authLoading || dataLoading) return;
     if (isInitialRehydrationDone.current || !SELECTION_KEY) return;
 
-    // Prioridad 1: Ruta que ya esté En Progreso
     const activeRoute = allRoutes.find(r => r.status === 'En Progreso' && r.createdBy === user?.id);
     if (activeRoute) {
         setSelectedRouteId(activeRoute.id);
@@ -101,7 +98,6 @@ export default function RouteManagementPage() {
         return;
     }
 
-    // Prioridad 2: Ruta guardada en localStorage que no esté completada
     const savedId = localStorage.getItem(SELECTION_KEY);
     if (savedId && allRoutes.length > 0) {
         const found = allRoutes.find(r => r.id === savedId);
@@ -198,7 +194,6 @@ export default function RouteManagementPage() {
         return c;
     });
 
-    // Una ruta solo se completa si TODOS los clientes de TODOS los días están listos
     const allTotalClientsDone = nextClients
         .filter(c => c.status !== 'Eliminado')
         .every(c => c.visitStatus === 'Completado');
@@ -236,7 +231,7 @@ export default function RouteManagementPage() {
     const newClientsToAdd: ClientInRoute[] = multiSelectedClients.map(c => ({
         ruc: c.ruc,
         nombre_comercial: c.nombre_comercial,
-        date: new Date(), // Se añade para hoy
+        date: new Date(),
         visitStatus: 'Pendiente',
         status: 'Activo',
         origin: 'manual'
@@ -312,39 +307,73 @@ export default function RouteManagementPage() {
                     <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
                         <DialogTrigger asChild>
                             <Button variant="outline" className="w-full h-10 border-dashed border-2 hover:border-primary hover:text-primary transition-all font-bold">
-                                <PlusCircle className="mr-2 h-4 w-4" /> AÑADIR CLIENTE A HOY
+                                <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente a mi Ruta
                             </Button>
                         </DialogTrigger>
-                        <DialogContent className="max-w-md p-0 overflow-hidden">
-                            <DialogHeader className="p-6 pb-0">
-                                <DialogTitle>Añadir Clientes a la Ruta</DialogTitle>
-                                <DialogDescription>Solo se muestran clientes asignados a tu nombre.</DialogDescription>
+                        <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden bg-white">
+                            <DialogHeader className="p-6 pb-2">
+                                <DialogTitle className="text-2xl font-bold text-[#011688]">Añadir Clientes</DialogTitle>
+                                <DialogDescription className="text-muted-foreground text-sm font-medium">
+                                    Buscador multicriterio por RUC, Nombre Comercial o Razón Social.
+                                </DialogDescription>
                             </DialogHeader>
-                            <div className="p-6 space-y-4">
+                            <div className="p-6 space-y-6">
                                 <div className="relative">
-                                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                    <Input placeholder="Buscar por RUC o Nombre..." className="pl-9" value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)} />
+                                    <Search className="absolute left-3 top-3.5 h-5 w-5 text-muted-foreground" />
+                                    <Input 
+                                        placeholder="Nombre, RUC, Comercial..." 
+                                        className="h-12 pl-10 border-[#011688] border-2 focus-visible:ring-0 focus-visible:border-[#011688] rounded-xl text-base" 
+                                        value={addClientSearchTerm} 
+                                        onChange={e => setAddClientSearchTerm(e.target.value)} 
+                                    />
                                 </div>
-                                <ScrollArea className="h-[300px] border rounded-md p-2">
-                                    {filteredSearchClients.map(c => (
-                                        <div key={c.ruc} className="flex items-center space-x-3 p-3 hover:bg-muted/50 rounded-lg transition-colors cursor-pointer" onClick={() => {
+                                <ScrollArea className="h-[400px] pr-4">
+                                    <div className="space-y-3">
+                                        {filteredSearchClients.map(c => {
                                             const isSel = multiSelectedClients.some(sc => sc.ruc === c.ruc);
-                                            setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => sc.ruc !== c.ruc) : [...multiSelectedClients, c]);
-                                        }}>
-                                            <Checkbox checked={multiSelectedClients.some(sc => sc.ruc === c.ruc)} />
-                                            <div className="min-w-0">
-                                                <p className="text-sm font-bold truncate">{c.nombre_comercial}</p>
-                                                <p className="text-[10px] text-muted-foreground uppercase">{c.ruc}</p>
-                                            </div>
-                                        </div>
-                                    ))}
+                                            return (
+                                                <div 
+                                                    key={c.ruc} 
+                                                    className={cn(
+                                                        "flex items-start space-x-4 p-4 rounded-xl border transition-all cursor-pointer",
+                                                        isSel ? "bg-[#011688]/5 border-[#011688]" : "bg-[#f8f9ff] border-[#e2e8f0] hover:border-[#cbd5e1]"
+                                                    )}
+                                                    onClick={() => {
+                                                        setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => sc.ruc !== c.ruc) : [...multiSelectedClients, c]);
+                                                    }}
+                                                >
+                                                    <Checkbox 
+                                                        checked={isSel} 
+                                                        className="mt-1 h-5 w-5 border-[#011688] data-[state=checked]:bg-[#011688]"
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <p className="text-base font-black text-[#011688] uppercase truncate">{c.nombre_comercial}</p>
+                                                        <p className="text-xs font-bold text-muted-foreground uppercase">{c.nombre_cliente}</p>
+                                                        <p className="text-xs font-mono text-muted-foreground mt-1">{c.ruc}</p>
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
                                 </ScrollArea>
                             </div>
-                            <DialogFooter className="p-6 bg-muted/20">
-                                <Button className="w-full font-bold" disabled={multiSelectedClients.length === 0 || isSaving} onClick={handleAddClientsToRoute}>
-                                    {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <PlusCircle className="mr-2" />}
-                                    CONFIRMAR ADICIÓN ({multiSelectedClients.length})
-                                </Button>
+                            <DialogFooter className="p-6 bg-[#f8f9ff] border-t flex flex-row items-center justify-between sm:justify-between">
+                                <span className="text-sm font-black text-[#011688] uppercase">
+                                    {multiSelectedClients.length} seleccionados
+                                </span>
+                                <div className="flex gap-3">
+                                    <DialogClose asChild>
+                                        <Button variant="ghost" className="font-bold text-[#011688]">Cerrar</Button>
+                                    </DialogClose>
+                                    <Button 
+                                        className="font-bold bg-[#011688] hover:bg-[#011688]/90 px-8 rounded-xl" 
+                                        disabled={multiSelectedClients.length === 0 || isSaving} 
+                                        onClick={handleAddClientsToRoute}
+                                    >
+                                        {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : null}
+                                        Añadir a Hoy
+                                    </Button>
+                                </div>
                             </DialogFooter>
                         </DialogContent>
                     </Dialog>

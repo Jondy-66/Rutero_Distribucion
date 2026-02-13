@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter, notFound } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle } from 'lucide-react';
@@ -66,20 +66,17 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     if (!currentUser || !route) return false;
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
     const isOwner = currentUser.id === route.createdBy;
-    const isEditableStatus = route.status === 'Planificada' || route.status === 'Rechazada' || route.status === 'En Progreso';
-    return isOwner && isEditableStatus;
+    return isOwner && (route.status === 'Planificada' || route.status === 'Rechazada' || route.status === 'En Progreso');
   }, [currentUser, route]);
 
   const canApprove = useMemo(() => {
      if (!currentUser || !route) return false;
-     if (currentUser.role === 'Administrador' && route.status === 'Pendiente de Aprobación') return true;
-     return currentUser.id === route.supervisorId && route.status === 'Pendiente de Aprobación';
+     return (currentUser.role === 'Administrador' || currentUser.id === route.supervisorId) && route.status === 'Pendiente de Aprobación';
   }, [currentUser, route]);
 
   const canRecoverClients = useMemo(() => {
     if (!currentUser) return false;
-    if (currentUser.role === 'Administrador') return true;
-    return currentUser.permissions?.includes('recover-clients') || false;
+    return currentUser.role === 'Administrador' || currentUser.permissions?.includes('recover-clients') || false;
   }, [currentUser]);
 
   useEffect(() => {
