@@ -15,15 +15,15 @@ import type { User } from '@/lib/types';
 import { updateUser } from '@/lib/firebase/firestore';
 
 const modules = [
-    { id: 'dashboard', label: 'Panel' },
-    { id: 'admin-dashboard', label: 'KPIs' },
-    { id: 'clients', label: 'Clientes' },
-    { id: 'locations', label: 'Ubicaciones' },
-    { id: 'map', label: 'Mapa' },
-    { id: 'reports', label: 'Reportes' },
-    { id: 'routes', label: 'Rutas' },
-    { id: 'users', label: 'Usuarios' },
-    { id: 'recover-clients', label: 'Recuperar Clientes (Rescate)' },
+    { id: 'dashboard', label: 'Panel Principal' },
+    { id: 'admin-dashboard', label: 'Dashboard de KPIs' },
+    { id: 'clients', label: 'Gestión de Clientes' },
+    { id: 'locations', label: 'Gestión de Ubicaciones' },
+    { id: 'map', label: 'Visualización de Mapa' },
+    { id: 'reports', label: 'Reportes y Exportaciones' },
+    { id: 'routes', label: 'Gestión de Rutas' },
+    { id: 'users', label: 'Administración de Usuarios' },
+    { id: 'recover-clients', label: 'RECUPERAR CLIENTES (Rescate de Datos)' },
 ];
 
 const defaultPermissionsByRole: Record<User['role'], string[]> = {
@@ -46,8 +46,6 @@ export default function PermissionsPage() {
 
     useEffect(() => {
         if (selectedUser) {
-            // Si el usuario ya tiene permisos guardados, los usamos. 
-            // Si no, cargamos los predeterminados según su rol.
             const userPermissions = selectedUser.permissions && selectedUser.permissions.length > 0 
                 ? selectedUser.permissions 
                 : defaultPermissionsByRole[selectedUser.role] || [];
@@ -78,7 +76,7 @@ export default function PermissionsPage() {
 
     const handleSaveChanges = async () => {
         if (!selectedUser) {
-            toast({ title: 'Error', description: 'Por favor, selecciona un usuario.', variant: 'destructive' });
+            toast({ title: 'Error', description: 'Selecciona un usuario primero.', variant: 'destructive' });
             return;
         }
         
@@ -92,16 +90,12 @@ export default function PermissionsPage() {
             await refetchData('users');
             
             toast({ 
-                title: 'Éxito', 
-                description: `Permisos actualizados correctamente para ${selectedUser.name}.` 
+                title: 'Permisos Guardados', 
+                description: `Se actualizaron los accesos para ${selectedUser.name}.` 
             });
         } catch (error: any) {
             console.error("Error al guardar permisos:", error);
-            toast({ 
-                title: 'Error al Guardar', 
-                description: 'Ocurrió un error al intentar actualizar los permisos.', 
-                variant: 'destructive' 
-            });
+            toast({ title: 'Error', description: 'No se pudieron actualizar los permisos.', variant: 'destructive' });
         } finally {
             setIsSaving(false);
         }
@@ -118,15 +112,15 @@ export default function PermissionsPage() {
 
     return (
         <>
-            <PageHeader title="Gestión de Permisos" description="Asigna o revoca el acceso a los módulos y funciones especiales para cada usuario." />
+            <PageHeader title="Gestión de Permisos" description="Configura los accesos granulares por usuario." />
 
             <Card>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <ShieldCheck className="h-5 w-5 text-primary" />
-                        Seleccionar Usuario
+                        1. Seleccionar Usuario
                     </CardTitle>
-                    <CardDescription>Elige un usuario para configurar sus permisos de acceso.</CardDescription>
+                    <CardDescription>Busca al usuario para modificar sus accesos a módulos.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <Select onValueChange={handleUserChange} disabled={isSaving}>
@@ -136,7 +130,7 @@ export default function PermissionsPage() {
                         <SelectContent>
                             {users.map(user => (
                                 <SelectItem key={user.id} value={user.id}>
-                                    {user.name} ({user.email}) - {user.role}
+                                    {user.name} ({user.role})
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -147,9 +141,9 @@ export default function PermissionsPage() {
             {selectedUser && (
                 <Card className="mt-6">
                     <CardHeader>
-                        <CardTitle>Permisos para {selectedUser.name}</CardTitle>
+                        <CardTitle>2. Configurar Permisos para {selectedUser.name}</CardTitle>
                         <CardDescription>
-                            Rol actual: <span className="font-bold text-primary">{selectedUser.role}</span>. Activa o desactiva los módulos a los que este usuario tendrá acceso.
+                            Rol base: <span className="font-bold text-primary">{selectedUser.role}</span>. Activa los módulos permitidos.
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -161,16 +155,16 @@ export default function PermissionsPage() {
                                     onCheckedChange={(checked) => handlePermissionChange(module.id, Boolean(checked))}
                                     disabled={isSaving}
                                 />
-                                <Label htmlFor={`perm-${module.id}`} className="font-semibold cursor-pointer flex-1">
+                                <Label htmlFor={`perm-${module.id}`} className="font-bold cursor-pointer flex-1 uppercase text-[11px]">
                                     {module.label}
                                 </Label>
                             </div>
                         ))}
                     </CardContent>
                     <CardFooter>
-                        <Button onClick={handleSaveChanges} disabled={isSaving} className="w-full sm:w-auto">
+                        <Button onClick={handleSaveChanges} disabled={isSaving} className="w-full sm:w-auto font-bold">
                             {isSaving ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : <Save className="mr-2 h-4 w-4" />}
-                            Guardar Permisos
+                            GUARDAR PERMISOS
                         </Button>
                     </CardFooter>
                 </Card>
