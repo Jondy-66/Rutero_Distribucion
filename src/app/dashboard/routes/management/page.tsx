@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -155,16 +155,20 @@ export default function RouteManagementPage() {
     return routeClients.find(c => c.ruc === activeRuc) || null;
   }, [routeClients, activeRuc]);
 
+  // Reglas de estado
+  const isCurrentClientInProgress = activeClient?.checkInTime && !activeClient?.checkOutTime;
+  const isCurrentClientCompleted = activeClient?.visitStatus === 'Completado';
+
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
-    if (!activeRuc) return;
+    if (!activeRuc || isCurrentClientCompleted) return;
     setCurrentRouteClientsFull(prev => prev.map(c => 
         c.ruc === activeRuc ? { ...c, [field]: value } : c
     ));
   };
 
   const handleCheckIn = async () => {
-    if (!selectedRoute || currentRouteClientsFull.length === 0) {
-        toast({ title: "Error de Sincronización", description: "Los datos no están listos.", variant: "destructive" });
+    if (!selectedRoute || currentRouteClientsFull.length === 0 || isCurrentClientCompleted) {
+        toast({ title: "Acción no permitida", description: "Los datos no están listos o la visita ya finalizó.", variant: "destructive" });
         return;
     }
     const time = format(new Date(), 'HH:mm:ss');
@@ -179,8 +183,8 @@ export default function RouteManagementPage() {
   };
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || currentRouteClientsFull.length === 0) {
-        toast({ title: "Error de Datos", description: "No se puede guardar una lista vacía.", variant: "destructive" });
+    if (!selectedRoute || currentRouteClientsFull.length === 0 || isCurrentClientCompleted) {
+        toast({ title: "Error de Datos", description: "No se puede guardar.", variant: "destructive" });
         return;
     }
 
@@ -254,6 +258,22 @@ export default function RouteManagementPage() {
     }
   };
 
+  const handleSelectClient = (ruc: string) => {
+      if (isSaving) return;
+      
+      // Regla: Si hay una gestión en curso, no dejar cambiar
+      if (isCurrentClientInProgress && activeRuc !== ruc) {
+          toast({
+              title: "Gestión en curso",
+              description: "Debes finalizar la visita actual antes de gestionar otro cliente.",
+              variant: "destructive"
+          });
+          return;
+      }
+
+      setActiveRuc(ruc);
+  };
+
   if (authLoading) {
       return (
         <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
@@ -306,7 +326,11 @@ export default function RouteManagementPage() {
                     
                     <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
                         <DialogTrigger asChild>
-                            <Button variant="outline" className="w-full h-10 border-dashed border-2 hover:border-primary hover:text-primary transition-all font-bold">
+                            <Button 
+                                variant="outline" 
+                                className="w-full h-10 border-dashed border-2 hover:border-primary hover:text-primary transition-all font-bold"
+                                disabled={isCurrentClientInProgress}
+                            >
                                 <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente a mi Ruta
                             </Button>
                         </DialogTrigger>
@@ -381,10 +405,11 @@ export default function RouteManagementPage() {
 
                 <div className="space-y-2">
                     {routeClients.map((c, i) => (
-                        <div key={c.ruc} onClick={() => !isSaving && setActiveRuc(c.ruc)} className={cn(
+                        <div key={c.ruc} onClick={() => handleSelectClient(c.ruc)} className={cn(
                             "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer", 
                             activeRuc === c.ruc ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
-                            c.visitStatus === 'Completado' && "opacity-50 grayscale bg-muted/30"
+                            c.visitStatus === 'Completado' && "opacity-50 grayscale bg-muted/30",
+                            isCurrentClientInProgress && activeRuc !== c.ruc && "opacity-30 cursor-not-allowed"
                         )}>
                             <div className="flex items-center gap-3 overflow-hidden">
                                 <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
@@ -394,6 +419,7 @@ export default function RouteManagementPage() {
                                 </div>
                             </div>
                             {c.visitStatus === 'Completado' && <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />}
+                            {isCurrentClientInProgress && activeRuc === c.ruc && <LoaderCircle className="h-4 w-4 animate-spin text-primary" />}
                         </div>
                     ))}
                 </div>
@@ -409,7 +435,9 @@ export default function RouteManagementPage() {
                                 <h3 className="text-2xl font-black text-primary leading-tight uppercase break-words">{activeClient.nombre_comercial}</h3>
                                 <div className="flex items-center gap-2">
                                     <Badge variant="outline" className="font-mono text-[10px]">{activeClient.ruc}</Badge>
-                                    <Badge variant="secondary" className="text-[9px] font-bold uppercase">CLIENTE ASIGNADO</Badge>
+                                    <Badge variant={isCurrentClientCompleted ? "success" : "secondary"} className="text-[9px] font-bold uppercase">
+                                        {isCurrentClientCompleted ? "VISITA FINALIZADA" : "GESTIÓN EN CURSO"}
+                                    </Badge>
                                 </div>
                             </div>
                             <div className="flex items-start gap-3 p-4 bg-white/80 rounded-2xl border border-primary/10 shadow-sm">
@@ -432,6 +460,13 @@ export default function RouteManagementPage() {
                 <CardContent className="space-y-8 pt-6">
                     {activeClient && (
                         <div className="space-y-8">
+                            {isCurrentClientCompleted && (
+                                <div className="bg-green-100 border border-green-200 p-4 rounded-xl flex items-center gap-3 text-green-800">
+                                    <CheckCircle className="h-5 w-5" />
+                                    <span className="text-sm font-bold uppercase">Gestión completada. Los datos son ahora de solo lectura.</span>
+                                </div>
+                            )}
+
                             <div className={cn("p-5 rounded-2xl border-2 transition-all", activeClient.checkInTime ? "bg-green-50 border-green-200 shadow-inner" : "bg-muted/20 border-dashed")}>
                                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                                     <div className="flex items-center gap-4 text-center sm:text-left">
@@ -448,7 +483,7 @@ export default function RouteManagementPage() {
                             <div className={cn("space-y-8 transition-opacity duration-500", !activeClient.checkInTime && "opacity-20 pointer-events-none")}>
                                 <div className="space-y-4">
                                     <h4 className="font-black text-sm uppercase flex items-center gap-2"><Phone className="h-4 w-4 text-primary" /> 2. Datos de Gestión</h4>
-                                    <RadioGroup onValueChange={(v: any) => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4">
+                                    <RadioGroup onValueChange={(v: any) => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4" disabled={isCurrentClientCompleted}>
                                         <Label className={cn("flex flex-col items-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "border-muted")}>
                                             <RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-6 w-6" /><span className="text-[10px] font-black uppercase">PRESENCIAL</span>
                                         </Label>
@@ -456,17 +491,22 @@ export default function RouteManagementPage() {
                                             <RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-6 w-6" /><span className="text-[10px] font-black uppercase">TELEFÓNICA</span>
                                         </Label>
                                     </RadioGroup>
-                                    {activeClient.visitType === 'telefonica' && <Textarea placeholder="Observaciones de la llamada (Ej: No contestó, volver a intentar...)" className="font-semibold" value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} />}
+                                    {activeClient.visitType === 'telefonica' && <Textarea placeholder="Observaciones de la llamada (Ej: No contestó, volver a intentar...)" className="font-semibold" value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} disabled={isCurrentClientCompleted} />}
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-primary">Venta ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} /></div>
-                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-orange-600">Cobro ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} /></div>
-                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-destructive">Devolución ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-primary">Venta ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={isCurrentClientCompleted} /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-orange-600">Cobro ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={isCurrentClientCompleted} /></div>
+                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-destructive">Devolución ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={isCurrentClientCompleted} /></div>
                                 </div>
                                 
-                                <Button onClick={handleConfirmCheckOut} className="w-full h-16 text-lg font-black mt-6 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all" disabled={isSaving || !activeClient.visitType}>
-                                    {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <LogOut className="mr-2 h-6 w-6" />} FINALIZAR VISITA
+                                <Button 
+                                    onClick={handleConfirmCheckOut} 
+                                    className="w-full h-16 text-lg font-black mt-6 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all" 
+                                    disabled={isSaving || !activeClient.visitType || isCurrentClientCompleted}
+                                >
+                                    {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <LogOut className="mr-2 h-6 w-6" />} 
+                                    {isCurrentClientCompleted ? "VISITA FINALIZADA" : "FINALIZAR VISITA"}
                                 </Button>
                             </div>
                         </div>
