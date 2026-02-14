@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -17,7 +16,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { getRoutes, deleteRoute, updateRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw } from 'lucide-react';
+import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -45,7 +44,7 @@ import {
 import { Timestamp } from 'firebase/firestore';
 
 export default function TeamRoutesPage() {
-  const { user, users, loading: authLoading } = useAuth();
+  const { user, users, loading: authLoading, refetchData } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [allRoutes, setAllRoutes] = useState<RoutePlan[]>([]);
@@ -75,7 +74,7 @@ export default function TeamRoutesPage() {
     } else if(!authLoading) {
       setLoading(false);
     }
-  }, [user, authLoading, toast]);
+  }, [user, authLoading]);
 
   const managedUsers = useMemo(() => {
     if (!user) return [];
@@ -133,6 +132,18 @@ export default function TeamRoutesPage() {
       toast({ title: "Error", description: "No se pudo reactivar la ruta.", variant: "destructive" });
     }
   };
+
+  const handleMarkAsCompleted = async (routeId: string) => {
+    try {
+      await updateRoute(routeId, { status: 'Completada' });
+      toast({ title: "Ruta Finalizada", description: "La ruta ha sido marcada como Completada manualmente." });
+      fetchRoutesData();
+      await refetchData('routes');
+    } catch (error: any) {
+      console.error("Failed to complete route:", error);
+      toast({ title: "Error", description: "No se pudo completar la ruta.", variant: "destructive" });
+    }
+  };
   
   const getBadgeForStatus = (status: RoutePlan['status']) => {
     switch (status) {
@@ -174,8 +185,7 @@ export default function TeamRoutesPage() {
       <PageHeader
         title="Rutas de Equipo"
         description="Revisa, aprueba o rechaza las rutas planificadas por tu equipo."
-      >
-      </PageHeader>
+      />
       
       <Card>
         <CardHeader>
@@ -198,7 +208,7 @@ export default function TeamRoutesPage() {
                     </SelectContent>
                 </Select>
             </div>
-             <div className="border rounded-lg">
+             <div className="border rounded-lg overflow-x-auto">
                 <Table>
                     <TableHeader>
                         <TableRow>
@@ -229,6 +239,7 @@ export default function TeamRoutesPage() {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
                                 const canDelete = user?.role === 'Administrador';
                                 const canReactivate = user?.role === 'Administrador' && (route.status === 'Completada' || route.status === 'Incompleta' || route.status === 'Rechazada');
+                                const canAdminComplete = user?.role === 'Administrador' && route.status === 'En Progreso';
                                
                                 return (
                                 <TableRow key={route.id}>
@@ -239,7 +250,7 @@ export default function TeamRoutesPage() {
                                     <TableCell>
                                         {getBadgeForStatus(route.status)}
                                     </TableCell>
-                                    <TableCell className="text-center">{route.clients.length}</TableCell>
+                                    <TableCell className="text-center">{route.clients?.length || 0}</TableCell>
                                     <TableCell className="text-right">
                                         <AlertDialog>
                                             <DropdownMenu>
@@ -255,6 +266,13 @@ export default function TeamRoutesPage() {
                                                         {canReview ? "Revisar" : "Ver Detalles"}
                                                     </DropdownMenuItem>
                                                     
+                                                    {canAdminComplete && (
+                                                        <DropdownMenuItem onClick={() => handleMarkAsCompleted(route.id)}>
+                                                            <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                                                            Finalizar Ruta (Completada)
+                                                        </DropdownMenuItem>
+                                                    )}
+
                                                     {canReactivate && (
                                                         <DropdownMenuItem onClick={() => handleReactivate(route.id)}>
                                                             <RefreshCw className="mr-2 h-4 w-4" />
@@ -279,7 +297,7 @@ export default function TeamRoutesPage() {
                                                 <AlertDialogHeader>
                                                     <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
                                                     <AlertDialogDescription>
-                                                        Esta acción no se puede deshacer. Esto eliminará permanentemente la ruta.
+                                                        Esta acción no se puede deshacer. Esto eliminará permanentemente la ruta de la base de datos.
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>

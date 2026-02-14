@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -14,10 +13,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
-import { deleteRoute } from '@/lib/firebase/firestore';
+import { deleteRoute, updateRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock, Trash2, Users } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock, Trash2, Users, CheckCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -50,10 +49,8 @@ export default function RoutesListPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  // Usamos las rutas del contexto para consistencia total entre módulos
   const filteredRoutes = useMemo(() => {
     if (!user) return [];
-    // Filtramos por el ID del creador para seguridad
     return allRoutesFromContext.filter(route => route.createdBy === user.id);
   }, [allRoutesFromContext, user]);
 
@@ -69,6 +66,17 @@ export default function RoutesListPage() {
     } catch (error: any) {
       console.error("Failed to delete route:", error);
       toast({ title: "Error", description: "No se pudo eliminar la ruta.", variant: "destructive" });
+    }
+  };
+
+  const handleMarkAsCompleted = async (routeId: string) => {
+    try {
+      await updateRoute(routeId, { status: 'Completada' });
+      toast({ title: "Ruta Finalizada", description: "La ruta ha sido marcada como Completada." });
+      await refetchData('routes');
+    } catch (error: any) {
+      console.error("Failed to complete route:", error);
+      toast({ title: "Error", description: "No se pudo completar la ruta.", variant: "destructive" });
     }
   };
 
@@ -149,8 +157,8 @@ export default function RoutesListPage() {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
                                 const canEdit = user?.id === route.createdBy && (route.status === 'Rechazada' || route.status === 'Planificada' || route.status === 'En Progreso');
                                 const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada';
-                                let canViewDetails = true;
                                 const canDelete = user?.role === 'Administrador' || (user?.id === route.createdBy && route.status === 'Rechazada');
+                                const canAdminComplete = user?.role === 'Administrador' && route.status === 'En Progreso';
                                 
                                 const clientCount = route.clients?.length || 0;
 
@@ -182,6 +190,14 @@ export default function RoutesListPage() {
                                             {canReview && <DropdownMenuItem onClick={() => handleAction(route.id)}>Revisar</DropdownMenuItem>}
                                             {(canEdit || canAdminEdit) && <DropdownMenuItem onClick={() => handleAction(route.id)}>Editar / Ver Detalle</DropdownMenuItem>}
                                             {!canReview && !canEdit && !canAdminEdit && <DropdownMenuItem onClick={() => handleAction(route.id)}>Ver Detalles</DropdownMenuItem>}
+                                            
+                                            {canAdminComplete && (
+                                                <DropdownMenuItem onClick={() => handleMarkAsCompleted(route.id)}>
+                                                    <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
+                                                    Finalizar Ruta (Completada)
+                                                </DropdownMenuItem>
+                                            )}
+
                                             {canDelete && (
                                                 <>
                                                     <DropdownMenuSeparator />
@@ -199,7 +215,7 @@ export default function RoutesListPage() {
                                           <AlertDialogHeader>
                                             <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
                                             <AlertDialogDescription>
-                                              Esta acción no se puede deshacer. Esto eliminará permanentemente la ruta.
+                                              Esta acción no se puede deshacer. Esto eliminará permanentemente la ruta de tu cuenta.
                                             </AlertDialogDescription>
                                           </AlertDialogHeader>
                                           <AlertDialogFooter>
