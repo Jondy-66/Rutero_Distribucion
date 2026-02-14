@@ -74,6 +74,7 @@ export default function RouteManagementPage() {
     return allRoutes.filter(r => {
         const isOwner = r.createdBy === user?.id;
         if (!isOwner) return false;
+        // Solo mostramos rutas que NO están completadas para gestionar
         return r.status === 'En Progreso' || r.status === 'Planificada';
     });
   }, [allRoutes, user]);
@@ -83,7 +84,7 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Sync DB data to local state
+  // Sincronizar datos de la DB al estado local
   useEffect(() => {
     if (authLoading || dataLoading || !selectedRoute) return;
     
@@ -94,7 +95,7 @@ export default function RouteManagementPage() {
     }
   }, [selectedRoute, authLoading, dataLoading, isSaving]);
 
-  // Initial rehydration
+  // Rehidratación inicial
   useEffect(() => {
     if (authLoading || dataLoading || isInitialRehydrationDone.current || !SELECTION_KEY) return;
 
@@ -141,6 +142,11 @@ export default function RouteManagementPage() {
   const isTodayCompleted = useMemo(() => {
     return routeClients.length > 0 && routeClients.every(c => c.visitStatus === 'Completado');
   }, [routeClients]);
+
+  const isEntireWeekCompleted = useMemo(() => {
+      const activeWeekly = currentRouteClientsFull.filter(c => c.status !== 'Eliminado');
+      return activeWeekly.length > 0 && activeWeekly.every(c => c.visitStatus === 'Completado');
+  }, [currentRouteClientsFull]);
 
   useEffect(() => {
     if (!activeRuc && routeClients.length > 0 && !isTodayCompleted) {
@@ -196,6 +202,7 @@ export default function RouteManagementPage() {
             c.ruc === activeRuc ? { ...c, checkOutTime: time, visitStatus: 'Completado' } : c
         );
 
+        // Verificar si se completó TODA la ruta (los 5 días)
         const allTotalClientsDone = nextClients
             .filter(c => c.status !== 'Eliminado')
             .every(c => c.visitStatus === 'Completado');
@@ -210,7 +217,10 @@ export default function RouteManagementPage() {
         
         await refetchData('routes');
         setActiveRuc(null);
-        toast({ title: "Visita Finalizada" });
+        toast({ 
+            title: allTotalClientsDone ? "Ruta Completada" : "Visita Finalizada",
+            description: allTotalClientsDone ? "Has terminado toda tu planificación semanal." : undefined
+        });
     } catch (e) {
         toast({ title: "Error al finalizar visita", variant: "destructive" });
     } finally {
@@ -309,7 +319,6 @@ export default function RouteManagementPage() {
                         <span className="text-primary">{routeClients.filter(c => c.visitStatus === 'Completado').length} / {routeClients.length}</span>
                     </div>
                     <Progress value={(routeClients.filter(c => c.visitStatus === 'Completado').length / (routeClients.length || 1)) * 100} className="h-2" />
-                    <p className="text-[11px] font-bold text-blue-600 animate-pulse uppercase tracking-tight text-center">selecciona un cliente para empezar gestion</p>
                     
                     <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
                         <DialogTrigger asChild>
@@ -390,8 +399,14 @@ export default function RouteManagementPage() {
                                 <Sparkles className="h-16 w-16 text-green-600" />
                             </div>
                             <div className="space-y-2">
-                                <h3 className="text-3xl font-black text-green-700 uppercase">¡Jornada de Hoy Completada!</h3>
-                                <p className="text-sm font-bold text-green-600/80 uppercase">Has gestionado todos los clientes planificados para este día.</p>
+                                <h3 className="text-3xl font-black text-green-700 uppercase">
+                                    {isEntireWeekCompleted ? "¡Ruta Semanal Completada!" : "¡Jornada de Hoy Completada!"}
+                                </h3>
+                                <p className="text-sm font-bold text-green-600/80 uppercase">
+                                    {isEntireWeekCompleted 
+                                        ? "Has gestionado todos los clientes de tu planificación semanal." 
+                                        : "Has gestionado todos los clientes planificados para este día."}
+                                </p>
                             </div>
                         </div>
                     ) : activeClient ? (
