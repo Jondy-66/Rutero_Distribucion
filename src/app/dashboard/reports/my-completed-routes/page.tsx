@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -20,9 +19,9 @@ import {
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import type { RoutePlan, User } from '@/lib/types';
+import type { RoutePlan } from '@/lib/types';
 import { Download, Calendar as CalendarIcon, MoreHorizontal } from 'lucide-react';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as XLSX from 'xlsx';
@@ -44,8 +43,9 @@ export default function MyCompletedRoutesPage() {
   const { user: currentUser, routes: allRoutes, loading: authLoading, clients: allSystemClients } = useAuth();
   const { toast } = useToast();
   
+  // Por defecto mostrar desde el inicio del mes para asegurar visibilidad de rutas recientes
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: startOfDay(new Date()),
+    from: startOfMonth(new Date()),
     to: endOfDay(new Date()),
   });
 
@@ -59,14 +59,14 @@ export default function MyCompletedRoutesPage() {
     if (dateRange?.from) {
       const fromDate = startOfDay(dateRange.from);
       userRoutes = userRoutes.filter(route => {
-        const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
+        const routeDate = route.date instanceof Timestamp ? route.date.toDate() : (route.date instanceof Date ? route.date : new Date(route.date));
         return routeDate >= fromDate;
       });
     }
      if (dateRange?.to) {
       const toDate = endOfDay(dateRange.to);
       userRoutes = userRoutes.filter(route => {
-        const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
+        const routeDate = route.date instanceof Timestamp ? route.date.toDate() : (route.date instanceof Date ? route.date : new Date(route.date));
         return routeDate <= toDate;
       });
     }
@@ -85,7 +85,7 @@ export default function MyCompletedRoutesPage() {
     }
 
     const dataToExport = filteredRoutes.map(route => {
-      const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
+      const routeDate = route.date instanceof Timestamp ? route.date.toDate() : (route.date instanceof Date ? route.date : new Date(route.date));
       return {
         'Nombre de Ruta': route.routeName,
         'Fecha de Ruta': format(routeDate, 'PPP', { locale: es }),
@@ -111,7 +111,7 @@ export default function MyCompletedRoutesPage() {
       .filter(client => client.status !== 'Eliminado' && client.visitStatus === 'Completado')
       .map(client => {
         const clientDetails = allSystemClients.find(c => c.ruc === client.ruc);
-        const visitDate = client.date;
+        const visitDate = client.date instanceof Timestamp ? client.date.toDate() : (client.date instanceof Date ? client.date : (client.date ? new Date(client.date) : null));
         return {
           'Fecha de Visita': visitDate ? format(visitDate, 'PPP', { locale: es }) : 'N/A',
           'RUC Cliente': client.ruc,
@@ -213,7 +213,7 @@ export default function MyCompletedRoutesPage() {
                     <TableHeader>
                         <TableRow>
                         <TableHead>Nombre de Ruta</TableHead>
-                        <TableHead>Fecha</TableHead>
+                        <TableHead>Fecha Base</TableHead>
                         <TableHead>Clientes</TableHead>
                         <TableHead>Estado</TableHead>
                         <TableHead className="text-right">Acciones</TableHead>
@@ -232,7 +232,7 @@ export default function MyCompletedRoutesPage() {
                             ))
                         ) : filteredRoutes.length > 0 ? (
                             filteredRoutes.map((route) => {
-                                const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
+                                const routeDate = route.date instanceof Timestamp ? route.date.toDate() : (route.date instanceof Date ? route.date : new Date(route.date));
                                 return (
                                 <TableRow key={route.id}>
                                     <TableCell className="font-medium">{route.routeName}</TableCell>

@@ -1,5 +1,3 @@
-
-
 'use client';
 import { useState, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -24,7 +22,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan, ClientInRoute } from '@/lib/types';
 import { Download, Users, MoreHorizontal, Eye, Calendar as CalendarIcon } from 'lucide-react';
-import { format, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as XLSX from 'xlsx';
@@ -63,8 +61,10 @@ export default function SellerReportsPage() {
   const router = useRouter();
   
   const [selectedSellerId, setSelectedSellerId] = useState<string>('all');
+  
+  // Rango de fechas por defecto: Mes Actual
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: startOfDay(new Date()),
+    from: startOfMonth(new Date()),
     to: endOfDay(new Date()),
   });
 
@@ -91,8 +91,8 @@ export default function SellerReportsPage() {
       }, {} as Record<K, T[]>);
 
     const managedSellerIds = managedSellers.map(s => s.id);
-    // Include routes that are in progress or finished
-    const relevantStatuses: RoutePlan['status'][] = ['En Progreso', 'Completada', 'Incompleta'];
+    // Incluir rutas terminadas o en progreso para ver gestiones parciales
+    const relevantStatuses: RoutePlan['status'][] = ['En Progreso', 'Completada', 'Incompleta', 'Planificada'];
 
     let routesToConsider = allRoutes.filter(route => 
         managedSellerIds.includes(route.createdBy) && relevantStatuses.includes(route.status)
@@ -107,16 +107,18 @@ export default function SellerReportsPage() {
     routesToConsider.forEach(route => {
         const clientsByDay = groupBy(
             route.clients.filter(c => c.status !== 'Eliminado'),
-            c => c.date ? format(c.date, 'yyyy-MM-dd') : 'no-date'
+            c => {
+                const d = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : (c.date ? new Date(c.date) : null));
+                return d ? format(d, 'yyyy-MM-dd') : 'no-date';
+            }
         );
 
         Object.entries(clientsByDay).forEach(([dateStr, dailyClients]) => {
             if (dateStr === 'no-date') return;
 
-            const logDate = new Date(dateStr);
-            logDate.setUTCHours(0,0,0,0); // Normalize to avoid timezone issues
+            const logDate = new Date(dateStr + 'T00:00:00');
 
-            // Filter by date range
+            // Filtrado por rango de fechas
             if (dateRange?.from && logDate < startOfDay(dateRange.from)) return;
             if (dateRange?.to && logDate > endOfDay(dateRange.to)) return;
 
@@ -126,15 +128,15 @@ export default function SellerReportsPage() {
             if (dailyClients.length > 0) {
                 if (completedClients === dailyClients.length) {
                     status = 'Completado';
-                } else if (logDate < startOfDay(new Date())) { // If day is in the past
+                } else if (logDate < startOfDay(new Date())) {
                     status = 'Incompleto';
-                } else if (completedClients > 0) { // If it's today and some are done
+                } else if (completedClients > 0) {
                     status = 'Incompleto';
                 }
             }
             
             const today = startOfDay(new Date());
-            if(logDate > today && status === 'Pendiente') return; // Don't show future pending days
+            if(logDate > today && status === 'Pendiente') return;
 
             logs.push({
                 id: `${route.id}-${dateStr}`,
@@ -177,9 +179,7 @@ export default function SellerReportsPage() {
                         'RUC Cliente': client.ruc,
                         'Nombre Cliente': client.nombre_comercial,
                         'Hora de Check-in': client.checkInTime || 'N/A',
-                        'Ubicación de Check-in': client.checkInLocation ? `${client.checkInLocation.latitude}, ${client.checkInLocation.longitude}` : 'N/A',
                         'Hora de Check-out': client.checkOutTime || 'N/A',
-                        'Ubicación de Check-out': client.checkOutLocation ? `${client.checkOutLocation.latitude}, ${client.checkOutLocation.longitude}` : 'N/A',
                         'Tipo de Visita': client.visitType === 'presencial' ? 'Presencial' : 'Telefónica',
                         'Observación Llamada': client.callObservation || '',
                         'Valor Venta ($)': client.valorVenta || 0,
@@ -205,7 +205,8 @@ export default function SellerReportsPage() {
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Detalle de Gestiones");
-    XLSX.writeFile(workbook, `reporte_gestiones_vendedores_${selectedSellerId === 'all' ? 'todos' : allUsers.find(u=>u.id === selectedSellerId)?.name.replace(' ', '_')}.xlsx`);
+    const sellerName = selectedSellerId === 'all' ? 'todos' : allUsers.find(u=>u.id === selectedSellerId)?.name.replace(/ /g, '_');
+    XLSX.writeFile(workbook, `reporte_gestiones_vendedores_${sellerName}.xlsx`);
     toast({ title: "Descarga Iniciada", description: "Tu reporte detallado en Excel se está descargando." });
 };
 
@@ -373,4 +374,3 @@ export default function SellerReportsPage() {
     </>
   );
 }
-
