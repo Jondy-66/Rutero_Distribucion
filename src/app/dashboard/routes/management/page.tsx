@@ -74,7 +74,6 @@ export default function RouteManagementPage() {
     return allRoutes.filter(r => {
         const isOwner = r.createdBy === user?.id;
         if (!isOwner) return false;
-        // Solo mostramos rutas que NO están completadas para gestionar
         return r.status === 'En Progreso' || r.status === 'Planificada';
     });
   }, [allRoutes, user]);
@@ -84,7 +83,6 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Sincronizar datos de la DB al estado local
   useEffect(() => {
     if (authLoading || dataLoading || !selectedRoute) return;
     
@@ -95,7 +93,6 @@ export default function RouteManagementPage() {
     }
   }, [selectedRoute, authLoading, dataLoading, isSaving]);
 
-  // Rehidratación inicial
   useEffect(() => {
     if (authLoading || dataLoading || isInitialRehydrationDone.current || !SELECTION_KEY) return;
 
@@ -202,14 +199,15 @@ export default function RouteManagementPage() {
             c.ruc === activeRuc ? { ...c, checkOutTime: time, visitStatus: 'Completado' } : c
         );
 
-        // Verificar si se completó TODA la ruta (los 5 días)
-        const allTotalClientsDone = nextClients
-            .filter(c => c.status !== 'Eliminado')
-            .every(c => c.visitStatus === 'Completado');
+        // Verificar si se completó TODA la planificación semanal
+        const allActiveClients = nextClients.filter(c => c.status !== 'Eliminado');
+        const allTotalClientsDone = allActiveClients.length > 0 && allActiveClients.every(c => c.visitStatus === 'Completado');
 
         const newStatus = allTotalClientsDone ? 'Completada' : 'En Progreso';
         
         setCurrentRouteClientsFull(nextClients);
+        
+        // Actualizar Firestore
         await updateRoute(selectedRoute.id, { 
             clients: sanitizeClientsForFirestore(nextClients), 
             status: newStatus 
@@ -217,6 +215,13 @@ export default function RouteManagementPage() {
         
         await refetchData('routes');
         setActiveRuc(null);
+
+        if (allTotalClientsDone) {
+            setIsRouteStarted(false);
+            setSelectedRouteId(undefined);
+            localStorage.removeItem(SELECTION_KEY!);
+        }
+
         toast({ 
             title: allTotalClientsDone ? "Ruta Completada" : "Visita Finalizada",
             description: allTotalClientsDone ? "Has terminado toda tu planificación semanal." : undefined
