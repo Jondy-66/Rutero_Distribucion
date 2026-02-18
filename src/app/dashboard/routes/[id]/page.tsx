@@ -6,8 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle } from 'lucide-react';
-import { getRoute, updateRoute } from '@/lib/firebase/firestore';
+import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { getRoute, updateRoute, addNotification } from '@/lib/firebase/firestore';
 import { getPredicciones } from '@/services/api';
 import type { User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 
 const ensureDate = (d: any): Date => {
   if (!d) return new Date();
@@ -62,6 +63,9 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   const [clientToRemove, setClientToRemove] = useState<ClientInRoute | null>(null);
   const [removalObservation, setRemovalObservation] = useState('');
 
+  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
+  const [rejectionReason, setRejectionReason] = useState('');
+
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
@@ -71,7 +75,10 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
   const canApprove = useMemo(() => {
      if (!currentUser || !route) return false;
-     return (currentUser.role === 'Administrador' || currentUser.id === route.supervisorId) && route.status === 'Pendiente de Aprobación';
+     const isPending = route.status === 'Pendiente de Aprobación';
+     const isAuthAdmin = currentUser.role === 'Administrador';
+     const isMyRouteAsSupervisor = currentUser.id === route.supervisorId;
+     return isPending && (isAuthAdmin || isMyRouteAsSupervisor);
   }, [currentUser, route]);
 
   const canRecoverClients = useMemo(() => {
@@ -117,6 +124,62 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
           )
       );
   }, []);
+
+  const handleApprove = async () => {
+    if (!route || !currentUser) return;
+    setIsSaving(true);
+    try {
+      await updateRoute(routeId, { 
+        status: 'Planificada',
+        supervisorObservation: 'Ruta aprobada.'
+      });
+      
+      await addNotification({
+        userId: route.createdBy,
+        title: 'Ruta Aprobada',
+        message: `Tu ruta "${route.routeName}" ha sido aprobada.`,
+        link: `/dashboard/routes/${routeId}`
+      });
+
+      await refetchData('routes');
+      toast({ title: 'Éxito', description: 'La ruta ha sido aprobada.' });
+      router.push('/dashboard/routes/team-routes');
+    } catch (error) {
+      toast({ title: 'Error al aprobar', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!route || !currentUser || !rejectionReason.trim()) {
+        toast({ title: "Motivo requerido", description: "Por favor indica por qué rechazas la ruta.", variant: "destructive" });
+        return;
+    }
+    setIsSaving(true);
+    try {
+      await updateRoute(routeId, { 
+        status: 'Rechazada',
+        supervisorObservation: rejectionReason
+      });
+
+      await addNotification({
+        userId: route.createdBy,
+        title: 'Ruta Rechazada',
+        message: `Tu ruta "${route.routeName}" ha sido rechazada. Motivo: ${rejectionReason}`,
+        link: `/dashboard/routes/${routeId}`
+      });
+
+      await refetchData('routes');
+      toast({ title: 'Ruta Rechazada', description: 'Se ha enviado la notificación al usuario.' });
+      setIsRejectDialogOpen(false);
+      router.push('/dashboard/routes/team-routes');
+    } catch (error) {
+      toast({ title: 'Error al rechazar', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleRecoverClients = async () => {
     if (!route) return;
@@ -340,6 +403,25 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
               {isSaving && <LoaderCircle className="animate-spin mr-2" />} GUARDAR CAMBIOS
             </Button>
           )}
+          {canApprove && (
+            <div className="flex gap-2">
+              <Button 
+                variant="destructive" 
+                onClick={() => setIsRejectDialogOpen(true)}
+                disabled={isSaving}
+                className="font-black"
+              >
+                <XCircle className="mr-2 h-4 w-4" /> RECHAZAR RUTA
+              </Button>
+              <Button 
+                onClick={handleApprove}
+                disabled={isSaving}
+                className="bg-green-600 hover:bg-green-700 font-black text-white"
+              >
+                <CheckCircle className="mr-2 h-4 w-4" /> APROBAR RUTA
+              </Button>
+            </div>
+          )}
         </div>
       </div>
 
@@ -364,6 +446,35 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-black uppercase text-red-600">Rechazar Plan de Ruta</DialogTitle>
+            <DialogDescription className="text-xs font-bold uppercase">Por favor, indica el motivo para que el usuario pueda corregir su planificación.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label className="font-bold uppercase text-[10px]">Observación del Supervisor</Label>
+            <Textarea 
+              value={rejectionReason} 
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="Ej: Faltan clientes clave para el martes, la ruta excede el kilometraje permitido..."
+              className="mt-2 font-bold text-sm h-32"
+            />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="ghost" className="font-bold">CANCELAR</Button></DialogClose>
+            <Button 
+              variant="destructive" 
+              onClick={handleReject} 
+              disabled={isSaving || !rejectionReason.trim()}
+              className="font-black"
+            >
+              {isSaving && <LoaderCircle className="animate-spin mr-2 h-4 w-4" />} CONFIRMAR RECHAZO
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
