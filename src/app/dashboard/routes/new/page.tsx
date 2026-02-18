@@ -12,7 +12,7 @@ import { addRoutesBatch } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
+import { format, startOfWeek, addDays, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
@@ -53,6 +53,7 @@ export default function NewRoutePage() {
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
   const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
+  const [targetDateForAdd, setTargetDateForAdd] = useState<Date | null>(null);
   
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
 
@@ -94,13 +95,18 @@ export default function NewRoutePage() {
       .filter(c => !selectedClients.some(sc => sc.ruc === c.ruc && sc.status !== 'Eliminado'));
   }, [clients, dialogSearchTerm, selectedClients, currentUser]);
 
+  const handleOpenAddDialog = (date: Date) => {
+    setTargetDateForAdd(date);
+    setIsClientDialogOpen(true);
+  };
+
   const handleAddClientsToSelected = () => {
-    if (dialogSelectedClients.length === 0) return;
+    if (dialogSelectedClients.length === 0 || !targetDateForAdd) return;
     
     const newClients: ClientInRoute[] = dialogSelectedClients.map(c => ({
       ruc: c.ruc,
       nombre_comercial: c.nombre_comercial,
-      date: routeDate || new Date(),
+      date: targetDateForAdd,
       status: 'Activo',
       origin: 'manual',
       visitStatus: 'Pendiente'
@@ -110,7 +116,7 @@ export default function NewRoutePage() {
     setDialogSelectedClients([]);
     setDialogSearchTerm('');
     setIsClientDialogOpen(false);
-    toast({ title: `${newClients.length} clientes añadidos` });
+    toast({ title: `${newClients.length} clientes añadidos al día ${format(targetDateForAdd, 'EEEE', { locale: es })}` });
   };
 
   const handleAddToStage = () => {
@@ -160,16 +166,11 @@ export default function NewRoutePage() {
       .map((c, i) => ({...c, globalIndex: i}))
   , [selectedClients]);
 
-  const groupedClients = useMemo(() => {
-    const groups: { [date: string]: typeof activeClientsWithIndex } = {};
-    activeClientsWithIndex.forEach(client => {
-        const dateObj = ensureDate(client.date);
-        const key = dateObj && !isNaN(dateObj.getTime()) ? format(dateObj, 'yyyy-MM-dd') : 'Sin Fecha';
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(client);
-    });
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [activeClientsWithIndex]);
+  const workWeekDays = useMemo(() => {
+    const base = routeDate || new Date();
+    const monday = startOfWeek(base, { weekStartsOn: 1 });
+    return Array.from({ length: 5 }).map((_, i) => addDays(monday, i));
+  }, [routeDate]);
 
   return (
     <>
@@ -196,128 +197,68 @@ export default function NewRoutePage() {
             <Separator />
 
             <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold uppercase tracking-tight">Cronograma de Visitas</h3>
-                <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
-                    <DialogTrigger asChild>
+                <h3 className="text-sm font-bold uppercase tracking-tight">Cronograma Semanal</h3>
+                <Popover>
+                    <PopoverTrigger asChild>
                         <Button variant="outline" size="sm" className="font-bold">
-                            <PlusCircle className="mr-2 h-4 w-4" />
-                            Añadir Clientes
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            Cambiar Semana Base
                         </Button>
-                    </DialogTrigger>
-                    <DialogContent className="max-w-2xl bg-white rounded-2xl p-0 overflow-hidden">
-                        <DialogHeader className="p-6 pb-2">
-                            <DialogTitle className="text-2xl font-black text-[#011688] uppercase">Buscar Clientes</DialogTitle>
-                            <DialogDescription className="font-bold text-muted-foreground uppercase text-xs">Añade clientes de tu cartera a la planificación actual.</DialogDescription>
-                        </DialogHeader>
-                        <div className="p-6 space-y-4">
-                            <div className="relative">
-                                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                                <Input
-                                    placeholder="RUC, Nombre o Comercial..."
-                                    className="pl-10 h-12 border-2 border-[#011688]/20 focus:border-[#011688] rounded-xl font-bold"
-                                    value={dialogSearchTerm}
-                                    onChange={(e) => setDialogSearchTerm(e.target.value)}
-                                />
-                            </div>
-                            <ScrollArea className="h-[350px] pr-2">
-                                <div className="space-y-3">
-                                    {filteredDialogClients.map((client) => {
-                                        const isSelected = dialogSelectedClients.some(c => c.ruc === client.ruc);
-                                        return (
-                                            <div
-                                                key={client.ruc}
-                                                className={cn(
-                                                    "flex items-center space-x-4 p-4 rounded-xl border-2 transition-all cursor-pointer",
-                                                    isSelected ? "bg-[#011688]/5 border-[#011688]" : "bg-slate-50 border-transparent hover:border-slate-200"
-                                                )}
-                                                onClick={() => {
-                                                    if (isSelected) {
-                                                        setDialogSelectedClients(prev => prev.filter(c => c.ruc !== client.ruc));
-                                                    } else {
-                                                        setDialogSelectedClients(prev => [...prev, client]);
-                                                    }
-                                                }}
-                                            >
-                                                <Checkbox checked={isSelected} className="h-5 w-5 border-[#011688]" />
-                                                <div className="flex-1">
-                                                    <p className="text-sm font-black text-[#011688] uppercase">{client.nombre_comercial}</p>
-                                                    <p className="text-[10px] font-bold text-muted-foreground uppercase">{client.nombre_cliente}</p>
-                                                    <p className="text-[10px] font-mono text-muted-foreground mt-1">{client.ruc}</p>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
-                                    {filteredDialogClients.length === 0 && (
-                                        <div className="text-center py-12 text-muted-foreground font-bold uppercase text-xs">No se encontraron clientes disponibles</div>
-                                    )}
-                                </div>
-                            </ScrollArea>
-                        </div>
-                        <DialogFooter className="p-6 bg-slate-50 border-t flex items-center justify-between">
-                            <span className="text-xs font-black text-[#011688] uppercase">{dialogSelectedClients.length} seleccionados</span>
-                            <div className="flex gap-2">
-                                <Button variant="ghost" onClick={() => setIsClientDialogOpen(false)} className="font-bold">CANCELAR</Button>
-                                <Button onClick={handleAddClientsToSelected} disabled={dialogSelectedClients.length === 0} className="font-bold bg-[#011688] px-8">AÑADIR</Button>
-                            </div>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                    </PopoverTrigger>
+                    <PopoverContent className="p-0">
+                        <Calendar mode="single" selected={routeDate} onSelect={setRouteDate} locale={es} />
+                    </PopoverContent>
+                </Popover>
             </div>
 
             <div className="space-y-4">
-                {groupedClients.map(([date, clientsInGroup]) => (
-                    <Collapsible key={date} defaultOpen className="border-l-4 pl-4 py-2 border-[#011688]/20 bg-slate-50/50 rounded-r-lg">
-                        <CollapsibleTrigger asChild>
-                            <div className="flex w-full items-center justify-between p-2 cursor-pointer hover:bg-slate-100 rounded-lg transition-all">
-                                <div className="flex items-center gap-3">
-                                    <CalendarIcon className="h-5 w-5 text-[#011688]" />
-                                    <h4 className="font-black text-sm uppercase">
-                                        {date === 'Sin Fecha' ? 'Sin Fecha' : format(new Date(date + 'T00:00:00'), 'EEEE, dd \'de\' MMMM', { locale: es })}
-                                    </h4>
-                                    <Badge variant="secondary" className="font-black">{clientsInGroup.length}</Badge>
-                                </div>
+                {workWeekDays.map((day) => {
+                    const dayClients = activeClientsWithIndex.filter(c => isSameDay(ensureDate(c.date), day));
+                    return (
+                        <Collapsible key={day.toISOString()} defaultOpen className="border-l-4 pl-4 py-2 border-[#011688]/20 bg-slate-50/50 rounded-r-lg">
+                            <div className="flex w-full items-center justify-between p-2">
+                                <CollapsibleTrigger asChild>
+                                    <div className="flex items-center gap-3 cursor-pointer hover:bg-slate-100 rounded-lg transition-all p-1">
+                                        <CalendarIcon className="h-5 w-5 text-[#011688]" />
+                                        <h4 className="font-black text-sm uppercase">
+                                            {format(day, 'EEEE, dd \'de\' MMMM', { locale: es })}
+                                        </h4>
+                                        <Badge variant="secondary" className={cn("font-black", dayClients.length === 0 && "opacity-30")}>
+                                            {dayClients.length}
+                                        </Badge>
+                                    </div>
+                                </CollapsibleTrigger>
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="font-black text-[#011688] hover:bg-[#011688]/10 h-8"
+                                    onClick={() => handleOpenAddDialog(day)}
+                                >
+                                    <PlusCircle className="mr-1 h-4 w-4" />
+                                    AÑADIR
+                                </Button>
                             </div>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent className="space-y-4 p-2 mt-2">
-                            {clientsInGroup.map((client) => (
-                                <Card key={client.ruc} className="p-4 relative hover:shadow-md transition-shadow border-l-2 border-l-[#011688]/10">
-                                    <div className="flex justify-between items-start">
-                                        <div>
-                                            <p className="font-black text-sm text-[#011688] uppercase">{client.globalIndex + 1}. {client.nombre_comercial}</p>
-                                            <p className="text-[10px] font-mono text-muted-foreground">{client.ruc}</p>
+                            <CollapsibleContent className="space-y-4 p-2 mt-2">
+                                {dayClients.map((client) => (
+                                    <Card key={client.ruc} className="p-4 relative hover:shadow-md transition-shadow border-l-2 border-l-[#011688]/10">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <p className="font-black text-sm text-[#011688] uppercase">{client.globalIndex + 1}. {client.nombre_comercial}</p>
+                                                <p className="text-[10px] font-mono text-muted-foreground">{client.ruc}</p>
+                                            </div>
+                                            <Button variant="ghost" size="icon" onClick={() => setSelectedClients(prev => prev.map(c => c.ruc === client.ruc ? {...c, status: 'Eliminado'} : c))}>
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
                                         </div>
-                                        <Button variant="ghost" size="icon" onClick={() => setSelectedClients(prev => prev.map(c => c.ruc === client.ruc ? {...c, status: 'Eliminado'} : c))}>
-                                            <Trash2 className="h-4 w-4 text-destructive" />
-                                        </Button>
-                                    </div>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] font-black uppercase">Cambiar Fecha</Label>
-                                            <Popover open={calendarOpen[client.ruc]} onOpenChange={(o) => setCalendarOpen(prev => ({...prev, [client.ruc]: o}))}>
-                                                <PopoverTrigger asChild>
-                                                    <Button variant="outline" className="w-full justify-start h-9 text-xs font-bold">
-                                                        <CalendarIcon className="mr-2 h-3 w-3" />
-                                                        {client.date ? format(ensureDate(client.date), 'dd/MM/yyyy') : 'Elegir'}
-                                                    </Button>
-                                                </PopoverTrigger>
-                                                <PopoverContent className="p-0">
-                                                    <Calendar mode="single" selected={ensureDate(client.date)} onSelect={(d) => handleClientDetailChange(client.ruc, 'date', d)} locale={es} />
-                                                </PopoverContent>
-                                            </Popover>
-                                        </div>
-                                    </div>
-                                </Card>
-                            ))}
-                        </CollapsibleContent>
-                    </Collapsible>
-                ))}
-                {groupedClients.length === 0 && (
-                    <div className="text-center py-12 bg-slate-50 rounded-xl border-2 border-dashed">
-                        <Users className="mx-auto h-8 w-8 text-muted-foreground/40 mb-2" />
-                        <p className="text-xs font-bold text-muted-foreground uppercase">No hay clientes en esta ruta diaria</p>
-                        <p className="text-[10px] text-muted-foreground/60 uppercase">Usa el botón "Añadir Clientes" para empezar</p>
-                    </div>
-                )}
+                                    </Card>
+                                ))}
+                                {dayClients.length === 0 && (
+                                    <p className="text-[10px] text-center text-muted-foreground/60 italic uppercase font-bold py-2">Sin clientes asignados para este día</p>
+                                )}
+                            </CollapsibleContent>
+                        </Collapsible>
+                    );
+                })}
             </div>
           </CardContent>
            <CardFooter>
@@ -360,6 +301,69 @@ export default function NewRoutePage() {
           </CardFooter>
         </Card>
       </div>
+
+      {/* Reusable Client Search Dialog */}
+      <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
+        <DialogContent className="max-w-2xl bg-white rounded-2xl p-0 overflow-hidden">
+            <DialogHeader className="p-6 pb-2">
+                <DialogTitle className="text-2xl font-black text-[#011688] uppercase">
+                    Añadir a {targetDateForAdd ? format(targetDateForAdd, 'EEEE', { locale: es }) : 'Día'}
+                </DialogTitle>
+                <DialogDescription className="font-bold text-muted-foreground uppercase text-xs">Busca clientes para el día seleccionado.</DialogDescription>
+            </DialogHeader>
+            <div className="p-6 space-y-4">
+                <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                        placeholder="RUC, Nombre o Comercial..."
+                        className="pl-10 h-12 border-2 border-[#011688]/20 focus:border-[#011688] rounded-xl font-bold"
+                        value={dialogSearchTerm}
+                        onChange={(e) => setDialogSearchTerm(e.target.value)}
+                    />
+                </div>
+                <ScrollArea className="h-[350px] pr-2">
+                    <div className="space-y-3">
+                        {filteredDialogClients.map((client) => {
+                            const isSelected = dialogSelectedClients.some(c => c.ruc === client.ruc);
+                            return (
+                                <div
+                                    key={client.ruc}
+                                    className={cn(
+                                        "flex items-center space-x-4 p-4 rounded-xl border-2 transition-all cursor-pointer",
+                                        isSelected ? "bg-[#011688]/5 border-[#011688]" : "bg-slate-50 border-transparent hover:border-slate-200"
+                                    )}
+                                    onClick={() => {
+                                        if (isSelected) {
+                                            setDialogSelectedClients(prev => prev.filter(c => c.ruc !== client.ruc));
+                                        } else {
+                                            setDialogSelectedClients(prev => [...prev, client]);
+                                        }
+                                    }}
+                                >
+                                    <Checkbox checked={isSelected} className="h-5 w-5 border-[#011688]" />
+                                    <div className="flex-1">
+                                        <p className="text-sm font-black text-[#011688] uppercase">{client.nombre_comercial}</p>
+                                        <p className="text-[10px] font-bold text-muted-foreground uppercase">{client.nombre_cliente}</p>
+                                        <p className="text-[10px] font-mono text-muted-foreground mt-1">{client.ruc}</p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                        {filteredDialogClients.length === 0 && (
+                            <div className="text-center py-12 text-muted-foreground font-bold uppercase text-xs">No se encontraron clientes disponibles</div>
+                        )}
+                    </div>
+                </ScrollArea>
+            </div>
+            <DialogFooter className="p-6 bg-slate-50 border-t flex items-center justify-between">
+                <span className="text-xs font-black text-[#011688] uppercase">{dialogSelectedClients.length} seleccionados</span>
+                <div className="flex gap-2">
+                    <Button variant="ghost" onClick={() => setIsClientDialogOpen(false)} className="font-bold">CANCELAR</Button>
+                    <Button onClick={handleAddClientsToSelected} disabled={dialogSelectedClients.length === 0} className="font-bold bg-[#011688] px-8 text-white">AÑADIR AL DÍA</Button>
+                </div>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
