@@ -332,7 +332,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Visitas por Día (Lunes a Viernes)</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Visitas por Día</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-4">
               {groupedClients.length > 0 ? (
@@ -459,7 +459,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
             <Textarea 
               value={rejectionReason} 
               onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="Ej: Faltan clientes clave para el martes, la ruta excede el kilometraje permitido..."
+              placeholder="Ej: Motivo del rechazo..."
               className="mt-2 font-bold text-sm h-32"
             />
           </div>

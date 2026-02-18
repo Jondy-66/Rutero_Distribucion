@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/hooks/use-auth';
 import { Separator } from '@/components/ui/separator';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -47,8 +47,10 @@ export default function NewRoutePage() {
   const [selectedClients, setSelectedClients] = useState<ClientInRoute[]>([]);
   const [supervisors, setSupervisors] = useState<User[]>([]);
   const [isSaving, setIsSaving] = useState(false);
-  const [calendarOpen, setCalendarOpen] = useState<{ [key: string]: boolean }>({});
   
+  const [isFromPrediction, setIsFromPrediction] = useState(false);
+  const [predictedDateStrings, setPredictedDateStrings] = useState<Set<string>>(new Set());
+
   // States for the "Add Client" Dialog
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
@@ -65,23 +67,26 @@ export default function NewRoutePage() {
     if (predictionDataStr) {
         try {
             const data = JSON.parse(predictionDataStr);
-            const clientsFromPred: ClientInRoute[] = data.clients.map((c: any) => ({
-                ...c,
-                date: c.date ? new Date(c.date) : new Date(),
-                origin: 'predicted',
-                status: 'Activo'
-            }));
+            const dateStrings = new Set<string>();
+            const clientsFromPred: ClientInRoute[] = data.clients.map((c: any) => {
+                const d = c.date ? new Date(c.date) : new Date();
+                dateStrings.add(format(d, 'yyyy-MM-dd'));
+                return {
+                    ...c,
+                    date: d,
+                    origin: 'predicted',
+                    status: 'Activo'
+                };
+            });
             setRouteName(data.routeName || '');
             if (clientsFromPred[0]?.date) setRouteDate(clientsFromPred[0].date);
             setSelectedClients(clientsFromPred);
+            setIsFromPrediction(true);
+            setPredictedDateStrings(dateStrings);
             localStorage.removeItem('predictionRoute');
         } catch (e) { console.error(e); }
     }
   }, [users, currentUser]);
-
-  const handleClientDetailChange = (ruc: string, field: keyof ClientInRoute, value: any) => {
-    setSelectedClients(prev => prev.map(c => c.ruc === ruc ? { ...c, [field]: value } : c));
-  };
 
   const filteredDialogClients = useMemo(() => {
     const term = dialogSearchTerm.toLowerCase();
@@ -137,6 +142,8 @@ export default function NewRoutePage() {
     }]);
     setRouteName('');
     setSelectedClients([]);
+    setIsFromPrediction(false);
+    setPredictedDateStrings(new Set());
     toast({ title: 'Ruta añadida a la lista de espera' });
   }
 
@@ -166,11 +173,16 @@ export default function NewRoutePage() {
       .map((c, i) => ({...c, globalIndex: i}))
   , [selectedClients]);
 
-  const workWeekDays = useMemo(() => {
+  const displayedDays = useMemo(() => {
+    if (isFromPrediction) {
+        return Array.from(predictedDateStrings)
+            .sort()
+            .map(ds => new Date(ds + 'T00:00:00'));
+    }
     const base = routeDate || new Date();
     const monday = startOfWeek(base, { weekStartsOn: 1 });
     return Array.from({ length: 5 }).map((_, i) => addDays(monday, i));
-  }, [routeDate]);
+  }, [isFromPrediction, predictedDateStrings, routeDate]);
 
   return (
     <>
@@ -196,24 +208,28 @@ export default function NewRoutePage() {
             
             <Separator />
 
-            <div className="flex justify-between items-center mb-4">
-                <h3 className="text-sm font-bold uppercase tracking-tight">Cronograma Semanal</h3>
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <Button variant="outline" size="sm" className="font-bold">
-                            <CalendarIcon className="mr-2 h-4 w-4" />
-                            Cambiar Semana Base
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="p-0">
-                        <Calendar mode="single" selected={routeDate} onSelect={setRouteDate} locale={es} />
-                    </PopoverContent>
-                </Popover>
-            </div>
+            {!isFromPrediction && (
+                <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-sm font-bold uppercase tracking-tight text-[#011688]">Cronograma Semanal</h3>
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" size="sm" className="font-bold">
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                Cambiar Semana Base
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="p-0">
+                            <Calendar mode="single" selected={routeDate} onSelect={setRouteDate} locale={es} />
+                        </PopoverContent>
+                    </Popover>
+                </div>
+            )}
 
             <div className="space-y-4">
-                {workWeekDays.map((day) => {
+                {displayedDays.map((day) => {
                     const dayClients = activeClientsWithIndex.filter(c => isSameDay(ensureDate(c.date), day));
+                    const canAddThisDay = !isFromPrediction || predictedDateStrings.has(format(day, 'yyyy-MM-dd'));
+                    
                     return (
                         <Collapsible key={day.toISOString()} defaultOpen className="border-l-4 pl-4 py-2 border-[#011688]/20 bg-slate-50/50 rounded-r-lg">
                             <div className="flex w-full items-center justify-between p-2">
@@ -228,15 +244,17 @@ export default function NewRoutePage() {
                                         </Badge>
                                     </div>
                                 </CollapsibleTrigger>
-                                <Button 
-                                    variant="ghost" 
-                                    size="sm" 
-                                    className="font-black text-[#011688] hover:bg-[#011688]/10 h-8"
-                                    onClick={() => handleOpenAddDialog(day)}
-                                >
-                                    <PlusCircle className="mr-1 h-4 w-4" />
-                                    AÑADIR
-                                </Button>
+                                {canAddThisDay && (
+                                    <Button 
+                                        variant="ghost" 
+                                        size="sm" 
+                                        className="font-black text-[#011688] hover:bg-[#011688]/10 h-8"
+                                        onClick={() => handleOpenAddDialog(day)}
+                                    >
+                                        <PlusCircle className="mr-1 h-4 w-4" />
+                                        AÑADIR
+                                    </Button>
+                                )}
                             </div>
                             <CollapsibleContent className="space-y-4 p-2 mt-2">
                                 {dayClients.map((client) => (
@@ -253,7 +271,7 @@ export default function NewRoutePage() {
                                     </Card>
                                 ))}
                                 {dayClients.length === 0 && (
-                                    <p className="text-[10px] text-center text-muted-foreground/60 italic uppercase font-bold py-2">Sin clientes asignados para este día</p>
+                                    <p className="text-[10px] text-center text-muted-foreground/60 italic uppercase font-bold py-2">Sin clientes asignados</p>
                                 )}
                             </CollapsibleContent>
                         </Collapsible>
@@ -263,7 +281,7 @@ export default function NewRoutePage() {
           </CardContent>
            <CardFooter>
             <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase tracking-tighter" disabled={activeClientsWithIndex.length === 0}>
-                Añadir a la Lista de Rutas
+                Añadir a la Lista
             </Button>
           </CardFooter>
         </Card>
@@ -271,7 +289,7 @@ export default function NewRoutePage() {
         <Card>
           <CardHeader>
             <CardTitle>Rutas en Lista</CardTitle>
-            <CardDescription>Rutas pendientes por ser guardadas en la base de datos.</CardDescription>
+            <CardDescription>Rutas pendientes por ser guardadas.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {stagedRoutes.map(r => (
@@ -302,26 +320,25 @@ export default function NewRoutePage() {
         </Card>
       </div>
 
-      {/* Reusable Client Search Dialog */}
       <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
-        <DialogContent className="max-w-2xl bg-white rounded-2xl p-0 overflow-hidden">
+        <DialogContent className="w-[95vw] sm:max-w-[600px] p-0 overflow-hidden bg-white max-h-[90vh] flex flex-col rounded-2xl">
             <DialogHeader className="p-6 pb-2">
                 <DialogTitle className="text-2xl font-black text-[#011688] uppercase">
                     Añadir a {targetDateForAdd ? format(targetDateForAdd, 'EEEE', { locale: es }) : 'Día'}
                 </DialogTitle>
-                <DialogDescription className="font-bold text-muted-foreground uppercase text-xs">Busca clientes para el día seleccionado.</DialogDescription>
+                <DialogDescription className="font-bold text-muted-foreground uppercase text-xs">Buscador multicriterio (RUC, Nombre, Comercial).</DialogDescription>
             </DialogHeader>
-            <div className="p-6 space-y-4">
+            <div className="flex-1 overflow-hidden flex flex-col p-6 space-y-4">
                 <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="RUC, Nombre o Comercial..."
+                        placeholder="Buscar..."
                         className="pl-10 h-12 border-2 border-[#011688]/20 focus:border-[#011688] rounded-xl font-bold"
                         value={dialogSearchTerm}
                         onChange={(e) => setDialogSearchTerm(e.target.value)}
                     />
                 </div>
-                <ScrollArea className="h-[350px] pr-2">
+                <ScrollArea className="flex-1 pr-2">
                     <div className="space-y-3">
                         {filteredDialogClients.map((client) => {
                             const isSelected = dialogSelectedClients.some(c => c.ruc === client.ruc);
@@ -358,7 +375,7 @@ export default function NewRoutePage() {
             <DialogFooter className="p-6 bg-slate-50 border-t flex items-center justify-between">
                 <span className="text-xs font-black text-[#011688] uppercase">{dialogSelectedClients.length} seleccionados</span>
                 <div className="flex gap-2">
-                    <Button variant="ghost" onClick={() => setIsClientDialogOpen(false)} className="font-bold">CANCELAR</Button>
+                    <DialogClose asChild><Button variant="ghost" className="font-bold">CANCELAR</Button></DialogClose>
                     <Button onClick={handleAddClientsToSelected} disabled={dialogSelectedClients.length === 0} className="font-bold bg-[#011688] px-8 text-white">AÑADIR AL DÍA</Button>
                 </div>
             </DialogFooter>
