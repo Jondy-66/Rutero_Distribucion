@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -260,8 +259,13 @@ export default function NewRoutePage() {
                                 {dayClients.map((client) => (
                                     <Card key={client.ruc} className="p-4 relative hover:shadow-md transition-shadow border-l-2 border-l-[#011688]/10">
                                         <div className="flex justify-between items-start">
-                                            <div>
-                                                <p className="font-black text-sm text-[#011688] uppercase">{client.globalIndex + 1}. {client.nombre_comercial}</p>
+                                            <div className="space-y-1">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-black text-sm text-[#011688] uppercase">{client.globalIndex + 1}. {client.nombre_comercial}</p>
+                                                    {client.origin === 'manual' && (
+                                                        <Badge variant="success" className="text-[8px] font-black h-4 px-1.5 animate-pulse">NUEVO</Badge>
+                                                    )}
+                                                </div>
                                                 <p className="text-[10px] font-mono text-muted-foreground">{client.ruc}</p>
                                             </div>
                                             <Button variant="ghost" size="icon" onClick={() => setSelectedClients(prev => prev.map(c => c.ruc === client.ruc ? {...c, status: 'Eliminado'} : c))}>

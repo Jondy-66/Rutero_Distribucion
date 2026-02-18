@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter, notFound } from 'next/navigation';
@@ -24,16 +23,6 @@ import { useAuth } from '@/hooks/use-auth';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { 
-  AlertDialog, 
-  AlertDialogAction, 
-  AlertDialogCancel, 
-  AlertDialogHeader, 
-  AlertDialogContent, 
-  AlertDialogTitle, 
-  AlertDialogDescription, 
-  AlertDialogFooter 
-} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -61,8 +50,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   const [isRecovering, setIsRecovering] = useState(false);
   
   const [calendarOpen, setCalendarOpen] = useState<{[key: string]: boolean}>({});
-  const [clientToRemove, setClientToRemove] = useState<ClientInRoute | null>(null);
-  const [removalObservation, setRemovalObservation] = useState('');
 
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
@@ -126,6 +113,13 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       );
   }, []);
 
+  const handleRemoveClient = (ruc: string) => {
+    setClientsInRoute(prev => prev.map(c => 
+        c.ruc === ruc ? { ...c, status: 'Eliminado' } : c
+    ));
+    toast({ title: "Cliente quitado de la lista" });
+  };
+
   const handleApprove = async () => {
     if (!route || !currentUser) return;
     setIsSaving(true);
@@ -144,7 +138,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
       await refetchData('routes');
       toast({ title: 'Éxito', description: 'La ruta ha sido aprobada.' });
-      router.push('/dashboard/routes/team-routes');
+      router.push('/dashboard/team-routes');
     } catch (error) {
       toast({ title: 'Error al aprobar', variant: 'destructive' });
     } finally {
@@ -174,7 +168,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       await refetchData('routes');
       toast({ title: 'Ruta Rechazada', description: 'Se ha enviado la notificación al usuario.' });
       setIsRejectDialogOpen(false);
-      router.push('/dashboard/routes/team-routes');
+      router.push('/dashboard/team-routes');
     } catch (error) {
       toast({ title: 'Error al rechazar', variant: 'destructive' });
     } finally {
@@ -245,15 +239,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     }
   };
 
-  const handleConfirmRemoval = () => {
-    if (!clientToRemove || !removalObservation.trim()) return;
-    setClientsInRoute(prev => prev.map(c => 
-        c.ruc === clientToRemove.ruc ? { ...c, status: 'Eliminado', removalObservation: removalObservation } : c
-    ));
-    setClientToRemove(null);
-    setRemovalObservation('');
-  };
-  
   const activeClientsWithIndex = useMemo(() => 
     clientsInRoute
       .map((c, i) => ({...c, originalIndex: i})) 
@@ -357,7 +342,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                               <p className="font-bold text-sm text-primary uppercase">{client.globalIndex + 1}. {client.nombre_comercial}</p>
                               <p className="text-[10px] font-mono text-muted-foreground uppercase">{client.ruc}</p>
                             </div>
-                            <Button type="button" variant="ghost" size="icon" onClick={() => setClientToRemove(client)} disabled={isFormDisabled}>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveClient(client.ruc)} disabled={isFormDisabled}>
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           </div>
@@ -425,28 +410,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
           )}
         </div>
       </div>
-
-      <AlertDialog open={!!clientToRemove} onOpenChange={() => setClientToRemove(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle className="font-black uppercase text-red-600">¿Quitar cliente de la ruta?</AlertDialogTitle>
-            <AlertDialogDescription className="text-xs font-bold uppercase">Esta acción es irreversible una vez guardada.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <div className="py-4 space-y-2">
-            <Label className="font-bold uppercase text-[10px]">Indica el Motivo</Label>
-            <Textarea 
-              value={removalObservation} 
-              onChange={(e) => setRemovalObservation(e.target.value)} 
-              placeholder="Ej: Negocio cerrado, cliente no desea visita..." 
-              className="text-xs font-bold"
-            />
-          </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel className="font-bold">CANCELAR</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmRemoval} className="bg-destructive hover:bg-destructive/90 font-bold">CONFIRMAR</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
         <DialogContent>
