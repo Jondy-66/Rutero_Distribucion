@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
 import { getRoute, updateRoute, addNotification } from '@/lib/firebase/firestore';
 import { getPredicciones } from '@/services/api';
 import type { User, RoutePlan, ClientInRoute } from '@/lib/types';
@@ -53,6 +53,11 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
+
+  // States for Removal Observation
+  const [isRemovalDialogOpen, setIsRemovalDialogOpen] = useState(false);
+  const [removalReason, setRemovalReason] = useState('');
+  const [rucToToRemove, setRucToToRemove] = useState<string | null>(null);
 
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
@@ -113,11 +118,23 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       );
   }, []);
 
-  const handleRemoveClient = (ruc: string) => {
+  const handleOpenRemovalDialog = (ruc: string) => {
+    setRucToToRemove(ruc);
+    setRemovalReason('');
+    setIsRemovalDialogOpen(true);
+  };
+
+  const confirmRemoval = () => {
+    if (!rucToToRemove || !removalReason.trim()) {
+        toast({ title: "Motivo requerido", description: "Debes indicar por qué eliminas este cliente.", variant: "destructive" });
+        return;
+    }
     setClientsInRoute(prev => prev.map(c => 
-        c.ruc === ruc ? { ...c, status: 'Eliminado' } : c
+        c.ruc === rucToToRemove ? { ...c, status: 'Eliminado', removalObservation: removalReason } : c
     ));
-    toast({ title: "Cliente quitado de la lista" });
+    setIsRemovalDialogOpen(false);
+    setRucToToRemove(null);
+    toast({ title: "Cliente eliminado", description: "Se ha registrado el motivo de la eliminación." });
   };
 
   const handleApprove = async () => {
@@ -342,7 +359,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                               <p className="font-bold text-sm text-primary uppercase">{client.globalIndex + 1}. {client.nombre_comercial}</p>
                               <p className="text-[10px] font-mono text-muted-foreground uppercase">{client.ruc}</p>
                             </div>
-                            <Button type="button" variant="ghost" size="icon" onClick={() => handleRemoveClient(client.ruc)} disabled={isFormDisabled}>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.ruc)} disabled={isFormDisabled}>
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           </div>
@@ -435,6 +452,37 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
               className="font-black"
             >
               {isSaving && <LoaderCircle className="animate-spin mr-2 h-4 w-4" />} CONFIRMAR RECHAZO
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isRemovalDialogOpen} onOpenChange={setIsRemovalDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-black uppercase text-destructive flex items-center gap-2">
+                <Trash2 className="h-5 w-5" /> Eliminar Parada de Ruta
+            </DialogTitle>
+            <DialogDescription className="text-xs font-bold uppercase">Es obligatorio indicar el motivo por el cual este cliente no será visitado.</DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label className="font-bold uppercase text-[10px]">Motivo de la Eliminación</Label>
+            <Textarea 
+              value={removalReason} 
+              onChange={(e) => setRemovalReason(e.target.value)}
+              placeholder="Ej: Cliente solicitó cambio de fecha, local cerrado permanentemente, etc."
+              className="mt-2 font-bold text-sm h-32"
+            />
+          </div>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="ghost" className="font-bold">CANCELAR</Button></DialogClose>
+            <Button 
+              variant="destructive" 
+              onClick={confirmRemoval} 
+              disabled={!removalReason.trim()}
+              className="font-black"
+            >
+              ELIMINAR PARADA
             </Button>
           </DialogFooter>
         </DialogContent>
