@@ -417,7 +417,7 @@ export default function NewRoutePage() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="font-black uppercase text-destructive flex items-center gap-2">
-                <Trash2 className="h-5 w-5" /> Eliminar Parada de Ruta
+                <Trash2 className="h-5 w-5" /> Eliminar Cliente de Ruta
             </DialogTitle>
             <DialogDescription className="text-xs font-bold uppercase">Es obligatorio indicar el motivo por el cual este cliente no será visitado.</DialogDescription>
           </DialogHeader>
@@ -438,7 +438,7 @@ export default function NewRoutePage() {
               disabled={!removalReason.trim()}
               className="font-black"
             >
-              ELIMINAR PARADA
+              ELIMINAR CLIENTE
             </Button>
           </DialogFooter>
         </DialogContent>
