@@ -9,7 +9,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, isToday } from 'date-fns';
+import { format, isToday, isBefore, startOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
@@ -74,7 +74,12 @@ export default function RouteManagementPage() {
     return allRoutes.filter(r => {
         const isOwner = r.createdBy === user?.id;
         if (!isOwner) return false;
-        return r.status === 'En Progreso' || r.status === 'Planificada';
+        // Solo mostrar rutas de la semana actual o planificadas que no hayan expirado
+        const routeDate = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date(r.date));
+        const expirationDate = addDays(startOfDay(routeDate), 7);
+        const isExpired = isBefore(expirationDate, startOfDay(new Date()));
+        
+        return (r.status === 'En Progreso' || r.status === 'Planificada') && !isExpired;
     });
   }, [allRoutes, user]);
 
@@ -83,6 +88,34 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
+  // Motor de Auto-Cierre por Expiración
+  useEffect(() => {
+    if (authLoading || dataLoading) return;
+
+    const checkAndAutoCloseRoutes = async () => {
+        const inProgressRoutes = allRoutes.filter(r => r.createdBy === user?.id && r.status === 'En Progreso');
+        for (const r of inProgressRoutes) {
+            const routeDate = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date(r.date));
+            const expirationDate = addDays(startOfDay(routeDate), 7); // La ruta expira el lunes de la siguiente semana
+            
+            if (isBefore(expirationDate, startOfDay(new Date()))) {
+                const allDone = r.clients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
+                const newStatus = allDone ? 'Completada' : 'Incompleta';
+                
+                await updateRoute(r.id, { status: newStatus });
+                toast({ 
+                    title: "Ruta Cerrada Automáticamente", 
+                    description: `La ruta "${r.routeName}" ha finalizado como ${newStatus}.`,
+                    variant: "destructive"
+                });
+                await refetchData('routes');
+            }
+        }
+    };
+
+    checkAndAutoCloseRoutes();
+  }, [allRoutes, user, authLoading, dataLoading, toast, refetchData]);
+
   useEffect(() => {
     if (authLoading || dataLoading || !selectedRoute) return;
     
@@ -104,7 +137,7 @@ export default function RouteManagementPage() {
     } else {
         const savedId = localStorage.getItem(SELECTION_KEY);
         if (savedId) {
-            const found = allRoutes.find(r => r.id === savedId && r.status !== 'Completada');
+            const found = allRoutes.find(r => r.id === savedId && r.status !== 'Completada' && r.status !== 'Incompleta');
             if (found) {
                 setSelectedRouteId(savedId);
                 setIsRouteStarted(found.status === 'En Progreso');
@@ -199,7 +232,6 @@ export default function RouteManagementPage() {
             c.ruc === activeRuc ? { ...c, checkOutTime: time, visitStatus: 'Completado' } : c
         );
 
-        // Verificar si se completó TODA la planificación semanal
         const allActiveClients = nextClients.filter(c => c.status !== 'Eliminado');
         const allTotalClientsDone = allActiveClients.length > 0 && allActiveClients.every(c => c.visitStatus === 'Completado');
 
@@ -207,7 +239,6 @@ export default function RouteManagementPage() {
         
         setCurrentRouteClientsFull(nextClients);
         
-        // Actualizar Firestore
         await updateRoute(selectedRoute.id, { 
             clients: sanitizeClientsForFirestore(nextClients), 
             status: newStatus 
@@ -300,7 +331,13 @@ export default function RouteManagementPage() {
             <CardContent className="space-y-4">
                 <Select onValueChange={(v) => { setSelectedRouteId(v); localStorage.setItem(SELECTION_KEY!, v); }} value={selectedRouteId}>
                     <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta" /></SelectTrigger>
-                    <SelectContent>{selectableRoutes.map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName}</SelectItem>))}</SelectContent>
+                    <SelectContent>
+                        {selectableRoutes.length > 0 ? (
+                            selectableRoutes.map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName}</SelectItem>))
+                        ) : (
+                            <SelectItem value="none" disabled>No tienes rutas vigentes para hoy</SelectItem>
+                        )}
+                    </SelectContent>
                 </Select>
                 <p className="text-xs text-center font-bold text-muted-foreground uppercase">selecciona un cliente para empezar gestion</p>
                 {selectedRoute && (

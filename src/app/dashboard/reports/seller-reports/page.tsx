@@ -22,7 +22,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan, ClientInRoute } from '@/lib/types';
 import { Download, Users, MoreHorizontal, Eye, Calendar as CalendarIcon } from 'lucide-react';
-import { format, startOfDay, endOfDay, startOfMonth } from 'date-fns';
+import { format, startOfDay, endOfDay, startOfMonth, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
 import * as XLSX from 'xlsx';
@@ -91,7 +91,6 @@ export default function SellerReportsPage() {
       }, {} as Record<K, T[]>);
 
     const managedSellerIds = managedSellers.map(s => s.id);
-    // Incluir rutas terminadas o en progreso para ver gestiones parciales
     const relevantStatuses: RoutePlan['status'][] = ['En Progreso', 'Completada', 'Incompleta', 'Planificada'];
 
     let routesToConsider = allRoutes.filter(route => 
@@ -118,25 +117,28 @@ export default function SellerReportsPage() {
 
             const logDate = new Date(dateStr + 'T00:00:00');
 
-            // Filtrado por rango de fechas
             if (dateRange?.from && logDate < startOfDay(dateRange.from)) return;
             if (dateRange?.to && logDate > endOfDay(dateRange.to)) return;
 
             const completedClients = dailyClients.filter(c => c.visitStatus === 'Completado').length;
+            const today = startOfDay(new Date());
             
             let status: DailyLog['status'] = 'Pendiente';
+            
             if (dailyClients.length > 0) {
                 if (completedClients === dailyClients.length) {
                     status = 'Completado';
-                } else if (logDate < startOfDay(new Date())) {
+                } else if (isBefore(logDate, today)) {
+                    // Si el día ya pasó y no se completaron todos, es Incompleto
                     status = 'Incompleto';
                 } else if (completedClients > 0) {
+                    // Si es hoy y lleva algunos clientes, está en progreso (Incompleto temporalmente)
                     status = 'Incompleto';
                 }
             }
             
-            const today = startOfDay(new Date());
-            if(logDate > today && status === 'Pendiente') return;
+            // No mostrar días futuros si están pendientes
+            if (logDate > today && status === 'Pendiente') return;
 
             logs.push({
                 id: `${route.id}-${dateStr}`,
