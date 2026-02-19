@@ -1,10 +1,9 @@
 
-
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
 import { redirect } from 'next/navigation';
-import { Briefcase, Route, Users, BarChart, Clock, TrendingUp, CheckCircle, Percent, Timer } from 'lucide-react';
+import { Briefcase, Route, Users, BarChart, Clock, TrendingUp, CheckCircle, Percent, Timer, CheckCircle2 } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -45,8 +44,22 @@ export default function DashboardPage() {
   const canSeeUserCount = user?.role === 'Administrador' || user?.role === 'Supervisor';
 
   const activeRoute = useMemo(() => {
-    return routes.find(r => r.createdBy === user?.id && r.status === 'En Progreso' && r.date && isToday(r.date));
+    // Buscamos cualquier ruta en progreso del usuario actual
+    return routes.find(r => r.createdBy === user?.id && r.status === 'En Progreso');
   }, [routes, user]);
+
+  const todayClients = useMemo(() => {
+    if (!activeRoute) return [];
+    return activeRoute.clients.filter(c => {
+        if (c.status === 'Eliminado' || !c.date) return false;
+        const cDate = c.date instanceof Timestamp ? c.date.toDate() : new Date(c.date as any);
+        return isToday(cDate);
+    });
+  }, [activeRoute]);
+
+  const isTodayCompleted = useMemo(() => {
+    return todayClients.length > 0 && todayClients.every(c => c.visitStatus === 'Completado');
+  }, [todayClients]);
 
   const [remainingTime, setRemainingTime] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false });
   
@@ -232,8 +245,12 @@ export default function DashboardPage() {
                     <Route className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{completedCount} de {activeClientsInRoute.length}</div>
-                    <p className="text-xs text-muted-foreground mb-2">clientes gestionados</p>
+                    <div className="text-2xl font-bold">
+                        {isTodayCompleted ? "Hoy completado" : `${completedCount} de ${activeClientsInRoute.length}`}
+                    </div>
+                    <p className="text-xs text-muted-foreground mb-2">
+                        {isTodayCompleted ? "Has gestionado todos los clientes de hoy" : "clientes gestionados (total semana)"}
+                    </p>
                     <Progress value={progress} aria-label={`${progress.toFixed(0)}% completado`} />
                 </CardContent>
             </Card>
@@ -243,13 +260,24 @@ export default function DashboardPage() {
                     <Clock className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                   <div className={cn("text-2xl font-bold", remainingTime.expired && "text-destructive")}>
-                       {remainingTime.expired 
-                           ? "Expirado" 
-                           : `${String(remainingTime.hours).padStart(2, '0')}:${String(remainingTime.minutes).padStart(2, '0')}:${String(remainingTime.seconds).padStart(2, '0')}`
-                       }
-                   </div>
-                   <p className="text-xs text-muted-foreground">Para finalizar la ruta de hoy (20:30)</p>
+                   {isTodayCompleted ? (
+                       <div className="flex flex-col gap-1">
+                           <div className="text-xl font-black text-green-600 uppercase flex items-center gap-2">
+                               <CheckCircle2 className="h-5 w-5" /> Jornada Completada
+                           </div>
+                           <p className="text-[10px] text-muted-foreground uppercase font-bold">¡Buen trabajo!</p>
+                       </div>
+                   ) : (
+                       <>
+                        <div className={cn("text-2xl font-bold", remainingTime.expired && "text-destructive")}>
+                            {remainingTime.expired 
+                                ? "Expirado" 
+                                : `${String(remainingTime.hours).padStart(2, '0')}:${String(remainingTime.minutes).padStart(2, '0')}:${String(remainingTime.seconds).padStart(2, '0')}`
+                            }
+                        </div>
+                        <p className="text-xs text-muted-foreground">Para finalizar la ruta de hoy (20:30)</p>
+                       </>
+                   )}
                 </CardContent>
             </Card>
             </>
@@ -381,4 +409,3 @@ export default function DashboardPage() {
     </>
   );
 }
-
