@@ -54,7 +54,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
-  // States for Removal Observation
   const [isRemovalDialogOpen, setIsRemovalDialogOpen] = useState(false);
   const [removalReason, setRemovalReason] = useState('');
   const [rucToToRemove, setRucToToRemove] = useState<string | null>(null);
@@ -155,7 +154,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
       await refetchData('routes');
       toast({ title: 'Éxito', description: 'La ruta ha sido aprobada.' });
-      router.push('/dashboard/team-routes');
+      router.push('/dashboard/routes/team-routes');
     } catch (error) {
       toast({ title: 'Error al aprobar', variant: 'destructive' });
     } finally {
@@ -185,7 +184,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       await refetchData('routes');
       toast({ title: 'Ruta Rechazada', description: 'Se ha enviado la notificación al usuario.' });
       setIsRejectDialogOpen(false);
-      router.push('/dashboard/team-routes');
+      router.push('/dashboard/routes/team-routes');
     } catch (error) {
       toast({ title: 'Error al rechazar', variant: 'destructive' });
     } finally {
