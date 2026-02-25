@@ -64,6 +64,9 @@ export default function NewRoutePage() {
 
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
 
+  // Si hay rutas en la lista, el formulario de la izquierda se bloquea
+  const isFormLocked = stagedRoutes.length > 0;
+
   useEffect(() => {
     if (users) setSupervisors(users.filter(u => u.role === 'Supervisor'));
     if (currentUser?.supervisorId) setSelectedSupervisorId(currentUser.supervisorId);
@@ -106,11 +109,13 @@ export default function NewRoutePage() {
   }, [clients, dialogSearchTerm, selectedClients, currentUser]);
 
   const handleOpenAddDialog = (date: Date) => {
+    if (isFormLocked) return;
     setTargetDateForAdd(date);
     setIsClientDialogOpen(true);
   };
 
   const handleOpenRemovalDialog = (ruc: string) => {
+    if (isFormLocked) return;
     setRucToToRemove(ruc);
     setRemovalReason('');
     setIsRemovalDialogOpen(true);
@@ -164,10 +169,7 @@ export default function NewRoutePage() {
         supervisorName: supervisor?.name || '',
         createdBy: currentUser!.id,
     }]);
-    setRouteName('');
-    setSelectedClients([]);
-    setIsFromPrediction(false);
-    setPredictedDateStrings(new Set());
+    // No limpiamos routeName ni selectedClients aquí para que el usuario vea lo que añadió, pero el form se bloquea
     toast({ title: 'Ruta añadida a la lista de espera' });
   }
 
@@ -212,7 +214,7 @@ export default function NewRoutePage() {
     <>
       <PageHeader title="Planificación de Rutas" description="Crea y guarda planes de ruta de 5 días." />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card>
+        <Card className={cn(isFormLocked && "opacity-60 grayscale-[0.5]")}>
           <CardHeader>
             <CardTitle>Detalles de la Ruta</CardTitle>
             <CardDescription>Configura los clientes y fechas para tu nuevo plan.</CardDescription>
@@ -220,11 +222,16 @@ export default function NewRoutePage() {
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label>Nombre de la Ruta</Label>
-              <Input placeholder="Ej: Ruta Norte Semana 08" value={routeName} onChange={(e) => setRouteName(e.target.value)} />
+              <Input 
+                placeholder="Ej: Ruta Norte Semana 08" 
+                value={routeName} 
+                onChange={(e) => setRouteName(e.target.value)} 
+                disabled={isFormLocked}
+              />
             </div>
             <div className="space-y-2">
                 <Label>Supervisor</Label>
-                <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId}>
+                <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
                     <SelectTrigger><SelectValue placeholder="Seleccionar supervisor" /></SelectTrigger>
                     <SelectContent>{supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
                 </Select>
@@ -237,7 +244,7 @@ export default function NewRoutePage() {
                     <h3 className="text-sm font-bold uppercase tracking-tight text-[#011688]">Cronograma Semanal</h3>
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" className="font-bold">
+                            <Button variant="outline" size="sm" className="font-bold" disabled={isFormLocked}>
                                 <CalendarIcon className="mr-2 h-4 w-4" />
                                 Cambiar Semana Base
                             </Button>
@@ -274,6 +281,7 @@ export default function NewRoutePage() {
                                         size="sm" 
                                         className="font-black text-[#011688] hover:bg-[#011688]/10 h-8"
                                         onClick={() => handleOpenAddDialog(day)}
+                                        disabled={isFormLocked}
                                     >
                                         <PlusCircle className="mr-1 h-4 w-4" />
                                         AÑADIR
@@ -293,7 +301,7 @@ export default function NewRoutePage() {
                                                 </div>
                                                 <p className="text-[10px] font-mono text-muted-foreground">{client.ruc}</p>
                                             </div>
-                                            <Button variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.ruc)}>
+                                            <Button variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.ruc)} disabled={isFormLocked}>
                                                 <Trash2 className="h-4 w-4 text-destructive" />
                                             </Button>
                                         </div>
@@ -309,7 +317,11 @@ export default function NewRoutePage() {
             </div>
           </CardContent>
            <CardFooter>
-            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase tracking-tighter" disabled={activeClientsWithIndex.length === 0}>
+            <Button 
+                onClick={handleAddToStage} 
+                className="w-full h-12 font-black uppercase tracking-tighter" 
+                disabled={activeClientsWithIndex.length === 0 || isFormLocked}
+            >
                 Añadir a la Lista
             </Button>
           </CardFooter>
