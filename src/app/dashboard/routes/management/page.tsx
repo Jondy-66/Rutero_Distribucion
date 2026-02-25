@@ -74,7 +74,6 @@ export default function RouteManagementPage() {
     return allRoutes.filter(r => {
         const isOwner = r.createdBy === user?.id;
         if (!isOwner) return false;
-        // Solo mostrar rutas de la semana actual o planificadas que no hayan expirado
         const routeDate = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date(r.date));
         const expirationDate = addDays(startOfDay(routeDate), 7);
         const isExpired = isBefore(expirationDate, startOfDay(new Date()));
@@ -88,7 +87,6 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Motor de Auto-Cierre por Expiración
   useEffect(() => {
     if (authLoading || dataLoading) return;
 
@@ -96,7 +94,7 @@ export default function RouteManagementPage() {
         const inProgressRoutes = allRoutes.filter(r => r.createdBy === user?.id && r.status === 'En Progreso');
         for (const r of inProgressRoutes) {
             const routeDate = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date(r.date));
-            const expirationDate = addDays(startOfDay(routeDate), 7); // La ruta expira el lunes de la siguiente semana
+            const expirationDate = addDays(startOfDay(routeDate), 7);
             
             if (isBefore(expirationDate, startOfDay(new Date()))) {
                 const allDone = r.clients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
@@ -200,15 +198,30 @@ export default function RouteManagementPage() {
     ));
   };
 
+  const getCurrentCoords = (): Promise<{ latitude: number, longitude: number } | null> => {
+    return new Promise((resolve) => {
+        if (!navigator.geolocation) {
+            resolve(null);
+            return;
+        }
+        navigator.geolocation.getCurrentPosition(
+            (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+            () => resolve(null),
+            { enableHighAccuracy: true, timeout: 6000 }
+        );
+    });
+  };
+
   const handleCheckIn = async () => {
     if (!selectedRoute || !activeRuc || isCurrentClientCompleted || isSaving) return;
     
-    const time = format(new Date(), 'HH:mm:ss');
     setIsSaving(true);
+    const time = format(new Date(), 'HH:mm:ss');
+    const location = await getCurrentCoords();
 
     try {
         const nextClients = currentRouteClientsFull.map(c => 
-            c.ruc === activeRuc ? { ...c, checkInTime: time } : c
+            c.ruc === activeRuc ? { ...c, checkInTime: time, checkInLocation: location } : c
         );
         setCurrentRouteClientsFull(nextClients);
         await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextClients) });
@@ -224,12 +237,13 @@ export default function RouteManagementPage() {
   const handleConfirmCheckOut = async () => {
     if (!selectedRoute || !activeRuc || isCurrentClientCompleted || isSaving) return;
 
-    const time = format(new Date(), 'HH:mm:ss');
     setIsSaving(true);
+    const time = format(new Date(), 'HH:mm:ss');
+    const location = await getCurrentCoords();
 
     try {
         const nextClients = currentRouteClientsFull.map(c => 
-            c.ruc === activeRuc ? { ...c, checkOutTime: time, visitStatus: 'Completado' } : c
+            c.ruc === activeRuc ? { ...c, checkOutTime: time, checkOutLocation: location, visitStatus: 'Completado' } : c
         );
 
         const allActiveClients = nextClients.filter(c => c.status !== 'Eliminado');
@@ -415,7 +429,7 @@ export default function RouteManagementPage() {
                             "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer", 
                             activeRuc === c.ruc ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
                             c.visitStatus === 'Completado' && "opacity-50 grayscale bg-muted/30",
-                            isCurrentClientInProgress && activeRuc !== c.ruc && "opacity-30 cursor-not-allowed"
+                            isCurrentClientInProgress && activeRuc !== ruc && "opacity-30 cursor-not-allowed"
                         )}>
                             <div className="flex items-center gap-3 overflow-hidden">
                                 <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>

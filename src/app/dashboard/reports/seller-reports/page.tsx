@@ -62,11 +62,18 @@ export default function SellerReportsPage() {
   
   const [selectedSellerId, setSelectedSellerId] = useState<string>('all');
   
-  // Rango de fechas por defecto: Mes Actual
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
     to: endOfDay(new Date()),
   });
+
+  const formatLoc = (loc: any) => {
+    if (!loc) return 'N/A';
+    if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+        return `${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}`;
+    }
+    return 'N/A';
+  };
 
   const managedSellers = useMemo(() => {
     if (!currentUser) return [];
@@ -129,15 +136,12 @@ export default function SellerReportsPage() {
                 if (completedClients === dailyClients.length) {
                     status = 'Completado';
                 } else if (isBefore(logDate, today)) {
-                    // Si el día ya pasó y no se completaron todos, es Incompleto
                     status = 'Incompleto';
                 } else if (completedClients > 0) {
-                    // Si es hoy y lleva algunos clientes, está en progreso (Incompleto temporalmente)
                     status = 'Incompleto';
                 }
             }
             
-            // No mostrar días futuros si están pendientes
             if (logDate > today && status === 'Pendiente') return;
 
             logs.push({
@@ -181,7 +185,9 @@ export default function SellerReportsPage() {
                         'RUC Cliente': client.ruc,
                         'Nombre Cliente': client.nombre_comercial,
                         'Hora de Check-in': client.checkInTime || 'N/A',
+                        'Ubicación Check-in': formatLoc(client.checkInLocation),
                         'Hora de Check-out': client.checkOutTime || 'N/A',
+                        'Ubicación Check-out': formatLoc(client.checkOutLocation),
                         'Tipo de Visita': client.visitType === 'presencial' ? 'Presencial' : 'Telefónica',
                         'Observación Llamada': client.callObservation || '',
                         'Valor Venta ($)': client.valorVenta || 0,

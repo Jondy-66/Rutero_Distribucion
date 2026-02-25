@@ -43,11 +43,18 @@ export default function MyCompletedRoutesPage() {
   const { user: currentUser, routes: allRoutes, loading: authLoading, clients: allSystemClients } = useAuth();
   const { toast } = useToast();
   
-  // Por defecto mostrar desde el inicio del mes para asegurar visibilidad de rutas recientes
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
     to: endOfDay(new Date()),
   });
+
+  const formatLoc = (loc: any) => {
+    if (!loc) return 'N/A';
+    if (typeof loc.latitude === 'number' && typeof loc.longitude === 'number') {
+        return `${loc.latitude.toFixed(6)}, ${loc.longitude.toFixed(6)}`;
+    }
+    return 'N/A';
+  };
 
   const filteredRoutes = useMemo(() => {
     if (!currentUser || !allRoutes) return [];
@@ -117,7 +124,9 @@ export default function MyCompletedRoutesPage() {
           'RUC Cliente': client.ruc,
           'Nombre Cliente': clientDetails?.nombre_comercial || client.nombre_comercial,
           'Hora de Check-in': client.checkInTime || 'N/A',
+          'Ubicación Check-in': formatLoc(client.checkInLocation),
           'Hora de Check-out': client.checkOutTime || 'N/A',
+          'Ubicación Check-out': formatLoc(client.checkOutLocation),
           'Tipo de Visita': client.visitType === 'presencial' ? 'Presencial' : 'Telefónica',
           'Observación Llamada': client.callObservation || '',
           'Valor Venta ($)': client.valorVenta || 0,
