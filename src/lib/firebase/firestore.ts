@@ -27,9 +27,12 @@ export const getSupervisors = async (): Promise<User[]> => {
 };
 
 export const getUsersBySupervisor = async (supervisorId: string): Promise<User[]> => {
-    const q = query(usersCollection, where('supervisorId', '==', supervisorId), orderBy('name'));
+    // Se elimina el orderBy de la consulta de Firestore para evitar errores de índice compuesto
+    const q = query(usersCollection, where('supervisorId', '==', supervisorId));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+    const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+    // Se ordena en el cliente
+    return users.sort((a, b) => a.name.localeCompare(b.name));
 };
 
 export const getUser = async (id: string): Promise<User | null> => {

@@ -115,18 +115,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         });
 
+        // Se elimina orderBy y limit de la consulta del servidor para evitar el requisito de índices compuestos
+        // El ordenamiento y el límite se aplican ahora en el lado del cliente.
         const notificationsQuery = query(
             collection(db, 'notifications'), 
-            where('userId', '==', fbUser.uid),
-            orderBy('createdAt', 'desc'),
-            limit(15)
+            where('userId', '==', fbUser.uid)
         );
         const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
             const notificationsData = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
                 createdAt: doc.data().createdAt instanceof Timestamp ? doc.data().createdAt.toDate() : null,
-            } as Notification));
+            } as Notification))
+            .sort((a, b) => {
+                const dateA = a.createdAt?.getTime() || 0;
+                const dateB = b.createdAt?.getTime() || 0;
+                return dateB - dateA; // Orden descendente por fecha
+            })
+            .slice(0, 15); // Limitar a las 15 más recientes
+            
             setNotifications(notificationsData);
         });
 
