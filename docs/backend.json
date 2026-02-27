@@ -1,0 +1,398 @@
+{
+  "entities": {
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the Routero application, including administrators, supervisors, and teleoperators. This entity stores core user information but excludes authentication credentials.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the User entity."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user, used for identification (not for authentication itself).",
+          "format": "email"
+        },
+        "firstName": {
+          "type": "string",
+          "description": "First name of the user."
+        },
+        "lastName": {
+          "type": "string",
+          "description": "Last name of the user."
+        },
+        "role": {
+          "type": "string",
+          "description": "The assigned role for the user within the application (e.g., Admin, Supervisor, User/Teleoperador)."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the user account was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the user account was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "email",
+        "firstName",
+        "lastName",
+        "role",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Client": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Client",
+      "type": "object",
+      "description": "Represents a client company managed within the Routero CRM system, including profile information and calculated metrics for call prioritization.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Client entity."
+        },
+        "ejecutivo": {
+          "type": "string",
+          "description": "Name of the executive (from imported data) associated with the client for external reference."
+        },
+        "ruc": {
+          "type": "string",
+          "description": "Unique tax identifier (RUC) of the client company, typically used for legal identification."
+        },
+        "nombreCliente": {
+          "type": "string",
+          "description": "Full legal name or primary identifier of the client company."
+        },
+        "nombreComercial": {
+          "type": "string",
+          "description": "Commercial or trade name of the client company, often used for branding."
+        },
+        "ticketPromedio": {
+          "type": "number",
+          "description": "Calculated average order value (AOV) for the client over a defined period, used for tier classification."
+        },
+        "ultimaCompra": {
+          "type": "string",
+          "description": "Date and time of the client's most recent purchase.",
+          "format": "date-time"
+        },
+        "priorityScore": {
+          "type": "number",
+          "description": "Calculated score indicating the priority for calling this client, based on business rules and prediction logic."
+        },
+        "tier": {
+          "type": "string",
+          "description": "Classification of the client based on their average order value (e.g., 'VIP', 'Medio', 'Bajo')."
+        },
+        "frecuenciaLlamadaDias": {
+          "type": "number",
+          "description": "Recommended call frequency in days for the client, determined by their assigned tier."
+        },
+        "proximaLlamada": {
+          "type": "string",
+          "description": "Predicted date and time for the next call to this client, calculated by the system's prediction logic.",
+          "format": "date-time"
+        },
+        "estadoPrediccion": {
+          "type": "string",
+          "description": "Status indicating the client's purchasing likelihood (e.g., 'Próximo a comprar', 'Normal')."
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Reference to the User (teleoperador) currently assigned to manage this client. (Relationship: User 1:N Client)"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the client record was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the client record was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "ruc",
+        "nombreCliente",
+        "nombreComercial",
+        "ticketPromedio",
+        "ultimaCompra",
+        "priorityScore",
+        "tier",
+        "frecuenciaLlamadaDias",
+        "proximaLlamada",
+        "estadoPrediccion",
+        "agentId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ClientLocation": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ClientLocation",
+      "type": "object",
+      "description": "Represents a physical location associated with a client, used for map visualization and route planning.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ClientLocation entity."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Reference to the Client this location belongs to. (Relationship: Client 1:N ClientLocation)"
+        },
+        "provincia": {
+          "type": "string",
+          "description": "Province where the client location is situated, from imported data."
+        },
+        "canton": {
+          "type": "string",
+          "description": "Canton (an administrative division) where the client location is situated, from imported data."
+        },
+        "direccion": {
+          "type": "string",
+          "description": "Full street address of the client location, from imported data."
+        },
+        "latitud": {
+          "type": "number",
+          "description": "Geographical latitude coordinate of the client location, used for map visualization."
+        },
+        "longitud": {
+          "type": "number",
+          "description": "Geographical longitude coordinate of the client location, used for map visualization."
+        },
+        "isPrimary": {
+          "type": "boolean",
+          "description": "Indicates if this is the primary or main physical location for the client. A client can have multiple locations but one primary."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the client location record was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the client location record was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "clientId",
+        "provincia",
+        "canton",
+        "direccion",
+        "latitud",
+        "longitud",
+        "isPrimary",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Sale": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Sale",
+      "type": "object",
+      "description": "Records a sales transaction made by a client, including the date, amount, and the teleoperator responsible. Used for historical analysis and calculating client metrics.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Sale entity."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Reference to the Client who made the purchase. (Relationship: Client 1:N Sale)"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Reference to the User (teleoperador) who closed this sale. (Relationship: User 1:N Sale)"
+        },
+        "fecha": {
+          "type": "string",
+          "description": "Date and time when the sale transaction occurred.",
+          "format": "date-time"
+        },
+        "monto": {
+          "type": "number",
+          "description": "The total monetary amount of the sale."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the sale record was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the sale record was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "clientId",
+        "agentId",
+        "fecha",
+        "monto",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Call": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Call",
+      "type": "object",
+      "description": "Logs an attempt to call a client by a teleoperator, capturing details such as duration, outcome, and associated notes. Essential for tracking teleoperator activity and client interaction history.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Call entity."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Reference to the Client for whom the call was made. (Relationship: Client 1:N Call)"
+        },
+        "agentId": {
+          "type": "string",
+          "description": "Reference to the User (teleoperador) who made the call attempt. (Relationship: User 1:N Call)"
+        },
+        "fecha": {
+          "type": "string",
+          "description": "Date and time when the call attempt was made.",
+          "format": "date-time"
+        },
+        "duracionMinutos": {
+          "type": "number",
+          "description": "Duration of the call in minutes. Can be 0 if no contact was made or it was a quick hang-up."
+        },
+        "resultado": {
+          "type": "string",
+          "description": "Outcome of the call attempt (e.g., 'Contacto Efectivo', 'Buzon', 'Venta', 'No Contesto', 'Otro')."
+        },
+        "observaciones": {
+          "type": "string",
+          "description": "Any additional notes or comments recorded by the teleoperator during or after the call."
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Timestamp when the call record was created.",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "Timestamp when the call record was last updated.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "clientId",
+        "agentId",
+        "fecha",
+        "duracionMinutos",
+        "resultado",
+        "createdAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profiles including their assigned roles (Admin, Supervisor, Teleoperador). The 'userId' directly corresponds to the Firebase Authentication UID, making it suitable for DBAC checks. Access is primarily for the user themselves or for administrative roles. Does not contain sensitive authentication credentials.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier (Firebase Auth UID) of the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/clients/{clientId}",
+        "definition": {
+          "entityName": "Client",
+          "schema": {
+            "$ref": "#/backend/entities/Client"
+          },
+          "description": "Primary collection for client information. Includes profile details and calculated metrics (e.g., 'ticketPromedio', 'priorityScore', 'proximaLlamada') updated by Cloud Functions. Critically, it includes the denormalized 'agentId' for authorization independence, allowing teleoperators to query and access only their assigned clients without hierarchical rule dependencies.",
+          "params": [
+            {
+              "name": "clientId",
+              "description": "The unique identifier of the client."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/clientLocations/{locationId}",
+        "definition": {
+          "entityName": "ClientLocation",
+          "schema": {
+            "$ref": "#/backend/entities/ClientLocation"
+          },
+          "description": "Stores geographical location data for clients. This is a top-level collection to ensure Authorization Independence. Each document includes denormalized 'clientId' and 'agentId' (from the parent Client) to enable direct security rule checks and QAP-compliant queries by the assigned teleoperator.",
+          "params": [
+            {
+              "name": "locationId",
+              "description": "The unique identifier for the client location."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/sales/{saleId}",
+        "definition": {
+          "entityName": "Sale",
+          "schema": {
+            "$ref": "#/backend/entities/Sale"
+          },
+          "description": "Records individual sales transactions. Each sale document contains a 'clientId' and the denormalized 'agentId' of the teleoperator who closed the sale. This ensures Authorization Independence, allowing direct security rule validation against 'request.auth.uid' and supporting QAP-compliant queries for an agent's sales history.",
+          "params": [
+            {
+              "name": "saleId",
+              "description": "The unique identifier of the sales transaction."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/calls/{callId}",
+        "definition": {
+          "entityName": "Call",
+          "schema": {
+            "$ref": "#/backend/entities/Call"
+          },
+          "description": "Logs call attempts to clients. Each call document includes the 'clientId' and the denormalized 'agentId' of the teleoperator who made the call. This design supports Authorization Independence, allowing direct security rule checks against 'request.auth.uid' and facilitating QAP-compliant queries for an agent's call history.",
+          "params": [
+            {
+              "name": "callId",
+              "description": "The unique identifier of the call record."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to be secure, scalable, and debuggable, adhering strictly to the core design principles provided. It prioritizes Authorization Independence, ensures QAP (Query as Permission) compliance, and uses Structural Segregation to simplify security rules.\n\n**Authorization Independence via Denormalization:**\n*   **Clients (`/clients/{clientId}`):** Each client document directly includes the `agentId` (teleoperator assigned). This denormalization is crucial. It means any read, write, or update operation on a client document can be authorized by directly comparing `request.auth.uid` with `resource.data.agentId` without requiring a `get()` call to a parent or related collection. This makes rules atomic and highly debuggable.\n*   **Sales (`/sales/{saleId}`):** Similar to clients, each sale document contains the `agentId` of the teleoperator responsible for the sale, along with the `clientId`. This allows for direct authorization checks (`request.auth.uid == resource.data.agentId`) and supports QAP for listing an agent's sales.\n*   **Calls (`/calls/{callId}`):** Each call record also includes the `agentId` and `clientId`. This denormalization ensures that access to call logs can be authorized independently, matching the pattern of sales and clients.\n*   **Client Locations (`/clientLocations/{locationId}`):** To maintain strict Authorization Independence and avoid `get()` calls in rules, the `agentId` will also be denormalized and stored directly on each `clientLocation` document, alongside `clientId`. This allows authorization for locations to be handled in the same, independent manner as other core entities.\n\n**QAPs (Rules are not Filters):**\nThis structure robustly supports QAPs, particularly for the teleoperator interface:\n*   **Teleoperator Queue:** The frontend query for clients assigned to a teleoperator (`where('asignado_a', '==', teleoperador_id)`) directly maps to the `agentId` field on client documents. Firestore security rules can then enforce `allow read: if request.auth.uid == resource.data.agentId;`. This pre-filtered query ensures that users only request data they are authorized to see, making the rule simple and efficient.\n*   **Historical Data (Sales & Calls):** For viewing an agent's sales or call history, similar queries using `where('agentId', '==', request.auth.uid)` can be applied to the `/sales` and `/calls` collections, with rules directly validating `resource.data.agentId`.\n*   **Global Roles:** User roles (`Admin`, `Supervisor`, `User`) are stored directly in the `/users/{userId}` collection. This allows for simple, existence-based role checks in security rules (e.g., `get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin'`) for broader administrative access, while avoiding custom claims.\n\n**Structural Segregation:**\nEach top-level collection (`/users`, `/clients`, `/sales`, `/calls`, `/clientLocations`) represents a distinct entity with a homogeneous security posture. For example, all documents in `/clients` are primarily associated with an `agentId` (or accessible by higher roles), and their structure for authorization is consistent. This segregation simplifies the security rules by removing conditional logic based on document content within a single collection.\n\n**Data Invariants & Predictability:**\nCloud Functions will be responsible for calculating and updating denormalized fields on the `Client` document (e.g., `ticketPromedio`, `priorityScore`, `proximaLlamada`, `estadoPrediccion`). This centralizes complex logic, ensures data integrity, and makes the frontend display predictable. Standard `createdAt` and `updatedAt` fields are included for auditability.\n\nThis design minimizes complexity in security rules, maximizes query efficiency, and directly addresses the requirement for secure, agent-specific data access and robust data integrity."
+  }
+}

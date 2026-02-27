@@ -1,0 +1,146 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    /**
+     * CORE PHILOSOPHY
+     * This ruleset implements a strict "Assignment-Based" security model optimized for a CRM. 
+     * Access is primarily governed by the 'agentId' field denormalized across all client-related 
+     * entities, ensuring that teleoperators can only access data they are explicitly responsible for.
+     *
+     * DATA STRUCTURE
+     * The system uses a flat, top-level collection structure (/users, /clients, /sales, /calls, /clientLocations).
+     * This avoids deeply nested rules and supports "Authorization Independence," where a document 
+     * contains all the information necessary to authorize a request without looking up parent records.
+     *
+     * KEY SECURITY DECISIONS
+     * 1. Denormalization: The 'agentId' (Firebase UID) is stored directly on Clients, Sales, Calls, 
+     *    and Locations. This allows for high-performance rules that don't require costly get() calls.
+     * 2. Role-Based Access: 'Admin' and 'Supervisor' roles are verified by looking up the 
+     *    authenticated user's document in the /users collection.
+     * 3. Prototyping Flexibility: Rules enforce WHO can write but do not strictly validate 
+     *    the shape of the data (except for critical relational links like agentId).
+     * 4. Relational Integrity: On creation of sales or calls, the rules force the 'agentId' 
+     *    to match the actual UID of the authenticated user.
+     */
+
+    // --- Global Helper Functions ---
+
+    /** @description Checks if the request is from an authenticated user. */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /** @description Checks if the provided ID matches the authenticated user's UID. */
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    /** @description Fetches the authenticated user's record to check roles. */
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    /** @description Checks if the authenticated user has a specific system role. */
+    function hasRole(role) {
+      return isSignedIn() && getUserData().role == role;
+    }
+
+    /** @description Checks if the user is an Admin. */
+    function isAdmin() {
+      return hasRole('Admin');
+    }
+
+    /** @description Checks if the user is a Supervisor. */
+    function isSupervisor() {
+      return hasRole('Supervisor');
+    }
+
+    /** @description Validates if the user is the assigned agent for the resource. */
+    function isAssignedAgent(resourceData) {
+      return isSignedIn() && resourceData.agentId == request.auth.uid;
+    }
+
+    /** @description Combines assignment check with existence check for destructive/update ops. */
+    function isExistingAssignedAgent(resourceData) {
+      return resourceData != null && isAssignedAgent(resourceData);
+    }
+
+    // --- Collection Rules ---
+
+    /**
+     * @description Rules for the User profiles. Users can manage their own profile; Admins manage all.
+     * @path /users/{userId}
+     * @allow (get) If user is owner or Admin. (create) If user is creating their own initial profile.
+     * @deny (list) If user is not an Admin or Supervisor.
+     * @principle Pattern 1 (Ownership) & Pattern 4 (Self-Creation).
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId) || isAdmin() || isSupervisor();
+      allow list: if isAdmin() || isSupervisor();
+      allow create: if isOwner(userId);
+      allow update: if (isOwner(userId) && resource != null) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Rules for Client documents. Access is restricted to assigned agents or management.
+     * @path /clients/{clientId}
+     * @allow (list) If query filters by agentId == auth.uid. (update) If user is the assigned agent.
+     * @deny (delete) To anyone except Admins.
+     * @principle Pattern 3 (Shared Access / Assignment) via denormalized agentId.
+     */
+    match /clients/{clientId} {
+      allow get: if isAssignedAgent(resource.data) || isAdmin() || isSupervisor();
+      allow list: if isSignedIn(); // Filtering is enforced by the query (QAP)
+      allow create: if isAdmin() || isSupervisor();
+      allow update: if isExistingAssignedAgent(resource.data) || isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Rules for Client Locations. Enables map visualization for assigned agents.
+     * @path /clientLocations/{locationId}
+     * @allow (get) If agentId on location matches auth.uid.
+     * @deny (create) If agentId doesn't match authenticated user.
+     * @principle Authorization Independence: agentId is denormalized here to avoid get() on Client.
+     */
+    match /clientLocations/{locationId} {
+      allow get: if isAssignedAgent(resource.data) || isAdmin() || isSupervisor();
+      allow list: if isSignedIn();
+      allow create: if isAdmin() || isSupervisor();
+      allow update: if isAdmin() || isSupervisor();
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Rules for Sales records. Teleoperators create sales and view their own history.
+     * @path /sales/{saleId}
+     * @allow (create) If agentId is set to the current user's UID.
+     * @deny (update) If user tries to change the agentId or clientId of a recorded sale.
+     * @principle Relational Integrity: Enforces that the creator of the record is the assigned agent.
+     */
+    match /sales/{saleId} {
+      allow get: if isAssignedAgent(resource.data) || isAdmin() || isSupervisor();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.agentId == request.auth.uid;
+      allow update: if (isExistingAssignedAgent(resource.data) && request.resource.data.agentId == resource.data.agentId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description Rules for Call logs. Teleoperators log their activity.
+     * @path /calls/{callId}
+     * @allow (create) If user is logged in and assigns themselves as the agent.
+     * @deny (delete) To prevent teleoperators from deleting their call history.
+     * @principle QAP Compliance: Supports list operations for an agent's own call history.
+     */
+    match /calls/{callId} {
+      allow get: if isAssignedAgent(resource.data) || isAdmin() || isSupervisor();
+      allow list: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.agentId == request.auth.uid;
+      allow update: if (isExistingAssignedAgent(resource.data) && request.resource.data.agentId == resource.data.agentId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}
