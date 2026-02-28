@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -12,7 +13,6 @@ import { redirect } from 'next/navigation';
 import { FloatingLabelInput } from '@/components/ui/floating-label-input';
 import { FloatingLabelPasswordInput } from '@/components/ui/floating-label-password-input';
 import Image from 'next/image';
-import { getUserByEmail, updateUser } from '@/lib/firebase/firestore';
 
 export default function LoginPage() {
   const { user, loading: authLoading, refetchData } = useAuth();
@@ -23,13 +23,12 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSlowConnection, setIsSlowConnection] = useState(false);
 
-  // Monitor de conexión lenta
   useEffect(() => {
     let timer: NodeJS.Timeout;
     if (isLoading) {
       timer = setTimeout(() => {
         setIsSlowConnection(true);
-      }, 6000); // 6 segundos antes de avisar sobre lentitud
+      }, 6000);
     } else {
       setIsSlowConnection(false);
     }
@@ -42,55 +41,61 @@ export default function LoginPage() {
     setIsSlowConnection(false);
 
     try {
-        const userToLogin = await getUserByEmail(email);
+        // 1. Verificar estado mediante API segura (evita error de permisos Firestore)
+        const checkRes = await fetch(`/api/auth/security?email=${encodeURIComponent(email)}`);
+        const userSecurity = await checkRes.json();
 
-        if (userToLogin && userToLogin.status === 'inactive') {
+        if (userSecurity.exists && userSecurity.status === 'inactive') {
             toast({
                 title: "Cuenta Bloqueada",
-                description: "Tu cuenta ha sido bloqueada. Por favor, contacta al administrador.",
+                description: "Tu cuenta ha sido desactivada por seguridad. Contacta al administrador.",
                 variant: "destructive",
             });
             setIsLoading(false);
             return;
         }
 
-      await handleSignIn(email, password);
+        // 2. Intentar autenticación en Firebase
+        await handleSignIn(email, password);
 
-      if (userToLogin && userToLogin.failedLoginAttempts && userToLogin.failedLoginAttempts > 0) {
-          await updateUser(userToLogin.id, { failedLoginAttempts: 0 });
-          await refetchData('users');
-      }
+        // 3. Si tiene éxito, resetear intentos fallidos vía API
+        if (userSecurity.exists && userSecurity.failedLoginAttempts > 0) {
+            await fetch('/api/auth/security', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, action: 'reset' })
+            });
+            await refetchData('users');
+        }
 
-      toast({ title: "Inicio de sesión exitoso", description: "Verificando perfil..." });
+        toast({ title: "Inicio de sesión exitoso", description: "Verificando perfil..." });
 
     } catch (error: any) {
         console.error(error);
-        
         let description = "Ocurrió un error al iniciar sesión.";
         
         if (error.code === 'auth/network-request-failed') {
-            description = "Error de conexión. Por favor, verifica tu internet e intenta de nuevo.";
+            description = "Error de conexión. Por favor, verifica tu internet.";
         } else if (error.code === 'auth/invalid-credential') {
             description = "Credenciales incorrectas. Por favor, verifica tus datos.";
             
-            // Manejo de intentos fallidos
-            const userToUpdate = await getUserByEmail(email);
-            if (userToUpdate) {
-                const currentAttempts = userToUpdate.failedLoginAttempts || 0;
-                const newAttempts = currentAttempts + 1;
+            // 4. Registrar fallo vía API segura
+            try {
+                const failRes = await fetch('/api/auth/security', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, action: 'fail' })
+                });
+                const failData = await failRes.json();
                 
-                if (newAttempts >= 5) {
-                    await updateUser(userToUpdate.id, { status: 'inactive', failedLoginAttempts: newAttempts });
-                    await refetchData('users');
+                if (failData.blocked) {
                     description = "Cuenta bloqueada por demasiados intentos fallidos. Contacta al administrador.";
-                } else {
-                    await updateUser(userToUpdate.id, { failedLoginAttempts: newAttempts });
-                    await refetchData('users');
-                    description += ` Intento ${newAttempts} de 5.`;
+                } else if (failData.attempts) {
+                    description += ` Intento ${failData.attempts} de 5.`;
                 }
+            } catch (apiErr) {
+                console.error("Error registrando fallo:", apiErr);
             }
-        } else {
-            description = error.message || description;
         }
 
         toast({

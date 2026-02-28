@@ -9,7 +9,6 @@ import { Label } from '@/components/ui/label';
 import { Route, LoaderCircle, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { handlePasswordReset } from '@/lib/firebase/auth';
-import { getUsers } from '@/lib/firebase/firestore';
 
 export default function ForgotPasswordPage() {
   const { toast } = useToast();
@@ -21,11 +20,11 @@ export default function ForgotPasswordPage() {
     e.preventDefault();
     setIsLoading(true);
     try {
-      // Primero, verificamos si el usuario existe en Firestore.
-      const allUsers = await getUsers();
-      const userExists = allUsers.some(user => user.email === email);
+      // Verificar existencia vía API segura (evita error de permisos Firestore)
+      const res = await fetch(`/api/auth/security?email=${encodeURIComponent(email)}`);
+      const data = await res.json();
 
-      if (userExists) {
+      if (data.exists) {
         await handlePasswordReset(email);
         setIsSent(true);
         toast({ 
@@ -33,7 +32,6 @@ export default function ForgotPasswordPage() {
           description: "Revisa tu bandeja de entrada para restablecer tu contraseña."
         });
       } else {
-        // Si el usuario no existe, mostramos un error específico.
         toast({
           title: "Error",
           description: "No se encontró ningún usuario con ese correo electrónico.",
@@ -42,14 +40,9 @@ export default function ForgotPasswordPage() {
       }
     } catch (error: any) {
       console.error(error);
-      let description = "Ocurrió un error al enviar el correo.";
-      // Mantenemos el manejo de otros posibles errores de la API.
-      if (error.code) {
-        description = error.message || description;
-      }
       toast({
         title: "Error",
-        description: description,
+        description: "Ocurrió un error al procesar tu solicitud.",
         variant: 'destructive'
       });
     } finally {
@@ -85,7 +78,7 @@ export default function ForgotPasswordPage() {
                 </div>
                 <div className="space-y-2 pt-2">
                     <Button type="submit" className="w-full" disabled={isLoading}>
-                      {isLoading && <LoaderCircle className="animate-spin" />}
+                      {isLoading && <LoaderCircle className="animate-spin mr-2" />}
                       Enviar correo de restablecimiento
                     </Button>
                 </div>
