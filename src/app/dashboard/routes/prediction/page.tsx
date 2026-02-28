@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { LoaderCircle, Search, Save, MapPin, Download, Route, Users, LocateFixed } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
@@ -167,8 +167,17 @@ export default function PrediccionesPage() {
         const supervisorId = executiveUser.supervisorId || (currentUser?.role === 'Supervisor' && executiveUser.id !== currentUser.id ? currentUser.id : undefined);
 
         const routeClients: ClientInRoute[] = [];
-        for (const prediction of filteredPredicciones) {
-            const rucRaw = (prediction as any).ruc || (prediction as any).RUC || (prediction as any).cliente_id || (prediction as any).ID_Cliente;
+        
+        // Filtrar predicciones que pertenezcan al ejecutivo seleccionado (doble seguridad)
+        const predictionsToProcess = filteredPredicciones.filter(p => 
+            selectedEjecutivo === 'todos' || 
+            (p as any).Ejecutivo?.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase() ||
+            (p as any).ejecutivo?.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase()
+        );
+
+        for (const prediction of predictionsToProcess) {
+            // Usar el mismo orden de campos de ID que en la tabla para consistencia
+            const rucRaw = (prediction as any).cliente_id || (prediction as any).RUC || (prediction as any).ruc || (prediction as any).ID_Cliente;
             const ruc = String(rucRaw || '').trim();
             
             if (!ruc) continue;
@@ -178,9 +187,11 @@ export default function PrediccionesPage() {
                 c.ruc.trim().replace(/^0+/, '') === ruc.replace(/^0+/, '')
             );
             
+            // Usar parseISO para mayor robustez en el parsing de fechas, tal como se hace en la tabla
             if (prediction.fecha_predicha) {
-                const dateObj = new Date(prediction.fecha_predicha + 'T00:00:00');
-                if (!isNaN(dateObj.getTime())) {
+                const dateObj = parseISO(prediction.fecha_predicha);
+                
+                if (isValid(dateObj)) {
                     routeClients.push({
                         ruc: client ? client.ruc : ruc,
                         nombre_comercial: client ? client.nombre_comercial : ((prediction as any).Cliente || (prediction as any).nombre_comercial || 'Cliente Predicho'),
@@ -197,7 +208,7 @@ export default function PrediccionesPage() {
         }
         
         if (routeClients.length === 0) {
-            toast({title: "Sin clientes válidos", description: "No se encontraron predicciones con fechas válidas para generar la ruta.", variant: "destructive"});
+            toast({title: "Sin clientes válidos", description: "No se encontraron predicciones con fechas o datos válidos en la predicción para vincular con el catálogo.", variant: "destructive"});
             return;
         }
 
