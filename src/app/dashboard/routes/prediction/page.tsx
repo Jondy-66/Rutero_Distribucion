@@ -49,14 +49,24 @@ export default function PrediccionesPage() {
   const isSupervisorOrAdmin = currentUser?.role === 'Administrador' || currentUser?.role === 'Supervisor';
   
   const availableEjecutivos = useMemo(() => {
-    if (!isSupervisorOrAdmin && currentUser) {
+    if (!currentUser) return [];
+    
+    if (currentUser.role === 'Usuario' || currentUser.role === 'Telemercaderista') {
         return [currentUser];
     }
+
+    if (currentUser.role === 'Supervisor') {
+        // Un supervisor puede predecir para sí mismo y para los que tiene asignados
+        const managed = users.filter(u => u.supervisorId === currentUser.id);
+        return [currentUser, ...managed];
+    }
+
+    // Administrador ve a todos los ejecutivos de campo
     return users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
-  }, [users, currentUser, isSupervisorOrAdmin]);
+  }, [users, currentUser]);
 
   useEffect(() => {
-    if (!isSupervisorOrAdmin && currentUser) {
+    if (currentUser && !isSupervisorOrAdmin) {
       setSelectedEjecutivo(currentUser.name);
     }
   }, [isSupervisorOrAdmin, currentUser]);
@@ -133,7 +143,7 @@ export default function PrediccionesPage() {
         }
         return true; // No filtrar por búsqueda si no es admin/supervisor
     });
-}, [predicciones, searchTerm, isSupervisorOrAdmin]);
+  }, [predicciones, searchTerm, isSupervisorOrAdmin]);
 
 
   const handlePlanPredictionRoute = () => {
@@ -146,13 +156,16 @@ export default function PrediccionesPage() {
         return;
     }
 
-    const executiveUser = users.find(u => u.name === selectedEjecutivo);
+    // Buscamos al usuario en la lista de disponibles (que incluye al currentUser si es vendedor)
+    const executiveUser = availableEjecutivos.find(u => u.name.trim() === selectedEjecutivo.trim());
+    
     if (!executiveUser) {
         toast({ title: 'Error', description: `No se pudo encontrar al usuario ejecutivo: ${selectedEjecutivo}`, variant: 'destructive' });
         return;
     }
 
-    const supervisor = users.find(u => u.id === executiveUser.supervisorId);
+    // Si el usuario no tiene supervisorId pero nosotros sí (y somos su supervisor), usamos nuestro ID
+    const supervisorId = executiveUser.supervisorId || (currentUser?.role === 'Supervisor' && executiveUser.id !== currentUser.id ? currentUser.id : undefined);
 
     const routeClients: ClientInRoute[] = [];
     for (const prediction of filteredPredicciones) {
@@ -162,7 +175,7 @@ export default function PrediccionesPage() {
             routeClients.push({
                 ruc: client.ruc,
                 nombre_comercial: client.nombre_comercial,
-                date: new Date(prediction.fecha_predicha),
+                date: new Date(prediction.fecha_predicha + 'T00:00:00'),
                 valorVenta: parseFloat(String(prediction.ventas)) || 0,
                 valorCobro: parseFloat(String(prediction.cobros)) || 0,
                 promociones: parseFloat(String(prediction.promociones)) || 0,
@@ -177,12 +190,12 @@ export default function PrediccionesPage() {
         return;
     }
 
-    const routeDate = routeClients[0].date;
-    const routeName = `Ruta Predicha para ${selectedEjecutivo} - ${format(routeDate, 'PPP', {locale: es})}`;
+    const firstClientDate = routeClients[0].date;
+    const routeName = `Ruta Predicha para ${selectedEjecutivo} - ${format(firstClientDate!, 'PPP', {locale: es})}`;
     
     const predictionData = {
       routeName,
-      supervisorId: supervisor?.id,
+      supervisorId: supervisorId,
       clients: routeClients.map(c => ({...c, date: c.date?.toISOString()})),
     };
     

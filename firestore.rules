@@ -4,11 +4,12 @@ service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
     function isAdmin() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Administrador'; }
+    function isSupervisor() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Supervisor'; }
     function isAssignedAgent(data) { return request.auth.uid == data.agent_id; }
 
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
-      allow list: if isAdmin();
+      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isSupervisor());
+      allow list: if isSignedIn() && (isAdmin() || isSupervisor());
       allow write: if isAdmin();
     }
 
