@@ -147,60 +147,73 @@ export default function PrediccionesPage() {
 
 
   const handlePlanPredictionRoute = () => {
-    if (selectedEjecutivo === 'todos') {
-      toast({ title: 'Error', description: 'Por favor, selecciona un ejecutivo para planificar la ruta.', variant: 'destructive' });
-      return;
-    }
-    if (filteredPredicciones.length === 0) {
-        toast({ title: 'Error', description: 'No hay predicciones para planificar para este ejecutivo.', variant: 'destructive' });
-        return;
-    }
-
-    // Buscamos al usuario en la lista de disponibles (que incluye al currentUser si es vendedor)
-    const executiveUser = availableEjecutivos.find(u => u.name.trim() === selectedEjecutivo.trim());
-    
-    if (!executiveUser) {
-        toast({ title: 'Error', description: `No se pudo encontrar al usuario ejecutivo: ${selectedEjecutivo}`, variant: 'destructive' });
-        return;
-    }
-
-    // Si el usuario no tiene supervisorId pero nosotros sí (y somos su supervisor), usamos nuestro ID
-    const supervisorId = executiveUser.supervisorId || (currentUser?.role === 'Supervisor' && executiveUser.id !== currentUser.id ? currentUser.id : undefined);
-
-    const routeClients: ClientInRoute[] = [];
-    for (const prediction of filteredPredicciones) {
-        const ruc = (prediction as any).ruc || (prediction as any).RUC || (prediction as any).cliente_id;
-        const client = clients.find(c => c.ruc === ruc);
-        if (client && prediction.fecha_predicha) {
-            routeClients.push({
-                ruc: client.ruc,
-                nombre_comercial: client.nombre_comercial,
-                date: new Date(prediction.fecha_predicha + 'T00:00:00'),
-                valorVenta: parseFloat(String(prediction.ventas)) || 0,
-                valorCobro: parseFloat(String(prediction.cobros)) || 0,
-                promociones: parseFloat(String(prediction.promociones)) || 0,
-                origin: 'predicted',
-                status: 'Activo'
-            });
+    try {
+        if (selectedEjecutivo === 'todos') {
+            toast({ title: 'Error', description: 'Por favor, selecciona un ejecutivo para planificar la ruta.', variant: 'destructive' });
+            return;
         }
-    }
-    
-    if (routeClients.length === 0) {
-        toast({title: "Sin clientes válidos", description: "No se encontraron clientes con fechas válidas en la predicción.", variant: "destructive"});
-        return;
-    }
+        if (filteredPredicciones.length === 0) {
+            toast({ title: 'Error', description: 'No hay predicciones para planificar. Haz clic en "Obtener Predicciones" primero.', variant: 'destructive' });
+            return;
+        }
 
-    const firstClientDate = routeClients[0].date;
-    const routeName = `Ruta Predicha para ${selectedEjecutivo} - ${format(firstClientDate!, 'PPP', {locale: es})}`;
-    
-    const predictionData = {
-      routeName,
-      supervisorId: supervisorId,
-      clients: routeClients.map(c => ({...c, date: c.date?.toISOString()})),
-    };
-    
-    localStorage.setItem('predictionRoute', JSON.stringify(predictionData));
-    router.push('/dashboard/routes/new');
+        // Buscamos al usuario en la lista de disponibles de forma robusta
+        const executiveUser = availableEjecutivos.find(u => u.name.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase());
+        
+        if (!executiveUser) {
+            toast({ title: 'Error', description: `No se pudo identificar al ejecutivo: ${selectedEjecutivo}`, variant: 'destructive' });
+            return;
+        }
+
+        const supervisorId = executiveUser.supervisorId || (currentUser?.role === 'Supervisor' && executiveUser.id !== currentUser.id ? currentUser.id : undefined);
+
+        const routeClients: ClientInRoute[] = [];
+        for (const prediction of filteredPredicciones) {
+            const ruc = String((prediction as any).ruc || (prediction as any).RUC || (prediction as any).cliente_id).trim();
+            const client = clients.find(c => c.ruc.trim() === ruc);
+            
+            if (client && prediction.fecha_predicha) {
+                const dateObj = new Date(prediction.fecha_predicha + 'T00:00:00');
+                if (!isNaN(dateObj.getTime())) {
+                    routeClients.push({
+                        ruc: client.ruc,
+                        nombre_comercial: client.nombre_comercial,
+                        date: dateObj,
+                        valorVenta: parseFloat(String(prediction.ventas)) || 0,
+                        valorCobro: parseFloat(String(prediction.cobros)) || 0,
+                        promociones: parseFloat(String(prediction.promociones)) || 0,
+                        origin: 'predicted',
+                        status: 'Activo',
+                        visitStatus: 'Pendiente'
+                    });
+                }
+            }
+        }
+        
+        if (routeClients.length === 0) {
+            toast({title: "Sin clientes válidos", description: "No se encontraron clientes con fechas o datos válidos en la predicción para vincular con el catálogo.", variant: "destructive"});
+            return;
+        }
+
+        // Ordenar por fecha
+        routeClients.sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0));
+
+        const firstClientDate = routeClients[0].date;
+        const routeName = `Ruta Predicha para ${selectedEjecutivo} - ${format(firstClientDate!, 'PPP', {locale: es})}`;
+        
+        const predictionData = {
+            routeName,
+            supervisorId: supervisorId,
+            clients: routeClients.map(c => ({...c, date: c.date?.toISOString()})),
+        };
+        
+        localStorage.setItem('predictionRoute', JSON.stringify(predictionData));
+        toast({ title: "Preparando Planificación", description: "Redirigiendo al editor de rutas..." });
+        router.push('/dashboard/routes/new');
+    } catch (error: any) {
+        console.error("Error en handlePlanPredictionRoute:", error);
+        toast({ title: "Error al Procesar", description: "Ocurrió un error inesperado al preparar la ruta.", variant: "destructive" });
+    }
   }
 
   const handleViewOnMap = (prediction: Prediction) => {
@@ -218,10 +231,10 @@ export default function PrediccionesPage() {
       return;
     }
     
-    const predictedRucs = new Set(filteredPredicciones.map(p => (p as any).ruc || (p as any).RUC || (p as any).cliente_id));
+    const predictedRucs = new Set(filteredPredicciones.map(p => String((p as any).ruc || (p as any).RUC || (p as any).cliente_id).trim()));
 
     const clientsFromRucs = clients
-      .filter(client => predictedRucs.has(client.ruc) && isFinite(client.latitud) && isFinite(client.longitud));
+      .filter(client => predictedRucs.has(client.ruc.trim()) && isFinite(client.latitud) && isFinite(client.longitud));
 
     if (clientsFromRucs.length === 0) {
       toast({ title: "Sin ubicaciones válidas", description: "Ninguno de los clientes predichos tiene coordenadas válidas registradas." });
