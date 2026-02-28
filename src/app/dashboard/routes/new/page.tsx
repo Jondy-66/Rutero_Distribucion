@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -69,7 +70,11 @@ export default function NewRoutePage() {
 
   useEffect(() => {
     if (users) setSupervisors(users.filter(u => u.role === 'Supervisor'));
-    if (currentUser?.supervisorId) setSelectedSupervisorId(currentUser.supervisorId);
+    
+    // Carga inicial del supervisor del usuario actual
+    if (currentUser?.supervisorId && !selectedSupervisorId) {
+        setSelectedSupervisorId(currentUser.supervisorId);
+    }
     
     const predictionDataStr = localStorage.getItem('predictionRoute');
     if (predictionDataStr) {
@@ -86,13 +91,24 @@ export default function NewRoutePage() {
                     status: 'Activo'
                 };
             });
+            
             setRouteName(data.routeName || '');
+            
+            // Priorizar el supervisor que viene en la data de la predicción
+            if (data.supervisorId) {
+                setSelectedSupervisorId(data.supervisorId);
+            }
+            
             if (clientsFromPred[0]?.date) setRouteDate(clientsFromPred[0].date);
             setSelectedClients(clientsFromPred);
             setIsFromPrediction(true);
             setPredictedDateStrings(dateStrings);
+            
+            // Limpiar para evitar recargas accidentales
             localStorage.removeItem('predictionRoute');
-        } catch (e) { console.error(e); }
+        } catch (e) { 
+            console.error("Error rehidratando predicción:", e); 
+        }
     }
   }, [users, currentUser]);
 
@@ -169,7 +185,6 @@ export default function NewRoutePage() {
         supervisorName: supervisor?.name || '',
         createdBy: currentUser!.id,
     }]);
-    // No limpiamos routeName ni selectedClients aquí para que el usuario vea lo que añadió, pero el form se bloquea
     toast({ title: 'Ruta añadida a la lista de espera' });
   }
 
@@ -233,7 +248,13 @@ export default function NewRoutePage() {
                 <Label>Supervisor</Label>
                 <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
                     <SelectTrigger><SelectValue placeholder="Seleccionar supervisor" /></SelectTrigger>
-                    <SelectContent>{supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
+                    <SelectContent>
+                        {supervisors.length > 0 ? (
+                            supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))
+                        ) : (
+                            <SelectItem value="none" disabled>Cargando supervisores...</SelectItem>
+                        )}
+                    </SelectContent>
                 </Select>
             </div>
             

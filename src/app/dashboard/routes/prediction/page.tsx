@@ -156,18 +156,17 @@ export default function PrediccionesPage() {
             return;
         }
 
+        // Obtener el ID del supervisor asignado
         const supervisorId = executiveUser.supervisorId || (currentUser?.role === 'Supervisor' && executiveUser.id !== currentUser.id ? currentUser.id : undefined);
+        
         const routeClients: ClientInRoute[] = [];
         
-        // Unificamos la lógica de extracción de datos con la que usa la tabla
         for (const pred of filteredPredicciones) {
             const data: any = pred;
-            // Detección de RUC multicampo
             const rucRaw = data.cliente_id || data.RUC || data.ruc || data.ID_Cliente || data.ID_CLIENTE;
             const ruc = String(rucRaw || '').trim();
             if (!ruc) continue;
 
-            // Detección de fecha robusta
             const rawDate = data.fecha_predicha || data.fecha || data.FECHA;
             if (!rawDate) continue;
 
@@ -190,7 +189,7 @@ export default function PrediccionesPage() {
         }
         
         if (routeClients.length === 0) {
-            toast({title: "Error de Datos", description: "Los datos de la predicción no tienen un formato válido de fecha o RUC.", variant: "destructive"});
+            toast({title: "Error de Datos", description: "Los datos de la predicción no tienen un formato válido.", variant: "destructive"});
             return;
         }
 
@@ -198,7 +197,7 @@ export default function PrediccionesPage() {
         const firstDate = routeClients[0].date;
         
         const predictionData = {
-            routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(firstDate!, 'PPP', {locale: es})}`,
+            routeName: `Plan de Ruta - ${selectedEjecutivo}`,
             supervisorId: supervisorId,
             clients: routeClients.map(c => ({...c, date: c.date?.toISOString()})),
         };
@@ -208,7 +207,7 @@ export default function PrediccionesPage() {
         router.push('/dashboard/routes/new');
     } catch (error: any) {
         console.error("Error en planificación:", error);
-        toast({ title: "Error Crítico", description: "Ocurrió un error al procesar la lista de clientes.", variant: "destructive" });
+        toast({ title: "Error Crítico", description: "Ocurrió un error al procesar la lista.", variant: "destructive" });
     }
   }
 
