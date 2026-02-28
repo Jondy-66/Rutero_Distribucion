@@ -56,12 +56,10 @@ export default function PrediccionesPage() {
     }
 
     if (currentUser.role === 'Supervisor') {
-        // Un supervisor puede predecir para sí mismo y para los que tiene asignados
         const managed = users.filter(u => u.supervisorId === currentUser.id);
         return [currentUser, ...managed];
     }
 
-    // Administrador ve a todos los ejecutivos de campo
     return users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
   }, [users, currentUser]);
 
@@ -71,13 +69,9 @@ export default function PrediccionesPage() {
     }
   }, [isSupervisorOrAdmin, currentUser]);
 
-  /**
-   * Maneja la solicitud de predicciones a la API.
-   * Actualiza el estado con los resultados o muestra un error.
-   */
   const obtenerPredicciones = async () => {
     setLoading(true);
-    setPredicciones([]); // Limpiar predicciones anteriores
+    setPredicciones([]); 
     try {
       const params: Parameters<typeof getPredicciones>[0] = { 
           dias: Number(dias) || 7,
@@ -93,7 +87,6 @@ export default function PrediccionesPage() {
       }
       
       const data = await getPredicciones(params);
-      
       setPredicciones(data);
 
        if (data.length === 0) {
@@ -106,7 +99,7 @@ export default function PrediccionesPage() {
       console.error(error);
        toast({
         title: "Error de API",
-        description: error.message || "No se pudieron obtener las predicciones. Inténtalo de nuevo más tarde.",
+        description: error.message || "No se pudieron obtener las predicciones.",
         variant: "destructive",
       });
     }
@@ -127,7 +120,7 @@ export default function PrediccionesPage() {
             setLoading(false);
         },
         (error) => {
-            toast({ title: "Error de Ubicación", description: "No se pudo obtener la ubicación. " + error.message, variant: "destructive" });
+            toast({ title: "Error de Ubicación", description: "No se pudo obtener la ubicación.", variant: "destructive" });
             setLoading(false);
         }
     );
@@ -136,99 +129,86 @@ export default function PrediccionesPage() {
   const filteredPredicciones = useMemo(() => {
     return predicciones.filter(p => {
         if (isSupervisorOrAdmin) {
-             if (p.Ejecutivo && typeof p.Ejecutivo === 'string') {
-                return p.Ejecutivo.toLowerCase().includes(searchTerm.toLowerCase());
+             const execName = (p as any).Ejecutivo || (p as any).ejecutivo || '';
+             if (execName && typeof execName === 'string') {
+                return execName.toLowerCase().includes(searchTerm.toLowerCase());
             }
             return false;
         }
-        return true; // No filtrar por búsqueda si no es admin/supervisor
+        return true;
     });
   }, [predicciones, searchTerm, isSupervisorOrAdmin]);
-
 
   const handlePlanPredictionRoute = () => {
     try {
         if (selectedEjecutivo === 'todos') {
-            toast({ title: 'Error', description: 'Por favor, selecciona un ejecutivo para planificar la ruta.', variant: 'destructive' });
+            toast({ title: 'Atención', description: 'Por favor, selecciona un ejecutivo específico para planificar.', variant: 'destructive' });
             return;
         }
         if (filteredPredicciones.length === 0) {
-            toast({ title: 'Error', description: 'No hay predicciones para planificar. Haz clic en "Obtener Predicciones" primero.', variant: 'destructive' });
+            toast({ title: 'Sin datos', description: 'Haz clic en "Obtener Predicciones" antes de planificar.', variant: 'destructive' });
             return;
         }
 
         const executiveUser = availableEjecutivos.find(u => u.name.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase());
-        
         if (!executiveUser) {
-            toast({ title: 'Error', description: `No se pudo identificar al ejecutivo: ${selectedEjecutivo}`, variant: 'destructive' });
+            toast({ title: 'Error', description: `No se encontró el perfil de ${selectedEjecutivo}.`, variant: 'destructive' });
             return;
         }
 
         const supervisorId = executiveUser.supervisorId || (currentUser?.role === 'Supervisor' && executiveUser.id !== currentUser.id ? currentUser.id : undefined);
-
         const routeClients: ClientInRoute[] = [];
         
-        // Filtrar predicciones que pertenezcan al ejecutivo seleccionado (doble seguridad)
-        const predictionsToProcess = filteredPredicciones.filter(p => 
-            selectedEjecutivo === 'todos' || 
-            (p as any).Ejecutivo?.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase() ||
-            (p as any).ejecutivo?.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase()
-        );
-
-        for (const prediction of predictionsToProcess) {
-            // Usar el mismo orden de campos de ID que en la tabla para consistencia
-            const rucRaw = (prediction as any).cliente_id || (prediction as any).RUC || (prediction as any).ruc || (prediction as any).ID_Cliente;
+        // Unificamos la lógica de extracción de datos con la que usa la tabla
+        for (const pred of filteredPredicciones) {
+            const data: any = pred;
+            // Detección de RUC multicampo
+            const rucRaw = data.cliente_id || data.RUC || data.ruc || data.ID_Cliente || data.ID_CLIENTE;
             const ruc = String(rucRaw || '').trim();
-            
             if (!ruc) continue;
 
-            const client = clients.find(c => 
-                c.ruc.trim().toLowerCase() === ruc.toLowerCase() ||
-                c.ruc.trim().replace(/^0+/, '') === ruc.replace(/^0+/, '')
-            );
-            
-            // Usar parseISO para mayor robustez en el parsing de fechas, tal como se hace en la tabla
-            if (prediction.fecha_predicha) {
-                const dateObj = parseISO(prediction.fecha_predicha);
-                
-                if (isValid(dateObj)) {
-                    routeClients.push({
-                        ruc: client ? client.ruc : ruc,
-                        nombre_comercial: client ? client.nombre_comercial : ((prediction as any).Cliente || (prediction as any).nombre_comercial || 'Cliente Predicho'),
-                        date: dateObj,
-                        valorVenta: parseFloat(String(prediction.ventas)) || 0,
-                        valorCobro: parseFloat(String(prediction.cobros)) || 0,
-                        promociones: parseFloat(String(prediction.promociones)) || 0,
-                        origin: 'predicted',
-                        status: 'Activo',
-                        visitStatus: 'Pendiente'
-                    });
-                }
-            }
+            // Detección de fecha robusta
+            const rawDate = data.fecha_predicha || data.fecha || data.FECHA;
+            if (!rawDate) continue;
+
+            const dateObj = parseISO(String(rawDate));
+            if (!isValid(dateObj)) continue;
+
+            const clientInCatalog = clients.find(c => c.ruc.trim() === ruc);
+
+            routeClients.push({
+                ruc: ruc,
+                nombre_comercial: clientInCatalog ? clientInCatalog.nombre_comercial : (data.Cliente || data.nombre_comercial || 'Cliente Predicho'),
+                date: dateObj,
+                valorVenta: parseFloat(String(data.ventas || data.VENTAS || 0)) || 0,
+                valorCobro: parseFloat(String(data.cobros || data.COBROS || 0)) || 0,
+                promociones: parseFloat(String(data.promociones || 0)) || 0,
+                origin: 'predicted',
+                status: 'Activo',
+                visitStatus: 'Pendiente'
+            });
         }
         
         if (routeClients.length === 0) {
-            toast({title: "Sin clientes válidos", description: "No se encontraron predicciones con fechas o datos válidos en la predicción para vincular con el catálogo.", variant: "destructive"});
+            toast({title: "Error de Datos", description: "Los datos de la predicción no tienen un formato válido de fecha o RUC.", variant: "destructive"});
             return;
         }
 
         routeClients.sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0));
-
-        const firstClientDate = routeClients[0].date;
-        const routeName = `Ruta Predicha para ${selectedEjecutivo} - ${format(firstClientDate!, 'PPP', {locale: es})}`;
+        const firstDate = routeClients[0].date;
         
         const predictionData = {
-            routeName,
+            routeName: `Ruta Predicha para ${selectedEjecutivo} - ${format(firstDate!, 'PPP', {locale: es})}`,
             supervisorId: supervisorId,
             clients: routeClients.map(c => ({...c, date: c.date?.toISOString()})),
         };
         
         localStorage.setItem('predictionRoute', JSON.stringify(predictionData));
-        toast({ title: "Preparando Planificación", description: "Redirigiendo al editor de rutas..." });
+        toast({ title: "Preparando Ruta", description: "Redirigiendo al planificador..." });
         router.push('/dashboard/routes/new');
     } catch (error: any) {
-        console.error("Error en handlePlanPredictionRoute:", error);
-        toast({ title: "Error al Procesar", description: "Ocurrió un error inesperado al preparar la ruta.", variant: "destructive" });
+        console.error("Error en planificación:", error);
+        toast({ title: "Error Crítico", description: "Ocurrió un error al procesar la lista de clientes.", variant: "destructive" });
     }
   }
 
@@ -237,23 +217,18 @@ export default function PrediccionesPage() {
       setSelectedLocation({ lat: prediction.LatitudTrz, lng: prediction.LongitudTrz });
       setIsMapOpen(true);
     } else {
-      toast({ title: 'Ubicación no válida', description: 'Las coordenadas para esta predicción no son válidas.', variant: 'destructive' });
+      toast({ title: 'Sin ubicación', description: 'Este cliente no tiene coordenadas registradas.', variant: 'destructive' });
     }
   };
 
   const handleViewOptimizedRoute = () => {
-    if (filteredPredicciones.length === 0) {
-      toast({ title: "Sin datos", description: "No hay predicciones para mostrar en el mapa." });
-      return;
-    }
+    if (filteredPredicciones.length === 0) return;
     
     const predictedRucs = new Set(filteredPredicciones.map(p => String((p as any).ruc || (p as any).RUC || (p as any).cliente_id || (p as any).ID_Cliente).trim()));
-
-    const clientsFromRucs = clients
-      .filter(client => predictedRucs.has(client.ruc.trim()) && isFinite(client.latitud) && isFinite(client.longitud));
+    const clientsFromRucs = clients.filter(client => predictedRucs.has(client.ruc.trim()) && isFinite(client.latitud) && isFinite(client.longitud));
 
     if (clientsFromRucs.length === 0) {
-      toast({ title: "Sin ubicaciones válidas", description: "Ninguno de los clientes predichos tiene coordenadas válidas registradas." });
+      toast({ title: "Mapa vacío", description: "No hay clientes con coordenadas válidas para mostrar." });
       return;
     }
 
@@ -262,46 +237,34 @@ export default function PrediccionesPage() {
   };
 
   const handleDownloadExcel = () => {
-    if (filteredPredicciones.length === 0) {
-        toast({
-            title: "Sin Datos",
-            description: "No hay predicciones para descargar.",
-            variant: "destructive"
-        });
-        return;
-    }
+    if (filteredPredicciones.length === 0) return;
 
     const dataToExport = filteredPredicciones.map(p => {
-        const clientId = (p as any).cliente_id || (p as any).RUC || (p as any).ruc || (p as any).ID_Cliente;
+        const data: any = p;
+        const clientId = data.cliente_id || data.RUC || data.ruc || data.ID_Cliente;
         const client = clients.find(c => c.ruc === clientId);
         return {
+            'Ejecutivo': data.Ejecutivo || data.ejecutivo || '',
             'ID Cliente': clientId,
-            'Cliente': client ? client.nombre_comercial : (p as any).Cliente || 'No encontrado',
-            'Fecha Predicha': p.fecha_predicha ? format(parseISO(p.fecha_predicha), 'PPP', { locale: es }) : 'N/A',
-            'Probabilidad': (p.probabilidad_visita * 100).toFixed(2) + '%',
-            'Ventas': p.ventas || 0,
-            'Cobros': p.cobros || 0,
-            'Promociones': p.promociones || 0,
+            'Cliente': client ? client.nombre_comercial : data.Cliente || 'No encontrado',
+            'Fecha Predicha': data.fecha_predicha ? format(parseISO(data.fecha_predicha), 'PPP', { locale: es }) : 'N/A',
+            'Probabilidad': (data.probabilidad_visita * 100).toFixed(2) + '%',
+            'Ventas Est.': data.ventas || 0,
+            'Cobros Est.': data.cobros || 0,
         };
     });
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Predicciones");
-    XLSX.writeFile(workbook, "predicciones_de_visitas.xlsx");
-    toast({ title: "Descarga Iniciada", description: "Tu reporte en Excel se está descargando." });
-};
-  
-   const formatCurrency = (value: number | string | undefined | null) => {
-    if (value === undefined || value === null) return '$0.00';
-    const numValue = typeof value === 'string' ? parseFloat(value) : value;
-    if (isNaN(numValue)) return '$0.00';
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(numValue);
+    XLSX.writeFile(workbook, `predicciones_${selectedEjecutivo}.xlsx`);
   };
-
+  
+   const formatCurrency = (value: any) => {
+    const numValue = typeof value === 'string' ? parseFloat(value) : (typeof value === 'number' ? value : 0);
+    if (isNaN(numValue)) return '$0.00';
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(numValue);
+  };
 
   return (
     <>
@@ -310,7 +273,7 @@ export default function PrediccionesPage() {
         <Card>
             <CardHeader>
                 <CardTitle>Parámetros de Predicción</CardTitle>
-                <CardDescription>Selecciona los parámetros para generar las predicciones.</CardDescription>
+                <CardDescription>Configura los filtros para generar las visitas sugeridas.</CardDescription>
             </CardHeader>
             <CardContent>
                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -367,17 +330,17 @@ export default function PrediccionesPage() {
                         <Input id="lonBase" value={lonBase} onChange={(e) => setLonBase(e.target.value)} disabled={loading} placeholder="-78.469498" />
                     </div>
                     <div className="space-y-2">
-                        <Button onClick={handleGetLocation} variant="outline" disabled={loading}>
+                        <Button onClick={handleGetLocation} variant="outline" disabled={loading} className="w-full">
                             <LocateFixed className="mr-2 h-4 w-4" />
-                            Obtener mi Ubicación
+                            Mi Ubicación
                         </Button>
                     </div>
                  </div>
             </CardContent>
             <CardFooter>
-                <Button onClick={obtenerPredicciones} disabled={loading}>
+                <Button onClick={obtenerPredicciones} disabled={loading} className="w-full sm:w-auto font-bold">
                     {loading && <LoaderCircle className="animate-spin mr-2" />}
-                    {loading ? "Cargando..." : "Obtener Predicciones"}
+                    {loading ? "Generando..." : "Obtener Predicciones"}
                 </Button>
             </CardFooter>
         </Card>
@@ -385,12 +348,7 @@ export default function PrediccionesPage() {
         <Card>
             <CardHeader>
                 <CardTitle>Resultados de la Predicción</CardTitle>
-                 <CardDescription>
-                    {isSupervisorOrAdmin 
-                        ? 'Listado de visitas predichas y su probabilidad.' 
-                        : 'Este es el listado de tus visitas predichas y su probabilidad.'
-                    }
-                </CardDescription>
+                 <CardDescription>Listado de visitas sugeridas por probabilidad de éxito.</CardDescription>
             </CardHeader>
             <CardContent>
                 {isSupervisorOrAdmin && (
@@ -398,7 +356,7 @@ export default function PrediccionesPage() {
                         <div className="relative w-full sm:max-w-xs">
                             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
                             <Input 
-                                placeholder="Buscar por ejecutivo..." 
+                                placeholder="Filtrar resultados..." 
                                 className="w-full pl-8" 
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -406,7 +364,7 @@ export default function PrediccionesPage() {
                         </div>
                     </div>
                 )}
-                 <div className="border rounded-lg">
+                 <div className="border rounded-lg overflow-x-auto">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -417,33 +375,32 @@ export default function PrediccionesPage() {
                                 <TableHead className="text-right">Probabilidad</TableHead>
                                 <TableHead className="text-right">Ventas</TableHead>
                                 <TableHead className="text-right">Cobros</TableHead>
-                                <TableHead className="text-right">Promociones</TableHead>
                                 <TableHead>Mapa</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {loading ? (
                                 <TableRow>
-                                    <TableCell colSpan={9} className="h-24 text-center">
+                                    <TableCell colSpan={8} className="h-24 text-center">
                                         <LoaderCircle className="mx-auto animate-spin text-primary" />
                                     </TableCell>
                                 </TableRow>
                             ) : filteredPredicciones.length > 0 ? (
                                 filteredPredicciones.map((pred: any, i) => {
-                                    const clientId = pred.cliente_id || pred.RUC || pred.ruc || pred.ID_Cliente;
+                                    const clientId = pred.cliente_id || pred.RUC || pred.ruc || pred.ID_Cliente || pred.ID_CLIENTE;
                                     const client = clients.find(c => c.ruc === clientId);
+                                    const execName = pred.Ejecutivo || pred.ejecutivo || 'N/A';
                                     return (
                                         <TableRow key={i}>
-                                            <TableCell>{pred.Ejecutivo}</TableCell>
-                                            <TableCell>{clientId}</TableCell>
-                                            <TableCell>{client ? client.nombre_comercial : (pred.Cliente || 'No encontrado')}</TableCell>
-                                            <TableCell>{pred.fecha_predicha ? format(parseISO(pred.fecha_predicha), 'PPP', { locale: es }) : 'N/A'}</TableCell>
-                                            <TableCell className="text-right">{(pred.probabilidad_visita * 100).toFixed(2)}%</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(pred.ventas)}</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(pred.cobros)}</TableCell>
-                                            <TableCell className="text-right">{formatCurrency(pred.promociones)}</TableCell>
+                                            <TableCell className="text-xs font-medium">{execName}</TableCell>
+                                            <TableCell className="text-xs font-mono">{clientId}</TableCell>
+                                            <TableCell className="text-xs font-bold uppercase">{client ? client.nombre_comercial : (pred.Cliente || 'Nuevo Cliente')}</TableCell>
+                                            <TableCell className="text-xs">{pred.fecha_predicha ? format(parseISO(pred.fecha_predicha), 'dd/MM/yyyy', { locale: es }) : 'N/A'}</TableCell>
+                                            <TableCell className="text-right font-black text-primary">{(pred.probabilidad_visita * 100).toFixed(1)}%</TableCell>
+                                            <TableCell className="text-right text-xs">{formatCurrency(pred.ventas)}</TableCell>
+                                            <TableCell className="text-right text-xs">{formatCurrency(pred.cobros)}</TableCell>
                                             <TableCell>
-                                                <Button variant="ghost" size="icon" onClick={() => handleViewOnMap(pred)} title="Ver en Mapa">
+                                                <Button variant="ghost" size="icon" onClick={() => handleViewOnMap(pred)}>
                                                     <MapPin className="h-4 w-4" />
                                                 </Button>
                                             </TableCell>
@@ -452,7 +409,7 @@ export default function PrediccionesPage() {
                                 })
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={9} className="h-24 text-center">
+                                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                                         No hay predicciones para mostrar.
                                     </TableCell>
                                 </TableRow>
@@ -461,35 +418,33 @@ export default function PrediccionesPage() {
                     </Table>
                 </div>
             </CardContent>
-            <CardFooter className="flex-col sm:flex-row gap-2 items-start sm:items-center">
-                 <Button onClick={handlePlanPredictionRoute} disabled={loading || isSaving || selectedEjecutivo === 'todos'}>
+            <CardFooter className="flex flex-col sm:flex-row gap-3">
+                 <Button onClick={handlePlanPredictionRoute} disabled={loading || isSaving || selectedEjecutivo === 'todos'} className="w-full sm:w-auto font-black bg-primary">
                     {(loading || isSaving) && <LoaderCircle className="animate-spin mr-2" />}
                     <Save className="mr-2 h-4 w-4" />
-                    Planificar Ruta con Predicción
+                    PLANIFICAR RUTA
                 </Button>
-                 <Button onClick={handleViewOptimizedRoute} variant="outline" disabled={loading || filteredPredicciones.length === 0}>
+                 <Button onClick={handleViewOptimizedRoute} variant="outline" disabled={loading || filteredPredicciones.length === 0} className="w-full sm:w-auto font-bold">
                     <Route className="mr-2 h-4 w-4" />
-                    Ver Ruta en Mapa
+                    VER EN MAPA
                 </Button>
-                <Button onClick={handleDownloadExcel} variant="outline" disabled={loading || filteredPredicciones.length === 0}>
+                <Button onClick={handleDownloadExcel} variant="ghost" disabled={loading || filteredPredicciones.length === 0} className="w-full sm:w-auto font-bold">
                     <Download className="mr-2 h-4 w-4" />
-                    Descargar Excel
+                    EXCEL
                 </Button>
             </CardFooter>
         </Card>
       </div>
+      
       <Dialog open={isMapOpen} onOpenChange={setIsMapOpen}>
             <DialogContent className="max-w-3xl h-[60vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>Ubicación de la Predicción</DialogTitle>
-                     <DialogDescription>
-                        Esta es la ubicación (Lat: {selectedLocation?.lat.toFixed(4)}, Lon: {selectedLocation?.lng.toFixed(4)}) para la visita predicha.
-                    </DialogDescription>
+                    <DialogTitle>Ubicación de Visita</DialogTitle>
                 </DialogHeader>
-                <div className="flex-grow">
+                <div className="flex-grow rounded-xl overflow-hidden">
                     {selectedLocation && (
                         <MapView 
-                            key={Date.now()} // Force re-render
+                            key={Date.now()}
                             center={selectedLocation}
                             markerPosition={selectedLocation}
                             containerClassName="h-full w-full"
@@ -502,12 +457,10 @@ export default function PrediccionesPage() {
         <Dialog open={isRouteMapOpen} onOpenChange={setIsRouteMapOpen}>
             <DialogContent className="max-w-4xl h-[80vh] flex flex-col">
                 <DialogHeader>
-                    <DialogTitle>Ruta Optimizada de Predicciones</DialogTitle>
-                     <DialogDescription>
-                        Esta es la ruta óptima sugerida que conecta todos los clientes de la predicción actual.
-                    </DialogDescription>
+                    <DialogTitle>Ruta Optimizada</DialogTitle>
+                     <DialogDescription>Mapa interactivo con todos los clientes predichos.</DialogDescription>
                 </DialogHeader>
-                <div className="flex-grow">
+                <div className="flex-grow rounded-xl overflow-hidden border">
                     <MapView 
                         clients={clientsForMap}
                         containerClassName="h-full w-full"
