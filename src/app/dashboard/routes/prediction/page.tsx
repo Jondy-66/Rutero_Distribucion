@@ -157,7 +157,6 @@ export default function PrediccionesPage() {
             return;
         }
 
-        // Buscamos al usuario en la lista de disponibles de forma robusta
         const executiveUser = availableEjecutivos.find(u => u.name.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase());
         
         if (!executiveUser) {
@@ -169,15 +168,22 @@ export default function PrediccionesPage() {
 
         const routeClients: ClientInRoute[] = [];
         for (const prediction of filteredPredicciones) {
-            const ruc = String((prediction as any).ruc || (prediction as any).RUC || (prediction as any).cliente_id).trim();
-            const client = clients.find(c => c.ruc.trim() === ruc);
+            const rucRaw = (prediction as any).ruc || (prediction as any).RUC || (prediction as any).cliente_id || (prediction as any).ID_Cliente;
+            const ruc = String(rucRaw || '').trim();
             
-            if (client && prediction.fecha_predicha) {
+            if (!ruc) continue;
+
+            const client = clients.find(c => 
+                c.ruc.trim().toLowerCase() === ruc.toLowerCase() ||
+                c.ruc.trim().replace(/^0+/, '') === ruc.replace(/^0+/, '')
+            );
+            
+            if (prediction.fecha_predicha) {
                 const dateObj = new Date(prediction.fecha_predicha + 'T00:00:00');
                 if (!isNaN(dateObj.getTime())) {
                     routeClients.push({
-                        ruc: client.ruc,
-                        nombre_comercial: client.nombre_comercial,
+                        ruc: client ? client.ruc : ruc,
+                        nombre_comercial: client ? client.nombre_comercial : ((prediction as any).Cliente || (prediction as any).nombre_comercial || 'Cliente Predicho'),
                         date: dateObj,
                         valorVenta: parseFloat(String(prediction.ventas)) || 0,
                         valorCobro: parseFloat(String(prediction.cobros)) || 0,
@@ -191,11 +197,10 @@ export default function PrediccionesPage() {
         }
         
         if (routeClients.length === 0) {
-            toast({title: "Sin clientes válidos", description: "No se encontraron clientes con fechas o datos válidos en la predicción para vincular con el catálogo.", variant: "destructive"});
+            toast({title: "Sin clientes válidos", description: "No se encontraron predicciones con fechas válidas para generar la ruta.", variant: "destructive"});
             return;
         }
 
-        // Ordenar por fecha
         routeClients.sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0));
 
         const firstClientDate = routeClients[0].date;
@@ -231,7 +236,7 @@ export default function PrediccionesPage() {
       return;
     }
     
-    const predictedRucs = new Set(filteredPredicciones.map(p => String((p as any).ruc || (p as any).RUC || (p as any).cliente_id).trim()));
+    const predictedRucs = new Set(filteredPredicciones.map(p => String((p as any).ruc || (p as any).RUC || (p as any).cliente_id || (p as any).ID_Cliente).trim()));
 
     const clientsFromRucs = clients
       .filter(client => predictedRucs.has(client.ruc.trim()) && isFinite(client.latitud) && isFinite(client.longitud));
@@ -256,11 +261,11 @@ export default function PrediccionesPage() {
     }
 
     const dataToExport = filteredPredicciones.map(p => {
-        const clientId = (p as any).cliente_id || (p as any).RUC || (p as any).ruc;
+        const clientId = (p as any).cliente_id || (p as any).RUC || (p as any).ruc || (p as any).ID_Cliente;
         const client = clients.find(c => c.ruc === clientId);
         return {
             'ID Cliente': clientId,
-            'Cliente': client ? client.nombre_comercial : 'No encontrado',
+            'Cliente': client ? client.nombre_comercial : (p as any).Cliente || 'No encontrado',
             'Fecha Predicha': p.fecha_predicha ? format(parseISO(p.fecha_predicha), 'PPP', { locale: es }) : 'N/A',
             'Probabilidad': (p.probabilidad_visita * 100).toFixed(2) + '%',
             'Ventas': p.ventas || 0,
@@ -414,7 +419,7 @@ export default function PrediccionesPage() {
                                 </TableRow>
                             ) : filteredPredicciones.length > 0 ? (
                                 filteredPredicciones.map((pred: any, i) => {
-                                    const clientId = pred.cliente_id || pred.RUC || pred.ruc;
+                                    const clientId = pred.cliente_id || pred.RUC || pred.ruc || pred.ID_Cliente;
                                     const client = clients.find(c => c.ruc === clientId);
                                     return (
                                         <TableRow key={i}>
