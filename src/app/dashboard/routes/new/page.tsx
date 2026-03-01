@@ -46,7 +46,6 @@ export default function NewRoutePage() {
   const [routeDate, setRouteDate] = useState<Date | undefined>(new Date());
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
   const [selectedClients, setSelectedClients] = useState<ClientInRoute[]>([]);
-  const [supervisors, setSupervisors] = useState<User[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   
   const [isFromPrediction, setIsFromPrediction] = useState(false);
@@ -71,15 +70,22 @@ export default function NewRoutePage() {
   // Determinar si el usuario debe tener un supervisor fijo
   const isSellerRole = currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista';
 
+  // Lista de supervisores para el dropdown (solo para Admins/Supervisores)
+  const supervisors = useMemo(() => {
+    return users.filter(u => u.role === 'Supervisor');
+  }, [users]);
+
+  // Resolución del nombre del supervisor (para vendedores)
+  const currentSupervisorName = useMemo(() => {
+    if (!selectedSupervisorId) return null;
+    const found = users.find(u => u.id === selectedSupervisorId);
+    return found?.name || null;
+  }, [users, selectedSupervisorId]);
+
   useEffect(() => {
-    if (users && users.length > 0) {
-        const supervisorList = users.filter(u => u.role === 'Supervisor');
-        setSupervisors(supervisorList);
-        
-        // Prioridad absoluta: Si es vendedor, forzar su propio supervisor
-        if (isSellerRole && currentUser?.supervisorId) {
-            setSelectedSupervisorId(currentUser.supervisorId);
-        }
+    // Prioridad absoluta: Si es vendedor, forzar su propio supervisor del perfil
+    if (isSellerRole && currentUser?.supervisorId) {
+        setSelectedSupervisorId(currentUser.supervisorId);
     }
     
     // Carga inicial de datos desde predicción si existe
@@ -116,12 +122,7 @@ export default function NewRoutePage() {
             console.error("Error rehidratando predicción:", e); 
         }
     }
-  }, [users, currentUser, isSellerRole]);
-
-  // Buscar el objeto del supervisor seleccionado para mostrar su nombre
-  const currentSupervisor = useMemo(() => {
-    return supervisors.find(s => s.id === selectedSupervisorId);
-  }, [supervisors, selectedSupervisorId]);
+  }, [currentUser, isSellerRole]);
 
   const filteredDialogClients = useMemo(() => {
     const term = dialogSearchTerm.toLowerCase();
@@ -185,7 +186,7 @@ export default function NewRoutePage() {
       toast({ title: 'Faltan datos', description: 'Asegúrate de tener un nombre, supervisor y al menos un cliente.', variant: 'destructive' });
       return;
     }
-    const supervisor = supervisors.find(s => s.id === selectedSupervisorId);
+    const supervisor = users.find(u => u.id === selectedSupervisorId);
     setStagedRoutes(prev => [...prev, {
         tempId: Date.now(),
         routeName,
@@ -193,7 +194,7 @@ export default function NewRoutePage() {
         clients: [...selectedClients],
         status: 'Planificada',
         supervisorId: selectedSupervisorId!,
-        supervisorName: supervisor?.name || '',
+        supervisorName: supervisor?.name || 'Supervisor Asignado',
         createdBy: currentUser!.id,
     }]);
     toast({ title: 'Ruta añadida a la lista de espera' });
@@ -261,12 +262,12 @@ export default function NewRoutePage() {
                     <div className="relative">
                         <Users className="absolute left-3 top-3 h-4 w-4 text-primary z-10" />
                         <Input 
-                            value={currentSupervisor?.name || (dataLoading ? 'Cargando supervisor asignado...' : 'Supervisor no encontrado')} 
-                            className="pl-10 h-10 font-bold bg-muted border-primary/20" 
+                            value={currentSupervisorName || (dataLoading ? 'Cargando supervisor asignado...' : (currentUser?.supervisorId ? 'Supervisor no encontrado' : 'Sin supervisor asignado en tu perfil'))} 
+                            className={cn("pl-10 h-10 font-bold bg-muted border-primary/20", !currentSupervisorName && !dataLoading && "text-destructive")} 
                             disabled 
                         />
-                        {!currentUser?.supervisorId && (
-                            <p className="text-[10px] text-destructive font-bold uppercase mt-1">No tienes un supervisor asignado en tu perfil de usuario.</p>
+                        {!currentUser?.supervisorId && !dataLoading && (
+                            <p className="text-[10px] text-destructive font-black uppercase mt-1">Error: No tienes un supervisor asignado. Contacta al Administrador.</p>
                         )}
                     </div>
                 ) : (
