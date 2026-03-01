@@ -69,7 +69,9 @@ export default function NewRoutePage() {
   const isFormLocked = stagedRoutes.length > 0;
 
   useEffect(() => {
-    if (users) setSupervisors(users.filter(u => u.role === 'Supervisor'));
+    if (users && users.length > 0) {
+        setSupervisors(users.filter(u => u.role === 'Supervisor'));
+    }
     
     // Carga inicial del supervisor del usuario actual
     if (currentUser?.supervisorId && !selectedSupervisorId) {
@@ -104,7 +106,7 @@ export default function NewRoutePage() {
             setIsFromPrediction(true);
             setPredictedDateStrings(dateStrings);
             
-            // Limpiar para evitar recargas accidentales
+            // Limpiar para evitar recargas accidentales después de que el componente ya ha procesado la data
             localStorage.removeItem('predictionRoute');
         } catch (e) { 
             console.error("Error rehidratando predicción:", e); 
@@ -247,12 +249,15 @@ export default function NewRoutePage() {
             <div className="space-y-2">
                 <Label>Supervisor</Label>
                 <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar supervisor" /></SelectTrigger>
+                    <SelectTrigger>
+                        <Users className="mr-2 h-4 w-4 text-primary" />
+                        <SelectValue placeholder={supervisors.length > 0 ? "Seleccionar supervisor" : "Cargando supervisores..."} />
+                    </SelectTrigger>
                     <SelectContent>
                         {supervisors.length > 0 ? (
                             supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))
                         ) : (
-                            <SelectItem value="none" disabled>Cargando supervisores...</SelectItem>
+                            <SelectItem value="none" disabled>No se encontraron supervisores</SelectItem>
                         )}
                     </SelectContent>
                 </Select>

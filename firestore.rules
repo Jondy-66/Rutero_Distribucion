@@ -9,7 +9,7 @@ service cloud.firestore {
 
     match /users/{userId} {
       allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isSupervisor());
-      allow list: if isSignedIn() && (isAdmin() || isSupervisor());
+      allow list: if isSignedIn(); // Se permite listar para que los usuarios puedan encontrar y seleccionar supervisores
       allow write: if isAdmin();
     }
 
