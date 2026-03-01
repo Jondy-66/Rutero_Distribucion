@@ -68,16 +68,15 @@ export default function NewRoutePage() {
   // Si hay rutas en la lista, el formulario de la izquierda se bloquea
   const isFormLocked = stagedRoutes.length > 0;
 
+  // Determinar si el usuario debe tener un supervisor fijo
+  const isSellerRole = currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista';
+
   useEffect(() => {
     if (users && users.length > 0) {
         setSupervisors(users.filter(u => u.role === 'Supervisor'));
     }
     
-    // Carga inicial del supervisor del usuario actual
-    if (currentUser?.supervisorId && !selectedSupervisorId) {
-        setSelectedSupervisorId(currentUser.supervisorId);
-    }
-    
+    // Carga inicial de datos
     const predictionDataStr = localStorage.getItem('predictionRoute');
     if (predictionDataStr) {
         try {
@@ -96,8 +95,8 @@ export default function NewRoutePage() {
             
             setRouteName(data.routeName || '');
             
-            // Priorizar el supervisor que viene en la data de la predicción
-            if (data.supervisorId) {
+            // Si es administrador/supervisor, tomar el supervisor que viene en la data
+            if (!isSellerRole && data.supervisorId) {
                 setSelectedSupervisorId(data.supervisorId);
             }
             
@@ -106,13 +105,24 @@ export default function NewRoutePage() {
             setIsFromPrediction(true);
             setPredictedDateStrings(dateStrings);
             
-            // Limpiar para evitar recargas accidentales después de que el componente ya ha procesado la data
             localStorage.removeItem('predictionRoute');
         } catch (e) { 
             console.error("Error rehidratando predicción:", e); 
         }
     }
-  }, [users, currentUser]);
+
+    // Prioridad absoluta: Si es vendedor, forzar su propio supervisor
+    if (isSellerRole && currentUser?.supervisorId) {
+        setSelectedSupervisorId(currentUser.supervisorId);
+    } else if (!selectedSupervisorId && currentUser?.supervisorId) {
+        setSelectedSupervisorId(currentUser.supervisorId);
+    }
+  }, [users, currentUser, isSellerRole]);
+
+  // Buscar el objeto del supervisor seleccionado para mostrar su nombre
+  const currentSupervisor = useMemo(() => {
+    return supervisors.find(s => s.id === selectedSupervisorId);
+  }, [supervisors, selectedSupervisorId]);
 
   const filteredDialogClients = useMemo(() => {
     const term = dialogSearchTerm.toLowerCase();
@@ -247,20 +257,34 @@ export default function NewRoutePage() {
               />
             </div>
             <div className="space-y-2">
-                <Label>Supervisor</Label>
-                <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
-                    <SelectTrigger>
-                        <Users className="mr-2 h-4 w-4 text-primary" />
-                        <SelectValue placeholder={supervisors.length > 0 ? "Seleccionar supervisor" : "Cargando supervisores..."} />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {supervisors.length > 0 ? (
-                            supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))
-                        ) : (
-                            <SelectItem value="none" disabled>No se encontraron supervisores</SelectItem>
+                <Label>Supervisor (Aprobador)</Label>
+                {isSellerRole ? (
+                    <div className="relative">
+                        <Users className="absolute left-3 top-3 h-4 w-4 text-primary z-10" />
+                        <Input 
+                            value={currentSupervisor?.name || 'Cargando supervisor asignado...'} 
+                            className="pl-10 h-10 font-bold bg-muted border-primary/20" 
+                            disabled 
+                        />
+                        {!currentUser?.supervisorId && (
+                            <p className="text-[10px] text-destructive font-bold uppercase mt-1">No tienes un supervisor asignado en tu perfil.</p>
                         )}
-                    </SelectContent>
-                </Select>
+                    </div>
+                ) : (
+                    <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
+                        <SelectTrigger>
+                            <Users className="mr-2 h-4 w-4 text-primary" />
+                            <SelectValue placeholder={supervisors.length > 0 ? "Seleccionar supervisor" : "Cargando supervisores..."} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {supervisors.length > 0 ? (
+                                supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))
+                            ) : (
+                                <SelectItem value="none" disabled>No se encontraron supervisores</SelectItem>
+                            )}
+                        </SelectContent>
+                    </Select>
+                )}
             </div>
             
             <Separator />
