@@ -70,32 +70,35 @@ export default function NewRoutePage() {
   const isFormLocked = stagedRoutes.length > 0;
   const isSellerRole = currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista';
 
-  // Lista base de supervisores para el selector (si el auto-check falla)
+  // Lista base de supervisores para el selector (incluye Administradores como aprobadores)
   const activeSupervisors = useMemo(() => {
-    return users.filter(u => u.role === 'Supervisor');
+    return users.filter(u => u.role === 'Supervisor' || u.role === 'Administrador');
   }, [users]);
 
-  // Motor de Resolución Inteligente de Identidad
+  // Motor de Resolución Inteligente de Identidad - Versión de Raíz
   useEffect(() => {
     const resolveSupervisor = async () => {
       if (!currentUser?.supervisorId || !isSellerRole) return;
       
       const sid = currentUser.supervisorId.trim();
-      
-      // 1. Intentar encontrar en la lista de usuarios ya cargada
+      if (!sid) return;
+
+      // 1. Intentar encontrar en la lista de usuarios ya cargada (Búsqueda Global)
       const foundInList = users.find(u => 
         u.id === sid || 
-        u.name.toLowerCase() === sid.toLowerCase() ||
-        u.email.toLowerCase() === sid.toLowerCase()
+        (u as any).uid === sid ||
+        u.email?.toLowerCase() === sid.toLowerCase() ||
+        u.name?.toLowerCase().trim() === sid.toLowerCase()
       );
 
       if (foundInList) {
         setResolvedSupervisor(foundInList);
         setSelectedSupervisorId(foundInList.id);
+        setIsResolving(false);
         return;
       }
 
-      // 2. Si no está en la lista (filtrado silencioso), realizar búsqueda profunda por ID directo
+      // 2. Si no está en la lista, realizar búsqueda profunda por ID directo (Bypass de filtros)
       setIsResolving(true);
       try {
         const directUser = await getUser(sid);
@@ -110,7 +113,9 @@ export default function NewRoutePage() {
       }
     };
 
-    if (!loading) resolveSupervisor();
+    if (!loading) {
+        resolveSupervisor();
+    }
   }, [currentUser?.supervisorId, users, loading, isSellerRole]);
 
   useEffect(() => {
@@ -197,18 +202,19 @@ export default function NewRoutePage() {
   };
 
   const handleAddToStage = () => {
-    if (!routeName || !selectedSupervisorId || selectedClients.filter(c => c.status !== 'Eliminado').length === 0) {
+    const finalSupervisorId = selectedSupervisorId || resolvedSupervisor?.id;
+    if (!routeName || !finalSupervisorId || selectedClients.filter(c => c.status !== 'Eliminado').length === 0) {
       toast({ title: 'Faltan datos', description: 'Revisa el nombre, supervisor y clientes.', variant: 'destructive' });
       return;
     }
-    const supervisor = users.find(u => u.id === selectedSupervisorId) || resolvedSupervisor;
+    const supervisor = users.find(u => u.id === finalSupervisorId) || resolvedSupervisor;
     setStagedRoutes(prev => [...prev, {
         tempId: Date.now(),
         routeName,
         date: routeDate || new Date(),
         clients: [...selectedClients],
         status: 'Planificada',
-        supervisorId: selectedSupervisorId!,
+        supervisorId: finalSupervisorId!,
         supervisorName: supervisor?.name || 'Supervisor Asignado',
         createdBy: currentUser!.id,
     }]);
@@ -293,7 +299,7 @@ export default function NewRoutePage() {
                                 {loading ? (
                                     <SelectItem value="loading" disabled>Cargando usuarios...</SelectItem>
                                 ) : (
-                                    activeSupervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))
+                                    activeSupervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name} ({s.role})</SelectItem>))
                                 )}
                             </SelectContent>
                         </Select>
@@ -380,7 +386,7 @@ export default function NewRoutePage() {
             </div>
           </CardContent>
            <CardFooter>
-            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase" disabled={activeClientsWithIndex.length === 0 || isFormLocked || !selectedSupervisorId}>
+            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase" disabled={activeClientsWithIndex.length === 0 || isFormLocked || (!selectedSupervisorId && !resolvedSupervisor)}>
                 Añadir a la Lista
             </Button>
           </CardFooter>
