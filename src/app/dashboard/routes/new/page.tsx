@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, MessageSquare, UserCheck, AlertTriangle } from 'lucide-react';
-import { addRoutesBatch, getUser, getUsers } from '@/lib/firebase/firestore';
+import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, AlertCircle } from 'lucide-react';
+import { addRoutesBatch } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -35,9 +35,6 @@ const ensureDate = (d: any): Date => {
   return isNaN(date.getTime()) ? new Date() : date;
 };
 
-const normalizeStr = (str: string) => 
-    str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
-
 type StagedRoute = Omit<RoutePlan, 'id' | 'createdAt'> & { tempId: number };
 
 export default function NewRoutePage() {
@@ -48,8 +45,6 @@ export default function NewRoutePage() {
   const [routeName, setRouteName] = useState('');
   const [routeDate, setRouteDate] = useState<Date | undefined>(new Date());
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
-  const [resolvedSupervisorName, setResolvedSupervisorName] = useState<string | null>(null);
-  const [isResolvingSupervisor, setIsResolvingSupervisor] = useState(false);
   
   const [selectedClients, setSelectedClients] = useState<ClientInRoute[]>([]);
   const [isSaving, setIsSaving] = useState(false);
@@ -71,70 +66,28 @@ export default function NewRoutePage() {
   const isFormLocked = stagedRoutes.length > 0;
   const isSellerRole = currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista';
 
-  // RESOLUCIÓN AGRESIVA DEL SUPERVISOR
-  useEffect(() => {
-    const fetchSupervisorDetails = async () => {
-      if (isSellerRole && currentUser?.supervisorId) {
-        setIsResolvingSupervisor(true);
-        const targetRaw = currentUser.supervisorId;
-        const targetClean = normalizeStr(targetRaw);
-        
-        setSelectedSupervisorId(targetRaw);
-
-        // 1. Búsqueda en caché (ID, Nombre o Email)
-        let found = users.find(u => 
-          normalizeStr(u.id) === targetClean || 
-          normalizeStr(u.name) === targetClean ||
-          normalizeStr(u.email) === targetClean
-        );
-
-        if (found) {
-          setResolvedSupervisorName(found.name);
-          setSelectedSupervisorId(found.id);
-          setIsResolvingSupervisor(false);
-          return;
-        }
-
-        // 2. Consulta directa a la base de datos por ID
-        try {
-          const directUser = await getUser(targetRaw);
-          if (directUser) {
-            setResolvedSupervisorName(directUser.name);
-            setSelectedSupervisorId(directUser.id);
-            setIsResolvingSupervisor(false);
-            return;
-          }
-
-          // 3. Búsqueda por Nombre en toda la base (por si el supervisorId es el nombre)
-          const allUsers = users.length > 0 ? users : await getUsers();
-          const matchByName = allUsers.find(u => 
-            normalizeStr(u.name).includes(targetClean) || 
-            targetClean.includes(normalizeStr(u.name))
-          );
-
-          if (matchByName) {
-            setResolvedSupervisorName(matchByName.name);
-            setSelectedSupervisorId(matchByName.id);
-          } else {
-            setResolvedSupervisorName(null);
-          }
-        } catch (error) {
-          console.error("Error crítico resolviendo supervisor:", error);
-          setResolvedSupervisorName(null);
-        } finally {
-          setIsResolvingSupervisor(false);
-        }
-      }
-    };
-
-    if (!loading) {
-      fetchSupervisorDetails();
-    }
-  }, [currentUser, users, isSellerRole, loading]);
-
+  // Obtener lista de supervisores
   const supervisors = useMemo(() => {
     return users.filter(u => u.role === 'Supervisor');
   }, [users]);
+
+  // Resolución de supervisor asignado
+  const assignedSupervisor = useMemo(() => {
+    if (!currentUser?.supervisorId || users.length === 0) return null;
+    const sid = currentUser.supervisorId.trim();
+    return users.find(u => 
+        u.id === sid || 
+        u.name.toLowerCase() === sid.toLowerCase() ||
+        u.email.toLowerCase() === sid.toLowerCase()
+    ) || null;
+  }, [currentUser, users]);
+
+  // Sincronizar selección de supervisor
+  useEffect(() => {
+    if (assignedSupervisor) {
+        setSelectedSupervisorId(assignedSupervisor.id);
+    }
+  }, [assignedSupervisor]);
 
   useEffect(() => {
     const predictionDataStr = localStorage.getItem('predictionRoute');
@@ -154,10 +107,6 @@ export default function NewRoutePage() {
             });
             
             setRouteName(data.routeName || '');
-            if (!isSellerRole && data.supervisorId) {
-                setSelectedSupervisorId(data.supervisorId);
-            }
-            if (clientsFromPred[0]?.date) setRouteDate(clientsFromPred[0].date);
             setSelectedClients(clientsFromPred);
             setIsFromPrediction(true);
             setPredictedDateStrings(dateStrings);
@@ -166,7 +115,7 @@ export default function NewRoutePage() {
             console.error("Error rehidratando predicción:", e); 
         }
     }
-  }, [isSellerRole]);
+  }, []);
 
   const filteredDialogClients = useMemo(() => {
     const term = dialogSearchTerm.toLowerCase();
@@ -228,7 +177,7 @@ export default function NewRoutePage() {
       toast({ title: 'Faltan datos', description: 'Revisa el nombre, supervisor y clientes.', variant: 'destructive' });
       return;
     }
-    const supervisorName = resolvedSupervisorName || users.find(u => u.id === selectedSupervisorId)?.name || 'Supervisor Asignado';
+    const supervisor = users.find(u => u.id === selectedSupervisorId);
     setStagedRoutes(prev => [...prev, {
         tempId: Date.now(),
         routeName,
@@ -236,7 +185,7 @@ export default function NewRoutePage() {
         clients: [...selectedClients],
         status: 'Planificada',
         supervisorId: selectedSupervisorId!,
-        supervisorName: supervisorName,
+        supervisorName: supervisor?.name || 'Supervisor Asignado',
         createdBy: currentUser!.id,
     }]);
     toast({ title: 'Ruta añadida a la lista' });
@@ -297,47 +246,42 @@ export default function NewRoutePage() {
                 disabled={isFormLocked}
               />
             </div>
+            
             <div className="space-y-2">
                 <Label>Supervisor (Aprobador)</Label>
-                {isSellerRole ? (
+                {isSellerRole && assignedSupervisor ? (
+                    <div className="relative">
+                        <Users className="absolute left-3 top-3 h-4 w-4 text-primary z-10" />
+                        <Input 
+                            value={assignedSupervisor.name} 
+                            className="pl-10 h-10 font-bold bg-muted border-primary/20" 
+                            disabled 
+                        />
+                    </div>
+                ) : (
                     <div className="space-y-2">
-                        <div className="relative">
-                            {isResolvingSupervisor ? (
-                            <div className="flex items-center gap-2 h-10 px-3 border rounded-md bg-muted animate-pulse">
-                                <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
-                                <span className="text-xs font-bold text-muted-foreground uppercase">Localizando supervisor en la base...</span>
-                            </div>
-                            ) : (
-                            <>
-                                <Users className="absolute left-3 top-3 h-4 w-4 text-primary z-10" />
-                                <Input 
-                                    value={resolvedSupervisorName || (currentUser?.supervisorId ? 'Supervisor no encontrado' : 'Sin supervisor asignado')} 
-                                    className={cn("pl-10 h-10 font-bold bg-muted border-primary/20", !resolvedSupervisorName && "text-destructive border-destructive/50")} 
-                                    disabled 
-                                />
-                            </>
-                            )}
-                        </div>
-                        {!isResolvingSupervisor && !resolvedSupervisorName && (
-                            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 flex items-start gap-2">
-                                <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
-                                <div className="space-y-1">
-                                    <p className="text-[10px] text-destructive font-black uppercase leading-tight">Error de Identificación</p>
-                                    <p className="text-[9px] text-destructive/80 font-bold leading-tight uppercase">Tu ficha de usuario tiene un supervisor asignado ({currentUser?.supervisorId}), pero no existe un perfil activo con ese nombre o ID. Contacta al administrador para corregir tu ficha.</p>
-                                </div>
+                        <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
+                            <SelectTrigger className={cn(!selectedSupervisorId && "border-destructive")}>
+                                <Users className="mr-2 h-4 w-4 text-primary" />
+                                <SelectValue placeholder="Seleccionar supervisor..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {loading ? (
+                                    <SelectItem value="loading" disabled>Cargando usuarios...</SelectItem>
+                                ) : (
+                                    supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))
+                                )}
+                            </SelectContent>
+                        </Select>
+                        {isSellerRole && !assignedSupervisor && currentUser?.supervisorId && (
+                            <div className="flex items-start gap-2 p-2 rounded bg-orange-50 border border-orange-200">
+                                <AlertCircle className="h-4 w-4 text-orange-600 shrink-0 mt-0.5" />
+                                <p className="text-[10px] text-orange-700 font-bold leading-tight uppercase">
+                                    Tu ID de supervisor ({currentUser.supervisorId}) no coincide con un perfil activo. Por favor, selecciona a tu supervisor manualmente para continuar.
+                                </p>
                             </div>
                         )}
                     </div>
-                ) : (
-                    <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
-                        <SelectTrigger>
-                            <Users className="mr-2 h-4 w-4 text-primary" />
-                            <SelectValue placeholder="Seleccionar supervisor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
-                        </SelectContent>
-                    </Select>
                 )}
             </div>
             
@@ -412,7 +356,7 @@ export default function NewRoutePage() {
             </div>
           </CardContent>
            <CardFooter>
-            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase" disabled={activeClientsWithIndex.length === 0 || isFormLocked || !resolvedSupervisorName}>
+            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase" disabled={activeClientsWithIndex.length === 0 || isFormLocked || !selectedSupervisorId}>
                 Añadir a la Lista
             </Button>
           </CardFooter>
