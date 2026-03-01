@@ -8,8 +8,7 @@ service cloud.firestore {
     function isAssignedAgent(data) { return request.auth.uid == data.agent_id; }
 
     match /users/{userId} {
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin() || isSupervisor());
-      allow list: if isSignedIn(); // Se permite listar para que los usuarios puedan encontrar y seleccionar supervisores
+      allow read: if isSignedIn(); // Permite que cualquier usuario vea los perfiles (necesario para asignaciones y supervisión)
       allow write: if isAdmin();
     }
 

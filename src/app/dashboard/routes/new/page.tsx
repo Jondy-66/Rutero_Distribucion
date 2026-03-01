@@ -40,7 +40,7 @@ type StagedRoute = Omit<RoutePlan, 'id' | 'createdAt'> & { tempId: number };
 export default function NewRoutePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { user: currentUser, users, clients, loading, refetchData } = useAuth();
+  const { user: currentUser, users, clients, loading, refetchData, dataLoading } = useAuth();
   
   const [routeName, setRouteName] = useState('');
   const [routeDate, setRouteDate] = useState<Date | undefined>(new Date());
@@ -73,10 +73,16 @@ export default function NewRoutePage() {
 
   useEffect(() => {
     if (users && users.length > 0) {
-        setSupervisors(users.filter(u => u.role === 'Supervisor'));
+        const supervisorList = users.filter(u => u.role === 'Supervisor');
+        setSupervisors(supervisorList);
+        
+        // Prioridad absoluta: Si es vendedor, forzar su propio supervisor
+        if (isSellerRole && currentUser?.supervisorId) {
+            setSelectedSupervisorId(currentUser.supervisorId);
+        }
     }
     
-    // Carga inicial de datos
+    // Carga inicial de datos desde predicción si existe
     const predictionDataStr = localStorage.getItem('predictionRoute');
     if (predictionDataStr) {
         try {
@@ -89,7 +95,7 @@ export default function NewRoutePage() {
                     ...c,
                     date: d,
                     origin: 'predicted',
-                    status: 'Activo'
+                    status: 'Active'
                 };
             });
             
@@ -109,13 +115,6 @@ export default function NewRoutePage() {
         } catch (e) { 
             console.error("Error rehidratando predicción:", e); 
         }
-    }
-
-    // Prioridad absoluta: Si es vendedor, forzar su propio supervisor
-    if (isSellerRole && currentUser?.supervisorId) {
-        setSelectedSupervisorId(currentUser.supervisorId);
-    } else if (!selectedSupervisorId && currentUser?.supervisorId) {
-        setSelectedSupervisorId(currentUser.supervisorId);
     }
   }, [users, currentUser, isSellerRole]);
 
@@ -262,25 +261,25 @@ export default function NewRoutePage() {
                     <div className="relative">
                         <Users className="absolute left-3 top-3 h-4 w-4 text-primary z-10" />
                         <Input 
-                            value={currentSupervisor?.name || 'Cargando supervisor asignado...'} 
+                            value={currentSupervisor?.name || (dataLoading ? 'Cargando supervisor asignado...' : 'Supervisor no encontrado')} 
                             className="pl-10 h-10 font-bold bg-muted border-primary/20" 
                             disabled 
                         />
                         {!currentUser?.supervisorId && (
-                            <p className="text-[10px] text-destructive font-bold uppercase mt-1">No tienes un supervisor asignado en tu perfil.</p>
+                            <p className="text-[10px] text-destructive font-bold uppercase mt-1">No tienes un supervisor asignado en tu perfil de usuario.</p>
                         )}
                     </div>
                 ) : (
                     <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
                         <SelectTrigger>
                             <Users className="mr-2 h-4 w-4 text-primary" />
-                            <SelectValue placeholder={supervisors.length > 0 ? "Seleccionar supervisor" : "Cargando supervisores..."} />
+                            <SelectValue placeholder={dataLoading ? "Cargando supervisores..." : "Seleccionar supervisor"} />
                         </SelectTrigger>
                         <SelectContent>
                             {supervisors.length > 0 ? (
                                 supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))
                             ) : (
-                                <SelectItem value="none" disabled>No se encontraron supervisores</SelectItem>
+                                <SelectItem value="none" disabled>No se encontraron supervisores activos</SelectItem>
                             )}
                         </SelectContent>
                     </Select>
