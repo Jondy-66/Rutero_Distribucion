@@ -38,28 +38,28 @@ export const addCrmCall = async (call: Omit<CrmCall, 'id'>) => {
     return addDoc(callsCollection, { ...call, createdAt: serverTimestamp() });
 };
 
-// --- FUNCIONES EXISTENTES DE RUTERO (MANTENIDAS) ---
-// [Se mantienen todas las funciones de users, clients, routes, notifications del archivo original]
-// (Para brevedad, asumo que el contenido original se preserva aquí tal cual estaba)
+// --- FUNCIONES DE USUARIOS ---
 
 export const getUsers = async (): Promise<User[]> => {
-  const q = query(collection(db, 'users'), orderBy('name'));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+  // Se elimina orderBy('name') del servidor para evitar que Firestore 
+  // oculte documentos que no tengan el campo 'name' definido.
+  const snapshot = await getDocs(collection(db, 'users'));
+  const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+  return users.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 };
 
 export const getSupervisors = async (): Promise<User[]> => {
     const q = query(collection(db, 'users'), where('role', '==', 'Supervisor'));
     const snapshot = await getDocs(q);
     const supervisors = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
-    return supervisors.sort((a, b) => a.name.localeCompare(b.name));
+    return supervisors.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 };
 
 export const getUsersBySupervisor = async (supervisorId: string): Promise<User[]> => {
     const q = query(collection(db, 'users'), where('supervisorId', '==', supervisorId));
     const snapshot = await getDocs(q);
     const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
-    return users.sort((a, b) => a.name.localeCompare(b.name));
+    return users.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 };
 
 export const getUser = async (id: string): Promise<User | null> => {

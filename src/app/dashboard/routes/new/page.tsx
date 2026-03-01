@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, AlertCircle } from 'lucide-react';
-import { addRoutesBatch } from '@/lib/firebase/firestore';
+import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, AlertCircle, ShieldCheck } from 'lucide-react';
+import { addRoutesBatch, getUser } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -63,31 +63,55 @@ export default function NewRoutePage() {
 
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
 
+  // Estados para resolución profunda de supervisor
+  const [resolvedSupervisor, setResolvedSupervisor] = useState<User | null>(null);
+  const [isResolving, setIsResolving] = useState(false);
+
   const isFormLocked = stagedRoutes.length > 0;
   const isSellerRole = currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista';
 
-  // Obtener lista de supervisores
-  const supervisors = useMemo(() => {
+  // Lista base de supervisores para el selector (si el auto-check falla)
+  const activeSupervisors = useMemo(() => {
     return users.filter(u => u.role === 'Supervisor');
   }, [users]);
 
-  // Resolución de supervisor asignado
-  const assignedSupervisor = useMemo(() => {
-    if (!currentUser?.supervisorId || users.length === 0) return null;
-    const sid = currentUser.supervisorId.trim();
-    return users.find(u => 
+  // Motor de Resolución Inteligente de Identidad
+  useEffect(() => {
+    const resolveSupervisor = async () => {
+      if (!currentUser?.supervisorId || !isSellerRole) return;
+      
+      const sid = currentUser.supervisorId.trim();
+      
+      // 1. Intentar encontrar en la lista de usuarios ya cargada
+      const foundInList = users.find(u => 
         u.id === sid || 
         u.name.toLowerCase() === sid.toLowerCase() ||
         u.email.toLowerCase() === sid.toLowerCase()
-    ) || null;
-  }, [currentUser, users]);
+      );
 
-  // Sincronizar selección de supervisor
-  useEffect(() => {
-    if (assignedSupervisor) {
-        setSelectedSupervisorId(assignedSupervisor.id);
-    }
-  }, [assignedSupervisor]);
+      if (foundInList) {
+        setResolvedSupervisor(foundInList);
+        setSelectedSupervisorId(foundInList.id);
+        return;
+      }
+
+      // 2. Si no está en la lista (filtrado silencioso), realizar búsqueda profunda por ID directo
+      setIsResolving(true);
+      try {
+        const directUser = await getUser(sid);
+        if (directUser) {
+          setResolvedSupervisor(directUser);
+          setSelectedSupervisorId(directUser.id);
+        }
+      } catch (e) {
+        console.error("Fallo en resolución profunda:", e);
+      } finally {
+        setIsResolving(false);
+      }
+    };
+
+    if (!loading) resolveSupervisor();
+  }, [currentUser?.supervisorId, users, loading, isSellerRole]);
 
   useEffect(() => {
     const predictionDataStr = localStorage.getItem('predictionRoute');
@@ -177,7 +201,7 @@ export default function NewRoutePage() {
       toast({ title: 'Faltan datos', description: 'Revisa el nombre, supervisor y clientes.', variant: 'destructive' });
       return;
     }
-    const supervisor = users.find(u => u.id === selectedSupervisorId);
+    const supervisor = users.find(u => u.id === selectedSupervisorId) || resolvedSupervisor;
     setStagedRoutes(prev => [...prev, {
         tempId: Date.now(),
         routeName,
@@ -249,12 +273,12 @@ export default function NewRoutePage() {
             
             <div className="space-y-2">
                 <Label>Supervisor (Aprobador)</Label>
-                {isSellerRole && assignedSupervisor ? (
+                {isSellerRole && (resolvedSupervisor || isResolving) ? (
                     <div className="relative">
-                        <Users className="absolute left-3 top-3 h-4 w-4 text-primary z-10" />
+                        <ShieldCheck className={cn("absolute left-3 top-3 h-4 w-4 z-10", isResolving ? "animate-pulse text-muted-foreground" : "text-green-600")} />
                         <Input 
-                            value={assignedSupervisor.name} 
-                            className="pl-10 h-10 font-bold bg-muted border-primary/20" 
+                            value={isResolving ? "Verificando identidad..." : resolvedSupervisor?.name || "Supervisor Vinculado"} 
+                            className="pl-10 h-10 font-black bg-green-50 border-green-200 text-green-800" 
                             disabled 
                         />
                     </div>
@@ -269,15 +293,15 @@ export default function NewRoutePage() {
                                 {loading ? (
                                     <SelectItem value="loading" disabled>Cargando usuarios...</SelectItem>
                                 ) : (
-                                    supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))
+                                    activeSupervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))
                                 )}
                             </SelectContent>
                         </Select>
-                        {isSellerRole && !assignedSupervisor && currentUser?.supervisorId && (
+                        {isSellerRole && !resolvedSupervisor && !isResolving && currentUser?.supervisorId && (
                             <div className="flex items-start gap-2 p-2 rounded bg-orange-50 border border-orange-200">
                                 <AlertCircle className="h-4 w-4 text-orange-600 shrink-0 mt-0.5" />
                                 <p className="text-[10px] text-orange-700 font-bold leading-tight uppercase">
-                                    Tu ID de supervisor ({currentUser.supervisorId}) no coincide con un perfil activo. Por favor, selecciona a tu supervisor manualmente para continuar.
+                                    TU ID DE SUPERVISOR ({currentUser.supervisorId}) NO COINCIDE CON UN PERFIL ACTIVO. POR FAVOR, SELECCIONA A TU SUPERVISOR MANUALMENTE PARA CONTINUAR.
                                 </p>
                             </div>
                         )}
