@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, MessageSquare, UserCheck } from 'lucide-react';
-import { addRoutesBatch, getUser } from '@/lib/firebase/firestore';
+import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, MessageSquare, UserCheck, AlertTriangle } from 'lucide-react';
+import { addRoutesBatch, getUser, getUsers } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -35,12 +35,15 @@ const ensureDate = (d: any): Date => {
   return isNaN(date.getTime()) ? new Date() : date;
 };
 
+const normalizeStr = (str: string) => 
+    str.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+
 type StagedRoute = Omit<RoutePlan, 'id' | 'createdAt'> & { tempId: number };
 
 export default function NewRoutePage() {
   const router = useRouter();
   const { toast } = useToast();
-  const { user: currentUser, users, clients, loading, refetchData, dataLoading } = useAuth();
+  const { user: currentUser, users, clients, loading, refetchData } = useAuth();
   
   const [routeName, setRouteName] = useState('');
   const [routeDate, setRouteDate] = useState<Date | undefined>(new Date());
@@ -68,38 +71,55 @@ export default function NewRoutePage() {
   const isFormLocked = stagedRoutes.length > 0;
   const isSellerRole = currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista';
 
-  // Fallback: Si no lo encuentra en la lista global, lo busca directamente en la base
+  // RESOLUCIÓN AGRESIVA DEL SUPERVISOR
   useEffect(() => {
     const fetchSupervisorDetails = async () => {
       if (isSellerRole && currentUser?.supervisorId) {
         setIsResolvingSupervisor(true);
-        setSelectedSupervisorId(currentUser.supervisorId);
+        const targetRaw = currentUser.supervisorId;
+        const targetClean = normalizeStr(targetRaw);
+        
+        setSelectedSupervisorId(targetRaw);
 
-        // 1. Intentar buscar en la lista de usuarios ya cargada
-        const inList = users.find(u => u.id === currentUser.supervisorId || u.name === currentUser.supervisorId);
-        if (inList) {
-          setResolvedSupervisorName(inList.name);
+        // 1. Búsqueda en caché (ID, Nombre o Email)
+        let found = users.find(u => 
+          normalizeStr(u.id) === targetClean || 
+          normalizeStr(u.name) === targetClean ||
+          normalizeStr(u.email) === targetClean
+        );
+
+        if (found) {
+          setResolvedSupervisorName(found.name);
+          setSelectedSupervisorId(found.id);
           setIsResolvingSupervisor(false);
           return;
         }
 
-        // 2. Si no está en la lista (común para vendedores), buscarlo directamente por ID
+        // 2. Consulta directa a la base de datos por ID
         try {
-          const directUser = await getUser(currentUser.supervisorId);
+          const directUser = await getUser(targetRaw);
           if (directUser) {
             setResolvedSupervisorName(directUser.name);
+            setSelectedSupervisorId(directUser.id);
+            setIsResolvingSupervisor(false);
+            return;
+          }
+
+          // 3. Búsqueda por Nombre en toda la base (por si el supervisorId es el nombre)
+          const allUsers = users.length > 0 ? users : await getUsers();
+          const matchByName = allUsers.find(u => 
+            normalizeStr(u.name).includes(targetClean) || 
+            targetClean.includes(normalizeStr(u.name))
+          );
+
+          if (matchByName) {
+            setResolvedSupervisorName(matchByName.name);
+            setSelectedSupervisorId(matchByName.id);
           } else {
-            // 3. Último recurso: Ver si el campo supervisorId es en realidad el NOMBRE (error de base)
-            const byName = users.find(u => u.name.toLowerCase() === currentUser.supervisorId?.toLowerCase());
-            if (byName) {
-              setResolvedSupervisorName(byName.name);
-              setSelectedSupervisorId(byName.id);
-            } else {
-              setResolvedSupervisorName(null);
-            }
+            setResolvedSupervisorName(null);
           }
         } catch (error) {
-          console.error("Error resolviendo supervisor:", error);
+          console.error("Error crítico resolviendo supervisor:", error);
           setResolvedSupervisorName(null);
         } finally {
           setIsResolvingSupervisor(false);
@@ -280,24 +300,32 @@ export default function NewRoutePage() {
             <div className="space-y-2">
                 <Label>Supervisor (Aprobador)</Label>
                 {isSellerRole ? (
-                    <div className="relative">
-                        {isResolvingSupervisor ? (
-                          <div className="flex items-center gap-2 h-10 px-3 border rounded-md bg-muted animate-pulse">
-                            <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
-                            <span className="text-xs font-bold text-muted-foreground uppercase">Verificando supervisor en la base...</span>
-                          </div>
-                        ) : (
-                          <>
-                            <Users className="absolute left-3 top-3 h-4 w-4 text-primary z-10" />
-                            <Input 
-                                value={resolvedSupervisorName || (currentUser?.supervisorId ? 'Supervisor no encontrado' : 'Sin supervisor asignado')} 
-                                className={cn("pl-10 h-10 font-bold bg-muted border-primary/20", !resolvedSupervisorName && "text-destructive")} 
-                                disabled 
-                            />
-                            {!resolvedSupervisorName && (
-                                <p className="text-[9px] text-destructive font-black uppercase mt-1">Error: Tu supervisor no tiene un perfil válido. Contacta a Soporte.</p>
+                    <div className="space-y-2">
+                        <div className="relative">
+                            {isResolvingSupervisor ? (
+                            <div className="flex items-center gap-2 h-10 px-3 border rounded-md bg-muted animate-pulse">
+                                <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
+                                <span className="text-xs font-bold text-muted-foreground uppercase">Localizando supervisor en la base...</span>
+                            </div>
+                            ) : (
+                            <>
+                                <Users className="absolute left-3 top-3 h-4 w-4 text-primary z-10" />
+                                <Input 
+                                    value={resolvedSupervisorName || (currentUser?.supervisorId ? 'Supervisor no encontrado' : 'Sin supervisor asignado')} 
+                                    className={cn("pl-10 h-10 font-bold bg-muted border-primary/20", !resolvedSupervisorName && "text-destructive border-destructive/50")} 
+                                    disabled 
+                                />
+                            </>
                             )}
-                          </>
+                        </div>
+                        {!isResolvingSupervisor && !resolvedSupervisorName && (
+                            <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 flex items-start gap-2">
+                                <AlertTriangle className="h-4 w-4 text-destructive shrink-0 mt-0.5" />
+                                <div className="space-y-1">
+                                    <p className="text-[10px] text-destructive font-black uppercase leading-tight">Error de Identificación</p>
+                                    <p className="text-[9px] text-destructive/80 font-bold leading-tight uppercase">Tu ficha de usuario tiene un supervisor asignado ({currentUser?.supervisorId}), pero no existe un perfil activo con ese nombre o ID. Contacta al administrador para corregir tu ficha.</p>
+                                </div>
+                            </div>
                         )}
                     </div>
                 ) : (
