@@ -8,7 +8,7 @@ service cloud.firestore {
     function isAssignedAgent(data) { return request.auth.uid == data.agent_id; }
 
     match /users/{userId} {
-      allow read: if isSignedIn(); // Permite que cualquier usuario vea los perfiles (necesario para asignaciones y supervisión)
+      allow read: if isSignedIn(); 
       allow write: if isAdmin();
     }
 
@@ -30,7 +30,6 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
     
-    // Reglas existentes para Rutero (compatibilidad)
     match /clients/{clientId} { allow read, write: if isSignedIn(); }
     match /routes/{routeId} { allow read, write: if isSignedIn(); }
     match /notifications/{id} { allow read, write: if isSignedIn(); }

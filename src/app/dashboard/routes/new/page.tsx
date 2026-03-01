@@ -7,8 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, MessageSquare } from 'lucide-react';
-import { addRoutesBatch } from '@/lib/firebase/firestore';
+import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, MessageSquare, UserCheck } from 'lucide-react';
+import { addRoutesBatch, getUser } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -45,50 +45,78 @@ export default function NewRoutePage() {
   const [routeName, setRouteName] = useState('');
   const [routeDate, setRouteDate] = useState<Date | undefined>(new Date());
   const [selectedSupervisorId, setSelectedSupervisorId] = useState<string | undefined>();
+  const [resolvedSupervisorName, setResolvedSupervisorName] = useState<string | null>(null);
+  const [isResolvingSupervisor, setIsResolvingSupervisor] = useState(false);
+  
   const [selectedClients, setSelectedClients] = useState<ClientInRoute[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   
   const [isFromPrediction, setIsFromPrediction] = useState(false);
   const [predictedDateStrings, setPredictedDateStrings] = useState<Set<string>>(new Set());
 
-  // States for the "Add Client" Dialog
   const [isClientDialogOpen, setIsClientDialogOpen] = useState(false);
   const [dialogSearchTerm, setDialogSearchTerm] = useState('');
   const [dialogSelectedClients, setDialogSelectedClients] = useState<Client[]>([]);
   const [targetDateForAdd, setTargetDateForAdd] = useState<Date | null>(null);
   
-  // States for Removal Observation
   const [isRemovalDialogOpen, setIsRemovalDialogOpen] = useState(false);
   const [removalReason, setRemovalReason] = useState('');
   const [rucToToRemove, setRucToToRemove] = useState<string | null>(null);
 
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
 
-  // Si hay rutas en la lista, el formulario de la izquierda se bloquea
   const isFormLocked = stagedRoutes.length > 0;
-
-  // Determinar si el usuario debe tener un supervisor fijo
   const isSellerRole = currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista';
 
-  // Lista de supervisores para el dropdown (solo para Admins/Supervisores)
+  // Fallback: Si no lo encuentra en la lista global, lo busca directamente en la base
+  useEffect(() => {
+    const fetchSupervisorDetails = async () => {
+      if (isSellerRole && currentUser?.supervisorId) {
+        setIsResolvingSupervisor(true);
+        setSelectedSupervisorId(currentUser.supervisorId);
+
+        // 1. Intentar buscar en la lista de usuarios ya cargada
+        const inList = users.find(u => u.id === currentUser.supervisorId || u.name === currentUser.supervisorId);
+        if (inList) {
+          setResolvedSupervisorName(inList.name);
+          setIsResolvingSupervisor(false);
+          return;
+        }
+
+        // 2. Si no está en la lista (común para vendedores), buscarlo directamente por ID
+        try {
+          const directUser = await getUser(currentUser.supervisorId);
+          if (directUser) {
+            setResolvedSupervisorName(directUser.name);
+          } else {
+            // 3. Último recurso: Ver si el campo supervisorId es en realidad el NOMBRE (error de base)
+            const byName = users.find(u => u.name.toLowerCase() === currentUser.supervisorId?.toLowerCase());
+            if (byName) {
+              setResolvedSupervisorName(byName.name);
+              setSelectedSupervisorId(byName.id);
+            } else {
+              setResolvedSupervisorName(null);
+            }
+          }
+        } catch (error) {
+          console.error("Error resolviendo supervisor:", error);
+          setResolvedSupervisorName(null);
+        } finally {
+          setIsResolvingSupervisor(false);
+        }
+      }
+    };
+
+    if (!loading) {
+      fetchSupervisorDetails();
+    }
+  }, [currentUser, users, isSellerRole, loading]);
+
   const supervisors = useMemo(() => {
     return users.filter(u => u.role === 'Supervisor');
   }, [users]);
 
-  // Resolución del nombre del supervisor (para vendedores)
-  const currentSupervisorName = useMemo(() => {
-    if (!selectedSupervisorId) return null;
-    const found = users.find(u => u.id === selectedSupervisorId);
-    return found?.name || null;
-  }, [users, selectedSupervisorId]);
-
   useEffect(() => {
-    // Prioridad absoluta: Si es vendedor, forzar su propio supervisor del perfil
-    if (isSellerRole && currentUser?.supervisorId) {
-        setSelectedSupervisorId(currentUser.supervisorId);
-    }
-    
-    // Carga inicial de datos desde predicción si existe
     const predictionDataStr = localStorage.getItem('predictionRoute');
     if (predictionDataStr) {
         try {
@@ -106,23 +134,19 @@ export default function NewRoutePage() {
             });
             
             setRouteName(data.routeName || '');
-            
-            // Si es administrador/supervisor, tomar el supervisor que viene en la data
             if (!isSellerRole && data.supervisorId) {
                 setSelectedSupervisorId(data.supervisorId);
             }
-            
             if (clientsFromPred[0]?.date) setRouteDate(clientsFromPred[0].date);
             setSelectedClients(clientsFromPred);
             setIsFromPrediction(true);
             setPredictedDateStrings(dateStrings);
-            
             localStorage.removeItem('predictionRoute');
         } catch (e) { 
             console.error("Error rehidratando predicción:", e); 
         }
     }
-  }, [currentUser, isSellerRole]);
+  }, [isSellerRole]);
 
   const filteredDialogClients = useMemo(() => {
     const term = dialogSearchTerm.toLowerCase();
@@ -164,7 +188,6 @@ export default function NewRoutePage() {
 
   const handleAddClientsToSelected = () => {
     if (dialogSelectedClients.length === 0 || !targetDateForAdd) return;
-    
     const newClients: ClientInRoute[] = dialogSelectedClients.map(c => ({
       ruc: c.ruc,
       nombre_comercial: c.nombre_comercial,
@@ -173,20 +196,19 @@ export default function NewRoutePage() {
       origin: 'manual',
       visitStatus: 'Pendiente'
     }));
-    
     setSelectedClients(prev => [...prev, ...newClients]);
     setDialogSelectedClients([]);
     setDialogSearchTerm('');
     setIsClientDialogOpen(false);
-    toast({ title: `${newClients.length} clientes añadidos al día ${format(targetDateForAdd, 'EEEE', { locale: es })}` });
+    toast({ title: `${newClients.length} clientes añadidos` });
   };
 
   const handleAddToStage = () => {
     if (!routeName || !selectedSupervisorId || selectedClients.filter(c => c.status !== 'Eliminado').length === 0) {
-      toast({ title: 'Faltan datos', description: 'Asegúrate de tener un nombre, supervisor y al menos un cliente.', variant: 'destructive' });
+      toast({ title: 'Faltan datos', description: 'Revisa el nombre, supervisor y clientes.', variant: 'destructive' });
       return;
     }
-    const supervisor = users.find(u => u.id === selectedSupervisorId);
+    const supervisorName = resolvedSupervisorName || users.find(u => u.id === selectedSupervisorId)?.name || 'Supervisor Asignado';
     setStagedRoutes(prev => [...prev, {
         tempId: Date.now(),
         routeName,
@@ -194,10 +216,10 @@ export default function NewRoutePage() {
         clients: [...selectedClients],
         status: 'Planificada',
         supervisorId: selectedSupervisorId!,
-        supervisorName: supervisor?.name || 'Supervisor Asignado',
+        supervisorName: supervisorName,
         createdBy: currentUser!.id,
     }]);
-    toast({ title: 'Ruta añadida a la lista de espera' });
+    toast({ title: 'Ruta añadida a la lista' });
   }
 
   const handleSaveAllRoutes = async (sendForApproval: boolean) => {
@@ -212,7 +234,6 @@ export default function NewRoutePage() {
         await refetchData('routes');
         router.push('/dashboard/routes');
     } catch(e) { 
-        console.error(e);
         toast({ title: 'Error al guardar', variant: 'destructive' });
     } finally { 
         setIsSaving(false); 
@@ -250,7 +271,7 @@ export default function NewRoutePage() {
             <div className="space-y-2">
               <Label>Nombre de la Ruta</Label>
               <Input 
-                placeholder="Ej: Ruta Norte Semana 08" 
+                placeholder="Ej: Ruta Norte" 
                 value={routeName} 
                 onChange={(e) => setRouteName(e.target.value)} 
                 disabled={isFormLocked}
@@ -260,28 +281,33 @@ export default function NewRoutePage() {
                 <Label>Supervisor (Aprobador)</Label>
                 {isSellerRole ? (
                     <div className="relative">
-                        <Users className="absolute left-3 top-3 h-4 w-4 text-primary z-10" />
-                        <Input 
-                            value={currentSupervisorName || (dataLoading ? 'Cargando supervisor asignado...' : (currentUser?.supervisorId ? 'Supervisor no encontrado' : 'Sin supervisor asignado en tu perfil'))} 
-                            className={cn("pl-10 h-10 font-bold bg-muted border-primary/20", !currentSupervisorName && !dataLoading && "text-destructive")} 
-                            disabled 
-                        />
-                        {!currentUser?.supervisorId && !dataLoading && (
-                            <p className="text-[10px] text-destructive font-black uppercase mt-1">Error: No tienes un supervisor asignado. Contacta al Administrador.</p>
+                        {isResolvingSupervisor ? (
+                          <div className="flex items-center gap-2 h-10 px-3 border rounded-md bg-muted animate-pulse">
+                            <LoaderCircle className="h-4 w-4 animate-spin text-primary" />
+                            <span className="text-xs font-bold text-muted-foreground uppercase">Verificando supervisor en la base...</span>
+                          </div>
+                        ) : (
+                          <>
+                            <Users className="absolute left-3 top-3 h-4 w-4 text-primary z-10" />
+                            <Input 
+                                value={resolvedSupervisorName || (currentUser?.supervisorId ? 'Supervisor no encontrado' : 'Sin supervisor asignado')} 
+                                className={cn("pl-10 h-10 font-bold bg-muted border-primary/20", !resolvedSupervisorName && "text-destructive")} 
+                                disabled 
+                            />
+                            {!resolvedSupervisorName && (
+                                <p className="text-[9px] text-destructive font-black uppercase mt-1">Error: Tu supervisor no tiene un perfil válido. Contacta a Soporte.</p>
+                            )}
+                          </>
                         )}
                     </div>
                 ) : (
                     <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
                         <SelectTrigger>
                             <Users className="mr-2 h-4 w-4 text-primary" />
-                            <SelectValue placeholder={dataLoading ? "Cargando supervisores..." : "Seleccionar supervisor"} />
+                            <SelectValue placeholder="Seleccionar supervisor" />
                         </SelectTrigger>
                         <SelectContent>
-                            {supervisors.length > 0 ? (
-                                supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))
-                            ) : (
-                                <SelectItem value="none" disabled>No se encontraron supervisores activos</SelectItem>
-                            )}
+                            {supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}
                         </SelectContent>
                     </Select>
                 )}
@@ -309,8 +335,6 @@ export default function NewRoutePage() {
             <div className="space-y-4">
                 {displayedDays.map((day) => {
                     const dayClients = activeClientsWithIndex.filter(c => isSameDay(ensureDate(c.date), day));
-                    const canAddThisDay = !isFromPrediction || predictedDateStrings.has(format(day, 'yyyy-MM-dd'));
-                    
                     return (
                         <Collapsible key={day.toISOString()} defaultOpen className="border-l-4 pl-4 py-2 border-[#011688]/20 bg-slate-50/50 rounded-r-lg">
                             <div className="flex w-full items-center justify-between p-2">
@@ -325,18 +349,16 @@ export default function NewRoutePage() {
                                         </Badge>
                                     </div>
                                 </CollapsibleTrigger>
-                                {canAddThisDay && (
-                                    <Button 
-                                        variant="ghost" 
-                                        size="sm" 
-                                        className="font-black text-[#011688] hover:bg-[#011688]/10 h-8"
-                                        onClick={() => handleOpenAddDialog(day)}
-                                        disabled={isFormLocked}
-                                    >
-                                        <PlusCircle className="mr-1 h-4 w-4" />
-                                        AÑADIR
-                                    </Button>
-                                )}
+                                <Button 
+                                    variant="ghost" 
+                                    size="sm" 
+                                    className="font-black text-[#011688] hover:bg-[#011688]/10 h-8"
+                                    onClick={() => handleOpenAddDialog(day)}
+                                    disabled={isFormLocked}
+                                >
+                                    <PlusCircle className="mr-1 h-4 w-4" />
+                                    AÑADIR
+                                </Button>
                             </div>
                             <CollapsibleContent className="space-y-4 p-2 mt-2">
                                 {dayClients.map((client) => (
@@ -345,9 +367,7 @@ export default function NewRoutePage() {
                                             <div className="space-y-1">
                                                 <div className="flex items-center gap-2">
                                                     <p className="font-black text-sm text-[#011688] uppercase">{client.globalIndex + 1}. {client.nombre_comercial}</p>
-                                                    {client.origin === 'manual' && (
-                                                        <Badge variant="success" className="text-[8px] font-black h-4 px-1.5 animate-pulse">NUEVO</Badge>
-                                                    )}
+                                                    {client.origin === 'manual' && <Badge variant="success" className="text-[8px] font-black h-4 px-1.5 animate-pulse">NUEVO</Badge>}
                                                 </div>
                                                 <p className="text-[10px] font-mono text-muted-foreground">{client.ruc}</p>
                                             </div>
@@ -357,9 +377,6 @@ export default function NewRoutePage() {
                                         </div>
                                     </Card>
                                 ))}
-                                {dayClients.length === 0 && (
-                                    <p className="text-[10px] text-center text-muted-foreground/60 italic uppercase font-bold py-2">Sin clientes asignados</p>
-                                )}
                             </CollapsibleContent>
                         </Collapsible>
                     );
@@ -367,11 +384,7 @@ export default function NewRoutePage() {
             </div>
           </CardContent>
            <CardFooter>
-            <Button 
-                onClick={handleAddToStage} 
-                className="w-full h-12 font-black uppercase tracking-tighter" 
-                disabled={activeClientsWithIndex.length === 0 || isFormLocked}
-            >
+            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase" disabled={activeClientsWithIndex.length === 0 || isFormLocked || !resolvedSupervisorName}>
                 Añadir a la Lista
             </Button>
           </CardFooter>
@@ -396,14 +409,11 @@ export default function NewRoutePage() {
                     </Button>
                 </Card>
             ))}
-            {stagedRoutes.length === 0 && (
-                <div className="text-center py-12 text-muted-foreground font-bold uppercase text-xs">La lista de rutas está vacía</div>
-            )}
           </CardContent>
           <CardFooter>
             {stagedRoutes.length > 0 && (
                 <Button onClick={() => handleSaveAllRoutes(true)} className="w-full h-12 font-black bg-green-600 hover:bg-green-700" disabled={isSaving}>
-                    {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : null}
+                    {isSaving && <LoaderCircle className="animate-spin mr-2" />}
                     GUARDAR Y ENVIAR A APROBACIÓN
                 </Button>
             )}
@@ -411,44 +421,24 @@ export default function NewRoutePage() {
         </Card>
       </div>
 
-      {/* Dialog for Adding Clients */}
       <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
         <DialogContent className="w-[95vw] sm:max-w-[600px] p-0 overflow-hidden bg-white max-h-[90vh] flex flex-col rounded-2xl">
             <DialogHeader className="p-6 pb-2">
                 <DialogTitle className="text-2xl font-black text-[#011688] uppercase">
                     Añadir a {targetDateForAdd ? format(targetDateForAdd, 'EEEE', { locale: es }) : 'Día'}
                 </DialogTitle>
-                <DialogDescription className="font-bold text-muted-foreground uppercase text-xs">Buscador multicriterio (RUC, Nombre, Comercial).</DialogDescription>
             </DialogHeader>
             <div className="flex-1 overflow-hidden flex flex-col p-6 space-y-4">
                 <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                        placeholder="Buscar..."
-                        className="pl-10 h-12 border-2 border-[#011688]/20 focus:border-[#011688] rounded-xl font-bold"
-                        value={dialogSearchTerm}
-                        onChange={(e) => setDialogSearchTerm(e.target.value)}
-                    />
+                    <Input placeholder="Buscar..." className="pl-10 h-12 border-2 border-[#011688]/20 focus:border-[#011688] font-bold" value={dialogSearchTerm} onChange={(e) => setDialogSearchTerm(e.target.value)} />
                 </div>
                 <ScrollArea className="flex-1 pr-2">
                     <div className="space-y-3">
                         {filteredDialogClients.map((client) => {
                             const isSelected = dialogSelectedClients.some(c => c.ruc === client.ruc);
                             return (
-                                <div
-                                    key={client.ruc}
-                                    className={cn(
-                                        "flex items-center space-x-4 p-4 rounded-xl border-2 transition-all cursor-pointer",
-                                        isSelected ? "bg-[#011688]/5 border-[#011688]" : "bg-slate-50 border-transparent hover:border-slate-200"
-                                    )}
-                                    onClick={() => {
-                                        if (isSelected) {
-                                            setDialogSelectedClients(prev => prev.filter(c => c.ruc !== client.ruc));
-                                        } else {
-                                            setDialogSelectedClients(prev => [...prev, client]);
-                                        }
-                                    }}
-                                >
+                                <div key={client.ruc} className={cn("flex items-center space-x-4 p-4 rounded-xl border-2 transition-all cursor-pointer", isSelected ? "bg-[#011688]/5 border-[#011688]" : "bg-slate-50 border-transparent hover:border-slate-200")} onClick={() => isSelected ? setDialogSelectedClients(prev => prev.filter(c => c.ruc !== client.ruc)) : setDialogSelectedClients(prev => [...prev, client])}>
                                     <Checkbox checked={isSelected} className="h-5 w-5 border-[#011688]" />
                                     <div className="flex-1">
                                         <p className="text-sm font-black text-[#011688] uppercase">{client.nombre_comercial}</p>
@@ -458,9 +448,6 @@ export default function NewRoutePage() {
                                 </div>
                             );
                         })}
-                        {filteredDialogClients.length === 0 && (
-                            <div className="text-center py-12 text-muted-foreground font-bold uppercase text-xs">No se encontraron clientes disponibles</div>
-                        )}
                     </div>
                 </ScrollArea>
             </div>
@@ -468,40 +455,22 @@ export default function NewRoutePage() {
                 <span className="text-xs font-black text-[#011688] uppercase">{dialogSelectedClients.length} seleccionados</span>
                 <div className="flex gap-2">
                     <DialogClose asChild><Button variant="ghost" className="font-bold">CANCELAR</Button></DialogClose>
-                    <Button onClick={handleAddClientsToSelected} disabled={dialogSelectedClients.length === 0} className="font-bold bg-[#011688] px-8 text-white">AÑADIR AL DÍA</Button>
+                    <Button onClick={handleAddClientsToSelected} disabled={dialogSelectedClients.length === 0} className="font-bold bg-[#011688] text-white">AÑADIR</Button>
                 </div>
             </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Dialog for Removal Observation */}
       <Dialog open={isRemovalDialogOpen} onOpenChange={setIsRemovalDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="font-black uppercase text-destructive flex items-center gap-2">
-                <Trash2 className="h-5 w-5" /> Eliminar Cliente de Ruta
-            </DialogTitle>
-            <DialogDescription className="text-xs font-bold uppercase">Es obligatorio indicar el motivo por el cual este cliente no será visitado.</DialogDescription>
-          </DialogHeader>
+          <DialogHeader><DialogTitle className="font-black uppercase text-destructive">Eliminar de Ruta</DialogTitle></DialogHeader>
           <div className="py-4">
-            <Label className="font-bold uppercase text-[10px]">Motivo de la Eliminación</Label>
-            <Textarea 
-              value={removalReason} 
-              onChange={(e) => setRemovalReason(e.target.value)}
-              placeholder="Ej: Cliente solicitó cambio de fecha, local cerrado permanentemente, etc."
-              className="mt-2 font-bold text-sm h-32"
-            />
+            <Label className="font-bold uppercase text-[10px]">Motivo</Label>
+            <Textarea value={removalReason} onChange={(e) => setRemovalReason(e.target.value)} placeholder="Ej: Local cerrado..." className="mt-2 font-bold text-sm h-32" />
           </div>
           <DialogFooter>
             <DialogClose asChild><Button variant="ghost" className="font-bold">CANCELAR</Button></DialogClose>
-            <Button 
-              variant="destructive" 
-              onClick={confirmRemoval} 
-              disabled={!removalReason.trim()}
-              className="font-black"
-            >
-              ELIMINAR CLIENTE
-            </Button>
+            <Button variant="destructive" onClick={confirmRemoval} disabled={!removalReason.trim()} className="font-black">ELIMINAR</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

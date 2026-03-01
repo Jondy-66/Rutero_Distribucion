@@ -1,3 +1,4 @@
+
 /**
  * @fileoverview Gestión de estado de autenticación y datos globales optimizada para cuota y resiliencia.
  */
@@ -52,8 +53,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor';
     
     try {
-        // Cargamos los datos de forma independiente para mayor resiliencia
-        const usersRes = await getUsers().catch(e => { console.error("Error cargando usuarios:", e); return []; });
+        // Cargamos usuarios - Para vendedores es vital tener la lista de nombres de supervisores
+        const usersRes = await getUsers().catch(e => { 
+          console.error("Error cargando usuarios:", e); 
+          return []; 
+        });
         setUsers(usersRes);
 
         const clientsRes = await (isSourcingAll ? getClients() : getMyClients(currentUser.name)).catch(e => { console.error("Error cargando clientes:", e); return []; });
@@ -115,8 +119,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         });
 
-        // Se elimina orderBy y limit de la consulta del servidor para evitar el requisito de índices compuestos
-        // El ordenamiento y el límite se aplican ahora en el lado del cliente.
         const notificationsQuery = query(
             collection(db, 'notifications'), 
             where('userId', '==', fbUser.uid)
@@ -130,9 +132,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             .sort((a, b) => {
                 const dateA = a.createdAt?.getTime() || 0;
                 const dateB = b.createdAt?.getTime() || 0;
-                return dateB - dateA; // Orden descendente por fecha
+                return dateB - dateA; 
             })
-            .slice(0, 15); // Limitar a las 15 más recientes
+            .slice(0, 15);
             
             setNotifications(notificationsData);
         });
