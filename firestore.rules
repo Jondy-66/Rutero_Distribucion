@@ -8,7 +8,7 @@ service cloud.firestore {
     function isAssignedAgent(data) { return request.auth.uid == data.agent_id; }
 
     match /users/{userId} {
-      // Permitir lectura para que cualquier usuario vea nombres de supervisores/ejecutivos
+      // Permitir lectura total (get y list) para que cualquier usuario vea nombres de supervisores/ejecutivos sin restricciones
       allow read: if isSignedIn(); 
       allow write: if isAdmin();
     }

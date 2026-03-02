@@ -75,31 +75,32 @@ export default function NewRoutePage() {
     return users.filter(u => u.role === 'Supervisor' || u.role === 'Administrador');
   }, [users]);
 
-  // Motor de Resolución Inteligente de Identidad - Versión de Raíz Robusta
+  // MOTOR DE RESOLUCIÓN DE IDENTIDAD V3 - RESILIENTE Y MULTICAPA
   useEffect(() => {
-    const resolveSupervisor = async () => {
-      const sid = currentUser?.supervisorId?.trim();
-      
-      if (!sid || !isSellerRole) {
-        setIsResolving(false);
-        return;
-      }
+    const sid = currentUser?.supervisorId?.trim();
+    
+    if (!sid || !isSellerRole) {
+      setIsResolving(false);
+      return;
+    }
 
-      // 1. Intentar encontrar en la lista de usuarios ya cargada
-      const foundInList = users.find(u => 
+    const resolveSupervisor = async () => {
+      // Capa 1: Búsqueda en memoria (rápida)
+      let found = users.find(u => 
         u.id === sid || 
         (u as any).uid === sid ||
+        u.email === sid ||
         u.name?.toLowerCase().trim() === sid.toLowerCase()
       );
 
-      if (foundInList) {
-        setResolvedSupervisor(foundInList);
-        setSelectedSupervisorId(foundInList.id);
+      if (found) {
+        setResolvedSupervisor(found);
+        setSelectedSupervisorId(found.id);
         setIsResolving(false);
         return;
       }
 
-      // 2. Si no está en la lista y la lista ya terminó de cargar, búsqueda profunda por ID directo
+      // Capa 2: Búsqueda directa en Firestore (cuando la carga inicial termina)
       if (!loading) {
         try {
           const directUser = await getUser(sid);
@@ -107,10 +108,21 @@ export default function NewRoutePage() {
             setResolvedSupervisor(directUser);
             setSelectedSupervisorId(directUser.id);
           } else {
-            setResolvedSupervisor(null);
+            // Capa 3: Búsqueda por coincidencia de nombre si el ID no es un UID válido
+            if (sid.length < 20) { 
+                const byName = users.find(u => u.name?.toLowerCase().includes(sid.toLowerCase()));
+                if (byName) {
+                    setResolvedSupervisor(byName);
+                    setSelectedSupervisorId(byName.id);
+                } else {
+                    setResolvedSupervisor(null);
+                }
+            } else {
+                setResolvedSupervisor(null);
+            }
           }
         } catch (e) {
-          console.error("Fallo en resolución profunda:", e);
+          console.error("Error crítico en resolución profunda:", e);
           setResolvedSupervisor(null);
         } finally {
           setIsResolving(false);
@@ -294,9 +306,9 @@ export default function NewRoutePage() {
                 ) : (
                     <div className="space-y-2">
                         <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
-                            <SelectTrigger className={cn(!selectedSupervisorId && "border-destructive")}>
+                            <SelectTrigger className={cn(!selectedSupervisorId && !isResolving && "border-destructive")}>
                                 <Users className="mr-2 h-4 w-4 text-primary" />
-                                <SelectValue placeholder="Seleccionar supervisor..." />
+                                <SelectValue placeholder={isResolving ? "Resolviendo identidad..." : "Seleccionar supervisor..."} />
                             </SelectTrigger>
                             <SelectContent>
                                 {loading ? (
@@ -307,11 +319,16 @@ export default function NewRoutePage() {
                             </SelectContent>
                         </Select>
                         {isSellerRole && !resolvedSupervisor && !isResolving && currentUser?.supervisorId && (
-                            <div className="flex items-start gap-2 p-2 rounded bg-orange-50 border border-orange-200">
-                                <AlertCircle className="h-4 w-4 text-orange-600 shrink-0 mt-0.5" />
-                                <p className="text-[10px] text-orange-700 font-bold leading-tight uppercase">
-                                    TU ID DE SUPERVISOR ({currentUser.supervisorId}) NO COINCIDE CON UN PERFIL ACTIVO. POR FAVOR, SELECCIONA A TU SUPERVISOR MANUALMENTE PARA CONTINUAR.
-                                </p>
+                            <div className="flex items-start gap-2 p-3 rounded-lg bg-orange-50 border-2 border-orange-200 animate-in fade-in slide-in-from-top-2">
+                                <AlertCircle className="h-5 w-5 text-orange-600 shrink-0 mt-0.5" />
+                                <div className="space-y-1">
+                                    <p className="text-[11px] text-orange-800 font-black leading-tight uppercase">
+                                        VINCULACIÓN AUTOMÁTICA PENDIENTE
+                                    </p>
+                                    <p className="text-[10px] text-orange-700 font-bold leading-tight uppercase">
+                                        Tu ID de supervisor ({currentUser.supervisorId}) no coincide con un perfil activo. Por favor, selecciona a tu supervisor manualmente para continuar.
+                                    </p>
+                                </div>
                             </div>
                         )}
                     </div>
