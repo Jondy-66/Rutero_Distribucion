@@ -65,7 +65,7 @@ export default function NewRoutePage() {
 
   // Estados para resolución profunda de supervisor
   const [resolvedSupervisor, setResolvedSupervisor] = useState<User | null>(null);
-  const [isResolving, setIsResolving] = useState(false);
+  const [isResolving, setIsResolving] = useState(true);
 
   const isFormLocked = stagedRoutes.length > 0;
   const isSellerRole = currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista';
@@ -75,19 +75,20 @@ export default function NewRoutePage() {
     return users.filter(u => u.role === 'Supervisor' || u.role === 'Administrador');
   }, [users]);
 
-  // Motor de Resolución Inteligente de Identidad - Versión de Raíz
+  // Motor de Resolución Inteligente de Identidad - Versión de Raíz Robusta
   useEffect(() => {
     const resolveSupervisor = async () => {
-      if (!currentUser?.supervisorId || !isSellerRole) return;
+      const sid = currentUser?.supervisorId?.trim();
       
-      const sid = currentUser.supervisorId.trim();
-      if (!sid) return;
+      if (!sid || !isSellerRole) {
+        setIsResolving(false);
+        return;
+      }
 
-      // 1. Intentar encontrar en la lista de usuarios ya cargada (Búsqueda Global)
+      // 1. Intentar encontrar en la lista de usuarios ya cargada
       const foundInList = users.find(u => 
         u.id === sid || 
         (u as any).uid === sid ||
-        u.email?.toLowerCase() === sid.toLowerCase() ||
         u.name?.toLowerCase().trim() === sid.toLowerCase()
       );
 
@@ -98,24 +99,26 @@ export default function NewRoutePage() {
         return;
       }
 
-      // 2. Si no está en la lista, realizar búsqueda profunda por ID directo (Bypass de filtros)
-      setIsResolving(true);
-      try {
-        const directUser = await getUser(sid);
-        if (directUser) {
-          setResolvedSupervisor(directUser);
-          setSelectedSupervisorId(directUser.id);
+      // 2. Si no está en la lista y la lista ya terminó de cargar, búsqueda profunda por ID directo
+      if (!loading) {
+        try {
+          const directUser = await getUser(sid);
+          if (directUser) {
+            setResolvedSupervisor(directUser);
+            setSelectedSupervisorId(directUser.id);
+          } else {
+            setResolvedSupervisor(null);
+          }
+        } catch (e) {
+          console.error("Fallo en resolución profunda:", e);
+          setResolvedSupervisor(null);
+        } finally {
+          setIsResolving(false);
         }
-      } catch (e) {
-        console.error("Fallo en resolución profunda:", e);
-      } finally {
-        setIsResolving(false);
       }
     };
 
-    if (!loading) {
-        resolveSupervisor();
-    }
+    resolveSupervisor();
   }, [currentUser?.supervisorId, users, loading, isSellerRole]);
 
   useEffect(() => {
