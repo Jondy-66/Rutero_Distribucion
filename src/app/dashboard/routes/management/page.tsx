@@ -246,13 +246,16 @@ export default function RouteManagementPage() {
             c.ruc === activeRuc ? { ...c, checkOutTime: time, checkOutLocation: location, visitStatus: 'Completado' } : c
         );
 
-        const allActiveClients = nextClients.filter(c => c.status !== 'Eliminado');
-        const allTotalClientsDone = allActiveClients.length > 0 && allActiveClients.every(c => c.visitStatus === 'Completado');
+        // EVALUACIÓN DE CIERRE DE RUTA SEMANAL (ROBUSTA)
+        const activeClients = nextClients.filter(c => c.status !== 'Eliminado');
+        const allTotalClientsDone = activeClients.length > 0 && activeClients.every(c => c.visitStatus === 'Completado');
 
         const newStatus = allTotalClientsDone ? 'Completada' : 'En Progreso';
         
+        // Actualizar estado local primero para feedback visual inmediato
         setCurrentRouteClientsFull(nextClients);
         
+        // Guardar en Firestore con el nuevo estado (Completada o En Progreso)
         await updateRoute(selectedRoute.id, { 
             clients: sanitizeClientsForFirestore(nextClients), 
             status: newStatus 
@@ -261,17 +264,22 @@ export default function RouteManagementPage() {
         await refetchData('routes');
         setActiveRuc(null);
 
+        // Si la ruta se completó totalmente, limpiar sesión local
         if (allTotalClientsDone) {
             setIsRouteStarted(false);
             setSelectedRouteId(undefined);
-            localStorage.removeItem(SELECTION_KEY!);
+            if (SELECTION_KEY) {
+                localStorage.removeItem(SELECTION_KEY);
+            }
         }
 
         toast({ 
             title: allTotalClientsDone ? "Ruta Completada" : "Visita Finalizada",
-            description: allTotalClientsDone ? "Has terminado toda tu planificación semanal." : undefined
+            description: allTotalClientsDone ? "Has terminado toda tu planificación semanal." : undefined,
+            variant: allTotalClientsDone ? "success" : "default"
         });
     } catch (e) {
+        console.error("Error al finalizar visita:", e);
         toast({ title: "Error al finalizar visita", variant: "destructive" });
     } finally {
         setIsSaving(false);
