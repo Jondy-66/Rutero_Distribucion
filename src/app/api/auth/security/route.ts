@@ -12,11 +12,13 @@ const adminApp = initializeAdminApp();
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const email = searchParams.get('email');
+  const rawEmail = searchParams.get('email');
 
-  if (!email || !adminApp) {
+  if (!rawEmail || !adminApp) {
     return NextResponse.json({ error: 'Email requerido o error de configuración' }, { status: 400 });
   }
+
+  const email = rawEmail.trim().toLowerCase();
 
   try {
     const db = getFirestore(adminApp);
@@ -43,7 +45,10 @@ export async function POST(request: Request) {
   if (!adminApp) return NextResponse.json({ error: 'Admin SDK no inicializado' }, { status: 500 });
 
   try {
-    const { email, action } = await request.json();
+    const { email: rawEmail, action } = await request.json();
+    if (!rawEmail) return NextResponse.json({ error: 'Email requerido' }, { status: 400 });
+    
+    const email = rawEmail.trim().toLowerCase();
     const db = getFirestore(adminApp);
     const snapshot = await db.collection('users').where('email', '==', email).limit(1).get();
 

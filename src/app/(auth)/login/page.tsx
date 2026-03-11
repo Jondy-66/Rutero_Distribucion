@@ -40,15 +40,18 @@ export default function LoginPage() {
     setIsLoading(true);
     setIsSlowConnection(false);
 
+    // Normalizar email para evitar errores de coincidencia en base de datos
+    const cleanEmail = email.trim().toLowerCase();
+
     try {
         // 1. Verificar estado mediante API segura antes de cualquier intento
-        const checkRes = await fetch(`/api/auth/security?email=${encodeURIComponent(email)}`);
+        const checkRes = await fetch(`/api/auth/security?email=${encodeURIComponent(cleanEmail)}`);
         const userSecurity = await checkRes.json();
 
         if (userSecurity.exists && userSecurity.status === 'inactive') {
             toast({
                 title: "ACCESO DENEGADO",
-                description: "Tu cuenta ha sido BLOQUEADA PERMANENTEMENTE por seguridad. Por favor, contacta al Administrador del sistema para su desbloqueo.",
+                description: "TU CUENTA HA SIDO BLOQUEADA. Por favor, contacta al Administrador del sistema para su desbloqueo.",
                 variant: "destructive",
             });
             setIsLoading(false);
@@ -56,14 +59,14 @@ export default function LoginPage() {
         }
 
         // 2. Intentar autenticación en Firebase
-        await handleSignIn(email, password);
+        await handleSignIn(cleanEmail, password);
 
         // 3. Si tiene éxito, resetear intentos fallidos vía API
         if (userSecurity.exists && userSecurity.failedLoginAttempts > 0) {
             await fetch('/api/auth/security', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ email, action: 'reset' })
+                body: JSON.stringify({ email: cleanEmail, action: 'reset' })
             });
             await refetchData('users');
         }
@@ -74,35 +77,36 @@ export default function LoginPage() {
         console.error("Login error code:", error.code);
         let description = "Ocurrió un error al iniciar sesión.";
         
-        // Identificamos errores de credenciales o de saturación (too-many-requests)
-        const isCredentialError = ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'].includes(error.code);
-        const isRateLimitError = error.code === 'auth/too-many-requests';
+        // Cualquier error de auth (excepto red) debe contar como intento fallido
+        const isAuthError = error.code && error.code.startsWith('auth/');
+        const isNetworkError = error.code === 'auth/network-request-failed';
 
-        if (error.code === 'auth/network-request-failed') {
+        if (isNetworkError) {
             description = "Error de conexión. Por favor, verifica tu internet.";
-        } else if (isCredentialError || isRateLimitError) {
+        } else if (isAuthError) {
             // 4. Registrar fallo vía API segura para disparar el bloqueo de 5 intentos
-            // Agrupamos el bloqueo temporal de Google con nuestro bloqueo permanente de base de datos
             try {
                 const failRes = await fetch('/api/auth/security', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, action: 'fail' })
+                    body: JSON.stringify({ email: cleanEmail, action: 'fail' })
                 });
                 
                 if (failRes.ok) {
                     const failData = await failRes.json();
                     if (failData.blocked) {
-                        description = "CUENTA BLOQUEADA DEFINITIVAMENTE. Has excedido los 5 intentos permitidos. Contacta al Administrador.";
+                        description = "CUENTA BLOQUEADA DEFINITIVAMENTE. Has excedido los 5 intentos permitidos. CONTACTA AL ADMINISTRADOR.";
                     } else if (failData.attempts) {
                         const remaining = 5 - failData.attempts;
-                        description = isRateLimitError
-                            ? `Demasiados intentos fallidos seguidos. Se te bloqueará permanentemente tras ${remaining} fallos más. Contacta al Administrador.`
-                            : `Contraseña incorrecta. Intento ${failData.attempts} de 5. Al llegar a 5 la cuenta se bloqueará permanentemente.`;
+                        description = `Credenciales incorrectas. Intento ${failData.attempts} de 5. Tras 5 fallos la cuenta será BLOQUEADA PERMANENTEMENTE.`;
+                        
+                        if (error.code === 'auth/too-many-requests') {
+                            description = "Demasiados intentos rápidos detectados. Google ha bloqueado temporalmente el acceso, y esto ha sido registrado como un fallo en tu cuenta.";
+                        }
                     }
                 }
             } catch (apiErr) {
-                console.error("Error registrando fallo:", apiErr);
+                console.error("Error registrando fallo en DB:", apiErr);
             }
         }
 
