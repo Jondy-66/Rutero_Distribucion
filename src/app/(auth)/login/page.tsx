@@ -71,31 +71,35 @@ export default function LoginPage() {
         toast({ title: "Inicio de sesión exitoso", description: "Verificando perfil..." });
 
     } catch (error: any) {
-        console.error(error);
+        console.error("Login error code:", error.code);
         let description = "Ocurrió un error al iniciar sesión.";
         
         if (error.code === 'auth/network-request-failed') {
             description = "Error de conexión. Por favor, verifica tu internet.";
-        } else if (error.code === 'auth/invalid-credential') {
+        } else if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'].includes(error.code)) {
             description = "Credenciales incorrectas. Por favor, verifica tus datos.";
             
-            // 4. Registrar fallo vía API segura
+            // 4. Registrar fallo vía API segura para disparar el bloqueo de 5 intentos
             try {
                 const failRes = await fetch('/api/auth/security', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, action: 'fail' })
                 });
-                const failData = await failRes.json();
                 
-                if (failData.blocked) {
-                    description = "Cuenta bloqueada por demasiados intentos fallidos. Contacta al administrador.";
-                } else if (failData.attempts) {
-                    description += ` Intento ${failData.attempts} de 5.`;
+                if (failRes.ok) {
+                    const failData = await failRes.json();
+                    if (failData.blocked) {
+                        description = "Cuenta bloqueada por demasiados intentos fallidos. Contacta al administrador.";
+                    } else if (failData.attempts) {
+                        description = `Credenciales incorrectas. Intento ${failData.attempts} de 5.`;
+                    }
                 }
             } catch (apiErr) {
                 console.error("Error registrando fallo:", apiErr);
             }
+        } else if (error.code === 'auth/too-many-requests') {
+            description = "Demasiados intentos fallidos. El acceso ha sido suspendido temporalmente por seguridad. Intenta más tarde.";
         }
 
         toast({
