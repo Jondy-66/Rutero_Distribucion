@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Route, LoaderCircle, WifiOff } from 'lucide-react';
+import { Route, LoaderCircle, WifiOff, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { handleSignIn } from '@/lib/firebase/auth';
 import { useAuth } from '@/hooks/use-auth';
@@ -47,8 +47,8 @@ export default function LoginPage() {
 
         if (userSecurity.exists && userSecurity.status === 'inactive') {
             toast({
-                title: "Cuenta Bloqueada",
-                description: "Tu cuenta ha sido desactivada por seguridad. Contacta al administrador.",
+                title: "CUENTA BLOQUEADA",
+                description: "Tu acceso ha sido desactivado permanentemente por seguridad tras múltiples intentos fallidos. Contacta al administrador.",
                 variant: "destructive",
             });
             setIsLoading(false);
@@ -74,12 +74,18 @@ export default function LoginPage() {
         console.error("Login error code:", error.code);
         let description = "Ocurrió un error al iniciar sesión.";
         
+        const isCredentialError = ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'].includes(error.code);
+        const isRateLimitError = error.code === 'auth/too-many-requests';
+
         if (error.code === 'auth/network-request-failed') {
             description = "Error de conexión. Por favor, verifica tu internet.";
-        } else if (['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'].includes(error.code)) {
-            description = "Credenciales incorrectas. Por favor, verifica tus datos.";
+        } else if (isCredentialError || isRateLimitError) {
+            description = isRateLimitError 
+                ? "Demasiados intentos seguidos. El acceso ha sido suspendido temporalmente." 
+                : "Credenciales incorrectas. Por favor, verifica tus datos.";
             
             // 4. Registrar fallo vía API segura para disparar el bloqueo de 5 intentos
+            // IMPORTANTE: Los bloqueos de Google (too-many-requests) ahora también suman al contador de bloqueo permanente
             try {
                 const failRes = await fetch('/api/auth/security', {
                     method: 'POST',
@@ -90,16 +96,17 @@ export default function LoginPage() {
                 if (failRes.ok) {
                     const failData = await failRes.json();
                     if (failData.blocked) {
-                        description = "Cuenta bloqueada por demasiados intentos fallidos. Contacta al administrador.";
+                        description = "CUENTA BLOQUEADA PERMANENTEMENTE. Has superado el límite de 5 intentos permitidos.";
                     } else if (failData.attempts) {
-                        description = `Credenciales incorrectas. Intento ${failData.attempts} de 5.`;
+                        const remaining = 5 - failData.attempts;
+                        description = isRateLimitError
+                            ? `Exceso de intentos. Se te bloqueará permanentemente tras ${remaining} fallos más.`
+                            : `Credenciales incorrectas. Intento ${failData.attempts} de 5.`;
                     }
                 }
             } catch (apiErr) {
                 console.error("Error registrando fallo:", apiErr);
             }
-        } else if (error.code === 'auth/too-many-requests') {
-            description = "Demasiados intentos fallidos. El acceso ha sido suspendido temporalmente por seguridad. Intenta más tarde.";
         }
 
         toast({
