@@ -106,6 +106,7 @@ export type RoutePlan = {
   date: Date;
   clients: ClientInRoute[];
   status: 'Pendiente de Aprobación' | 'Planificada' | 'En Progreso' | 'Completada' | 'Rechazada' | 'Incompleta';
+  statusReason?: string;
   supervisorId: string;
   supervisorName: string;
   supervisorObservation?: string;

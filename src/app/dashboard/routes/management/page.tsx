@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
-import type { Client, ClientInRoute } from '@/lib/types';
+import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format, isToday, isBefore, startOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -97,14 +98,24 @@ export default function RouteManagementPage() {
             const expirationDate = addDays(startOfDay(routeDate), 7);
             
             if (isBefore(expirationDate, startOfDay(new Date()))) {
-                const allDone = r.clients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
-                const newStatus = allDone ? 'Completada' : 'Incompleta';
+                const activeClients = r.clients.filter(c => c.status !== 'Eliminado');
+                const pendingClients = activeClients.filter(c => c.visitStatus !== 'Completado');
+                const allDone = pendingClients.length === 0;
                 
-                await updateRoute(r.id, { status: newStatus });
+                const newStatus = allDone ? 'Completada' : 'Incompleta';
+                const statusReason = allDone 
+                    ? "Ruta finalizada automáticamente por cumplimiento de tiempo límite." 
+                    : `Cierre automático por límite de tiempo (7 días). Visitas pendientes: ${pendingClients.length}`;
+                
+                await updateRoute(r.id, { 
+                    status: newStatus,
+                    statusReason: statusReason
+                });
+                
                 toast({ 
                     title: "Ruta Cerrada Automáticamente", 
                     description: `La ruta "${r.routeName}" ha finalizado como ${newStatus}.`,
-                    variant: "destructive"
+                    variant: allDone ? "default" : "destructive"
                 });
                 await refetchData('routes');
             }
@@ -251,6 +262,7 @@ export default function RouteManagementPage() {
         const allTotalClientsDone = activeClients.length > 0 && activeClients.every(c => c.visitStatus === 'Completado');
 
         const newStatus = allTotalClientsDone ? 'Completada' : 'En Progreso';
+        const statusReason = allTotalClientsDone ? "Planificación semanal completada exitosamente." : undefined;
         
         // Actualizar estado local primero para feedback visual inmediato
         setCurrentRouteClientsFull(nextClients);
@@ -258,7 +270,8 @@ export default function RouteManagementPage() {
         // Guardar en Firestore con el nuevo estado (Completada o En Progreso)
         await updateRoute(selectedRoute.id, { 
             clients: sanitizeClientsForFirestore(nextClients), 
-            status: newStatus 
+            status: newStatus,
+            statusReason: statusReason
         });
         
         await refetchData('routes');
@@ -402,7 +415,10 @@ export default function RouteManagementPage() {
                                 </div>
                                 <ScrollArea className="flex-1 pr-2">
                                     <div className="space-y-3 pb-2">
-                                        {filteredSearchClients.map(c => {
+                                        {myAssignedClients.filter(c => {
+                                            const term = addClientSearchTerm.toLowerCase();
+                                            return c.nombre_cliente.toLowerCase().includes(term) || c.nombre_comercial.toLowerCase().includes(term) || c.ruc.includes(term);
+                                        }).map(c => {
                                             const isSel = multiSelectedClients.some(sc => sc.ruc === c.ruc);
                                             return (
                                                 <div key={c.ruc} className={cn("flex items-start space-x-3 p-3 rounded-xl border transition-all cursor-pointer", isSel ? "bg-[#011688]/5 border-[#011688]" : "bg-[#f8f9ff] border-[#e2e8f0]")} onClick={() => setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => sc.ruc !== c.ruc) : [...multiSelectedClients, c])}>
@@ -437,7 +453,7 @@ export default function RouteManagementPage() {
                             "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer", 
                             activeRuc === c.ruc ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
                             c.visitStatus === 'Completado' && "opacity-50 grayscale bg-muted/30",
-                            isCurrentClientInProgress && activeRuc !== c.ruc && "opacity-30 cursor-not-allowed"
+                            isCurrentClientInProgress && activeRuc !== ruc && "opacity-30 cursor-not-allowed"
                         )}>
                             <div className="flex items-center gap-3 overflow-hidden">
                                 <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>

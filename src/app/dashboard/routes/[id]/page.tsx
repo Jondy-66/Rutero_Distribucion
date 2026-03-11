@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter, notFound } from 'next/navigation';
@@ -6,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle, MessageSquare, Info } from 'lucide-react';
 import { getRoute, updateRoute, addNotification } from '@/lib/firebase/firestore';
 import { getPredicciones } from '@/services/api';
 import type { User, RoutePlan, ClientInRoute } from '@/lib/types';
@@ -295,6 +296,16 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
             <ThumbsDown className="h-4 w-4" />
             <AlertTitle>Ruta Rechazada</AlertTitle>
             <AlertDescription>{route.supervisorObservation || 'Sin observaciones del supervisor.'}</AlertDescription>
+          </Alert>
+        )}
+
+        {route.status === 'Incompleta' && (
+          <Alert className="mb-6 border-orange-500 bg-orange-50">
+            <Info className="h-4 w-4 text-orange-600" />
+            <AlertTitle className="text-orange-800 font-bold uppercase">Información de Ruta Incompleta</AlertTitle>
+            <AlertDescription className="text-orange-700 font-medium">
+              {route.statusReason || "Esta ruta fue finalizada sin completar todas las visitas programadas."}
+            </AlertDescription>
           </Alert>
         )}
 

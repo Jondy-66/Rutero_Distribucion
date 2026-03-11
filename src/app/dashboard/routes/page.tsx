@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -16,7 +17,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { deleteRoute, updateRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock, Trash2, Users, CheckCircle } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock, Trash2, Users, CheckCircle, Info } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -43,6 +44,7 @@ import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Timestamp } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function RoutesListPage() {
   const { user, routes: allRoutesFromContext, loading: authLoading, dataLoading, refetchData } = useAuth();
@@ -71,7 +73,7 @@ export default function RoutesListPage() {
 
   const handleMarkAsCompleted = async (routeId: string) => {
     try {
-      await updateRoute(routeId, { status: 'Completada' });
+      await updateRoute(routeId, { status: 'Completada', statusReason: 'Finalizada manualmente por el usuario.' });
       toast({ title: "Ruta Finalizada", description: "La ruta ha sido marcada como Completada." });
       await refetchData('routes');
     } catch (error: any) {
@@ -80,14 +82,29 @@ export default function RoutesListPage() {
     }
   };
 
-  const getBadgeForStatus = (status: RoutePlan['status']) => {
+  const getBadgeForStatus = (route: RoutePlan) => {
+    const { status, statusReason } = route;
     switch (status) {
         case 'Planificada': return <Badge variant="secondary"><CheckCircle2 className="mr-1 h-3 w-3"/>{status}</Badge>;
         case 'En Progreso': return <Badge variant="default"><Clock className="mr-1 h-3 w-3"/>{status}</Badge>;
         case 'Completada': return <Badge variant="success"><CheckCircle2 className="mr-1 h-3 w-3"/>{status}</Badge>;
         case 'Pendiente de Aprobación': return <Badge variant="outline" className="text-amber-600 border-amber-500"><AlertCircle className="mr-1 h-3 w-3"/>Pendiente</Badge>;
         case 'Rechazada': return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3"/>{status}</Badge>;
-        case 'Incompleta': return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3"/>{status}</Badge>;
+        case 'Incompleta': 
+            return (
+                <TooltipProvider>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            <Badge variant="destructive" className="cursor-help">
+                                <AlertCircle className="mr-1 h-3 w-3"/>{status}
+                            </Badge>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            <p className="max-w-xs text-xs">{statusReason || "Ruta cerrada con visitas pendientes."}</p>
+                        </TooltipContent>
+                    </Tooltip>
+                </TooltipProvider>
+            );
         default: return <Badge variant="outline">{status}</Badge>;
     }
   }
@@ -164,11 +181,18 @@ export default function RoutesListPage() {
 
                                 return (
                                 <TableRow key={route.id}>
-                                    <TableCell className="font-medium">{route.routeName}</TableCell>
+                                    <TableCell className="font-medium">
+                                        <div className="flex flex-col">
+                                            <span>{route.routeName}</span>
+                                            {route.status === 'Incompleta' && route.statusReason && (
+                                                <span className="text-[10px] text-muted-foreground italic truncate max-w-[200px]">{route.statusReason}</span>
+                                            )}
+                                        </div>
+                                    </TableCell>
                                     <TableCell>{getRouteDate(route)}</TableCell>
                                     <TableCell>{route.supervisorName}</TableCell>
                                     <TableCell>
-                                        {getBadgeForStatus(route.status)}
+                                        {getBadgeForStatus(route)}
                                     </TableCell>
                                     <TableCell className="text-center">
                                         <div className={cn("flex items-center justify-center gap-1.5 font-bold", clientCount === 0 && "text-destructive animate-pulse")}>
