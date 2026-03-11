@@ -59,6 +59,7 @@ export async function POST(request: Request) {
       const newAttempts = currentAttempts + 1;
       const updates: any = { failedLoginAttempts: newAttempts };
       
+      // Umbral de seguridad: 5 intentos fallidos bloquean permanentemente la cuenta
       if (newAttempts >= 5) {
         updates.status = 'inactive';
       }

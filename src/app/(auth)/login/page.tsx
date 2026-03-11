@@ -41,14 +41,14 @@ export default function LoginPage() {
     setIsSlowConnection(false);
 
     try {
-        // 1. Verificar estado mediante API segura (evita error de permisos Firestore)
+        // 1. Verificar estado mediante API segura antes de cualquier intento
         const checkRes = await fetch(`/api/auth/security?email=${encodeURIComponent(email)}`);
         const userSecurity = await checkRes.json();
 
         if (userSecurity.exists && userSecurity.status === 'inactive') {
             toast({
-                title: "CUENTA BLOQUEADA",
-                description: "Tu acceso ha sido desactivado permanentemente por seguridad tras múltiples intentos fallidos. Contacta al administrador.",
+                title: "ACCESO DENEGADO",
+                description: "Tu cuenta ha sido BLOQUEADA PERMANENTEMENTE por seguridad. Por favor, contacta al Administrador del sistema para su desbloqueo.",
                 variant: "destructive",
             });
             setIsLoading(false);
@@ -74,18 +74,15 @@ export default function LoginPage() {
         console.error("Login error code:", error.code);
         let description = "Ocurrió un error al iniciar sesión.";
         
+        // Identificamos errores de credenciales o de saturación (too-many-requests)
         const isCredentialError = ['auth/invalid-credential', 'auth/wrong-password', 'auth/user-not-found', 'auth/invalid-email'].includes(error.code);
         const isRateLimitError = error.code === 'auth/too-many-requests';
 
         if (error.code === 'auth/network-request-failed') {
             description = "Error de conexión. Por favor, verifica tu internet.";
         } else if (isCredentialError || isRateLimitError) {
-            description = isRateLimitError 
-                ? "Demasiados intentos seguidos. El acceso ha sido suspendido temporalmente." 
-                : "Credenciales incorrectas. Por favor, verifica tus datos.";
-            
             // 4. Registrar fallo vía API segura para disparar el bloqueo de 5 intentos
-            // IMPORTANTE: Los bloqueos de Google (too-many-requests) ahora también suman al contador de bloqueo permanente
+            // Agrupamos el bloqueo temporal de Google con nuestro bloqueo permanente de base de datos
             try {
                 const failRes = await fetch('/api/auth/security', {
                     method: 'POST',
@@ -96,12 +93,12 @@ export default function LoginPage() {
                 if (failRes.ok) {
                     const failData = await failRes.json();
                     if (failData.blocked) {
-                        description = "CUENTA BLOQUEADA PERMANENTEMENTE. Has superado el límite de 5 intentos permitidos.";
+                        description = "CUENTA BLOQUEADA DEFINITIVAMENTE. Has excedido los 5 intentos permitidos. Contacta al Administrador.";
                     } else if (failData.attempts) {
                         const remaining = 5 - failData.attempts;
                         description = isRateLimitError
-                            ? `Exceso de intentos. Se te bloqueará permanentemente tras ${remaining} fallos más.`
-                            : `Credenciales incorrectas. Intento ${failData.attempts} de 5.`;
+                            ? `Demasiados intentos fallidos seguidos. Se te bloqueará permanentemente tras ${remaining} fallos más. Contacta al Administrador.`
+                            : `Contraseña incorrecta. Intento ${failData.attempts} de 5. Al llegar a 5 la cuenta se bloqueará permanentemente.`;
                     }
                 }
             } catch (apiErr) {
@@ -147,7 +144,7 @@ export default function LoginPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2">
                 <div className="relative hidden lg:block">
                     <Image
-                        src="https://i.ibb.co/gLWLM13M/rut-img1.png"
+                        src="https://i.ibb.co/gLWLM1M/rut-img1.png"
                         data-ai-hint="logistics map"
                         alt="Mapa de rutas de fondo"
                         width={600}
@@ -218,7 +215,7 @@ export default function LoginPage() {
                     
                     <div className="mt-6 text-center text-sm">
                         ¿No tienes una cuenta?{' '}
-                        <a href="mailto:jdiaza@farmaenlace.com" className="underline">
+                        <a href="mailto:jdiaza@farmaenlace.com" className="underline font-bold text-primary">
                         Contactar al Administrador
                         </a>
                     </div>
