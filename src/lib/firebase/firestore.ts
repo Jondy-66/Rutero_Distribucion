@@ -18,6 +18,19 @@ export const updateCustomerMetrics = async (id: string, metrics: Partial<Custome
     return updateDoc(docRef, { ...metrics, updatedAt: serverTimestamp() });
 };
 
+export const addCustomersBatch = async (customersData: Omit<Customer, 'id'>[]) => {
+    const batch = writeBatch(db);
+    for (const customer of customersData) {
+        const newDocRef = doc(customersCollection);
+        batch.set(newDocRef, {
+            ...customer,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+        });
+    }
+    await batch.commit();
+}
+
 // --- COLECCIÓN DE CRM: SALES ---
 const salesCrmCollection = collection(db, 'sales');
 
@@ -41,8 +54,6 @@ export const addCrmCall = async (call: Omit<CrmCall, 'id'>) => {
 // --- FUNCIONES DE USUARIOS ---
 
 export const getUsers = async (): Promise<User[]> => {
-  // Se elimina orderBy('name') del servidor para evitar que Firestore 
-  // oculte documentos que no tengan el campo 'name' definido.
   const snapshot = await getDocs(collection(db, 'users'));
   const users = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
   return users.sort((a, b) => (a.name || '').localeCompare(b.name || ''));

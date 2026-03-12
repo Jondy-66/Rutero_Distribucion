@@ -1,49 +1,70 @@
 
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { useAuth } from '@/hooks/use-auth';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Phone, TrendingUp, Calendar, AlertCircle, Sparkles, Filter } from 'lucide-react';
-import { format, isBefore, startOfDay, differenceInDays } from 'date-fns';
+import { Phone, TrendingUp, Calendar, AlertCircle, Sparkles, Filter, UploadCloud, Download, LoaderCircle } from 'lucide-react';
+import { format, isBefore, startOfDay, differenceInDays, addDays, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { getMyCustomers } from '@/lib/firebase/firestore';
+import { getMyCustomers, addCustomersBatch } from '@/lib/firebase/firestore';
 import type { Customer } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { useToast } from '@/hooks/use-toast';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
+import { Timestamp } from 'firebase/firestore';
 
 export default function CrmPredictionPage() {
   const { user } = useAuth();
   const router = useRouter();
+  const { toast } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const refreshData = async () => {
+    if (user) {
+      setLoading(true);
+      const data = await getMyCustomers(user.id);
+      setCustomers(data);
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    if (user) {
-      getMyCustomers(user.id).then(data => {
-        setCustomers(data);
-        setLoading(false);
-      });
-    }
+    refreshData();
   }, [user]);
 
   const callQueue = useMemo(() => {
     return customers
       .map(c => {
-        // Cálculo de prioridad local para la vista
-        const nextDate = c.next_call_date instanceof Date ? c.next_call_date : (c.next_call_date as any).toDate();
+        const nextDate = c.next_call_date instanceof Date 
+            ? c.next_call_date 
+            : (c.next_call_date && typeof (c.next_call_date as any).toDate === 'function')
+                ? (c.next_call_date as any).toDate()
+                : new Date(c.next_call_date as any);
+        
         const daysOverdue = differenceInDays(new Date(), nextDate);
         
         let score = (daysOverdue > 0 ? daysOverdue : 0) * 1.5;
         if (c.tier === 'VIP') score += 50;
         if (c.status === 'lead') score += 20;
         
-        // Simulación de "Próximo a comprar" basado en frecuencia
-        const lastPurchase = c.last_purchase_date instanceof Date ? c.last_purchase_date : (c.last_purchase_date as any).toDate();
+        const lastPurchase = c.last_purchase_date instanceof Date 
+            ? c.last_purchase_date 
+            : (c.last_purchase_date && typeof (c.last_purchase_date as any).toDate === 'function')
+                ? (c.last_purchase_date as any).toDate()
+                : new Date(c.last_purchase_date as any);
+
         const daysSincePurchase = differenceInDays(new Date(), lastPurchase);
         const isNextToBuy = daysSincePurchase >= (c.purchase_frequency_days - 5);
         if (isNextToBuy) score += 100;
@@ -57,12 +78,106 @@ export default function CrmPredictionPage() {
     router.push(`/dashboard/crm/management?customerId=${customerId}`);
   };
 
+  const processImportedData = async (data: any[]) => {
+    if (!user) return;
+    setIsUploading(true);
+
+    try {
+        const customersToSave: Omit<Customer, 'id'>[] = data.map(row => {
+            // Normalizar claves
+            const cleanRow: any = {};
+            Object.keys(row).forEach(k => {
+                cleanRow[k.trim().toLowerCase().replace(/ /g, '_')] = row[k];
+            });
+
+            const lastPurchaseDate = cleanRow.last_purchase_date ? new Date(cleanRow.last_purchase_date) : new Date();
+            const freq = parseInt(cleanRow.purchase_frequency_days) || 30;
+            
+            // Si no hay fecha de próxima llamada, calcularla basándose en frecuencia
+            const nextCallDate = cleanRow.next_call_date 
+                ? new Date(cleanRow.next_call_date) 
+                : addDays(lastPurchaseDate, freq);
+
+            return {
+                name: cleanRow.name || cleanRow.nombre || 'Sin Nombre',
+                phone: String(cleanRow.phone || cleanRow.telefono || ''),
+                email: cleanRow.email || '',
+                agent_id: user.id,
+                average_ticket: parseFloat(cleanRow.average_ticket || cleanRow.ticket_promedio) || 0,
+                last_purchase_date: Timestamp.fromDate(lastPurchaseDate),
+                next_call_date: Timestamp.fromDate(nextCallDate),
+                purchase_frequency_days: freq,
+                status: (cleanRow.status || 'active') as any,
+                tier: (cleanRow.tier || 'Medio') as any,
+                priority_score: 0
+            };
+        });
+
+        await addCustomersBatch(customersToSave);
+        toast({ title: "Carga Exitosa", description: `${customersToSave.length} clientes añadidos a tu cola.` });
+        await refreshData();
+        document.getElementById('close-import-crm')?.click();
+    } catch (e) {
+        console.error(e);
+        toast({ title: "Error en la carga", variant: "destructive" });
+    } finally {
+        setIsUploading(false);
+    }
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.name.endsWith('.csv')) {
+        Papa.parse(file, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => processImportedData(results.data)
+        });
+    } else {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const data = e.target?.result;
+            const workbook = XLSX.read(data, { type: 'binary' });
+            const sheet = workbook.Sheets[workbook.SheetNames[0]];
+            const json = XLSX.utils.sheet_to_json(sheet);
+            processImportedData(json);
+        };
+        reader.readAsBinaryString(file);
+    }
+  };
+
   return (
     <>
       <PageHeader
         title="Cola de Llamadas Inteligente"
         description="Clientes priorizados por Ticket Promedio y Ciclo de Compra."
-      />
+      >
+        <Dialog>
+            <DialogTrigger asChild>
+                <Button variant="outline" className="font-bold">
+                    <UploadCloud className="mr-2 h-4 w-4" /> IMPORTAR BASE
+                </Button>
+            </DialogTrigger>
+            <DialogContent>
+                <DialogHeader>
+                    <DialogTitle>Cargar Clientes CRM</DialogTitle>
+                    <DialogDescription>
+                        Sube un archivo CSV/Excel con las métricas de tus clientes. 
+                        Columnas requeridas: name, phone, average_ticket, last_purchase_date, purchase_frequency_days.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4">
+                    <Input type="file" accept=".csv, .xlsx" onChange={handleFileUpload} disabled={isUploading} />
+                </div>
+                <DialogFooter>
+                    <DialogClose asChild><Button variant="ghost" id="close-import-crm">Cerrar</Button></DialogClose>
+                    {isUploading && <LoaderCircle className="animate-spin" />}
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+      </PageHeader>
 
       <div className="grid gap-6 md:grid-cols-4 mb-6">
         <Card className="bg-primary/5 border-primary/20">
@@ -181,7 +296,7 @@ export default function CrmPredictionPage() {
                 ) : (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center h-24 text-muted-foreground font-bold uppercase text-xs">
-                      No tienes llamadas programadas para hoy.
+                      No tienes llamadas programadas para hoy. Sube tu base inteligente para empezar.
                     </TableCell>
                   </TableRow>
                 )}
