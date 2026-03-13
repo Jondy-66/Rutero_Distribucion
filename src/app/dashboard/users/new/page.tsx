@@ -1,5 +1,4 @@
 
-
 'use client';
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -18,7 +17,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { PasswordInput } from '@/components/password-input';
 import Link from 'next/link';
-import { ArrowLeft, LoaderCircle, Users } from 'lucide-react';
+import { ArrowLeft, LoaderCircle, Users, ShieldAlert } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { handleSignUpAsAdmin } from '@/lib/firebase/auth';
 import { addUser } from '@/lib/firebase/firestore';
@@ -44,12 +43,46 @@ export default function NewUserPage() {
     }
   }, [users]);
 
+  /**
+   * Valida que la contraseña cumpla con criterios de seguridad.
+   */
+  const validatePasswordSecurity = (pass: string) => {
+    const minLength = 8;
+    const hasUpperCase = /[A-Z]/.test(pass);
+    const hasLowerCase = /[a-z]/.test(pass);
+    const hasNumber = /[0-9]/.test(pass);
+    const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(pass);
+
+    if (pass.length < minLength) return "La contraseña debe tener al menos 8 caracteres.";
+    if (!hasUpperCase) return "Debe incluir al menos una letra MAYÚSCULA.";
+    if (!hasLowerCase) return "Debe incluir al menos una letra minúscula.";
+    if (!hasNumber) return "Debe incluir al menos un número.";
+    if (!hasSpecialChar) return "Debe incluir al menos un carácter especial (ej: @, #, $, %).";
+    
+    return null;
+  };
+
   const handleCreateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // 1. Validar coincidencia
     if (password !== confirmPassword) {
       toast({ title: "Error", description: "Las contraseñas no coinciden.", variant: "destructive" });
       return;
     }
+
+    // 2. Validar Seguridad de Contraseña (Raíz del requerimiento)
+    const securityError = validatePasswordSecurity(password);
+    if (securityError) {
+        toast({ 
+            title: "Contraseña poco segura", 
+            description: securityError, 
+            variant: "destructive" 
+        });
+        return;
+    }
+
+    // 3. Validar Supervisor para roles operativos
     if ((role === 'Usuario' || role === 'Telemercaderista') && !selectedSupervisor) {
       toast({ title: "Error", description: "Debes asignar un supervisor para el rol de Usuario o Telemercaderista.", variant: "destructive" });
       return;
@@ -74,7 +107,7 @@ export default function NewUserPage() {
       await addUser(uid, newUser);
       await refetchData('users');
 
-      toast({ title: "Éxito", description: "Usuario creado correctamente." });
+      toast({ title: "Éxito", description: "Usuario creado correctamente con credenciales seguras." });
       router.push('/dashboard/users');
     } catch (error: any) {
       console.error(error);
@@ -109,7 +142,7 @@ export default function NewUserPage() {
           <CardHeader>
             <CardTitle>Información del Usuario</CardTitle>
             <CardDescription>
-              Proporciona los detalles del nuevo usuario.
+              Proporciona los detalles del nuevo usuario y asigna una contraseña robusta.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -155,19 +188,26 @@ export default function NewUserPage() {
                 </Select>
               </div>
             )}
-            <div className="space-y-2">
-              <Label htmlFor="new-password">Contraseña</Label>
-              <PasswordInput id="new-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={isLoading || loading}/>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="confirm-password">Confirmar Contraseña</Label>
-              <PasswordInput id="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required disabled={isLoading || loading}/>
+            
+            <div className="bg-muted/30 p-4 rounded-lg border border-dashed space-y-4">
+                <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase mb-2">
+                    <ShieldAlert className="h-4 w-4" /> Seguridad de Acceso
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="new-password">Contraseña</Label>
+                    <PasswordInput id="new-password" value={password} onChange={e => setPassword(e.target.value)} required disabled={isLoading || loading}/>
+                    <p className="text-[10px] text-muted-foreground font-medium">Mínimo 8 caracteres, incluye mayúsculas, números y símbolos.</p>
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="confirm-password">Confirmar Contraseña</Label>
+                    <PasswordInput id="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} required disabled={isLoading || loading}/>
+                </div>
             </div>
           </CardContent>
           <CardFooter>
-            <Button type="submit" disabled={isLoading || loading}>
-              {(isLoading || loading) && <LoaderCircle className="animate-spin" />}
-              Crear Usuario
+            <Button type="submit" className="w-full sm:w-auto font-black px-10" disabled={isLoading || loading}>
+              {(isLoading || loading) && <LoaderCircle className="animate-spin mr-2" />}
+              CREAR USUARIO SEGURO
             </Button>
           </CardFooter>
         </Card>
