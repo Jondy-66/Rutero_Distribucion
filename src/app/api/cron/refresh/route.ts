@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   // Si se ha definido un secreto en las variables de entorno, validar que coincida
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     console.warn("Intento de ejecución de CRON no autorizado.");
-    return NextResponse.json({ error: 'Acceso Denegado' }, { status: 401 });
+    return NextResponse.json({ error: 'Acceso Denegado: Cabecera de autorización inválida o ausente.' }, { status: 401 });
   }
 
   if (!adminApp) {
@@ -84,7 +84,8 @@ export async function GET(request: Request) {
       type: 'CRON_SYNC_PREDICTIONS',
       executedAt: new Date(),
       total_processed: ejecutivos.length,
-      results: syncReport
+      results: syncReport,
+      invokedBy: authHeader ? 'Remote Cron Job' : 'Direct Call'
     });
 
     return NextResponse.json({ 
