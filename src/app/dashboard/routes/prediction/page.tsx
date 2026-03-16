@@ -92,7 +92,6 @@ export default function PrediccionesPage() {
 
         const round = (val: any) => Math.round((parseFloat(String(val || 0)) || 0) * 100) / 100;
         
-        // Búsqueda robusta del usuario ejecutivo
         const executiveUser = availableEjecutivos.find(u => 
             u.name && u.name.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase()
         );
@@ -102,10 +101,10 @@ export default function PrediccionesPage() {
         const routeClients: ClientInRoute[] = [];
         for (const pred of filteredPredicciones) {
             const data: any = pred;
+            // Aseguramos que el RUC sea siempre string antes del trim
             const ruc = String(data.cliente_id || data.RUC || data.ruc || '').trim();
             if (!ruc) continue;
             
-            // Parseo de fecha flexible (ISO o estándar)
             const dateStr = String(data.fecha_predicha || data.fecha || '');
             let dateObj = parseISO(dateStr);
             if (!isValid(dateObj)) {
@@ -114,7 +113,8 @@ export default function PrediccionesPage() {
             
             if (!isValid(dateObj)) continue;
 
-            const clientInCatalog = clients.find(c => c.ruc.trim() === ruc);
+            // Aseguramos conversión a string para evitar el error .trim() is not a function
+            const clientInCatalog = clients.find(c => String(c.ruc).trim() === ruc);
             routeClients.push({
                 ruc: ruc,
                 nombre_comercial: clientInCatalog ? clientInCatalog.nombre_comercial : (data.Cliente || 'Cliente Predicho'),
@@ -166,7 +166,8 @@ export default function PrediccionesPage() {
 
   const handleViewOptimizedRoute = () => {
     const predictedRucs = new Set(filteredPredicciones.map(p => String((p as any).ruc || (p as any).RUC || (p as any).cliente_id || '').trim()));
-    const clientsFromRucs = clients.filter(client => predictedRucs.has(client.ruc.trim()) && isFinite(client.latitud) && isFinite(client.longitud));
+    // Protección adicional aquí también
+    const clientsFromRucs = clients.filter(client => predictedRucs.has(String(client.ruc).trim()) && isFinite(client.latitud) && isFinite(client.longitud));
     if (clientsFromRucs.length === 0) return toast({ title: "Mapa vacío" });
     setClientsForMap(clientsFromRucs);
     setIsRouteMapOpen(true);
@@ -244,7 +245,7 @@ export default function PrediccionesPage() {
                                     <TableRow key={i}>
                                         <TableCell className="text-xs">{p.Ejecutivo || p.ejecutivo}</TableCell>
                                         <TableCell className="text-xs font-mono">{p.cliente_id || p.RUC || p.ruc}</TableCell>
-                                        <TableCell className="text-xs font-bold uppercase">{clients.find(c => c.ruc === (p.cliente_id || p.RUC || p.ruc))?.nombre_comercial || p.Cliente || 'Nuevo'}</TableCell>
+                                        <TableCell className="text-xs font-bold uppercase">{clients.find(c => String(c.ruc).trim() === String(p.cliente_id || p.RUC || p.ruc).trim())?.nombre_comercial || p.Cliente || 'Nuevo'}</TableCell>
                                         <TableCell className="text-right font-black text-primary">{(p.probabilidad_visita * 100).toFixed(1)}%</TableCell>
                                         <TableCell className="text-right text-xs">{formatCurrency(p.ventas)}</TableCell>
                                         <TableCell className="text-right text-xs">{formatCurrency(p.cobros)}</TableCell>
