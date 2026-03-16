@@ -81,6 +81,7 @@ export default function RouteManagementPage() {
   const [reAdditionObservation, setReAdditionObservation] = useState('');
 
   const isInitialRehydrationDone = useRef(false);
+  const lastLocalUpdateTimestamp = useRef<number>(0); // Para evitar sobrescritura de datos stale
   const SELECTION_KEY = user ? `mgmt_selected_route_v5_${user.id}` : null;
 
   useEffect(() => {
@@ -104,46 +105,14 @@ export default function RouteManagementPage() {
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  useEffect(() => {
-    if (authLoading || dataLoading) return;
-
-    const checkAndAutoCloseRoutes = async () => {
-        const inProgressRoutes = allRoutes.filter(r => r.createdBy === user?.id && r.status === 'En Progreso');
-        for (const r of inProgressRoutes) {
-            const routeDate = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date(r.date));
-            const expirationDate = addDays(startOfDay(routeDate), 7);
-            
-            if (isBefore(expirationDate, startOfDay(new Date()))) {
-                const activeClients = r.clients.filter(c => c.status !== 'Eliminado');
-                const pendingClients = activeClients.filter(c => c.visitStatus !== 'Completado');
-                const allDone = pendingClients.length === 0;
-                
-                const newStatus = allDone ? 'Completada' : 'Incompleta';
-                const statusReason = allDone 
-                    ? "Ruta finalizada automáticamente por cumplimiento de tiempo límite." 
-                    : `Cierre automático por límite de tiempo (7 días). Visitas pendientes: ${pendingClients.length}`;
-                
-                updateRoute(r.id, { 
-                    status: newStatus,
-                    statusReason: statusReason
-                });
-                
-                toast({ 
-                    title: "Ruta Cerrada Automáticamente", 
-                    description: `La ruta "${r.routeName}" ha finalizado como ${newStatus}.`,
-                    variant: allDone ? "default" : "destructive"
-                });
-                await refetchData('routes');
-            }
-        }
-    };
-
-    checkAndAutoCloseRoutes();
-  }, [allRoutes, user, authLoading, dataLoading, toast, refetchData]);
-
+  // Efecto de sincronización de datos desde el contexto
   useEffect(() => {
     if (authLoading || dataLoading || !selectedRoute) return;
     
+    // Ignorar actualizaciones externas si acabamos de hacer un cambio local (evita flickering y stale data)
+    const now = Date.now();
+    if (now - lastLocalUpdateTimestamp.current < 2500) return;
+
     if (!isSaving) {
         const clients = selectedRoute.clients || [];
         const round = (val: any) => {
@@ -163,6 +132,7 @@ export default function RouteManagementPage() {
     }
   }, [selectedRoute, authLoading, dataLoading, isSaving]);
 
+  // Recuperar selección de ruta del localStorage
   useEffect(() => {
     if (authLoading || dataLoading || isInitialRehydrationDone.current || !SELECTION_KEY) return;
 
@@ -215,10 +185,18 @@ export default function RouteManagementPage() {
       return activeWeekly.length > 0 && activeWeekly.every(c => c.visitStatus === 'Completado');
   }, [currentRouteClientsFull]);
 
+  // Lógica de selección inteligente del cliente activo
   useEffect(() => {
     if (!activeRuc && routeClients.length > 0 && !isTodayCompleted) {
-        const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
-        if (nextPending) setActiveRuc(nextPending.ruc);
+        // Prioridad 1: Buscar cliente que tenga entrada registrada pero no salida (visita activa)
+        const activeVisit = routeClients.find(c => c.checkInTime && !c.checkOutTime);
+        if (activeVisit) {
+            setActiveRuc(activeVisit.ruc);
+        } else {
+            // Prioridad 2: Buscar el primer cliente pendiente del día
+            const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
+            if (nextPending) setActiveRuc(nextPending.ruc);
+        }
     }
   }, [routeClients, activeRuc, isTodayCompleted]);
 
@@ -267,6 +245,8 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeRuc || isCurrentClientCompleted || isSaving) return;
     
     setIsSaving(true);
+    lastLocalUpdateTimestamp.current = Date.now(); // Marcar momento de actualización local
+    
     const time = format(new Date(), 'HH:mm:ss');
     const location = await getCurrentCoords();
 
@@ -274,11 +254,16 @@ export default function RouteManagementPage() {
         c.ruc === activeRuc ? { ...c, checkInTime: time, checkInLocation: location } : c
     );
     
+    // Actualización local inmediata (Optimistic UI)
     setCurrentRouteClientsFull(nextClients);
     
+    // Actualización remota (No bloqueante)
     updateRoute(selectedRoute.id, { 
         clients: sanitizeClientsForFirestore(nextClients) 
-    }).catch(e => console.error("Sync error (Check-in):", e));
+    }).catch(e => {
+        console.error("Error sincronizando entrada:", e);
+        toast({ title: "Error de Sincronización", description: "La entrada se guardó localmente pero no se pudo subir a la nube.", variant: "destructive" });
+    });
 
     setIsSaving(false);
     toast({ title: "Entrada Registrada" });
@@ -288,6 +273,8 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeRuc || isCurrentClientCompleted || isSaving) return;
 
     setIsSaving(true);
+    lastLocalUpdateTimestamp.current = Date.now();
+    
     const time = format(new Date(), 'HH:mm:ss');
     const location = await getCurrentCoords();
 
@@ -313,7 +300,7 @@ export default function RouteManagementPage() {
     }
 
     updateRoute(selectedRoute.id, updateData).catch(e => {
-        console.error("Sync error (Check-out):", e);
+        console.error("Error sincronizando salida:", e);
     });
     
     setActiveRuc(null);
@@ -329,11 +316,11 @@ export default function RouteManagementPage() {
     setIsSaving(false);
     toast({ 
         title: allTotalClientsDone ? "Ruta Completada" : "Visita Finalizada",
-        description: allTotalClientsDone ? "Has terminado toda tu planificación semanal." : "Visita registrada localmente y sincronizando...",
+        description: allTotalClientsDone ? "Has terminado toda tu planificación semanal." : "Visita registrada correctamente.",
         variant: allTotalClientsDone ? "success" : "default"
     });
     
-    setTimeout(() => refetchData('routes'), 1000);
+    setTimeout(() => refetchData('routes'), 1500);
   };
 
   const myAssignedClients = useMemo(() => {
@@ -366,6 +353,8 @@ export default function RouteManagementPage() {
     }
 
     setIsSaving(true);
+    lastLocalUpdateTimestamp.current = Date.now();
+
     const newClientsToAdd: ClientInRoute[] = multiSelectedClients.map(c => {
         const existing = currentRouteClientsFull.find(e => e.ruc === c.ruc);
         const isAlreadyManaged = existing?.visitStatus === 'Completado';
