@@ -35,7 +35,6 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
             cleaned.date = Timestamp.fromDate(new Date(c.date as any));
         }
 
-        // Redondear a 2 decimales para evitar errores de precisión y visualización
         const round = (val: any) => Math.round((parseFloat(String(val || 0)) || 0) * 100) / 100;
         
         cleaned.valorVenta = round(c.valorVenta);
@@ -44,7 +43,6 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         cleaned.promociones = round(c.promociones);
         cleaned.medicacionFrecuente = round(c.medicacionFrecuente);
 
-        // Convertir ubicación a GeoPoint si es un objeto plano
         if (c.checkInLocation && !(c.checkInLocation instanceof GeoPoint) && (c.checkInLocation as any).latitude !== undefined) {
             cleaned.checkInLocation = new GeoPoint((c.checkInLocation as any).latitude, (c.checkInLocation as any).longitude);
         }
@@ -121,7 +119,7 @@ export default function RouteManagementPage() {
                     ? "Ruta finalizada automáticamente por cumplimiento de tiempo límite." 
                     : `Cierre automático por límite de tiempo (7 días). Visitas pendientes: ${pendingClients.length}`;
                 
-                await updateRoute(r.id, { 
+                updateRoute(r.id, { 
                     status: newStatus,
                     statusReason: statusReason
                 });
@@ -144,7 +142,16 @@ export default function RouteManagementPage() {
     
     if (!isSaving) {
         const clients = selectedRoute.clients || [];
-        setCurrentRouteClientsFull(clients);
+        const round = (val: any) => Math.round((parseFloat(String(val || 0)) || 0) * 100) / 100;
+        const roundedClients = clients.map(c => ({
+            ...c,
+            valorVenta: round(c.valorVenta),
+            valorCobro: round(c.valorCobro),
+            devoluciones: round(c.devoluciones),
+            promociones: round(c.promociones),
+            medicacionFrecuente: round(c.medicacionFrecuente),
+        }));
+        setCurrentRouteClientsFull(roundedClients);
         setIsRouteStarted(selectedRoute.status === 'En Progreso');
     }
   }, [selectedRoute, authLoading, dataLoading, isSaving]);
@@ -218,8 +225,18 @@ export default function RouteManagementPage() {
 
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (!activeRuc || isCurrentClientCompleted || isSaving) return;
+    
+    let processedValue = value;
+    const numericFields = ['valorVenta', 'valorCobro', 'devoluciones', 'promociones', 'medicacionFrecuente'];
+    if (numericFields.includes(field)) {
+        const num = parseFloat(String(value));
+        if (!isNaN(num)) {
+            processedValue = Math.round(num * 100) / 100;
+        }
+    }
+
     setCurrentRouteClientsFull(prev => prev.map(c => 
-        c.ruc === activeRuc ? { ...c, [field]: value } : c
+        c.ruc === activeRuc ? { ...c, [field]: processedValue } : c
     ));
   };
 
@@ -249,11 +266,12 @@ export default function RouteManagementPage() {
             c.ruc === activeRuc ? { ...c, checkInTime: time, checkInLocation: location } : c
         );
         setCurrentRouteClientsFull(nextClients);
-        await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextClients) });
-        await refetchData('routes');
+        // Operación no bloqueante para internet lento
+        updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextClients) });
+        refetchData('routes');
         toast({ title: "Entrada Registrada" });
     } catch (e) {
-        toast({ title: "Error al registrar entrada", variant: "destructive" });
+        // En caso de error crítico inmediato
     } finally {
         setIsSaving(false);
     }
@@ -284,14 +302,14 @@ export default function RouteManagementPage() {
             status: newStatus
         };
         
-        // Evitar pasar undefined a Firestore
         if (statusReason) {
             updateData.statusReason = statusReason;
         }
 
-        await updateRoute(selectedRoute.id, updateData);
+        // Operación no bloqueante para internet lento
+        updateRoute(selectedRoute.id, updateData);
         
-        await refetchData('routes');
+        refetchData('routes');
         setActiveRuc(null);
 
         if (allTotalClientsDone) {
@@ -309,7 +327,6 @@ export default function RouteManagementPage() {
         });
     } catch (e) {
         console.error("Error al finalizar visita:", e);
-        toast({ title: "Error al finalizar visita", variant: "destructive" });
     } finally {
         setIsSaving(false);
     }
@@ -331,7 +348,6 @@ export default function RouteManagementPage() {
   const handleAddClientsToRoute = async () => {
     if (!selectedRoute || multiSelectedClients.length === 0 || isSaving) return;
 
-    // Verificar si alguno requiere observación (ya gestionado o programado para otro día)
     const needsObservation = multiSelectedClients.some(c => 
         currentRouteClientsFull.some(existing => {
             if (existing.ruc !== c.ruc) return false;
@@ -366,14 +382,14 @@ export default function RouteManagementPage() {
     const nextFullList = [...currentRouteClientsFull, ...newClientsToAdd];
     
     try {
-        await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextFullList) });
+        updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextFullList) });
         setCurrentRouteClientsFull(nextFullList);
         setMultiSelectedClients([]);
         setAddClientSearchTerm('');
         setReAdditionObservation('');
         setIsAddClientDialogOpen(false);
         toast({ title: "Clientes añadidos" });
-        await refetchData('routes');
+        refetchData('routes');
     } catch (e) {
         toast({ title: "Error al añadir", variant: "destructive" });
     } finally {
