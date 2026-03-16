@@ -30,12 +30,15 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         if (c.date instanceof Date) {
             cleaned.date = Timestamp.fromDate(c.date);
         } else if (c.date && typeof (c.date as any).toDate === 'function') {
-            // Already a Timestamp
+            // Ya es un Timestamp
         } else if (c.date) {
             cleaned.date = Timestamp.fromDate(new Date(c.date as any));
         }
 
-        const round = (val: any) => Math.round((parseFloat(String(val || 0)) || 0) * 100) / 100;
+        const round = (val: any) => {
+            const n = parseFloat(String(val || 0));
+            return isNaN(n) ? 0 : Math.round(n * 100) / 100;
+        };
         
         cleaned.valorVenta = round(c.valorVenta);
         cleaned.valorCobro = round(c.valorCobro);
@@ -50,6 +53,7 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
             cleaned.checkOutLocation = new GeoPoint((c.checkOutLocation as any).latitude, (c.checkOutLocation as any).longitude);
         }
 
+        // Evitar undefined que rompe Firebase
         Object.keys(cleaned).forEach(key => {
             if (cleaned[key] === undefined) cleaned[key] = null;
         });
@@ -142,7 +146,10 @@ export default function RouteManagementPage() {
     
     if (!isSaving) {
         const clients = selectedRoute.clients || [];
-        const round = (val: any) => Math.round((parseFloat(String(val || 0)) || 0) * 100) / 100;
+        const round = (val: any) => {
+            const n = parseFloat(String(val || 0));
+            return isNaN(n) ? 0 : Math.round(n * 100) / 100;
+        };
         const roundedClients = clients.map(c => ({
             ...c,
             valorVenta: round(c.valorVenta),
@@ -231,7 +238,10 @@ export default function RouteManagementPage() {
     if (numericFields.includes(field)) {
         const num = parseFloat(String(value));
         if (!isNaN(num)) {
+            // Aplicar redondeo en tiempo real para evitar números largos en el input
             processedValue = Math.round(num * 100) / 100;
+        } else if (value === "") {
+            processedValue = 0;
         }
     }
 
@@ -261,20 +271,19 @@ export default function RouteManagementPage() {
     const time = format(new Date(), 'HH:mm:ss');
     const location = await getCurrentCoords();
 
-    try {
-        const nextClients = currentRouteClientsFull.map(c => 
-            c.ruc === activeRuc ? { ...c, checkInTime: time, checkInLocation: location } : c
-        );
-        setCurrentRouteClientsFull(nextClients);
-        // Operación no bloqueante para internet lento
-        updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextClients) });
-        refetchData('routes');
-        toast({ title: "Entrada Registrada" });
-    } catch (e) {
-        // En caso de error crítico inmediato
-    } finally {
-        setIsSaving(false);
-    }
+    const nextClients = currentRouteClientsFull.map(c => 
+        c.ruc === activeRuc ? { ...c, checkInTime: time, checkInLocation: location } : c
+    );
+    
+    setCurrentRouteClientsFull(nextClients);
+    
+    // Operación no bloqueante para evitar errores por internet lento
+    updateRoute(selectedRoute.id, { 
+        clients: sanitizeClientsForFirestore(nextClients) 
+    }).catch(e => console.error("Sync error (Check-in):", e));
+
+    setIsSaving(false);
+    toast({ title: "Entrada Registrada" });
   };
 
   const handleConfirmCheckOut = async () => {
@@ -284,52 +293,51 @@ export default function RouteManagementPage() {
     const time = format(new Date(), 'HH:mm:ss');
     const location = await getCurrentCoords();
 
-    try {
-        const nextClients = currentRouteClientsFull.map(c => 
-            c.ruc === activeRuc ? { ...c, checkOutTime: time, checkOutLocation: location, visitStatus: 'Completado' } : c
-        );
+    const nextClients = currentRouteClientsFull.map(c => 
+        c.ruc === activeRuc ? { ...c, checkOutTime: time, checkOutLocation: location, visitStatus: 'Completado' } : c
+    );
 
-        const activeClients = nextClients.filter(c => c.status !== 'Eliminado');
-        const allTotalClientsDone = activeClients.length > 0 && activeClients.every(c => c.visitStatus === 'Completado');
+    const activeClients = nextClients.filter(c => c.status !== 'Eliminado');
+    const allTotalClientsDone = activeClients.length > 0 && activeClients.every(c => c.visitStatus === 'Completado');
 
-        const newStatus = allTotalClientsDone ? 'Completada' : 'En Progreso';
-        const statusReason = allTotalClientsDone ? "Planificación semanal completada exitosamente." : undefined;
-        
-        setCurrentRouteClientsFull(nextClients);
-        
-        const updateData: any = { 
-            clients: sanitizeClientsForFirestore(nextClients), 
-            status: newStatus
-        };
-        
-        if (statusReason) {
-            updateData.statusReason = statusReason;
-        }
-
-        // Operación no bloqueante para internet lento
-        updateRoute(selectedRoute.id, updateData);
-        
-        refetchData('routes');
-        setActiveRuc(null);
-
-        if (allTotalClientsDone) {
-            setIsRouteStarted(false);
-            setSelectedRouteId(undefined);
-            if (SELECTION_KEY) {
-                localStorage.removeItem(SELECTION_KEY);
-            }
-        }
-
-        toast({ 
-            title: allTotalClientsDone ? "Ruta Completada" : "Visita Finalizada",
-            description: allTotalClientsDone ? "Has terminado toda tu planificación semanal." : undefined,
-            variant: allTotalClientsDone ? "success" : "default"
-        });
-    } catch (e) {
-        console.error("Error al finalizar visita:", e);
-    } finally {
-        setIsSaving(false);
+    const newStatus = allTotalClientsDone ? 'Completada' : 'En Progreso';
+    const statusReason = allTotalClientsDone ? "Planificación semanal completada exitosamente." : null;
+    
+    setCurrentRouteClientsFull(nextClients);
+    
+    const updateData: any = { 
+        clients: sanitizeClientsForFirestore(nextClients), 
+        status: newStatus
+    };
+    
+    if (statusReason) {
+        updateData.statusReason = statusReason;
     }
+
+    // Operación no bloqueante para resiliencia total
+    updateRoute(selectedRoute.id, updateData).catch(e => {
+        console.error("Sync error (Check-out):", e);
+    });
+    
+    setActiveRuc(null);
+
+    if (allTotalClientsDone) {
+        setIsRouteStarted(false);
+        setSelectedRouteId(undefined);
+        if (SELECTION_KEY) {
+            localStorage.removeItem(SELECTION_KEY);
+        }
+    }
+
+    setIsSaving(false);
+    toast({ 
+        title: allTotalClientsDone ? "Ruta Completada" : "Visita Finalizada",
+        description: allTotalClientsDone ? "Has terminado toda tu planificación semanal." : "Visita registrada localmente y sincronizando...",
+        variant: allTotalClientsDone ? "success" : "default"
+    });
+    
+    // Refrescar datos en segundo plano
+    setTimeout(() => refetchData('routes'), 1000);
   };
 
   const myAssignedClients = useMemo(() => {
@@ -382,7 +390,7 @@ export default function RouteManagementPage() {
     const nextFullList = [...currentRouteClientsFull, ...newClientsToAdd];
     
     try {
-        updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextFullList) });
+        await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextFullList) });
         setCurrentRouteClientsFull(nextFullList);
         setMultiSelectedClients([]);
         setAddClientSearchTerm('');
@@ -536,7 +544,7 @@ export default function RouteManagementPage() {
                             "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer", 
                             activeRuc === c.ruc ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
                             c.visitStatus === 'Completado' && "opacity-50 grayscale bg-muted/30",
-                            isCurrentClientInProgress && activeRuc !== c.ruc && "opacity-30 cursor-not-allowed"
+                            isCurrentClientInProgress && activeRuc !== ruc && "opacity-30 cursor-not-allowed"
                         )}>
                             <div className="flex items-center gap-3 overflow-hidden">
                                 <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
@@ -651,9 +659,18 @@ export default function RouteManagementPage() {
                                 </div>
 
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-primary">Venta ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={isCurrentClientCompleted || isSaving} /></div>
-                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-orange-600">Cobro ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={isCurrentClientCompleted || isSaving} /></div>
-                                    <div className="space-y-1"><Label className="text-[10px] font-black uppercase text-destructive">Devolución ($)</Label><Input type="number" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={isCurrentClientCompleted || isSaving} /></div>
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] font-black uppercase text-primary">Venta ($)</Label>
+                                        <Input type="number" step="0.01" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={isCurrentClientCompleted || isSaving} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] font-black uppercase text-orange-600">Cobro ($)</Label>
+                                        <Input type="number" step="0.01" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={isCurrentClientCompleted || isSaving} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <Label className="text-[10px] font-black uppercase text-destructive">Devolución ($)</Label>
+                                        <Input type="number" step="0.01" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={isCurrentClientCompleted || isSaving} />
+                                    </div>
                                 </div>
                                 
                                 <Button onClick={handleConfirmCheckOut} className="w-full h-16 text-lg font-black mt-6 rounded-2xl shadow-xl hover:scale-[1.02] active:scale-95 transition-all" disabled={isSaving || !activeClient.visitType || isCurrentClientCompleted}>
