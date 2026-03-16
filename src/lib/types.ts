@@ -89,6 +89,8 @@ export type ClientInRoute = {
   startTime?: string;
   endTime?: string;
   removalObservation?: string;
+  reAdditionObservation?: string;
+  isReadded?: boolean;
   status?: 'Activo' | 'Eliminado';
   origin?: 'manual' | 'predicted';
   visitStatus?: 'Pendiente' | 'Completado';

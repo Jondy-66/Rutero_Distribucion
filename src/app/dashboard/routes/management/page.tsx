@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -63,6 +63,7 @@ export default function RouteManagementPage() {
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
   const [addClientSearchTerm, setAddClientSearchTerm] = useState('');
   const [multiSelectedClients, setMultiSelectedClients] = useState<Client[]>([]);
+  const [reAdditionObservation, setReAdditionObservation] = useState('');
 
   const isInitialRehydrationDone = useRef(false);
   const SELECTION_KEY = user ? `mgmt_selected_route_v5_${user.id}` : null;
@@ -257,17 +258,14 @@ export default function RouteManagementPage() {
             c.ruc === activeRuc ? { ...c, checkOutTime: time, checkOutLocation: location, visitStatus: 'Completado' } : c
         );
 
-        // EVALUACIÓN DE CIERRE DE RUTA SEMANAL (ROBUSTA)
         const activeClients = nextClients.filter(c => c.status !== 'Eliminado');
         const allTotalClientsDone = activeClients.length > 0 && activeClients.every(c => c.visitStatus === 'Completado');
 
         const newStatus = allTotalClientsDone ? 'Completada' : 'En Progreso';
         const statusReason = allTotalClientsDone ? "Planificación semanal completada exitosamente." : undefined;
         
-        // Actualizar estado local primero para feedback visual inmediato
         setCurrentRouteClientsFull(nextClients);
         
-        // Guardar en Firestore con el nuevo estado (Completada o En Progreso)
         await updateRoute(selectedRoute.id, { 
             clients: sanitizeClientsForFirestore(nextClients), 
             status: newStatus,
@@ -277,7 +275,6 @@ export default function RouteManagementPage() {
         await refetchData('routes');
         setActiveRuc(null);
 
-        // Si la ruta se completó totalmente, limpiar sesión local
         if (allTotalClientsDone) {
             setIsRouteStarted(false);
             setSelectedRouteId(undefined);
@@ -315,15 +312,30 @@ export default function RouteManagementPage() {
   const handleAddClientsToRoute = async () => {
     if (!selectedRoute || multiSelectedClients.length === 0 || isSaving) return;
 
+    // Verificar si alguno es re-adición y requiere observación
+    const needsObservation = multiSelectedClients.some(c => 
+        currentRouteClientsFull.some(existing => existing.ruc === c.ruc && existing.visitStatus === 'Completado')
+    );
+
+    if (needsObservation && !reAdditionObservation.trim()) {
+        toast({ title: "Observación requerida", description: "Por favor indica por qué estás añadiendo nuevamente estos clientes.", variant: "destructive" });
+        return;
+    }
+
     setIsSaving(true);
-    const newClientsToAdd: ClientInRoute[] = multiSelectedClients.map(c => ({
-        ruc: c.ruc,
-        nombre_comercial: c.nombre_comercial,
-        date: new Date(),
-        visitStatus: 'Pendiente',
-        status: 'Activo',
-        origin: 'manual'
-    }));
+    const newClientsToAdd: ClientInRoute[] = multiSelectedClients.map(c => {
+        const isAlreadyManaged = currentRouteClientsFull.some(existing => existing.ruc === c.ruc && existing.visitStatus === 'Completado');
+        return {
+            ruc: c.ruc,
+            nombre_comercial: c.nombre_comercial,
+            date: new Date(),
+            visitStatus: 'Pendiente',
+            status: 'Activo',
+            origin: 'manual',
+            isReadded: isAlreadyManaged,
+            reAdditionObservation: isAlreadyManaged ? reAdditionObservation : undefined
+        };
+    });
 
     const nextFullList = [...currentRouteClientsFull, ...newClientsToAdd];
     
@@ -332,6 +344,7 @@ export default function RouteManagementPage() {
         setCurrentRouteClientsFull(nextFullList);
         setMultiSelectedClients([]);
         setAddClientSearchTerm('');
+        setReAdditionObservation('');
         setIsAddClientDialogOpen(false);
         toast({ title: "Clientes añadidos" });
         await refetchData('routes');
@@ -415,16 +428,17 @@ export default function RouteManagementPage() {
                                 </div>
                                 <ScrollArea className="flex-1 pr-2">
                                     <div className="space-y-3 pb-2">
-                                        {myAssignedClients.filter(c => {
-                                            const term = addClientSearchTerm.toLowerCase();
-                                            return c.nombre_cliente.toLowerCase().includes(term) || c.nombre_comercial.toLowerCase().includes(term) || c.ruc.includes(term);
-                                        }).map(c => {
+                                        {filteredSearchClients.map(c => {
                                             const isSel = multiSelectedClients.some(sc => sc.ruc === c.ruc);
+                                            const isAlreadyManaged = currentRouteClientsFull.some(existing => existing.ruc === c.ruc && existing.visitStatus === 'Completado');
                                             return (
-                                                <div key={c.ruc} className={cn("flex items-start space-x-3 p-3 rounded-xl border transition-all cursor-pointer", isSel ? "bg-[#011688]/5 border-[#011688]" : "bg-[#f8f9ff] border-[#e2e8f0]")} onClick={() => setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => sc.ruc !== c.ruc) : [...multiSelectedClients, c])}>
+                                                <div key={c.ruc} className={cn("flex items-start space-x-3 p-3 rounded-xl border transition-all cursor-pointer", isSel ? "bg-[#011688]/5 border-[#011688]" : "bg-[#f8f9ff] border-[#e2e8f0]", isAlreadyManaged && !isSel && "border-orange-200 bg-orange-50/30")} onClick={() => setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => sc.ruc !== c.ruc) : [...multiSelectedClients, c])}>
                                                     <Checkbox checked={isSel} className="mt-1 h-5 w-5 border-[#011688]" />
                                                     <div className="flex-1 min-w-0">
-                                                        <p className="text-sm sm:text-base font-black text-[#011688] uppercase truncate">{c.nombre_comercial}</p>
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-sm sm:text-base font-black text-[#011688] uppercase truncate">{c.nombre_comercial}</p>
+                                                            {isAlreadyManaged && <Badge variant="outline" className="text-[8px] font-black h-4 px-1.5 border-orange-500 text-orange-600 bg-orange-50 uppercase">Ya gestionado</Badge>}
+                                                        </div>
                                                         <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase truncate">{c.nombre_cliente}</p>
                                                         <p className="text-[10px] sm:text-xs font-mono text-muted-foreground mt-1">{c.ruc}</p>
                                                     </div>
@@ -433,6 +447,20 @@ export default function RouteManagementPage() {
                                         })}
                                     </div>
                                 </ScrollArea>
+                                
+                                {multiSelectedClients.some(c => currentRouteClientsFull.some(existing => existing.ruc === c.ruc && existing.visitStatus === 'Completado')) && (
+                                    <div className="space-y-2 pt-2 border-t border-dashed">
+                                        <Label className="text-[10px] font-black uppercase text-orange-600 flex items-center gap-1">
+                                            <AlertCircle className="h-3 w-3" /> Motivo de re-adición (Obligatorio)
+                                        </Label>
+                                        <Textarea 
+                                            placeholder="Indica por qué gestionas a este cliente nuevamente..." 
+                                            className="h-20 text-xs font-bold border-orange-200 focus:border-orange-500" 
+                                            value={reAdditionObservation}
+                                            onChange={e => setReAdditionObservation(e.target.value)}
+                                        />
+                                    </div>
+                                )}
                             </div>
                             <DialogFooter className="p-4 sm:p-6 bg-[#f8f9ff] border-t flex flex-row items-center justify-between">
                                 <span className="text-[10px] sm:text-sm font-black text-[#011688] uppercase">{multiSelectedClients.length} seleccionados</span>
@@ -453,12 +481,15 @@ export default function RouteManagementPage() {
                             "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer", 
                             activeRuc === c.ruc ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
                             c.visitStatus === 'Completado' && "opacity-50 grayscale bg-muted/30",
-                            isCurrentClientInProgress && activeRuc !== ruc && "opacity-30 cursor-not-allowed"
+                            isCurrentClientInProgress && activeRuc !== c.ruc && "opacity-30 cursor-not-allowed"
                         )}>
                             <div className="flex items-center gap-3 overflow-hidden">
                                 <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
                                 <div className="min-w-0">
-                                    <p className="font-bold text-sm truncate uppercase">{c.nombre_comercial}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-bold text-sm truncate uppercase">{c.nombre_comercial}</p>
+                                        {c.isReadded && <Badge variant="outline" className="text-[7px] h-3 px-1 border-primary text-primary font-black uppercase">Re-adición</Badge>}
+                                    </div>
                                     <span className="text-[9px] text-muted-foreground truncate block uppercase font-mono">{c.ruc}</span>
                                 </div>
                             </div>
@@ -492,7 +523,10 @@ export default function RouteManagementPage() {
                     ) : activeClient ? (
                         <div className="space-y-4">
                             <div className="space-y-1">
-                                <h3 className="text-2xl font-black text-primary leading-tight uppercase break-words">{activeClient.nombre_comercial}</h3>
+                                <div className="flex items-center gap-3">
+                                    <h3 className="text-2xl font-black text-primary leading-tight uppercase break-words">{activeClient.nombre_comercial}</h3>
+                                    {activeClient.isReadded && <Badge className="bg-primary text-white font-black">RE-GESTIÓN</Badge>}
+                                </div>
                                 <div className="flex items-center gap-2">
                                     <Badge variant="outline" className="font-mono text-[10px]">{activeClient.ruc}</Badge>
                                     <Badge variant={isCurrentClientCompleted ? "success" : "secondary"} className="text-[9px] font-bold uppercase">
@@ -504,6 +538,14 @@ export default function RouteManagementPage() {
                                 <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
                                 <p className="text-sm font-semibold text-muted-foreground leading-relaxed">{activeClient.direccion}</p>
                             </div>
+                            {activeClient.isReadded && activeClient.reAdditionObservation && (
+                                <div className="p-3 bg-orange-50 border-l-4 border-l-orange-500 rounded-r-xl">
+                                    <p className="text-[10px] font-black uppercase text-orange-700 mb-1 flex items-center gap-1">
+                                        <History className="h-3 w-3" /> Motivo de nueva visita:
+                                    </p>
+                                    <p className="text-xs font-bold text-orange-800 italic">"{activeClient.reAdditionObservation}"</p>
+                                </div>
+                            )}
                         </div>
                     ) : (
                         <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-4 text-center">

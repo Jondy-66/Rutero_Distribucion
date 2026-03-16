@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -134,6 +135,8 @@ export default function MyCompletedRoutesPage() {
           'Devoluciones ($)': client.devoluciones || 0,
           'Promociones ($)': client.promociones || 0,
           'Medicación Frecuente ($)': client.medicacionFrecuente || 0,
+          'Es Re-adición': client.isReadded ? 'SÍ' : 'NO',
+          'Observación Re-adición': client.reAdditionObservation || ''
         };
       });
 
