@@ -238,7 +238,6 @@ export default function RouteManagementPage() {
     if (numericFields.includes(field)) {
         const num = parseFloat(String(value));
         if (!isNaN(num)) {
-            // Aplicar redondeo en tiempo real para evitar números largos en el input
             processedValue = Math.round(num * 100) / 100;
         } else if (value === "") {
             processedValue = 0;
@@ -277,7 +276,6 @@ export default function RouteManagementPage() {
     
     setCurrentRouteClientsFull(nextClients);
     
-    // Operación no bloqueante para evitar errores por internet lento
     updateRoute(selectedRoute.id, { 
         clients: sanitizeClientsForFirestore(nextClients) 
     }).catch(e => console.error("Sync error (Check-in):", e));
@@ -314,7 +312,6 @@ export default function RouteManagementPage() {
         updateData.statusReason = statusReason;
     }
 
-    // Operación no bloqueante para resiliencia total
     updateRoute(selectedRoute.id, updateData).catch(e => {
         console.error("Sync error (Check-out):", e);
     });
@@ -336,7 +333,6 @@ export default function RouteManagementPage() {
         variant: allTotalClientsDone ? "success" : "default"
     });
     
-    // Refrescar datos en segundo plano
     setTimeout(() => refetchData('routes'), 1000);
   };
 
@@ -427,7 +423,7 @@ export default function RouteManagementPage() {
                 <CardDescription>Solo rutas activas asignadas a ti.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <Select onValueChange={(v) => { setSelectedRouteId(v); localStorage.setItem(SELECTION_KEY!, v); }} value={selectedRouteId}>
+                <Select onValueChange={(v) => { setSelectedRouteId(v); if(SELECTION_KEY) localStorage.setItem(SELECTION_KEY, v); }} value={selectedRouteId}>
                     <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta" /></SelectTrigger>
                     <SelectContent>
                         {selectableRoutes.length > 0 ? (
@@ -544,7 +540,7 @@ export default function RouteManagementPage() {
                             "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer", 
                             activeRuc === c.ruc ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
                             c.visitStatus === 'Completado' && "opacity-50 grayscale bg-muted/30",
-                            isCurrentClientInProgress && activeRuc !== ruc && "opacity-30 cursor-not-allowed"
+                            isCurrentClientInProgress && activeRuc !== c.ruc && "opacity-30 cursor-not-allowed"
                         )}>
                             <div className="flex items-center gap-3 overflow-hidden">
                                 <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
