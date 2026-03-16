@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History, CalendarClock } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -312,19 +312,26 @@ export default function RouteManagementPage() {
   const handleAddClientsToRoute = async () => {
     if (!selectedRoute || multiSelectedClients.length === 0 || isSaving) return;
 
-    // Verificar si alguno es re-adición y requiere observación
+    // Verificar si alguno requiere observación (ya gestionado o programado para otro día)
     const needsObservation = multiSelectedClients.some(c => 
-        currentRouteClientsFull.some(existing => existing.ruc === c.ruc && existing.visitStatus === 'Completado')
+        currentRouteClientsFull.some(existing => {
+            if (existing.ruc !== c.ruc) return false;
+            const isTodayClient = isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
+            return existing.visitStatus === 'Completado' || !isTodayClient;
+        })
     );
 
     if (needsObservation && !reAdditionObservation.trim()) {
-        toast({ title: "Observación requerida", description: "Por favor indica por qué estás añadiendo nuevamente estos clientes.", variant: "destructive" });
+        toast({ title: "Observación requerida", description: "Por favor indica por qué estás gestionando estos clientes hoy.", variant: "destructive" });
         return;
     }
 
     setIsSaving(true);
     const newClientsToAdd: ClientInRoute[] = multiSelectedClients.map(c => {
-        const isAlreadyManaged = currentRouteClientsFull.some(existing => existing.ruc === c.ruc && existing.visitStatus === 'Completado');
+        const existing = currentRouteClientsFull.find(e => e.ruc === c.ruc);
+        const isAlreadyManaged = existing?.visitStatus === 'Completado';
+        const isScheduledOtherDay = existing && !isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
+        
         return {
             ruc: c.ruc,
             nombre_comercial: c.nombre_comercial,
@@ -332,8 +339,8 @@ export default function RouteManagementPage() {
             visitStatus: 'Pendiente',
             status: 'Activo',
             origin: 'manual',
-            isReadded: isAlreadyManaged,
-            reAdditionObservation: isAlreadyManaged ? reAdditionObservation : undefined
+            isReadded: isAlreadyManaged || isScheduledOtherDay,
+            reAdditionObservation: (isAlreadyManaged || isScheduledOtherDay) ? reAdditionObservation : undefined
         };
     });
 
@@ -430,14 +437,22 @@ export default function RouteManagementPage() {
                                     <div className="space-y-3 pb-2">
                                         {filteredSearchClients.map(c => {
                                             const isSel = multiSelectedClients.some(sc => sc.ruc === c.ruc);
-                                            const isAlreadyManaged = currentRouteClientsFull.some(existing => existing.ruc === c.ruc && existing.visitStatus === 'Completado');
+                                            const existing = currentRouteClientsFull.find(e => e.ruc === c.ruc);
+                                            const isAlreadyManaged = existing?.visitStatus === 'Completado';
+                                            const isScheduledOtherDay = existing && !isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
+                                            
                                             return (
-                                                <div key={c.ruc} className={cn("flex items-start space-x-3 p-3 rounded-xl border transition-all cursor-pointer", isSel ? "bg-[#011688]/5 border-[#011688]" : "bg-[#f8f9ff] border-[#e2e8f0]", isAlreadyManaged && !isSel && "border-orange-200 bg-orange-50/30")} onClick={() => setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => sc.ruc !== c.ruc) : [...multiSelectedClients, c])}>
+                                                <div key={c.ruc} className={cn("flex items-start space-x-3 p-3 rounded-xl border transition-all cursor-pointer", isSel ? "bg-[#011688]/5 border-[#011688]" : "bg-[#f8f9ff] border-[#e2e8f0]", (isAlreadyManaged || isScheduledOtherDay) && !isSel && "border-orange-200 bg-orange-50/30")} onClick={() => setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => sc.ruc !== c.ruc) : [...multiSelectedClients, c])}>
                                                     <Checkbox checked={isSel} className="mt-1 h-5 w-5 border-[#011688]" />
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2">
                                                             <p className="text-sm sm:text-base font-black text-[#011688] uppercase truncate">{c.nombre_comercial}</p>
                                                             {isAlreadyManaged && <Badge variant="outline" className="text-[8px] font-black h-4 px-1.5 border-orange-500 text-orange-600 bg-orange-50 uppercase">Ya gestionado</Badge>}
+                                                            {isScheduledOtherDay && !isAlreadyManaged && (
+                                                                <Badge variant="outline" className="text-[8px] font-black h-4 px-1.5 border-blue-500 text-blue-600 bg-blue-50 uppercase">
+                                                                    <CalendarClock className="mr-1 h-2 w-2" /> En otro día
+                                                                </Badge>
+                                                            )}
                                                         </div>
                                                         <p className="text-[10px] sm:text-xs font-bold text-muted-foreground uppercase truncate">{c.nombre_cliente}</p>
                                                         <p className="text-[10px] sm:text-xs font-mono text-muted-foreground mt-1">{c.ruc}</p>
@@ -448,13 +463,18 @@ export default function RouteManagementPage() {
                                     </div>
                                 </ScrollArea>
                                 
-                                {multiSelectedClients.some(c => currentRouteClientsFull.some(existing => existing.ruc === c.ruc && existing.visitStatus === 'Completado')) && (
+                                {multiSelectedClients.some(c => {
+                                    const existing = currentRouteClientsFull.find(e => e.ruc === c.ruc);
+                                    if (!existing) return false;
+                                    const isTodayClient = isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
+                                    return existing.visitStatus === 'Completado' || !isTodayClient;
+                                }) && (
                                     <div className="space-y-2 pt-2 border-t border-dashed">
                                         <Label className="text-[10px] font-black uppercase text-orange-600 flex items-center gap-1">
-                                            <AlertCircle className="h-3 w-3" /> Motivo de re-adición (Obligatorio)
+                                            <AlertCircle className="h-3 w-3" /> Motivo de visita adelantada o re-adición (Obligatorio)
                                         </Label>
                                         <Textarea 
-                                            placeholder="Indica por qué gestionas a este cliente nuevamente..." 
+                                            placeholder="Indica por qué gestionas a este cliente hoy..." 
                                             className="h-20 text-xs font-bold border-orange-200 focus:border-orange-500" 
                                             value={reAdditionObservation}
                                             onChange={e => setReAdditionObservation(e.target.value)}
