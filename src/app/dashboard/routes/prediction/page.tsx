@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -275,7 +274,7 @@ export default function PrediccionesPage() {
                 <CardDescription>Configura los filtros para generar las visitas sugeridas.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div className="space-y-2">
                         <Label htmlFor="ejecutivo">Ejecutivo</Label>
                         <Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo} disabled={!isSupervisorOrAdmin}>
@@ -314,27 +313,7 @@ export default function PrediccionesPage() {
                             disabled={loading}
                         />
                     </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="maxKm">Radio Máximo (km)</Label>
-                        <Input id="maxKm" type="number" value={maxKm} onChange={(e) => setMaxKm(e.target.value === '' ? '' : Number(e.target.value))} disabled={loading} />
-                    </div>
                 </div>
-                 <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4 items-end">
-                    <div className="space-y-2">
-                        <Label htmlFor="latBase">Latitud Base (Opcional)</Label>
-                        <Input id="latBase" value={latBase} onChange={(e) => setLatBase(e.target.value)} disabled={loading} placeholder="-0.180653" />
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="lonBase">Longitud Base (Opcional)</Label>
-                        <Input id="lonBase" value={lonBase} onChange={(e) => setLonBase(e.target.value)} disabled={loading} placeholder="-78.469498" />
-                    </div>
-                    <div className="space-y-2">
-                        <Button onClick={handleGetLocation} variant="outline" disabled={loading} className="w-full">
-                            <LocateFixed className="mr-2 h-4 w-4" />
-                            Mi Ubicación
-                        </Button>
-                    </div>
-                 </div>
             </CardContent>
             <CardFooter>
                 <Button onClick={obtenerPredicciones} disabled={loading} className="w-full sm:w-auto font-bold">
