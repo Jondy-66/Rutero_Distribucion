@@ -19,7 +19,7 @@ import { PageHeader } from '@/components/page-header';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Timestamp } from 'firebase/firestore';
+import { Timestamp, GeoPoint } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
@@ -34,11 +34,24 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         } else if (c.date) {
             cleaned.date = Timestamp.fromDate(new Date(c.date as any));
         }
-        cleaned.valorVenta = parseFloat(String(c.valorVenta || 0)) || 0;
-        cleaned.valorCobro = parseFloat(String(c.valorCobro || 0)) || 0;
-        cleaned.devoluciones = parseFloat(String(c.devoluciones || 0)) || 0;
-        cleaned.promociones = parseFloat(String(c.promociones || 0)) || 0;
-        cleaned.medicacionFrecuente = parseFloat(String(c.medicacionFrecuente || 0)) || 0;
+
+        // Redondear a 2 decimales para evitar errores de precisión y visualización
+        const round = (val: any) => Math.round((parseFloat(String(val || 0)) || 0) * 100) / 100;
+        
+        cleaned.valorVenta = round(c.valorVenta);
+        cleaned.valorCobro = round(c.valorCobro);
+        cleaned.devoluciones = round(c.devoluciones);
+        cleaned.promociones = round(c.promociones);
+        cleaned.medicacionFrecuente = round(c.medicacionFrecuente);
+
+        // Convertir ubicación a GeoPoint si es un objeto plano
+        if (c.checkInLocation && !(c.checkInLocation instanceof GeoPoint) && (c.checkInLocation as any).latitude !== undefined) {
+            cleaned.checkInLocation = new GeoPoint((c.checkInLocation as any).latitude, (c.checkInLocation as any).longitude);
+        }
+        if (c.checkOutLocation && !(c.checkOutLocation instanceof GeoPoint) && (c.checkOutLocation as any).latitude !== undefined) {
+            cleaned.checkOutLocation = new GeoPoint((c.checkOutLocation as any).latitude, (c.checkOutLocation as any).longitude);
+        }
+
         Object.keys(cleaned).forEach(key => {
             if (cleaned[key] === undefined) cleaned[key] = null;
         });
@@ -266,11 +279,17 @@ export default function RouteManagementPage() {
         
         setCurrentRouteClientsFull(nextClients);
         
-        await updateRoute(selectedRoute.id, { 
+        const updateData: any = { 
             clients: sanitizeClientsForFirestore(nextClients), 
-            status: newStatus,
-            statusReason: statusReason
-        });
+            status: newStatus
+        };
+        
+        // Evitar pasar undefined a Firestore
+        if (statusReason) {
+            updateData.statusReason = statusReason;
+        }
+
+        await updateRoute(selectedRoute.id, updateData);
         
         await refetchData('routes');
         setActiveRuc(null);
