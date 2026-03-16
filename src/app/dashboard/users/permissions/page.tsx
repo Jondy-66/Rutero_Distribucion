@@ -18,6 +18,8 @@ const modules = [
     { id: 'dashboard', label: 'Panel Principal' },
     { id: 'admin-dashboard', label: 'Dashboard de KPIs' },
     { id: 'clients', label: 'Gestión de Clientes' },
+    { id: 'import-clients', label: 'Importar Clientes (Excel/CSV)' },
+    { id: 'delete-clients', label: 'Eliminar Clientes' },
     { id: 'locations', label: 'Gestión de Ubicaciones' },
     { id: 'map', label: 'Visualización de Mapa' },
     { id: 'reports', label: 'Reportes y Exportaciones' },
@@ -27,8 +29,8 @@ const modules = [
 ];
 
 const defaultPermissionsByRole: Record<User['role'], string[]> = {
-    'Administrador': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'routes', 'users', 'recover-clients'],
-    'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'map', 'reports', 'routes', 'recover-clients'],
+    'Administrador': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'locations', 'map', 'reports', 'routes', 'users', 'recover-clients'],
+    'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'map', 'reports', 'routes', 'recover-clients'],
     'Usuario': ['dashboard', 'clients', 'map', 'routes'],
     'Telemercaderista': ['dashboard', 'clients', 'map', 'routes'],
 };

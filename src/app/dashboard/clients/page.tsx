@@ -1,4 +1,3 @@
-
 'use client';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import Link from 'next/link';
@@ -320,6 +319,10 @@ export default function ClientsPage() {
   };
   
   const canSeeEjecutivoFilter = user?.role === 'Administrador' || user?.role === 'Supervisor';
+  
+  // Lógica de permisos granulares
+  const canImport = user?.role === 'Administrador' || user?.permissions?.includes('import-clients');
+  const canDelete = user?.role === 'Administrador' || user?.permissions?.includes('delete-clients');
 
   return (
     <>
@@ -331,39 +334,41 @@ export default function ClientsPage() {
                 Añadir Cliente
             </Button>
             </Link>
-            <Dialog>
-                <DialogTrigger asChild>
-                    <Button variant="outline">
-                        <UploadCloud className="mr-2 h-4 w-4" />
-                        Importar
-                    </Button>
-                </DialogTrigger>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Importar Clientes desde CSV o Excel</DialogTitle>
-                        <DialogDescription>
-                            Sube un archivo para añadir o actualizar clientes. Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia. Opcionales: latitud, longitud.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="py-4">
-                    <Input
-                        type="file"
-                        accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-                        ref={fileInputRef}
-                        onChange={handleFileUpload}
-                        disabled={isUploading}
-                    />
-                    </div>
-                    <DialogFooter className="sm:justify-between">
-                        <span className="text-sm text-muted-foreground">{isUploading ? 'Procesando archivo...' : 'Selecciona un archivo para empezar.'}</span>
-                        <DialogClose asChild>
-                            <Button type="button" variant="secondary" id="close-dialog-clients">
-                                Cerrar
-                            </Button>
-                        </DialogClose>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+            {canImport && (
+                <Dialog>
+                    <DialogTrigger asChild>
+                        <Button variant="outline">
+                            <UploadCloud className="mr-2 h-4 w-4" />
+                            Importar
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Importar Clientes desde CSV o Excel</DialogTitle>
+                            <DialogDescription>
+                                Sube un archivo para añadir o actualizar clientes. Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia. Opcionales: latitud, longitud.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="py-4">
+                        <Input
+                            type="file"
+                            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                            ref={fileInputRef}
+                            onChange={handleFileUpload}
+                            disabled={isUploading}
+                        />
+                        </div>
+                        <DialogFooter className="sm:justify-between">
+                            <span className="text-sm text-muted-foreground">{isUploading ? 'Procesando archivo...' : 'Selecciona un archivo para empezar.'}</span>
+                            <DialogClose asChild>
+                                <Button type="button" variant="secondary" id="close-dialog-clients">
+                                    Cerrar
+                                </Button>
+                            </DialogClose>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
             <Button variant="outline" onClick={handleDownloadExcel}>
                 <Download className="mr-2 h-4 w-4" />
                 Descargar Excel
@@ -463,10 +468,14 @@ export default function ClientsPage() {
                             <DropdownMenuContent align="end">
                               <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                               <DropdownMenuItem onClick={() => handleEdit(client.id)}>Editar</DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <AlertDialogTrigger asChild>
-                                <DropdownMenuItem className="text-red-600">Eliminar</DropdownMenuItem>
-                              </AlertDialogTrigger>
+                              {canDelete && (
+                                <>
+                                    <DropdownMenuSeparator />
+                                    <AlertDialogTrigger asChild>
+                                        <DropdownMenuItem className="text-red-600">Eliminar</DropdownMenuItem>
+                                    </AlertDialogTrigger>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                            <AlertDialogContent>
