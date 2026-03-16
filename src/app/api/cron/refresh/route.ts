@@ -6,28 +6,25 @@ import { initializeAdminApp } from '@/lib/firebase/admin-config';
 const adminApp = initializeAdminApp();
 
 /**
- * @fileoverview Endpoint optimizado para ser invocado por servicios de tareas programadas (Cron).
+ * @fileoverview Endpoint de sincronización forzada para Cron Jobs.
  * 
- * Propósito: 
- * 1. Evitar el "Cold Start" de la API en Render (mantener el servicio activo).
- * 2. Refrescar los cálculos de predicción para todos los ejecutivos activos de forma masiva.
- * 3. Registrar una bitácora de sincronización en Firestore para monitoreo.
- * 
- * Seguridad: El endpoint espera un header 'Authorization: Bearer <TU_SECRETO_CRON>'.
+ * Este endpoint realiza un "barrido" de todos los ejecutivos activos y llama 
+ * a la API de Render para asegurar que el servicio no entre en modo suspensión
+ * y las predicciones estén siempre frescas.
  */
 export async function GET(request: Request) {
-  // 1. Verificación de Seguridad mediante Token Secreto
+  // 1. Verificación de Seguridad
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
-  // Si se ha definido un secreto en las variables de entorno, validar que coincida
+  // Si se ha definido un secreto, validar que el cron envíe 'Bearer <secreto>'
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     console.warn("Intento de ejecución de CRON no autorizado.");
-    return NextResponse.json({ error: 'Acceso Denegado: Cabecera de autorización inválida o ausente.' }, { status: 401 });
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
   if (!adminApp) {
-    return NextResponse.json({ error: 'Configuración del servidor incompleta (Admin SDK).' }, { status: 500 });
+    return NextResponse.json({ error: 'Admin SDK no inicializado' }, { status: 500 });
   }
 
   try {
@@ -35,10 +32,10 @@ export async function GET(request: Request) {
     const token = process.env.API_PREDICCION_TOKEN;
 
     if (!token) {
-      throw new Error("La variable de entorno API_PREDICCION_TOKEN no está configurada.");
+      throw new Error("Token de API externa no configurado.");
     }
 
-    // 2. Obtener lista de todos los ejecutivos (Vendedores y Telemercaderistas) activos
+    // 2. Obtener ejecutivos activos
     const usersSnapshot = await db.collection('users')
       .where('role', 'in', ['Usuario', 'Telemercaderista'])
       .where('status', '==', 'active')
@@ -47,20 +44,19 @@ export async function GET(request: Request) {
     const ejecutivos = usersSnapshot.docs.map(doc => doc.data().name);
     
     if (ejecutivos.length === 0) {
-      return NextResponse.json({ message: 'No hay ejecutivos activos para sincronizar.' });
+      return NextResponse.json({ message: 'Sin ejecutivos para sincronizar' });
     }
 
-    const syncReport = [];
+    const report = [];
 
-    // 3. Ejecutar el refresco de la API externa para cada ejecutivo
-    // Se utiliza 'cache: no-store' para forzar a Render a procesar la solicitud.
+    // 3. Despertar API de Render y refrescar datos
     for (const ejecutivo of ejecutivos) {
-      const externalApiUrl = new URL("https://api-distribucion-rutas.onrender.com/predecir_ejecutivo");
-      externalApiUrl.searchParams.append("ejecutivo", ejecutivo);
-      externalApiUrl.searchParams.append("dias", "7"); // Refresco preventivo para la semana
+      const url = new URL("https://api-distribucion-rutas.onrender.com/predecir_ejecutivo");
+      url.searchParams.append("ejecutivo", ejecutivo);
+      url.searchParams.append("dias", "7");
 
       try {
-        const response = await fetch(externalApiUrl.toString(), {
+        const response = await fetch(url.toString(), {
           method: 'GET',
           headers: {
             'Accept': 'application/json',
@@ -69,33 +65,28 @@ export async function GET(request: Request) {
           cache: 'no-store' 
         });
 
-        syncReport.push({
+        report.push({
           ejecutivo,
-          httpStatus: response.status,
-          success: response.ok
+          success: response.ok,
+          status: response.status
         });
       } catch (err: any) {
-        syncReport.push({ ejecutivo, error: err.message });
+        report.push({ ejecutivo, error: err.message });
       }
     }
 
-    // 4. Guardar registro de la tarea en la colección de logs del sistema
+    // 4. Registrar log en Firestore
     await db.collection('system_logs').add({
-      type: 'CRON_SYNC_PREDICTIONS',
-      executedAt: new Date(),
-      total_processed: ejecutivos.length,
-      results: syncReport,
-      invokedBy: authHeader ? 'Remote Cron Job' : 'Direct Call'
+      type: 'CRON_REFRESH',
+      timestamp: new Date(),
+      processed: ejecutivos.length,
+      details: report
     });
 
-    return NextResponse.json({ 
-      success: true, 
-      processed: ejecutivos.length,
-      report: syncReport 
-    });
+    return NextResponse.json({ success: true, report });
 
   } catch (error: any) {
-    console.error("Error crítico en Cron Job:", error);
+    console.error("Error en Cron:", error);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
