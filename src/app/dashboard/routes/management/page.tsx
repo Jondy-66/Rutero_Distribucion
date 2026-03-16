@@ -127,6 +127,11 @@ export default function RouteManagementPage() {
             promociones: round(c.promociones),
             medicacionFrecuente: round(c.medicacionFrecuente),
         }));
+        roundedClients.sort((a,b) => {
+            const dateA = a.date instanceof Timestamp ? a.date.toDate().getTime() : (a.date instanceof Date ? a.date.getTime() : 0);
+            const dateB = b.date instanceof Timestamp ? b.date.toDate().getTime() : (b.date instanceof Date ? b.date.getTime() : 0);
+            return dateA - dateB;
+        });
         setCurrentRouteClientsFull(roundedClients);
         setIsRouteStarted(selectedRoute.status === 'En Progreso');
     }
@@ -364,7 +369,7 @@ export default function RouteManagementPage() {
             ruc: c.ruc,
             nombre_comercial: c.nombre_comercial,
             date: new Date(),
-            visitStatus: 'Pendiente',
+            visitStatus: 'Pending',
             status: 'Activo',
             origin: 'manual',
             isReadded: isAlreadyManaged || isScheduledOtherDay,

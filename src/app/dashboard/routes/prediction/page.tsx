@@ -91,7 +91,12 @@ export default function PrediccionesPage() {
         }
 
         const round = (val: any) => Math.round((parseFloat(String(val || 0)) || 0) * 100) / 100;
-        const executiveUser = availableEjecutivos.find(u => u.name.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase());
+        
+        // Búsqueda robusta del usuario ejecutivo
+        const executiveUser = availableEjecutivos.find(u => 
+            u.name && u.name.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase()
+        );
+        
         const supervisorId = executiveUser?.supervisorId || (currentUser?.role === 'Supervisor' ? currentUser.id : undefined);
         
         const routeClients: ClientInRoute[] = [];
@@ -99,7 +104,14 @@ export default function PrediccionesPage() {
             const data: any = pred;
             const ruc = String(data.cliente_id || data.RUC || data.ruc || '').trim();
             if (!ruc) continue;
-            const dateObj = parseISO(String(data.fecha_predicha || data.fecha || ''));
+            
+            // Parseo de fecha flexible (ISO o estándar)
+            const dateStr = String(data.fecha_predicha || data.fecha || '');
+            let dateObj = parseISO(dateStr);
+            if (!isValid(dateObj)) {
+                dateObj = new Date(dateStr);
+            }
+            
             if (!isValid(dateObj)) continue;
 
             const clientInCatalog = clients.find(c => c.ruc.trim() === ruc);
@@ -117,19 +129,29 @@ export default function PrediccionesPage() {
         }
         
         if (routeClients.length === 0) {
-            toast({title: "Error de Datos", description: "Datos no válidos.", variant: "destructive"});
+            toast({title: "Error de Datos", description: "No se encontraron clientes con información válida para procesar.", variant: "destructive"});
             return;
         }
 
         routeClients.sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0));
-        localStorage.setItem('predictionRoute', JSON.stringify({
-            routeName: `Plan de Ruta - ${selectedEjecutivo}`,
-            supervisorId: supervisorId,
-            clients: routeClients.map(c => ({...c, date: c.date?.toISOString()})),
-        }));
-        router.push('/dashboard/routes/new');
+        
+        try {
+            localStorage.setItem('predictionRoute', JSON.stringify({
+                routeName: `Plan de Ruta - ${selectedEjecutivo}`,
+                supervisorId: supervisorId,
+                clients: routeClients.map(c => ({...c, date: c.date?.toISOString()})),
+            }));
+            router.push('/dashboard/routes/new');
+        } catch (storageError) {
+            toast({ title: "Error de Memoria", description: "La lista es demasiado grande para el navegador. Intente predecir menos días.", variant: "destructive" });
+        }
     } catch (error: any) {
-        toast({ title: "Error Crítico", variant: "destructive" });
+        console.error("Critical error in prediction planning:", error);
+        toast({ 
+            title: "Error Crítico", 
+            description: error.message || "Ocurrió un fallo inesperado al preparar la planificación.", 
+            variant: "destructive" 
+        });
     }
   }
 
