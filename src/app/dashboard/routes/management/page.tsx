@@ -72,7 +72,7 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
     });
 };
 
-type RouteClient = Client & ClientInRoute;
+type RouteClient = Client & ClientInRoute & { originalIndex: number };
 
 function RouteManagementContent() {
   const { user, clients: availableClients, routes: allRoutes, users: allUsers, loading: authLoading, dataLoading, refetchData } = useAuth();
@@ -87,7 +87,7 @@ function RouteManagementContent() {
   const [todayFormatted, setTodayFormatted] = useState('');
   
   const [currentRouteClientsFull, setCurrentRouteClientsFull] = useState<ClientInRoute[]>([]);
-  const [activeRuc, setActiveRuc] = useState<string | null>(null);
+  const [activeOriginalIndex, setActiveOriginalIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
@@ -97,7 +97,7 @@ function RouteManagementContent() {
 
   const isInitialRehydrationDone = useRef(false);
   const lastLocalUpdateTimestamp = useRef<number>(0);
-  const SELECTION_KEY = user ? `mgmt_selected_route_v8_${user.id}` : null;
+  const SELECTION_KEY = user ? `mgmt_selected_route_v9_${user.id}` : null;
 
   useEffect(() => {
     setTodayFormatted(format(new Date(), "EEEE, d 'de' MMMM", { locale: es }));
@@ -147,11 +147,6 @@ function RouteManagementContent() {
             promociones: round(c.promociones),
             medicacionFrecuente: round(c.medicacionFrecuente),
         }));
-        roundedClients.sort((a,b) => {
-            const dateA = a.date instanceof Timestamp ? a.date.toDate().getTime() : (a.date instanceof Date ? a.date.getTime() : 0);
-            const dateB = b.date instanceof Timestamp ? b.date.toDate().getTime() : (b.date instanceof Date ? b.date.getTime() : 0);
-            return dateA - dateB;
-        });
         setCurrentRouteClientsFull(roundedClients);
         setIsRouteStarted(selectedRoute.status === 'En Progreso' || isAdmin);
     }
@@ -189,6 +184,7 @@ function RouteManagementContent() {
     const routeOwner = allUsers.find(u => u.id === routeOwnerId);
 
     return currentRouteClientsFull
+        .map((c, index) => ({ ...c, originalIndex: index }))
         .filter(c => {
             if (c.status === 'Eliminado' || !c.date) return false;
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : new Date(c.date as any);
@@ -213,35 +209,28 @@ function RouteManagementContent() {
     return routeClients.length > 0 && routeClients.every(c => c.visitStatus === 'Completado');
   }, [routeClients]);
 
+  const activeClient = useMemo(() => {
+    if (activeOriginalIndex === null) return null;
+    return routeClients.find(c => c.originalIndex === activeOriginalIndex) || null;
+  }, [routeClients, activeOriginalIndex]);
+
   useEffect(() => {
-    if (!activeRuc && routeClients.length > 0 && !isTodayCompleted) {
+    if (activeOriginalIndex === null && routeClients.length > 0 && !isTodayCompleted) {
         const activeVisit = routeClients.find(c => c.checkInTime && !c.checkOutTime);
         if (activeVisit) {
-            setActiveRuc(activeVisit.ruc);
+            setActiveOriginalIndex(activeVisit.originalIndex);
         } else {
             const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
-            if (nextPending) setActiveRuc(nextPending.ruc);
+            if (nextPending) setActiveOriginalIndex(nextPending.originalIndex);
         }
     }
-  }, [routeClients, activeRuc, isTodayCompleted]);
-
-  const activeClient = useMemo(() => {
-    if (!activeRuc) return null;
-    return routeClients.find(c => c.ruc === activeRuc) || null;
-  }, [routeClients, activeRuc]);
+  }, [routeClients, activeOriginalIndex, isTodayCompleted]);
 
   const isCurrentClientInProgress = !!(activeClient?.checkInTime && !activeClient?.checkOutTime);
   const isCurrentClientCompleted = activeClient?.visitStatus === 'Completado';
 
-  // Helper para identificar la entrada de hoy de forma única entre duplicados semanales
-  const isTargetEntry = (entry: ClientInRoute) => {
-    if (!entry.date || entry.ruc !== activeRuc) return false;
-    const d = entry.date instanceof Timestamp ? entry.date.toDate() : new Date(entry.date as any);
-    return isToday(d);
-  };
-
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
-    if (!activeRuc || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
+    if (activeOriginalIndex === null || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
     
     lastLocalUpdateTimestamp.current = Date.now();
     let processedValue = value;
@@ -255,13 +244,12 @@ function RouteManagementContent() {
         }
     }
 
-    const nextClients = currentRouteClientsFull.map(c => 
-        isTargetEntry(c) ? { ...c, [field]: processedValue } : c
+    const nextClients = currentRouteClientsFull.map((c, idx) => 
+        idx === activeOriginalIndex ? { ...c, [field]: processedValue } : c
     );
     
     setCurrentRouteClientsFull(nextClients);
     
-    // Sincronización inmediata
     if (selectedRoute) {
         updateRoute(selectedRoute.id, { 
             clients: sanitizeClientsForFirestore(nextClients) 
@@ -286,7 +274,7 @@ function RouteManagementContent() {
   };
 
   const handleCheckIn = async () => {
-    if (!selectedRoute || !activeRuc || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
+    if (!selectedRoute || activeOriginalIndex === null || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
     
     setIsSaving(true);
     lastLocalUpdateTimestamp.current = Date.now();
@@ -294,8 +282,8 @@ function RouteManagementContent() {
     const time = format(new Date(), 'HH:mm:ss');
     const location = await getCurrentCoords();
 
-    const nextClients = currentRouteClientsFull.map(c => 
-        isTargetEntry(c) ? { ...c, checkInTime: time, checkInLocation: location } : c
+    const nextClients = currentRouteClientsFull.map((c, idx) => 
+        idx === activeOriginalIndex ? { ...c, checkInTime: time, checkInLocation: location } : c
     );
     
     setCurrentRouteClientsFull(nextClients);
@@ -311,7 +299,7 @@ function RouteManagementContent() {
   };
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || !activeRuc || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
+    if (!selectedRoute || activeOriginalIndex === null || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
 
     if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
         toast({ title: "Observación Requerida", description: "Debes ingresar una observación para visitas telefónicas.", variant: "destructive" });
@@ -324,8 +312,8 @@ function RouteManagementContent() {
     const time = format(new Date(), 'HH:mm:ss');
     const location = await getCurrentCoords();
 
-    const nextClients = currentRouteClientsFull.map(c => 
-        isTargetEntry(c) ? { ...c, checkOutTime: time, checkOutLocation: location, visitStatus: 'Completado' } : c
+    const nextClients = currentRouteClientsFull.map((c, idx) => 
+        idx === activeOriginalIndex ? { ...c, checkOutTime: time, checkOutLocation: location, visitStatus: 'Completado' } : c
     );
 
     const activeClients = nextClients.filter(c => c.status !== 'Eliminado');
@@ -348,7 +336,7 @@ function RouteManagementContent() {
         console.error("Error sincronizando salida:", e);
     });
     
-    if (!isAdmin) setActiveRuc(null);
+    if (!isAdmin) setActiveOriginalIndex(null);
 
     setIsSaving(false);
     toast({ 
@@ -402,7 +390,7 @@ function RouteManagementContent() {
             ruc: c.ruc,
             nombre_comercial: c.nombre_comercial,
             date: new Date(),
-            visitStatus: 'Pending',
+            visitStatus: 'Pendiente',
             status: 'Activo',
             origin: 'manual',
             isReadded: isAlreadyManaged || isScheduledOtherDay,
@@ -428,15 +416,14 @@ function RouteManagementContent() {
     }
   };
 
-  const handleRemoveClientToday = async (ruc: string) => {
+  const handleRemoveClientToday = async (originalIndex: number) => {
     if (!selectedRoute || !isAdmin || isSaving) return;
 
     setIsSaving(true);
     lastLocalUpdateTimestamp.current = Date.now();
 
-    const nextClients = currentRouteClientsFull.map(c => {
-        const d = c.date instanceof Timestamp ? c.date.toDate() : new Date(c.date as any);
-        if (String(c.ruc).trim() === String(ruc).trim() && isToday(d)) {
+    const nextClients = currentRouteClientsFull.map((c, idx) => {
+        if (idx === originalIndex) {
             return { ...c, status: 'Eliminado' as const };
         }
         return c;
@@ -445,7 +432,7 @@ function RouteManagementContent() {
     try {
         await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextClients) });
         setCurrentRouteClientsFull(nextClients);
-        if (activeRuc === ruc) setActiveRuc(null);
+        if (activeOriginalIndex === originalIndex) setActiveOriginalIndex(null);
         toast({ title: "Cliente removido de la ruta de hoy" });
         refetchData('routes');
     } catch (e) {
@@ -455,13 +442,17 @@ function RouteManagementContent() {
     }
   };
 
-  const handleSelectClient = (ruc: string) => {
+  const handleSelectClient = (originalIndex: number) => {
       if (isSaving) return;
-      if (isCurrentClientInProgress && activeRuc !== ruc && !isAdmin) {
+      
+      const target = routeClients.find(c => c.originalIndex === originalIndex);
+      if (!target) return;
+
+      if (isCurrentClientInProgress && activeOriginalIndex !== originalIndex && !isAdmin) {
           toast({ title: "Gestión en curso", description: "Finaliza la visita actual primero.", variant: "destructive" });
           return;
       }
-      setActiveRuc(ruc);
+      setActiveOriginalIndex(originalIndex);
   };
 
   const isFinishDisabled = useMemo(() => {
@@ -517,7 +508,7 @@ function RouteManagementContent() {
                     </Select>
                 </div>
                 {selectedRoute && (
-                    <Button onClick={() => { updateRoute(selectedRoute.id, {status: 'En Progreso'}).then(() => { setIsRouteStarted(true); refetchData('routes'); }); }} className="w-full h-12 text-lg font-bold">
+                    <Button onClick={() => { updateRoute(selectedRoute.id, {status: 'En Pregreso'}).then(() => { setIsRouteStarted(true); refetchData('routes'); }); }} className="w-full h-12 text-lg font-bold">
                         <PlayCircle className="mr-2 h-6 w-6" /> INICIAR JORNADA
                     </Button>
                 )}
@@ -565,11 +556,11 @@ function RouteManagementContent() {
 
                 <div className="space-y-2">
                     {routeClients.map((c, i) => (
-                        <div key={c.ruc} onClick={() => handleSelectClient(c.ruc)} className={cn(
+                        <div key={`${c.ruc}-${c.originalIndex}`} onClick={() => handleSelectClient(c.originalIndex)} className={cn(
                             "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer relative group", 
-                            activeRuc === c.ruc ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
+                            activeOriginalIndex === c.originalIndex ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
                             c.visitStatus === 'Completado' && !isAdmin && "opacity-50 grayscale bg-muted/30",
-                            isCurrentClientInProgress && activeRuc !== c.ruc && !isAdmin && "opacity-30 cursor-not-allowed"
+                            isCurrentClientInProgress && activeOriginalIndex !== c.originalIndex && !isAdmin && "opacity-30 cursor-not-allowed"
                         )}>
                             <div className="flex items-center gap-3 overflow-hidden flex-1">
                                 <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
@@ -602,7 +593,7 @@ function RouteManagementContent() {
                                                 <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
                                                 <AlertDialogAction 
                                                     className="bg-destructive hover:bg-destructive/90"
-                                                    onClick={(e) => { e.stopPropagation(); handleRemoveClientToday(c.ruc); }}
+                                                    onClick={(e) => { e.stopPropagation(); handleRemoveClientToday(c.originalIndex); }}
                                                 >
                                                     Eliminar
                                                 </AlertDialogAction>
