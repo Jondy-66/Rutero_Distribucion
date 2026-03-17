@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History, CalendarClock, Users, MessageSquare, ThumbsUp } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History, CalendarClock, Users, MessageSquare, ThumbsUp, Trash2 } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -15,6 +15,17 @@ import { format, isToday, isBefore, startOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/page-header';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -417,6 +428,33 @@ function RouteManagementContent() {
     }
   };
 
+  const handleRemoveClientToday = async (ruc: string) => {
+    if (!selectedRoute || !isAdmin || isSaving) return;
+
+    setIsSaving(true);
+    lastLocalUpdateTimestamp.current = Date.now();
+
+    const nextClients = currentRouteClientsFull.map(c => {
+        const d = c.date instanceof Timestamp ? c.date.toDate() : new Date(c.date as any);
+        if (String(c.ruc).trim() === String(ruc).trim() && isToday(d)) {
+            return { ...c, status: 'Eliminado' as const };
+        }
+        return c;
+    });
+
+    try {
+        await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextClients) });
+        setCurrentRouteClientsFull(nextClients);
+        if (activeRuc === ruc) setActiveRuc(null);
+        toast({ title: "Cliente removido de la ruta de hoy" });
+        refetchData('routes');
+    } catch (e) {
+        toast({ title: "Error al remover", variant: "destructive" });
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
   const handleSelectClient = (ruc: string) => {
       if (isSaving) return;
       if (isCurrentClientInProgress && activeRuc !== ruc && !isAdmin) {
@@ -528,14 +566,14 @@ function RouteManagementContent() {
                 <div className="space-y-2">
                     {routeClients.map((c, i) => (
                         <div key={c.ruc} onClick={() => handleSelectClient(c.ruc)} className={cn(
-                            "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer", 
+                            "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer relative group", 
                             activeRuc === c.ruc ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
                             c.visitStatus === 'Completado' && !isAdmin && "opacity-50 grayscale bg-muted/30",
                             isCurrentClientInProgress && activeRuc !== c.ruc && !isAdmin && "opacity-30 cursor-not-allowed"
                         )}>
-                            <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="flex items-center gap-3 overflow-hidden flex-1">
                                 <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
-                                <div className="min-w-0">
+                                <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
                                         <p className="font-bold text-sm truncate uppercase">{c.nombre_comercial}</p>
                                         {c.isReadded && (
@@ -545,7 +583,35 @@ function RouteManagementContent() {
                                     <span className="text-[9px] text-muted-foreground truncate block uppercase font-mono">{c.ruc}</span>
                                 </div>
                             </div>
-                            {c.visitStatus === 'Completado' && <CheckCircle className="h-5 w-5 text-green-500 shrink-0" />}
+                            <div className="flex items-center gap-2 shrink-0">
+                                {isAdmin && (
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent>
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>¿Remover cliente de la ruta?</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Esta acción eliminará a <strong>{c.nombre_comercial}</strong> de la planificación de hoy. Esta acción no se puede deshacer.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter>
+                                                <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
+                                                <AlertDialogAction 
+                                                    className="bg-destructive hover:bg-destructive/90"
+                                                    onClick={(e) => { e.stopPropagation(); handleRemoveClientToday(c.ruc); }}
+                                                >
+                                                    Eliminar
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                )}
+                                {c.visitStatus === 'Completado' && <CheckCircle className="h-5 w-5 text-green-500" />}
+                            </div>
                         </div>
                     ))}
                 </div>
