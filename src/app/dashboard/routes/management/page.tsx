@@ -131,8 +131,9 @@ function RouteManagementContent() {
   useEffect(() => {
     if (authLoading || dataLoading || !selectedRoute) return;
     
+    // CRITICAL: Aumentamos el bloqueo a 10 segundos para dar tiempo a que Firestore propague el cambio real.
     const now = Date.now();
-    if (now - lastLocalUpdateTimestamp.current < 3000) return;
+    if (now - lastLocalUpdateTimestamp.current < 10000) return;
 
     if (!isSaving) {
         const clients = selectedRoute.clients || [];
@@ -221,14 +222,13 @@ function RouteManagementContent() {
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (activeOriginalIndex === null || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
     
+    // Bloqueamos sincronización inversa por 10 segundos tras interactuar
     lastLocalUpdateTimestamp.current = Date.now();
     
-    // Permitimos que el valor sea procesado como string en el estado local para no interrumpir la escritura decimal
     let processedValue = value;
     const numericFields = ['valorVenta', 'valorCobro', 'devoluciones', 'promociones', 'medicacionFrecuente'];
     
     if (numericFields.includes(field)) {
-        // Permitir solo números, puntos y comas mientras se escribe
         processedValue = String(value).replace(/[^0-9.,]/g, '');
     }
 
@@ -239,7 +239,6 @@ function RouteManagementContent() {
     setCurrentRouteClientsFull(nextClients);
     
     if (selectedRoute) {
-        // sanitizeClientsForFirestore se encarga de convertir a número y redondear al guardar en DB
         updateRoute(selectedRoute.id, { 
             clients: sanitizeClientsForFirestore(nextClients) 
         }).catch(e => {
@@ -266,6 +265,7 @@ function RouteManagementContent() {
     if (!selectedRoute || activeOriginalIndex === null || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
     
     setIsSaving(true);
+    // Bloqueo agresivo de sync tras check-in
     lastLocalUpdateTimestamp.current = Date.now();
     
     const time = format(new Date(), 'HH:mm:ss');
@@ -277,14 +277,17 @@ function RouteManagementContent() {
     
     setCurrentRouteClientsFull(nextClients);
     
-    updateRoute(selectedRoute.id, { 
-        clients: sanitizeClientsForFirestore(nextClients) 
-    }).catch(e => {
+    try {
+        await updateRoute(selectedRoute.id, { 
+            clients: sanitizeClientsForFirestore(nextClients) 
+        });
+        toast({ title: "Entrada Registrada" });
+    } catch (e) {
         console.error("Error sincronizando entrada:", e);
-    });
-
-    setIsSaving(false);
-    toast({ title: "Entrada Registrada" });
+        toast({ title: "Error al registrar entrada", variant: "destructive" });
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const handleConfirmCheckOut = async () => {
@@ -321,19 +324,20 @@ function RouteManagementContent() {
         updateData.statusReason = "Planificación semanal completada exitosamente.";
     }
 
-    updateRoute(selectedRoute.id, updateData).catch(e => {
+    try {
+        await updateRoute(selectedRoute.id, updateData);
+        toast({ 
+            title: isCurrentClientCompleted ? "Gestión Actualizada" : "Visita Finalizada",
+            variant: allTotalClientsDone ? "success" : "default"
+        });
+        if (!isAdmin) setActiveOriginalIndex(null);
+        setTimeout(() => refetchData('routes'), 1000);
+    } catch (e) {
         console.error("Error sincronizando salida:", e);
-    });
-    
-    if (!isAdmin) setActiveOriginalIndex(null);
-
-    setIsSaving(false);
-    toast({ 
-        title: isCurrentClientCompleted ? "Gestión Actualizada" : "Visita Finalizada",
-        variant: allTotalClientsDone ? "success" : "default"
-    });
-    
-    if (!isAdmin) setTimeout(() => refetchData('routes'), 1500);
+        toast({ title: "Error al finalizar visita", variant: "destructive" });
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const myAssignedClients = useMemo(() => {
@@ -549,7 +553,7 @@ function RouteManagementContent() {
                             "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer relative group", 
                             activeOriginalIndex === c.originalIndex ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
                             c.visitStatus === 'Completado' && !isAdmin && "opacity-50 grayscale bg-muted/30",
-                            isCurrentClientInProgress && activeOriginalIndex !== i && !isAdmin && "opacity-30 cursor-not-allowed"
+                            isCurrentClientInProgress && activeOriginalIndex !== c.originalIndex && !isAdmin && "opacity-30 cursor-not-allowed"
                         )}>
                             <div className="flex items-center gap-3 overflow-hidden flex-1">
                                 <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
