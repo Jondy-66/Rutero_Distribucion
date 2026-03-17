@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History, CalendarClock, Users } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History, CalendarClock, Users, MessageSquare } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -294,6 +294,11 @@ function RouteManagementContent() {
   const handleConfirmCheckOut = async () => {
     if (!selectedRoute || !activeRuc || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
 
+    if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
+        toast({ title: "Observación Requerida", description: "Debes ingresar una observación para visitas telefónicas.", variant: "destructive" });
+        return;
+    }
+
     setIsSaving(true);
     lastLocalUpdateTimestamp.current = Date.now();
     
@@ -412,6 +417,15 @@ function RouteManagementContent() {
       }
       setActiveRuc(ruc);
   };
+
+  const isFinishDisabled = useMemo(() => {
+    if (!activeClient) return true;
+    if (isSaving) return true;
+    if (isCurrentClientCompleted && !isAdmin) return true;
+    if (!activeClient.visitType) return true;
+    if (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim()) return true;
+    return false;
+  }, [activeClient, isSaving, isCurrentClientCompleted, isAdmin]);
 
   if (authLoading) return <div className="flex flex-col items-center justify-center h-[60vh] gap-4"><LoaderCircle className="animate-spin h-12 w-12 text-primary" /><p className="text-muted-foreground">Cargando gestión...</p></div>;
 
@@ -558,6 +572,21 @@ function RouteManagementContent() {
                                     </RadioGroup>
                                 </div>
 
+                                {activeClient.visitType === 'telefonica' && (
+                                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                        <Label className="text-[10px] font-black uppercase flex items-center gap-2">
+                                            <MessageSquare className="h-3 w-3" /> Observación de Llamada (Obligatoria)
+                                        </Label>
+                                        <Textarea 
+                                            placeholder="Detalla lo conversado en la llamada..." 
+                                            className="h-24 font-bold text-sm border-2 focus:border-primary"
+                                            value={activeClient.callObservation || ''}
+                                            onChange={e => handleFieldChange('callObservation', e.target.value)}
+                                            disabled={(isCurrentClientCompleted && !isAdmin) || isSaving}
+                                        />
+                                    </div>
+                                )}
+
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                                     <div className="space-y-1">
                                         <Label className="text-[10px] font-black uppercase">Venta ($)</Label>
@@ -573,7 +602,7 @@ function RouteManagementContent() {
                                     </div>
                                 </div>
                                 
-                                <Button onClick={handleConfirmCheckOut} className="w-full h-16 text-lg font-black mt-6 rounded-2xl shadow-xl" disabled={isSaving || !activeClient.visitType || (isCurrentClientCompleted && !isAdmin)}>
+                                <Button onClick={handleConfirmCheckOut} className="w-full h-16 text-lg font-black mt-6 rounded-2xl shadow-xl" disabled={isFinishDisabled}>
                                     {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <LogOut className="mr-2 h-6 w-6" />} 
                                     {isCurrentClientCompleted ? (isAdmin ? "ACTUALIZAR GESTIÓN" : "VISITA FINALIZADA") : "FINALIZAR VISITA"}
                                 </Button>
