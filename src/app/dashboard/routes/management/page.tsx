@@ -48,7 +48,8 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         }
 
         const round = (val: any) => {
-            const n = parseFloat(String(val || 0).replace(',', '.'));
+            if (val === undefined || val === null || val === '') return 0;
+            const n = parseFloat(String(val).replace(',', '.'));
             return isNaN(n) ? 0 : Math.round(n * 100) / 100;
         };
         
@@ -135,19 +136,7 @@ function RouteManagementContent() {
 
     if (!isSaving) {
         const clients = selectedRoute.clients || [];
-        const round = (val: any) => {
-            const n = parseFloat(String(val || 0).replace(',', '.'));
-            return isNaN(n) ? 0 : Math.round(n * 100) / 100;
-        };
-        const roundedClients = clients.map(c => ({
-            ...c,
-            valorVenta: round(c.valorVenta),
-            valorCobro: round(c.valorCobro),
-            devoluciones: round(c.devoluciones),
-            promociones: round(c.promociones),
-            medicacionFrecuente: round(c.medicacionFrecuente),
-        }));
-        setCurrentRouteClientsFull(roundedClients);
+        setCurrentRouteClientsFull(clients);
         setIsRouteStarted(selectedRoute.status === 'En Progreso' || isAdmin);
     }
   }, [selectedRoute, authLoading, dataLoading, isSaving, isAdmin]);
@@ -233,15 +222,14 @@ function RouteManagementContent() {
     if (activeOriginalIndex === null || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
     
     lastLocalUpdateTimestamp.current = Date.now();
+    
+    // Permitimos que el valor sea procesado como string en el estado local para no interrumpir la escritura decimal
     let processedValue = value;
     const numericFields = ['valorVenta', 'valorCobro', 'devoluciones', 'promociones', 'medicacionFrecuente'];
+    
     if (numericFields.includes(field)) {
-        const num = parseFloat(String(value).replace(',', '.'));
-        if (!isNaN(num)) {
-            processedValue = Math.round(num * 100) / 100;
-        } else if (value === "") {
-            processedValue = 0;
-        }
+        // Permitir solo números, puntos y comas mientras se escribe
+        processedValue = String(value).replace(/[^0-9.,]/g, '');
     }
 
     const nextClients = currentRouteClientsFull.map((c, idx) => 
@@ -251,6 +239,7 @@ function RouteManagementContent() {
     setCurrentRouteClientsFull(nextClients);
     
     if (selectedRoute) {
+        // sanitizeClientsForFirestore se encarga de convertir a número y redondear al guardar en DB
         updateRoute(selectedRoute.id, { 
             clients: sanitizeClientsForFirestore(nextClients) 
         }).catch(e => {
@@ -560,7 +549,7 @@ function RouteManagementContent() {
                             "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer relative group", 
                             activeOriginalIndex === c.originalIndex ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
                             c.visitStatus === 'Completado' && !isAdmin && "opacity-50 grayscale bg-muted/30",
-                            isCurrentClientInProgress && activeOriginalIndex !== c.originalIndex && !isAdmin && "opacity-30 cursor-not-allowed"
+                            isCurrentClientInProgress && activeOriginalIndex !== i && !isAdmin && "opacity-30 cursor-not-allowed"
                         )}>
                             <div className="flex items-center gap-3 overflow-hidden flex-1">
                                 <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
