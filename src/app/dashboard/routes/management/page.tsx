@@ -222,6 +222,13 @@ function RouteManagementContent() {
   const isCurrentClientInProgress = !!(activeClient?.checkInTime && !activeClient?.checkOutTime);
   const isCurrentClientCompleted = activeClient?.visitStatus === 'Completado';
 
+  // Helper para identificar la entrada de hoy de forma única entre duplicados semanales
+  const isTargetEntry = (entry: ClientInRoute) => {
+    if (!entry.date || entry.ruc !== activeRuc) return false;
+    const d = entry.date instanceof Timestamp ? entry.date.toDate() : new Date(entry.date as any);
+    return isToday(d);
+  };
+
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (!activeRuc || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
     
@@ -238,7 +245,7 @@ function RouteManagementContent() {
     }
 
     const nextClients = currentRouteClientsFull.map(c => 
-        c.ruc === activeRuc ? { ...c, [field]: processedValue } : c
+        isTargetEntry(c) ? { ...c, [field]: processedValue } : c
     );
     
     setCurrentRouteClientsFull(nextClients);
@@ -277,7 +284,7 @@ function RouteManagementContent() {
     const location = await getCurrentCoords();
 
     const nextClients = currentRouteClientsFull.map(c => 
-        c.ruc === activeRuc ? { ...c, checkInTime: time, checkInLocation: location } : c
+        isTargetEntry(c) ? { ...c, checkInTime: time, checkInLocation: location } : c
     );
     
     setCurrentRouteClientsFull(nextClients);
@@ -307,7 +314,7 @@ function RouteManagementContent() {
     const location = await getCurrentCoords();
 
     const nextClients = currentRouteClientsFull.map(c => 
-        c.ruc === activeRuc ? { ...c, checkOutTime: time, checkOutLocation: location, visitStatus: 'Completado' } : c
+        isTargetEntry(c) ? { ...c, checkOutTime: time, checkOutLocation: location, visitStatus: 'Completado' } : c
     );
 
     const activeClients = nextClients.filter(c => c.status !== 'Eliminado');
@@ -384,7 +391,7 @@ function RouteManagementContent() {
             ruc: c.ruc,
             nombre_comercial: c.nombre_comercial,
             date: new Date(),
-            visitStatus: 'Pendiente',
+            visitStatus: 'Pending',
             status: 'Activo',
             origin: 'manual',
             isReadded: isAlreadyManaged || isScheduledOtherDay,
