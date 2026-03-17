@@ -66,6 +66,7 @@ type RouteClient = Client & ClientInRoute;
 function RouteManagementContent() {
   const { user, clients: availableClients, routes: allRoutes, users: allUsers, loading: authLoading, dataLoading, refetchData } = useAuth();
   const { toast } = useToast();
+  const router = useRouter();
   const searchParams = useSearchParams();
   const routeIdFromParams = searchParams.get('routeId');
   
@@ -85,7 +86,7 @@ function RouteManagementContent() {
 
   const isInitialRehydrationDone = useRef(false);
   const lastLocalUpdateTimestamp = useRef<number>(0);
-  const SELECTION_KEY = user ? `mgmt_selected_route_v7_${user.id}` : null;
+  const SELECTION_KEY = user ? `mgmt_selected_route_v8_${user.id}` : null;
 
   useEffect(() => {
     setTodayFormatted(format(new Date(), "EEEE, d 'de' MMMM", { locale: es }));
@@ -242,7 +243,7 @@ function RouteManagementContent() {
     
     setCurrentRouteClientsFull(nextClients);
     
-    // Sincronización inmediata para evitar pérdida de datos por refresco de fondo
+    // Sincronización inmediata
     if (selectedRoute) {
         updateRoute(selectedRoute.id, { 
             clients: sanitizeClientsForFirestore(nextClients) 
@@ -477,6 +478,27 @@ function RouteManagementContent() {
                 )}
             </CardContent>
         </Card>
+    ) : isTodayCompleted && !isAdmin ? (
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-2xl shadow-sm border border-primary/10 animate-in fade-in zoom-in-95 duration-500">
+            <div className="bg-green-100 p-8 rounded-full mb-6 relative">
+                <Sparkles className="h-16 w-16 text-green-600" />
+                <div className="absolute inset-0 bg-green-500/10 rounded-full animate-ping" />
+            </div>
+            <h2 className="text-3xl font-black text-green-700 uppercase tracking-tight mb-2">
+                ¡Jornada de Hoy Completada!
+            </h2>
+            <p className="text-sm font-bold text-green-600/80 uppercase">
+                Se han gestionado todos los clientes planificados para este día.
+            </p>
+            <div className="flex gap-4 mt-8">
+                <Button variant="outline" className="font-bold border-green-200 text-green-700 hover:bg-green-50" onClick={() => setIsAddClientDialogOpen(true)}>
+                    <PlusCircle className="mr-2 h-4 w-4" /> AÑADIR OTRO CLIENTE
+                </Button>
+                <Button className="font-bold bg-green-600 hover:bg-green-700" onClick={() => router.push('/dashboard')}>
+                    VOLVER AL PANEL
+                </Button>
+            </div>
+        </div>
     ) : (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1 shadow-md h-fit">
@@ -510,7 +532,12 @@ function RouteManagementContent() {
                             <div className="flex items-center gap-3 overflow-hidden">
                                 <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
                                 <div className="min-w-0">
-                                    <p className="font-bold text-sm truncate uppercase">{c.nombre_comercial}</p>
+                                    <div className="flex items-center gap-2">
+                                        <p className="font-bold text-sm truncate uppercase">{c.nombre_comercial}</p>
+                                        {c.isReadded && (
+                                            <Badge variant="outline" className="text-[8px] bg-orange-50 text-orange-700 border-orange-200 font-black h-4 px-1">RE-ADICIÓN</Badge>
+                                        )}
+                                    </div>
                                     <span className="text-[9px] text-muted-foreground truncate block uppercase font-mono">{c.ruc}</span>
                                 </div>
                             </div>
@@ -623,12 +650,20 @@ function RouteManagementContent() {
                 <ScrollArea className="flex-1 border rounded-lg p-2">
                     <div className="space-y-2">
                         {filteredSearchClients.map(c => {
+                            const existing = currentRouteClientsFull.find(e => String(e.ruc).trim() === String(c.ruc).trim());
                             const isSel = multiSelectedClients.some(sc => sc.ruc === c.ruc);
+                            const isManaged = existing?.visitStatus === 'Completado';
+                            const isOtherDay = existing && !isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
+
                             return (
                                 <div key={c.ruc} className={cn("p-3 rounded-lg border flex items-center gap-3 cursor-pointer", isSel && "bg-primary/5 border-primary")} onClick={() => setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => sc.ruc !== c.ruc) : [...multiSelectedClients, c])}>
                                     <Checkbox checked={isSel} />
                                     <div className="flex-1">
-                                        <p className="text-sm font-bold uppercase">{c.nombre_comercial}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="text-sm font-bold uppercase">{c.nombre_comercial}</p>
+                                            {isManaged && <Badge variant="outline" className="text-[8px] bg-orange-50 text-orange-700">YA GESTIONADO</Badge>}
+                                            {isOtherDay && <Badge variant="outline" className="text-[8px] bg-blue-50 text-blue-700">EN OTRO DÍA</Badge>}
+                                        </div>
                                         <p className="text-[10px] text-muted-foreground">{c.ruc}</p>
                                     </div>
                                 </div>
@@ -636,10 +671,13 @@ function RouteManagementContent() {
                         })}
                     </div>
                 </ScrollArea>
-                <Textarea placeholder="Observación obligatoria..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
+                <div className="space-y-2">
+                    <Label className="text-[10px] font-black uppercase">Observación de Re-adición / Adelanto (Obligatoria si ya existe)</Label>
+                    <Textarea placeholder="Indica el motivo..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
+                </div>
             </div>
             <DialogFooter>
-                <Button onClick={handleAddClientsToRoute} disabled={multiSelectedClients.length === 0 || !reAdditionObservation.trim() || isSaving}>Añadir Seleccionados</Button>
+                <Button onClick={handleAddClientsToRoute} disabled={multiSelectedClients.length === 0 || isSaving}>Añadir Seleccionados</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>
