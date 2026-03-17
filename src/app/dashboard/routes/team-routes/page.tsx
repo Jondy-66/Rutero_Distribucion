@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { getRoutes, deleteRoute, updateRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw, CheckCircle, Info } from 'lucide-react';
+import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw, CheckCircle, Info, PlayCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -111,6 +111,10 @@ export default function TeamRoutesPage() {
 
   const handleAction = (routeId: string) => {
     router.push(`/dashboard/routes/${routeId}`);
+  };
+
+  const handleManageLive = (routeId: string) => {
+    router.push(`/dashboard/routes/management?routeId=${routeId}`);
   };
 
   const handleDelete = async (routeId: string) => {
@@ -257,6 +261,7 @@ export default function TeamRoutesPage() {
                                 const canDelete = user?.role === 'Administrador';
                                 const canReactivate = user?.role === 'Administrador' && (route.status === 'Completada' || route.status === 'Incompleta' || route.status === 'Rechazada');
                                 const canAdminComplete = user?.role === 'Administrador' && route.status === 'En Progreso';
+                                const canManageLive = user?.role === 'Administrador' && route.status === 'En Progreso';
                                
                                 return (
                                 <TableRow key={route.id}>
@@ -290,6 +295,13 @@ export default function TeamRoutesPage() {
                                                         {canReview ? "Revisar" : "Ver Detalles"}
                                                     </DropdownMenuItem>
                                                     
+                                                    {canManageLive && (
+                                                        <DropdownMenuItem onClick={() => handleManageLive(route.id)} className="font-bold text-primary">
+                                                            <PlayCircle className="mr-2 h-4 w-4" />
+                                                            Gestionar Jornada
+                                                        </DropdownMenuItem>
+                                                    )}
+
                                                     {canAdminComplete && (
                                                         <DropdownMenuItem onClick={() => handleMarkAsCompleted(route.id)}>
                                                             <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
@@ -345,7 +357,7 @@ export default function TeamRoutesPage() {
                 </Table>
             </div>
         </CardContent>
-    </Card>
+      </Card>
     </>
   );
 }

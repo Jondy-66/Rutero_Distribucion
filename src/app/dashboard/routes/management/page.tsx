@@ -1,12 +1,13 @@
 
 'use client';
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History, CalendarClock } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History, CalendarClock, Users } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -30,7 +31,7 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
         if (c.date instanceof Date) {
             cleaned.date = Timestamp.fromDate(c.date);
         } else if (c.date && typeof (c.date as any).toDate === 'function') {
-            // Ya es un Timestamp
+            // Already a Timestamp
         } else if (c.date) {
             cleaned.date = Timestamp.fromDate(new Date(c.date as any));
         }
@@ -53,7 +54,6 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
             cleaned.checkOutLocation = new GeoPoint((c.checkOutLocation as any).latitude, (c.checkOutLocation as any).longitude);
         }
 
-        // Evitar undefined que rompe Firebase
         Object.keys(cleaned).forEach(key => {
             if (cleaned[key] === undefined) cleaned[key] = null;
         });
@@ -63,11 +63,14 @@ const sanitizeClientsForFirestore = (clients: ClientInRoute[]): any[] => {
 
 type RouteClient = Client & ClientInRoute;
 
-export default function RouteManagementPage() {
-  const { user, clients: availableClients, routes: allRoutes, loading: authLoading, dataLoading, refetchData } = useAuth();
+function RouteManagementContent() {
+  const { user, clients: availableClients, routes: allRoutes, users: allUsers, loading: authLoading, dataLoading, refetchData } = useAuth();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
+  const routeIdFromParams = searchParams.get('routeId');
   
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
   const [isRouteStarted, setIsRouteStarted] = useState(false);
   const [todayFormatted, setTodayFormatted] = useState('');
   
@@ -81,35 +84,41 @@ export default function RouteManagementPage() {
   const [reAdditionObservation, setReAdditionObservation] = useState('');
 
   const isInitialRehydrationDone = useRef(false);
-  const lastLocalUpdateTimestamp = useRef<number>(0); // Para evitar sobrescritura de datos stale
-  const SELECTION_KEY = user ? `mgmt_selected_route_v5_${user.id}` : null;
+  const lastLocalUpdateTimestamp = useRef<number>(0);
+  const SELECTION_KEY = user ? `mgmt_selected_route_v6_${user.id}` : null;
 
   useEffect(() => {
     setTodayFormatted(format(new Date(), "EEEE, d 'de' MMMM", { locale: es }));
   }, []);
 
+  const isAdmin = user?.role === 'Administrador';
+
   const selectableRoutes = useMemo(() => {
     return allRoutes.filter(r => {
         const isOwner = r.createdBy === user?.id;
-        if (!isOwner) return false;
+        const isManagedByAdmin = isAdmin;
+        
+        if (!isOwner && !isManagedByAdmin) return false;
+        
+        // Filter by selected agent if admin
+        if (isAdmin && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
+
         const routeDate = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date(r.date));
         const expirationDate = addDays(startOfDay(routeDate), 7);
         const isExpired = isBefore(expirationDate, startOfDay(new Date()));
         
         return (r.status === 'En Progreso' || r.status === 'Planificada') && !isExpired;
     });
-  }, [allRoutes, user]);
+  }, [allRoutes, user, isAdmin, selectedAgentId]);
 
   const selectedRoute = useMemo(() => {
     if (!selectedRouteId) return undefined;
     return allRoutes.find(r => r.id === selectedRouteId);
   }, [selectedRouteId, allRoutes]);
   
-  // Efecto de sincronización de datos desde el contexto
   useEffect(() => {
     if (authLoading || dataLoading || !selectedRoute) return;
     
-    // Ignorar actualizaciones externas si acabamos de hacer un cambio local (evita flickering y stale data)
     const now = Date.now();
     if (now - lastLocalUpdateTimestamp.current < 2500) return;
 
@@ -137,29 +146,37 @@ export default function RouteManagementPage() {
     }
   }, [selectedRoute, authLoading, dataLoading, isSaving]);
 
-  // Recuperar selección de ruta del localStorage
   useEffect(() => {
     if (authLoading || dataLoading || isInitialRehydrationDone.current || !SELECTION_KEY) return;
 
-    const activeRoute = allRoutes.find(r => r.status === 'En Progreso' && r.createdBy === user?.id);
-    if (activeRoute) {
-        setSelectedRouteId(activeRoute.id);
-        setIsRouteStarted(true);
-        localStorage.setItem(SELECTION_KEY, activeRoute.id);
+    if (routeIdFromParams) {
+        setSelectedRouteId(routeIdFromParams);
+        const found = allRoutes.find(r => r.id === routeIdFromParams);
+        if (found) setIsRouteStarted(found.status === 'En Progreso');
     } else {
-        const savedId = localStorage.getItem(SELECTION_KEY);
-        if (savedId) {
-            const found = allRoutes.find(r => r.id === savedId && r.status !== 'Completada' && r.status !== 'Incompleta');
-            if (found) {
-                setSelectedRouteId(savedId);
-                setIsRouteStarted(found.status === 'En Progreso');
+        const activeRoute = allRoutes.find(r => r.status === 'En Progreso' && r.createdBy === user?.id);
+        if (activeRoute) {
+            setSelectedRouteId(activeRoute.id);
+            setIsRouteStarted(true);
+            localStorage.setItem(SELECTION_KEY, activeRoute.id);
+        } else {
+            const savedId = localStorage.getItem(SELECTION_KEY);
+            if (savedId) {
+                const found = allRoutes.find(r => r.id === savedId && r.status !== 'Completada' && r.status !== 'Incompleta');
+                if (found) {
+                    setSelectedRouteId(savedId);
+                    setIsRouteStarted(found.status === 'En Progreso');
+                }
             }
         }
     }
     isInitialRehydrationDone.current = true;
-  }, [authLoading, dataLoading, SELECTION_KEY, allRoutes, user]);
+  }, [authLoading, dataLoading, SELECTION_KEY, allRoutes, user, routeIdFromParams]);
 
   const routeClients = useMemo(() => {
+    const routeOwnerId = selectedRoute?.createdBy;
+    const routeOwner = allUsers.find(u => u.id === routeOwnerId);
+
     return currentRouteClientsFull
         .filter(c => {
             if (c.status === 'Eliminado' || !c.date) return false;
@@ -167,7 +184,7 @@ export default function RouteManagementPage() {
             return isToday(cDate);
         })
         .map(c => {
-            const details = availableClients.find(ac => ac.ruc === c.ruc);
+            const details = availableClients.find(ac => String(ac.ruc).trim() === String(c.ruc).trim());
             return {
                 id: details?.id || c.ruc,
                 nombre_cliente: details?.nombre_cliente || c.nombre_comercial,
@@ -175,11 +192,11 @@ export default function RouteManagementPage() {
                 direccion: details?.direccion || 'Dirección no disponible',
                 latitud: details?.latitud || 0,
                 longitud: details?.longitud || 0,
-                ejecutivo: details?.ejecutivo || user?.name || '',
+                ejecutivo: details?.ejecutivo || routeOwner?.name || '',
                 ...c,
             } as RouteClient;
         });
-  }, [currentRouteClientsFull, availableClients, user]);
+  }, [currentRouteClientsFull, availableClients, selectedRoute, allUsers]);
 
   const isTodayCompleted = useMemo(() => {
     return routeClients.length > 0 && routeClients.every(c => c.visitStatus === 'Completado');
@@ -190,15 +207,12 @@ export default function RouteManagementPage() {
       return activeWeekly.length > 0 && activeWeekly.every(c => c.visitStatus === 'Completado');
   }, [currentRouteClientsFull]);
 
-  // Lógica de selección inteligente del cliente activo
   useEffect(() => {
     if (!activeRuc && routeClients.length > 0 && !isTodayCompleted) {
-        // Prioridad 1: Buscar cliente que tenga entrada registrada pero no salida (visita activa)
         const activeVisit = routeClients.find(c => c.checkInTime && !c.checkOutTime);
         if (activeVisit) {
             setActiveRuc(activeVisit.ruc);
         } else {
-            // Prioridad 2: Buscar el primer cliente pendiente del día
             const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
             if (nextPending) setActiveRuc(nextPending.ruc);
         }
@@ -250,7 +264,7 @@ export default function RouteManagementPage() {
     if (!selectedRoute || !activeRuc || isCurrentClientCompleted || isSaving) return;
     
     setIsSaving(true);
-    lastLocalUpdateTimestamp.current = Date.now(); // Marcar momento de actualización local
+    lastLocalUpdateTimestamp.current = Date.now();
     
     const time = format(new Date(), 'HH:mm:ss');
     const location = await getCurrentCoords();
@@ -259,10 +273,8 @@ export default function RouteManagementPage() {
         c.ruc === activeRuc ? { ...c, checkInTime: time, checkInLocation: location } : c
     );
     
-    // Actualización local inmediata (Optimistic UI)
     setCurrentRouteClientsFull(nextClients);
     
-    // Actualización remota (No bloqueante)
     updateRoute(selectedRoute.id, { 
         clients: sanitizeClientsForFirestore(nextClients) 
     }).catch(e => {
@@ -321,7 +333,7 @@ export default function RouteManagementPage() {
     setIsSaving(false);
     toast({ 
         title: allTotalClientsDone ? "Ruta Completada" : "Visita Finalizada",
-        description: allTotalClientsDone ? "Has terminado toda tu planificación semanal." : "Visita registrada correctamente.",
+        description: allTotalClientsDone ? "Se ha registrado la gestión correctamente." : "Visita registrada correctamente.",
         variant: allTotalClientsDone ? "success" : "default"
     });
     
@@ -329,15 +341,17 @@ export default function RouteManagementPage() {
   };
 
   const myAssignedClients = useMemo(() => {
-    return availableClients.filter(c => c.ejecutivo === user?.name);
-  }, [availableClients, user]);
+    const routeOwner = allUsers.find(u => u.id === selectedRoute?.createdBy);
+    const ownerName = routeOwner?.name || user?.name;
+    return availableClients.filter(c => c.ejecutivo === ownerName);
+  }, [availableClients, selectedRoute, allUsers, user]);
 
   const filteredSearchClients = useMemo(() => {
     const term = addClientSearchTerm.toLowerCase();
     return myAssignedClients.filter(c => 
         c.nombre_cliente.toLowerCase().includes(term) || 
         c.nombre_comercial.toLowerCase().includes(term) ||
-        c.ruc.includes(term)
+        String(c.ruc).includes(term)
     );
   }, [myAssignedClients, addClientSearchTerm]);
 
@@ -346,7 +360,7 @@ export default function RouteManagementPage() {
 
     const needsObservation = multiSelectedClients.some(c => 
         currentRouteClientsFull.some(existing => {
-            if (existing.ruc !== c.ruc) return false;
+            if (String(existing.ruc).trim() !== String(c.ruc).trim()) return false;
             const isTodayClient = isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
             return existing.visitStatus === 'Completado' || !isTodayClient;
         })
@@ -361,7 +375,7 @@ export default function RouteManagementPage() {
     lastLocalUpdateTimestamp.current = Date.now();
 
     const newClientsToAdd: ClientInRoute[] = multiSelectedClients.map(c => {
-        const existing = currentRouteClientsFull.find(e => e.ruc === c.ruc);
+        const existing = currentRouteClientsFull.find(e => String(e.ruc).trim() === String(c.ruc).trim());
         const isAlreadyManaged = existing?.visitStatus === 'Completado';
         const isScheduledOtherDay = existing && !isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
         
@@ -369,7 +383,7 @@ export default function RouteManagementPage() {
             ruc: c.ruc,
             nombre_comercial: c.nombre_comercial,
             date: new Date(),
-            visitStatus: 'Pending',
+            visitStatus: 'Pendiente',
             status: 'Activo',
             origin: 'manual',
             isReadded: isAlreadyManaged || isScheduledOtherDay,
@@ -413,24 +427,44 @@ export default function RouteManagementPage() {
     {!isRouteStarted ? (
         <Card className="max-w-2xl mx-auto shadow-lg">
             <CardHeader>
-                <CardTitle>Selecciona tu Ruta para Hoy</CardTitle>
-                <CardDescription>Solo rutas activas asignadas a ti.</CardDescription>
+                <CardTitle>Selecciona la Ruta a {isAdmin ? 'Supervisar' : 'Gestionar'}</CardTitle>
+                <CardDescription>{isAdmin ? 'Puedes ver y gestionar rutas de cualquier ejecutivo.' : 'Solo rutas activas asignadas a ti.'}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-                <Select onValueChange={(v) => { setSelectedRouteId(v); if(SELECTION_KEY) localStorage.setItem(SELECTION_KEY, v); }} value={selectedRouteId}>
-                    <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta" /></SelectTrigger>
-                    <SelectContent>
-                        {selectableRoutes.length > 0 ? (
-                            selectableRoutes.map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName}</SelectItem>))
-                        ) : (
-                            <SelectItem value="none" disabled>No tienes rutas vigentes para hoy</SelectItem>
-                        )}
-                    </SelectContent>
-                </Select>
-                <p className="text-xs text-center font-bold text-muted-foreground uppercase">selecciona un cliente para empezar gestion</p>
+                {isAdmin && (
+                    <div className="space-y-2">
+                        <Label className="text-xs font-bold uppercase text-muted-foreground">Filtrar por Agente (Admin)</Label>
+                        <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
+                            <SelectTrigger className="h-10">
+                                <Users className="mr-2 h-4 w-4" />
+                                <SelectValue placeholder="Todos los agentes" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Todos los agentes</SelectItem>
+                                {allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista').map(u => (
+                                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                )}
+                <div className="space-y-2">
+                    <Label className="text-xs font-bold uppercase text-muted-foreground">Planificación</Label>
+                    <Select onValueChange={(v) => { setSelectedRouteId(v); if(SELECTION_KEY) localStorage.setItem(SELECTION_KEY, v); }} value={selectedRouteId}>
+                        <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta" /></SelectTrigger>
+                        <SelectContent>
+                            {selectableRoutes.length > 0 ? (
+                                selectableRoutes.map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName} ({allUsers.find(u => u.id === r.createdBy)?.name})</SelectItem>))
+                            ) : (
+                                <SelectItem value="none" disabled>No hay rutas vigentes para mostrar</SelectItem>
+                            )}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <p className="text-xs text-center font-bold text-muted-foreground uppercase">presiona iniciar para habilitar la gestion diaria</p>
                 {selectedRoute && (
                     <Button onClick={() => { updateRoute(selectedRoute.id, {status: 'En Progreso'}).then(() => { setIsRouteStarted(true); refetchData('routes'); }); }} className="w-full h-12 text-lg font-bold">
-                        <PlayCircle className="mr-2 h-6 w-6" /> INICIAR JORNADA
+                        <PlayCircle className="mr-2 h-6 w-6" /> {isAdmin ? 'ABRIR GESTIÓN' : 'INICIAR JORNADA'}
                     </Button>
                 )}
             </CardContent>
@@ -440,7 +474,10 @@ export default function RouteManagementPage() {
         <Card className="lg:col-span-1 shadow-md h-fit">
             <CardHeader className="pb-3 px-4">
                 <CardTitle className="text-lg truncate">{selectedRoute?.routeName}</CardTitle>
-                <p className="text-muted-foreground text-xs capitalize">{todayFormatted}</p>
+                <div className="flex items-center justify-between">
+                    <p className="text-muted-foreground text-xs capitalize">{todayFormatted}</p>
+                    {isAdmin && <Badge variant="outline" className="text-[9px] bg-primary/5">VISTA ADMIN</Badge>}
+                </div>
             </CardHeader>
             <CardContent className="px-4">
                 <div className="mb-6 space-y-3">
@@ -453,13 +490,13 @@ export default function RouteManagementPage() {
                     <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
                         <DialogTrigger asChild>
                             <Button variant="outline" className="w-full h-10 border-dashed border-2 font-bold" disabled={isCurrentClientInProgress}>
-                                <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente a mi Ruta
+                                <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente
                             </Button>
                         </DialogTrigger>
                         <DialogContent className="w-[95vw] sm:max-w-[600px] p-0 overflow-hidden bg-white max-h-[90vh] flex flex-col rounded-2xl">
                             <DialogHeader className="p-4 sm:p-6 pb-2">
                                 <DialogTitle className="text-xl sm:text-2xl font-bold text-[#011688]">Añadir Clientes</DialogTitle>
-                                <DialogDescription className="text-muted-foreground text-xs sm:text-sm font-medium">Buscador multicriterio (RUC, Nombre, Comercial).</DialogDescription>
+                                <DialogDescription className="text-muted-foreground text-xs sm:text-sm font-medium">Buscador multicriterio por RUC o Nombre.</DialogDescription>
                             </DialogHeader>
                             <div className="flex-1 overflow-hidden flex flex-col p-4 sm:p-6 space-y-4">
                                 <div className="relative">
@@ -469,13 +506,13 @@ export default function RouteManagementPage() {
                                 <ScrollArea className="flex-1 pr-2">
                                     <div className="space-y-3 pb-2">
                                         {filteredSearchClients.map(c => {
-                                            const isSel = multiSelectedClients.some(sc => sc.ruc === c.ruc);
-                                            const existing = currentRouteClientsFull.find(e => e.ruc === c.ruc);
+                                            const isSel = multiSelectedClients.some(sc => String(sc.ruc).trim() === String(c.ruc).trim());
+                                            const existing = currentRouteClientsFull.find(e => String(e.ruc).trim() === String(c.ruc).trim());
                                             const isAlreadyManaged = existing?.visitStatus === 'Completado';
                                             const isScheduledOtherDay = existing && !isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
                                             
                                             return (
-                                                <div key={c.ruc} className={cn("flex items-start space-x-3 p-3 rounded-xl border transition-all cursor-pointer", isSel ? "bg-[#011688]/5 border-[#011688]" : "bg-[#f8f9ff] border-[#e2e8f0]", (isAlreadyManaged || isScheduledOtherDay) && !isSel && "border-orange-200 bg-orange-50/30")} onClick={() => setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => sc.ruc !== c.ruc) : [...multiSelectedClients, c])}>
+                                                <div key={c.ruc} className={cn("flex items-start space-x-3 p-3 rounded-xl border transition-all cursor-pointer", isSel ? "bg-[#011688]/5 border-[#011688]" : "bg-[#f8f9ff] border-[#e2e8f0]", (isAlreadyManaged || isScheduledOtherDay) && !isSel && "border-orange-200 bg-orange-50/30")} onClick={() => setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => String(sc.ruc).trim() !== String(c.ruc).trim()) : [...multiSelectedClients, c])}>
                                                     <Checkbox checked={isSel} className="mt-1 h-5 w-5 border-[#011688]" />
                                                     <div className="flex-1 min-w-0">
                                                         <div className="flex items-center gap-2">
@@ -497,7 +534,7 @@ export default function RouteManagementPage() {
                                 </ScrollArea>
                                 
                                 {multiSelectedClients.some(c => {
-                                    const existing = currentRouteClientsFull.find(e => e.ruc === c.ruc);
+                                    const existing = currentRouteClientsFull.find(e => String(e.ruc).trim() === String(c.ruc).trim());
                                     if (!existing) return false;
                                     const isTodayClient = isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
                                     return existing.visitStatus === 'Completado' || !isTodayClient;
@@ -568,8 +605,8 @@ export default function RouteManagementPage() {
                                 </h3>
                                 <p className="text-sm font-bold text-green-600/80 uppercase">
                                     {isEntireWeekCompleted 
-                                        ? "Has gestionado todos los clientes de tu planificación semanal." 
-                                        : "Has gestionado todos los clientes planificados para este día."}
+                                        ? "Se han gestionado todos los clientes de la planificación semanal." 
+                                        : "Se han gestionado todos los clientes planificados para este día."}
                                 </p>
                             </div>
                         </div>
@@ -676,5 +713,13 @@ export default function RouteManagementPage() {
     </div>
     )}
     </>
+  );
+}
+
+export default function RouteManagementPage() {
+  return (
+    <Suspense fallback={<div className="p-8">Cargando panel de gestión...</div>}>
+      <RouteManagementContent />
+    </Suspense>
   );
 }
