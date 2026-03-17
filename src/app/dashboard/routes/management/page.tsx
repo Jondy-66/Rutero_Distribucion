@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History, CalendarClock, Users, MessageSquare } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History, CalendarClock, Users, MessageSquare, ThumbsUp } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -481,7 +481,7 @@ function RouteManagementContent() {
     ) : isTodayCompleted && !isAdmin ? (
         <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-2xl shadow-sm border border-primary/10 animate-in fade-in zoom-in-95 duration-500">
             <div className="bg-green-100 p-8 rounded-full mb-6 relative">
-                <Sparkles className="h-16 w-16 text-green-600" />
+                <ThumbsUp className="h-16 w-16 text-green-600" />
                 <div className="absolute inset-0 bg-green-500/10 rounded-full animate-ping" />
             </div>
             <h2 className="text-3xl font-black text-green-700 uppercase tracking-tight mb-2">
