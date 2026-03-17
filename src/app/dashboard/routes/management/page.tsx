@@ -490,11 +490,8 @@ function RouteManagementContent() {
             <p className="text-sm font-bold text-green-600/80 uppercase">
                 Se han gestionado todos los clientes planificados para este día.
             </p>
-            <div className="flex gap-4 mt-8">
-                <Button variant="outline" className="font-bold border-green-200 text-green-700 hover:bg-green-50" onClick={() => setIsAddClientDialogOpen(true)}>
-                    <PlusCircle className="mr-2 h-4 w-4" /> AÑADIR OTRO CLIENTE
-                </Button>
-                <Button className="font-bold bg-green-600 hover:bg-green-700" onClick={() => router.push('/dashboard')}>
+            <div className="mt-8">
+                <Button className="font-bold bg-green-600 hover:bg-green-700 px-10 h-12" onClick={() => router.push('/dashboard')}>
                     VOLVER AL PANEL
                 </Button>
             </div>
