@@ -290,7 +290,6 @@ function RouteManagementContent() {
         </div>
     ) : (
         <div className="grid lg:grid-cols-3 gap-8">
-            {/* PANEL LATERAL: LISTADO DE CLIENTES ENCUADRADO */}
             <div className="lg:col-span-1">
                 <Card className="shadow-2xl border-t-4 border-t-primary min-h-[550px] rounded-[2.5rem] overflow-hidden flex flex-col h-full bg-white">
                     <CardHeader className="bg-muted/10 px-8 py-6 space-y-1">
@@ -342,22 +341,21 @@ function RouteManagementContent() {
                                         "flex items-center gap-4 p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200", 
                                         activeOriginalIndex === c.originalIndex 
                                             ? "border-primary bg-primary/5 shadow-md scale-[1.02]" 
-                                            : "border-slate-100 bg-white hover:border-slate-200", 
-                                        c.visitStatus === 'Completado' && !isAdmin && "opacity-50 grayscale-[0.5]"
+                                            : "border-slate-100 bg-white hover:border-slate-200"
                                     )}
                                 >
-                                    <span className="text-slate-200 font-black text-xs w-4 shrink-0">{i + 1}</span>
+                                    <span className="text-slate-300 font-black text-xs w-4 shrink-0">{i + 1}</span>
                                     <div className="flex-1 min-w-0">
                                         <div className="flex items-center gap-2">
                                             <p className={cn(
                                                 "font-black text-xs truncate uppercase tracking-tight",
-                                                activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-500"
+                                                activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-800"
                                             )}>
                                                 {c.nombre_comercial}
                                             </p>
                                             {c.isReadded && <Badge className="text-[8px] h-3.5 px-1.5 bg-orange-100 text-orange-700 font-black border-none uppercase">RE-ADICIÓN</Badge>}
                                         </div>
-                                        <p className="text-[10px] font-mono text-slate-300 mt-0.5">{c.ruc}</p>
+                                        <p className="text-[10px] font-mono text-slate-500 mt-0.5">{c.ruc}</p>
                                     </div>
                                     <div className="flex items-center gap-1">
                                         {isAdmin && (
@@ -370,7 +368,7 @@ function RouteManagementContent() {
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         )}
-                                        {c.visitStatus === 'Completado' && <CheckCircle className={cn("h-5 w-5", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-200")} />}
+                                        {c.visitStatus === 'Completado' && <CheckCircle className={cn("h-5 w-5", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-green-500")} />}
                                     </div>
                                 </div>
                             ))}
@@ -379,7 +377,6 @@ function RouteManagementContent() {
                 </Card>
             </div>
 
-            {/* PANEL DE DETALLE Y GESTIÓN */}
             <div className="lg:col-span-2">
                 <Card className="shadow-2xl border-t-4 border-t-primary min-h-[550px] rounded-[2.5rem] overflow-hidden">
                     <CardHeader className="bg-muted/10 h-36 flex flex-col justify-center px-10">
@@ -397,7 +394,6 @@ function RouteManagementContent() {
                     <CardContent className="p-10 space-y-10">
                         {activeClient && (
                             <>
-                            {/* Registro de Entrada */}
                             <div className={cn(
                                 "p-8 rounded-[2rem] border-2 transition-all duration-300", 
                                 activeClient.checkInTime ? "bg-green-50 border-green-200 shadow-sm" : "bg-muted/20 border-dashed border-slate-300"
@@ -420,7 +416,6 @@ function RouteManagementContent() {
                                 </div>
                             </div>
 
-                            {/* Datos de Gestión */}
                             <div className={cn(
                                 "space-y-8 transition-all duration-500", 
                                 !activeClient.checkInTime && !isAdmin && "opacity-20 pointer-events-none grayscale"
@@ -510,12 +505,11 @@ function RouteManagementContent() {
         </div>
     )}
 
-    {/* DIALOGO PARA AÑADIR CLIENTES */}
     <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
         <DialogContent className="w-[95vw] sm:max-w-xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl flex flex-col max-h-[90vh]">
             <DialogHeader className="bg-primary/5 p-8 pb-6 shrink-0 relative">
                 <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-primary pr-8">Catálogo de Clientes</DialogTitle>
-                <DialogDescription className="text-[10px] font-bold uppercase text-slate-400 mt-1">Selecciona clientes para re-añadir a tu ruta de hoy</DialogDescription>
+                <DialogDescription className="text-[10px] font-bold uppercase text-slate-500 mt-1">Selecciona clientes para re-añadir a tu ruta de hoy</DialogDescription>
                 <DialogClose className="absolute right-6 top-8 opacity-70 hover:opacity-100">
                     <X className="h-6 w-6" />
                 </DialogClose>
@@ -557,10 +551,10 @@ function RouteManagementContent() {
                             >
                                 <Checkbox checked={multiSelectedClients.some(s => s.ruc === c.ruc)} className="rounded-md h-5 w-5 border-2 border-primary" />
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-black uppercase truncate text-slate-700 leading-tight">{c.nombre_comercial || c.nombre_cliente}</p>
+                                    <p className="text-sm font-black uppercase truncate text-slate-900 leading-tight">{c.nombre_comercial || c.nombre_cliente}</p>
                                     <div className="flex items-center gap-3 mt-1">
-                                        <p className="text-[10px] font-mono text-slate-400">{c.ruc}</p>
-                                        <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-white border-slate-200 text-slate-400 font-bold uppercase">{c.ejecutivo}</Badge>
+                                        <p className="text-[10px] font-mono text-slate-600">{c.ruc}</p>
+                                        <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-white border-slate-200 text-slate-500 font-bold uppercase">{c.ejecutivo}</Badge>
                                     </div>
                                 </div>
                             </div>
@@ -571,7 +565,7 @@ function RouteManagementContent() {
 
             <div className="p-8 pt-6 border-t space-y-6 shrink-0 bg-white">
                 <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Observación de Re-adición (Opcional)</Label>
+                    <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider ml-1">Observación de Re-adición (Opcional)</Label>
                     <Textarea 
                         className="h-20 text-xs font-bold border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary transition-all resize-none" 
                         placeholder="Indica el motivo de esta nueva visita..."
