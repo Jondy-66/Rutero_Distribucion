@@ -7,14 +7,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, Sparkles, History, CalendarClock, Users, MessageSquare, ThumbsUp, Trash2 } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, PlayCircle, X, AlertCircle, ThumbsUp, Trash2, MessageSquare, Users } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format, isToday, isBefore, startOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -109,35 +109,23 @@ function RouteManagementContent() {
   const selectableRoutes = useMemo(() => {
     return allRoutes.filter(r => {
         const isOwner = r.createdBy === user?.id;
-        const isManagedByAdmin = isAdmin;
-        
-        if (!isOwner && !isManagedByAdmin) return false;
-        
+        if (!isOwner && !isAdmin) return false;
         if (isAdmin && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
 
         const routeDate = r.date instanceof Timestamp ? r.date.toDate() : (r.date instanceof Date ? r.date : new Date(r.date));
         const expirationDate = addDays(startOfDay(routeDate), 7);
-        const isExpired = isBefore(expirationDate, startOfDay(new Date()));
-        
-        return (r.status === 'En Progreso' || r.status === 'Planificada' || r.status === 'Completada' || r.status === 'Incompleta') && !isExpired;
+        return (r.status === 'En Progreso' || r.status === 'Planificada' || r.status === 'Completada' || r.status === 'Incompleta') && !isBefore(expirationDate, startOfDay(new Date()));
     });
   }, [allRoutes, user, isAdmin, selectedAgentId]);
 
-  const selectedRoute = useMemo(() => {
-    if (!selectedRouteId) return undefined;
-    return allRoutes.find(r => r.id === selectedRouteId);
-  }, [selectedRouteId, allRoutes]);
+  const selectedRoute = useMemo(() => selectedRouteId ? allRoutes.find(r => r.id === selectedRouteId) : undefined, [selectedRouteId, allRoutes]);
   
   useEffect(() => {
     if (authLoading || dataLoading || !selectedRoute) return;
-    
-    // CRITICAL: Aumentamos el bloqueo a 10 segundos para dar tiempo a que Firestore propague el cambio real.
-    const now = Date.now();
-    if (now - lastLocalUpdateTimestamp.current < 10000) return;
+    if (Date.now() - lastLocalUpdateTimestamp.current < 10000) return;
 
     if (!isSaving) {
-        const clients = selectedRoute.clients || [];
-        setCurrentRouteClientsFull(clients);
+        setCurrentRouteClientsFull(selectedRoute.clients || []);
         setIsRouteStarted(selectedRoute.status === 'En Progreso' || isAdmin);
     }
   }, [selectedRoute, authLoading, dataLoading, isSaving, isAdmin]);
@@ -195,345 +183,176 @@ function RouteManagementContent() {
         });
   }, [currentRouteClientsFull, availableClients, selectedRoute, allUsers]);
 
-  const isTodayCompleted = useMemo(() => {
-    return routeClients.length > 0 && routeClients.every(c => c.visitStatus === 'Completado');
-  }, [routeClients]);
+  const isTodayCompleted = useMemo(() => routeClients.length > 0 && routeClients.every(c => c.visitStatus === 'Completado'), [routeClients]);
 
-  const activeClient = useMemo(() => {
-    if (activeOriginalIndex === null) return null;
-    return routeClients.find(c => c.originalIndex === activeOriginalIndex) || null;
-  }, [routeClients, activeOriginalIndex]);
+  const activeClient = useMemo(() => activeOriginalIndex !== null ? routeClients.find(c => c.originalIndex === activeOriginalIndex) || null : null, [routeClients, activeOriginalIndex]);
 
   useEffect(() => {
     if (activeOriginalIndex === null && routeClients.length > 0 && !isTodayCompleted) {
         const activeVisit = routeClients.find(c => c.checkInTime && !c.checkOutTime);
-        if (activeVisit) {
-            setActiveOriginalIndex(activeVisit.originalIndex);
-        } else {
+        if (activeVisit) setActiveOriginalIndex(activeVisit.originalIndex);
+        else {
             const nextPending = routeClients.find(c => c.visitStatus !== 'Completado');
             if (nextPending) setActiveOriginalIndex(nextPending.originalIndex);
         }
     }
   }, [routeClients, activeOriginalIndex, isTodayCompleted]);
 
-  const isCurrentClientInProgress = !!(activeClient?.checkInTime && !activeClient?.checkOutTime);
-  const isCurrentClientCompleted = activeClient?.visitStatus === 'Completado';
-
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
-    if (activeOriginalIndex === null || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
-    
-    // Bloqueamos sincronización inversa por 10 segundos tras interactuar
+    if (activeOriginalIndex === null || (activeClient?.visitStatus === 'Completado' && !isAdmin) || isSaving) return;
     lastLocalUpdateTimestamp.current = Date.now();
     
-    let processedValue = value;
-    const numericFields = ['valorVenta', 'valorCobro', 'devoluciones', 'promociones', 'medicacionFrecuente'];
-    
-    if (numericFields.includes(field)) {
-        processedValue = String(value).replace(/[^0-9.,]/g, '');
-    }
-
-    const nextClients = currentRouteClientsFull.map((c, idx) => 
-        idx === activeOriginalIndex ? { ...c, [field]: processedValue } : c
-    );
-    
+    const nextClients = currentRouteClientsFull.map((c, idx) => idx === activeOriginalIndex ? { ...c, [field]: value } : c);
     setCurrentRouteClientsFull(nextClients);
     
     if (selectedRoute) {
-        updateRoute(selectedRoute.id, { 
-            clients: sanitizeClientsForFirestore(nextClients) 
-        }).catch(e => {
-            console.error("Error sincronizando campo:", e);
-        });
+        updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextClients) }).catch(console.error);
     }
-  };
-
-  const getCurrentCoords = (): Promise<{ latitude: number, longitude: number } | null> => {
-    return new Promise((resolve) => {
-        if (!navigator.geolocation) {
-            resolve(null);
-            return;
-        }
-        navigator.geolocation.getCurrentPosition(
-            (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-            () => resolve(null),
-            { enableHighAccuracy: true, timeout: 6000 }
-        );
-    });
   };
 
   const handleCheckIn = async () => {
-    if (!selectedRoute || activeOriginalIndex === null || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
-    
+    if (!selectedRoute || activeOriginalIndex === null || (activeClient?.visitStatus === 'Completado' && !isAdmin) || isSaving) return;
     setIsSaving(true);
-    // Bloqueo agresivo de sync tras check-in
     lastLocalUpdateTimestamp.current = Date.now();
     
     const time = format(new Date(), 'HH:mm:ss');
-    const location = await getCurrentCoords();
+    const location = await new Promise<{ latitude: number, longitude: number } | null>(resolve => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(p => resolve({ latitude: p.coords.latitude, longitude: p.coords.longitude }), () => resolve(null), { enableHighAccuracy: true, timeout: 6000 });
+    });
 
-    const nextClients = currentRouteClientsFull.map((c, idx) => 
-        idx === activeOriginalIndex ? { ...c, checkInTime: time, checkInLocation: location } : c
-    );
-    
+    const nextClients = currentRouteClientsFull.map((c, idx) => idx === activeOriginalIndex ? { ...c, checkInTime: time, checkInLocation: location } : c);
     setCurrentRouteClientsFull(nextClients);
     
     try {
-        await updateRoute(selectedRoute.id, { 
-            clients: sanitizeClientsForFirestore(nextClients) 
-        });
+        await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextClients) });
         toast({ title: "Entrada Registrada" });
-    } catch (e) {
-        console.error("Error sincronizando entrada:", e);
-        toast({ title: "Error al registrar entrada", variant: "destructive" });
-    } finally {
-        setIsSaving(false);
-    }
+    } finally { setIsSaving(false); }
   };
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || activeOriginalIndex === null || (isCurrentClientCompleted && !isAdmin) || isSaving) return;
-
+    if (!selectedRoute || activeOriginalIndex === null || (activeClient?.visitStatus === 'Completado' && !isAdmin) || isSaving) return;
     if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
-        toast({ title: "Observación Requerida", description: "Debes ingresar una observación para visitas telefónicas.", variant: "destructive" });
+        toast({ title: "Observación Requerida", variant: "destructive" });
         return;
     }
 
     setIsSaving(true);
     lastLocalUpdateTimestamp.current = Date.now();
-    
     const time = format(new Date(), 'HH:mm:ss');
-    const location = await getCurrentCoords();
-
-    const nextClients = currentRouteClientsFull.map((c, idx) => 
-        idx === activeOriginalIndex ? { ...c, checkOutTime: time, checkOutLocation: location, visitStatus: 'Completado' } : c
-    );
-
-    const activeClients = nextClients.filter(c => c.status !== 'Eliminado');
-    const allTotalClientsDone = activeClients.length > 0 && activeClients.every(c => c.visitStatus === 'Completado');
-
-    const newStatus = allTotalClientsDone ? 'Completada' : (selectedRoute.status === 'Planificada' ? 'En Progreso' : selectedRoute.status);
     
-    setCurrentRouteClientsFull(nextClients);
-    
+    const nextClients = currentRouteClientsFull.map((c, idx) => idx === activeOriginalIndex ? { ...c, checkOutTime: time, visitStatus: 'Completado' } : c);
+    const activeClientsOnly = nextClients.filter(c => c.status !== 'Eliminado');
+    const allDone = activeClientsOnly.length > 0 && activeClientsOnly.every(c => c.visitStatus === 'Completado');
+
     const updateData: any = { 
         clients: sanitizeClientsForFirestore(nextClients), 
-        status: newStatus
+        status: allDone ? 'Completada' : (selectedRoute.status === 'Planificada' ? 'En Progreso' : selectedRoute.status)
     };
-    
-    if (allTotalClientsDone) {
-        updateData.statusReason = "Planificación semanal completada exitosamente.";
-    }
+    if (allDone) updateData.statusReason = "Jornada completada.";
 
+    setCurrentRouteClientsFull(nextClients);
     try {
         await updateRoute(selectedRoute.id, updateData);
-        toast({ 
-            title: isCurrentClientCompleted ? "Gestión Actualizada" : "Visita Finalizada",
-            variant: allTotalClientsDone ? "success" : "default"
-        });
+        toast({ title: "Visita Finalizada", variant: allDone ? "success" : "default" });
         if (!isAdmin) setActiveOriginalIndex(null);
         setTimeout(() => refetchData('routes'), 1000);
-    } catch (e) {
-        console.error("Error sincronizando salida:", e);
-        toast({ title: "Error al finalizar visita", variant: "destructive" });
-    } finally {
-        setIsSaving(false);
-    }
-  };
-
-  const myAssignedClients = useMemo(() => {
-    const routeOwner = allUsers.find(u => u.id === selectedRoute?.createdBy);
-    const ownerName = routeOwner?.name || user?.name;
-    return availableClients.filter(c => c.ejecutivo === ownerName);
-  }, [availableClients, selectedRoute, allUsers, user]);
-
-  const filteredSearchClients = useMemo(() => {
-    const term = addClientSearchTerm.toLowerCase();
-    return myAssignedClients.filter(c => 
-        c.nombre_cliente.toLowerCase().includes(term) || 
-        c.nombre_comercial.toLowerCase().includes(term) ||
-        String(c.ruc).includes(term)
-    );
-  }, [myAssignedClients, addClientSearchTerm]);
-
-  const handleAddClientsToRoute = async () => {
-    if (!selectedRoute || multiSelectedClients.length === 0 || isSaving) return;
-
-    const needsObservation = multiSelectedClients.some(c => 
-        currentRouteClientsFull.some(existing => {
-            if (String(existing.ruc).trim() !== String(c.ruc).trim()) return false;
-            const isTodayClient = isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
-            return existing.visitStatus === 'Completado' || !isTodayClient;
-        })
-    );
-
-    if (needsObservation && !reAdditionObservation.trim()) {
-        toast({ title: "Observación requerida", description: "Por favor indica el motivo.", variant: "destructive" });
-        return;
-    }
-
-    setIsSaving(true);
-    lastLocalUpdateTimestamp.current = Date.now();
-
-    const newClientsToAdd: ClientInRoute[] = multiSelectedClients.map(c => {
-        const existing = currentRouteClientsFull.find(e => String(e.ruc).trim() === String(c.ruc).trim());
-        const isAlreadyManaged = existing?.visitStatus === 'Completado';
-        const isScheduledOtherDay = existing && !isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
-        
-        return {
-            ruc: c.ruc,
-            nombre_comercial: c.nombre_comercial,
-            date: new Date(),
-            visitStatus: 'Pendiente',
-            status: 'Activo',
-            origin: 'manual',
-            isReadded: isAlreadyManaged || isScheduledOtherDay,
-            reAdditionObservation: (isAlreadyManaged || isScheduledOtherDay) ? reAdditionObservation : undefined
-        };
-    });
-
-    const nextFullList = [...currentRouteClientsFull, ...newClientsToAdd];
-    
-    try {
-        await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextFullList) });
-        setCurrentRouteClientsFull(nextFullList);
-        setMultiSelectedClients([]);
-        setAddClientSearchTerm('');
-        setReAdditionObservation('');
-        setIsAddClientDialogOpen(false);
-        toast({ title: "Clientes añadidos" });
-        refetchData('routes');
-    } catch (e) {
-        toast({ title: "Error al añadir", variant: "destructive" });
-    } finally {
-        setIsSaving(false);
-    }
+    } finally { setIsSaving(false); }
   };
 
   const handleRemoveClientToday = async (originalIndex: number) => {
     if (!selectedRoute || !isAdmin || isSaving) return;
-
     setIsSaving(true);
     lastLocalUpdateTimestamp.current = Date.now();
-
-    const nextClients = currentRouteClientsFull.map((c, idx) => {
-        if (idx === originalIndex) {
-            return { ...c, status: 'Eliminado' as const };
-        }
-        return c;
-    });
-
+    const nextClients = currentRouteClientsFull.map((c, idx) => idx === originalIndex ? { ...c, status: 'Eliminado' as const } : c);
     try {
         await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextClients) });
         setCurrentRouteClientsFull(nextClients);
         if (activeOriginalIndex === originalIndex) setActiveOriginalIndex(null);
-        toast({ title: "Cliente removido de la ruta de hoy" });
+        toast({ title: "Cliente removido" });
         refetchData('routes');
-    } catch (e) {
-        toast({ title: "Error al remover", variant: "destructive" });
-    } finally {
-        setIsSaving(false);
-    }
+    } finally { setIsSaving(false); }
   };
 
-  const handleSelectClient = (originalIndex: number) => {
-      if (isSaving) return;
-      
-      const target = routeClients.find(c => c.originalIndex === originalIndex);
-      if (!target) return;
+  const handleAddClientsToRoute = async () => {
+    if (!selectedRoute || multiSelectedClients.length === 0 || isSaving) return;
+    const needsObs = multiSelectedClients.some(c => currentRouteClientsFull.some(e => String(e.ruc).trim() === String(c.ruc).trim() && (e.visitStatus === 'Completado' || !isToday(e.date instanceof Timestamp ? e.date.toDate() : new Date(e.date as any)))));
+    if (needsObs && !reAdditionObservation.trim()) return toast({ title: "Observación requerida", variant: "destructive" });
 
-      if (isCurrentClientInProgress && activeOriginalIndex !== originalIndex && !isAdmin) {
-          toast({ title: "Gestión en curso", description: "Finaliza la visita actual primero.", variant: "destructive" });
-          return;
-      }
-      setActiveOriginalIndex(originalIndex);
+    setIsSaving(true);
+    lastLocalUpdateTimestamp.current = Date.now();
+    const newClients: ClientInRoute[] = multiSelectedClients.map(c => {
+        const existing = currentRouteClientsFull.find(e => String(e.ruc).trim() === String(c.ruc).trim());
+        const isRe = !!existing && (existing.visitStatus === 'Completado' || !isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any)));
+        return { ruc: c.ruc, nombre_comercial: c.nombre_comercial, date: new Date(), visitStatus: 'Pendiente', status: 'Activo', isReadded: isRe, reAdditionObservation: isRe ? reAdditionObservation : undefined };
+    });
+
+    const nextFull = [...currentRouteClientsFull, ...newClients];
+    try {
+        await updateRoute(selectedRoute.id, { clients: sanitizeClientsForFirestore(nextFull) });
+        setCurrentRouteClientsFull(nextFull);
+        setMultiSelectedClients([]);
+        setReAdditionObservation('');
+        setIsAddClientDialogOpen(false);
+        toast({ title: "Clientes añadidos" });
+        refetchData('routes');
+    } finally { setIsSaving(false); }
   };
 
-  const isFinishDisabled = useMemo(() => {
-    if (!activeClient) return true;
-    if (isSaving) return true;
-    if (isCurrentClientCompleted && !isAdmin) return true;
-    if (!activeClient.visitType) return true;
-    if (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim()) return true;
-    return false;
-  }, [activeClient, isSaving, isCurrentClientCompleted, isAdmin]);
-
-  if (authLoading) return <div className="flex flex-col items-center justify-center h-[60vh] gap-4"><LoaderCircle className="animate-spin h-12 w-12 text-primary" /><p className="text-muted-foreground">Cargando gestión...</p></div>;
+  if (authLoading) return <div className="flex flex-col items-center justify-center h-[60vh] gap-4"><LoaderCircle className="animate-spin h-12 w-12 text-primary" /><p className="text-muted-foreground font-black">CARGANDO GESTIÓN...</p></div>;
 
   return (
     <>
-    <PageHeader title="Gestión de Ruta" description="Gestión diaria de visitas y ventas."/>
+    <PageHeader title="Gestión de Ruta" description="Control diario de visitas."/>
     
     {!isRouteStarted ? (
         <Card className="max-w-2xl mx-auto shadow-lg">
-            <CardHeader>
-                <CardTitle>Selecciona la Ruta a {isAdmin ? 'Supervisar' : 'Gestionar'}</CardTitle>
-                <CardDescription>{isAdmin ? 'Acceso administrativo total habilitado.' : 'Solo rutas activas asignadas a ti.'}</CardDescription>
-            </CardHeader>
+            <CardHeader><CardTitle>Selecciona la Ruta a {isAdmin ? 'Supervisar' : 'Gestionar'}</CardTitle></CardHeader>
             <CardContent className="space-y-4">
                 {isAdmin && (
                     <div className="space-y-2">
-                        <Label className="text-xs font-bold uppercase text-muted-foreground">Filtrar por Agente</Label>
+                        <Label className="text-[10px] font-black uppercase text-muted-foreground">Agente</Label>
                         <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-                            <SelectTrigger className="h-10">
-                                <Users className="mr-2 h-4 w-4" />
-                                <SelectValue placeholder="Todos los agentes" />
-                            </SelectTrigger>
+                            <SelectTrigger><Users className="mr-2 h-4 w-4" /><SelectValue placeholder="Todos los agentes" /></SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">Todos los agentes</SelectItem>
-                                {allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista').map(u => (
-                                    <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
-                                ))}
+                                {allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista').map(u => (<SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>))}
                             </SelectContent>
                         </Select>
                     </div>
                 )}
                 <div className="space-y-2">
-                    <Label className="text-xs font-bold uppercase text-muted-foreground">Planificación</Label>
-                    <Select onValueChange={(v) => { setSelectedRouteId(v); if(SELECTION_KEY) localStorage.setItem(SELECTION_KEY, v); }} value={selectedRouteId}>
+                    <Label className="text-[10px] font-black uppercase text-muted-foreground">Planificación Vigente</Label>
+                    <Select onValueChange={v => { setSelectedRouteId(v); if(SELECTION_KEY) localStorage.setItem(SELECTION_KEY, v); }} value={selectedRouteId}>
                         <SelectTrigger className="h-12"><Route className="mr-2 h-5 w-5 text-primary" /><SelectValue placeholder="Elije una ruta" /></SelectTrigger>
                         <SelectContent>
-                            {selectableRoutes.length > 0 ? (
-                                selectableRoutes.map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName} ({allUsers.find(u => u.id === r.createdBy)?.name})</SelectItem>))
-                            ) : (
-                                <SelectItem value="none" disabled>No hay rutas vigentes</SelectItem>
-                            )}
+                            {selectableRoutes.map(r => (<SelectItem key={r.id} value={r.id}>{r.routeName} ({allUsers.find(u => u.id === r.createdBy)?.name})</SelectItem>))}
                         </SelectContent>
                     </Select>
                 </div>
                 {selectedRoute && (
-                    <Button onClick={() => { updateRoute(selectedRoute.id, {status: 'En Pregreso'}).then(() => { setIsRouteStarted(true); refetchData('routes'); }); }} className="w-full h-12 text-lg font-bold">
+                    <Button onClick={() => updateRoute(selectedRoute.id, {status: 'En Progreso'}).then(() => { setIsRouteStarted(true); refetchData('routes'); })} className="w-full h-12 text-lg font-black uppercase">
                         <PlayCircle className="mr-2 h-6 w-6" /> INICIAR JORNADA
                     </Button>
                 )}
             </CardContent>
         </Card>
     ) : isTodayCompleted && !isAdmin ? (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-6 bg-white rounded-2xl shadow-sm border border-primary/10 animate-in fade-in zoom-in-95 duration-500">
-            <div className="bg-green-100 p-8 rounded-full mb-6 relative">
-                <ThumbsUp className="h-16 w-16 text-green-600" />
-                <div className="absolute inset-0 bg-green-500/10 rounded-full animate-ping" />
+        <div className="flex flex-col items-center justify-center min-h-[60vh] text-center p-10 bg-white rounded-3xl shadow-xl border-4 border-green-50 animate-in zoom-in-95 duration-500">
+            <div className="bg-green-100 p-8 rounded-full mb-8 relative">
+                <ThumbsUp className="h-20 w-20 text-green-600" />
+                <div className="absolute inset-0 bg-green-500/20 rounded-full animate-ping" />
             </div>
-            <h2 className="text-3xl font-black text-green-700 uppercase tracking-tight mb-2">
-                ¡Jornada de Hoy Completada!
-            </h2>
-            <p className="text-sm font-bold text-green-600/80 uppercase">
-                Se han gestionado todos los clientes planificados para este día.
-            </p>
-            <div className="mt-8">
-                <Button className="font-bold bg-green-600 hover:bg-green-700 px-10 h-12" onClick={() => router.push('/dashboard')}>
-                    VOLVER AL PANEL
-                </Button>
-            </div>
+            <h2 className="text-4xl font-black text-green-700 uppercase tracking-tighter mb-4">¡JORNADA COMPLETADA!</h2>
+            <p className="text-sm font-bold text-green-600/80 uppercase mb-8">Has gestionado todos los clientes planificados para hoy.</p>
+            <Button className="font-black bg-green-600 hover:bg-green-700 px-12 h-14 text-lg rounded-2xl shadow-xl" onClick={() => router.push('/dashboard')}>VOLVER AL PANEL</Button>
         </div>
     ) : (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1 shadow-md h-fit">
             <CardHeader className="pb-3 px-4">
-                <CardTitle className="text-lg truncate">{selectedRoute?.routeName}</CardTitle>
-                <div className="flex items-center justify-between">
-                    <p className="text-muted-foreground text-xs capitalize">{todayFormatted}</p>
-                    {isAdmin && <Badge variant="outline" className="text-[9px] bg-primary/5">VISTA ADMIN</Badge>}
-                </div>
+                <CardTitle className="text-lg truncate uppercase font-black">{selectedRoute?.routeName}</CardTitle>
+                <p className="text-muted-foreground text-[10px] font-black uppercase">{todayFormatted}</p>
             </CardHeader>
             <CardContent className="px-4">
                 <div className="mb-6 space-y-3">
@@ -542,57 +361,33 @@ function RouteManagementContent() {
                         <span className="text-primary">{routeClients.filter(c => c.visitStatus === 'Completado').length} / {routeClients.length}</span>
                     </div>
                     <Progress value={(routeClients.filter(c => c.visitStatus === 'Completado').length / (routeClients.length || 1)) * 100} className="h-2" />
-                    <Button variant="outline" className="w-full h-10 border-dashed border-2 font-bold" disabled={isCurrentClientInProgress && !isAdmin} onClick={() => setIsAddClientDialogOpen(true)}>
+                    <Button variant="outline" className="w-full h-10 border-dashed border-2 font-black uppercase text-[10px]" disabled={activeClient?.checkInTime && !activeClient?.checkOutTime && !isAdmin} onClick={() => setIsAddClientDialogOpen(true)}>
                         <PlusCircle className="mr-2 h-4 w-4" /> Añadir Cliente
                     </Button>
                 </div>
 
                 <div className="space-y-2">
                     {routeClients.map((c, i) => (
-                        <div key={`${c.ruc}-${c.originalIndex}`} onClick={() => handleSelectClient(c.originalIndex)} className={cn(
-                            "flex items-center justify-between p-3 bg-card border rounded-lg transition-all shadow-sm cursor-pointer relative group", 
-                            activeOriginalIndex === c.originalIndex ? "ring-2 ring-primary border-primary" : "hover:bg-accent/50", 
-                            c.visitStatus === 'Completado' && !isAdmin && "opacity-50 grayscale bg-muted/30",
-                            isCurrentClientInProgress && activeOriginalIndex !== c.originalIndex && !isAdmin && "opacity-30 cursor-not-allowed"
+                        <div key={`${c.ruc}-${c.originalIndex}`} onClick={() => (!isSaving && (isAdmin || !activeClient?.checkInTime || activeClient.checkOutTime || activeOriginalIndex === c.originalIndex)) && setActiveOriginalIndex(c.originalIndex)} className={cn(
+                            "flex items-center justify-between p-3 bg-card border-2 rounded-xl transition-all cursor-pointer relative group", 
+                            activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5" : "hover:border-primary/20", 
+                            c.visitStatus === 'Completado' && !isAdmin && "opacity-50 grayscale bg-muted/20 border-transparent"
                         )}>
                             <div className="flex items-center gap-3 overflow-hidden flex-1">
-                                <span className="text-[10px] font-black text-muted-foreground/40 w-4">{i + 1}</span>
+                                <span className="text-[10px] font-black text-muted-foreground/40">{i + 1}</span>
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
-                                        <p className="font-bold text-sm truncate uppercase">{c.nombre_comercial}</p>
-                                        {c.isReadded && (
-                                            <Badge variant="outline" className="text-[8px] bg-orange-50 text-orange-700 border-orange-200 font-black h-4 px-1">RE-ADICIÓN</Badge>
-                                        )}
+                                        <p className="font-black text-xs truncate uppercase">{c.nombre_comercial}</p>
+                                        {c.isReadded && <Badge variant="outline" className="text-[8px] bg-orange-50 text-orange-700 font-black h-4 px-1">RE-ADICIÓN</Badge>}
                                     </div>
-                                    <span className="text-[9px] text-muted-foreground truncate block uppercase font-mono">{c.ruc}</span>
+                                    <span className="text-[9px] text-muted-foreground truncate block font-mono">{c.ruc}</span>
                                 </div>
                             </div>
-                            <div className="flex items-center gap-2 shrink-0">
+                            <div className="flex items-center gap-2">
                                 {isAdmin && (
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>¿Remover cliente de la ruta?</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    Esta acción eliminará a <strong>{c.nombre_comercial}</strong> de la planificación de hoy. Esta acción no se puede deshacer.
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel onClick={(e) => e.stopPropagation()}>Cancelar</AlertDialogCancel>
-                                                <AlertDialogAction 
-                                                    className="bg-destructive hover:bg-destructive/90"
-                                                    onClick={(e) => { e.stopPropagation(); handleRemoveClientToday(c.originalIndex); }}
-                                                >
-                                                    Eliminar
-                                                </AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
+                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={(e) => { e.stopPropagation(); handleRemoveClientToday(c.originalIndex); }}>
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
                                 )}
                                 {c.visitStatus === 'Completado' && <CheckCircle className="h-5 w-5 text-green-500" />}
                             </div>
@@ -603,89 +398,69 @@ function RouteManagementContent() {
         </Card>
 
         <div className="lg:col-span-2">
-            <Card className="shadow-lg border-t-4 border-t-primary min-h-[600px] flex flex-col">
-                <CardHeader className="bg-muted/10 pb-6 min-h-[200px] flex flex-col justify-center">
+            <Card className="shadow-xl border-t-4 border-t-primary min-h-[600px] flex flex-col">
+                <CardHeader className="bg-muted/5 min-h-[180px] flex flex-col justify-center">
                     {activeClient ? (
                         <div className="space-y-4">
-                            <div className="flex items-center gap-3">
-                                <h3 className="text-2xl font-black text-primary leading-tight uppercase">{activeClient.nombre_comercial}</h3>
-                                {isCurrentClientCompleted && <Badge variant="success">COMPLETADA</Badge>}
-                            </div>
-                            <div className="flex items-start gap-3 p-4 bg-white/80 rounded-2xl border border-primary/10 shadow-sm">
-                                <MapPin className="h-4 w-4 text-primary mt-0.5 shrink-0" />
-                                <p className="text-sm font-semibold text-muted-foreground leading-relaxed">{activeClient.direccion}</p>
+                            <h3 className="text-2xl font-black text-primary uppercase">{activeClient.nombre_comercial}</h3>
+                            <div className="flex items-start gap-3 p-4 bg-white rounded-2xl border-2 border-primary/5 shadow-sm">
+                                <MapPin className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                                <p className="text-sm font-bold text-muted-foreground uppercase leading-tight">{activeClient.direccion}</p>
                             </div>
                         </div>
                     ) : (
-                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-4 text-center">
-                            <User className="h-16 w-16 text-primary/30" />
-                            <p className="font-black text-xl uppercase">selecciona un cliente para gestionar</p>
+                        <div className="flex flex-col items-center justify-center py-12 text-muted-foreground gap-4">
+                            <User className="h-16 w-16 text-primary/20" />
+                            <p className="font-black text-xl uppercase opacity-40 text-center">Selecciona un cliente de la lista</p>
                         </div>
                     )}
                 </CardHeader>
                 
-                <CardContent className="space-y-8 pt-6 flex-1">
+                <CardContent className="space-y-8 pt-8 flex-1">
                     {activeClient && (
                         <div className="space-y-8">
-                            <div className={cn("p-5 rounded-2xl border-2 transition-all", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-muted/20 border-dashed")}>
+                            <div className={cn("p-6 rounded-2xl border-2 transition-all", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-muted/20 border-dashed")}>
                                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                                    <div className="flex items-center gap-4">
-                                        <LogIn className={cn("h-8 w-8", activeClient.checkInTime ? "text-green-600" : "text-muted-foreground")} />
-                                        <div>
-                                            <h4 className="font-black text-sm uppercase">1. Entrada</h4>
-                                            <p className="text-xs font-bold text-muted-foreground">{activeClient.checkInTime ? `REGISTRADO: ${activeClient.checkInTime}` : 'Presiona al llegar'}</p>
-                                        </div>
+                                    <div className="flex items-center gap-4 text-center sm:text-left">
+                                        <LogIn className={cn("h-10 w-10", activeClient.checkInTime ? "text-green-600" : "text-muted-foreground")} />
+                                        <div><h4 className="font-black text-sm uppercase">1. Registro de Entrada</h4><p className="text-[10px] font-black uppercase text-muted-foreground">{activeClient.checkInTime ? `LLEGADA: ${activeClient.checkInTime}` : 'Presiona al llegar al local'}</p></div>
                                     </div>
-                                    {!activeClient.checkInTime && <Button size="lg" onClick={handleCheckIn} disabled={isSaving} className="font-black shadow-lg">REGISTRAR ENTRADA</Button>}
+                                    {!activeClient.checkInTime && <Button size="lg" onClick={handleCheckIn} disabled={isSaving} className="font-black px-10 shadow-lg">REGISTRAR ENTRADA</Button>}
                                 </div>
                             </div>
 
-                            <div className={cn("space-y-8", !activeClient.checkInTime && !isAdmin && "opacity-20 pointer-events-none")}>
+                            <div className={cn("space-y-8 transition-opacity", !activeClient.checkInTime && !isAdmin && "opacity-20 pointer-events-none")}>
                                 <div className="space-y-4">
-                                    <h4 className="font-black text-sm uppercase flex items-center gap-2"><Phone className="h-4 w-4 text-primary" /> 2. Datos de Gestión</h4>
-                                    <RadioGroup onValueChange={(v: any) => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4" disabled={(isCurrentClientCompleted && !isAdmin) || isSaving}>
-                                        <Label className={cn("flex flex-col items-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5" : "border-muted")}>
-                                            <RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-6 w-6" /><span className="text-[10px] font-black uppercase">PRESENCIAL</span>
+                                    <h4 className="font-black text-sm uppercase flex items-center gap-2 text-primary"><Phone className="h-4 w-4" /> 2. Datos de Gestión</h4>
+                                    <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4">
+                                        <Label className={cn("flex flex-col items-center gap-3 border-2 p-5 rounded-2xl cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5" : "border-muted/40 opacity-60")}>
+                                            <RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-8 w-8" /><span className="text-[10px] font-black uppercase">PRESENCIAL</span>
                                         </Label>
-                                        <Label className={cn("flex flex-col items-center gap-2 border-2 p-4 rounded-xl cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5" : "border-muted")}>
-                                            <RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-6 w-6" /><span className="text-[10px] font-black uppercase">TELEFÓNICA</span>
+                                        <Label className={cn("flex flex-col items-center gap-3 border-2 p-5 rounded-2xl cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5" : "border-muted/40 opacity-60")}>
+                                            <RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-8 w-8" /><span className="text-[10px] font-black uppercase">TELEFÓNICA</span>
                                         </Label>
                                     </RadioGroup>
                                 </div>
 
                                 {activeClient.visitType === 'telefonica' && (
-                                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
-                                        <Label className="text-[10px] font-black uppercase flex items-center gap-2">
-                                            <MessageSquare className="h-3 w-3" /> Observación de Llamada (Obligatoria)
-                                        </Label>
-                                        <Textarea 
-                                            placeholder="Detalla lo conversado en la llamada..." 
-                                            className="h-24 font-bold text-sm border-2 focus:border-primary"
-                                            value={activeClient.callObservation || ''}
-                                            onChange={e => handleFieldChange('callObservation', e.target.value)}
-                                            disabled={(isCurrentClientCompleted && !isAdmin) || isSaving}
-                                        />
+                                    <div className="space-y-2 animate-in slide-in-from-top-2">
+                                        <Label className="text-[10px] font-black uppercase flex items-center gap-2 text-primary"><MessageSquare className="h-3 w-3" /> Observación Obligatoria</Label>
+                                        <Textarea placeholder="Escribe aquí el resumen de la llamada..." className="h-28 font-bold text-sm border-2 focus:border-primary" value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} />
                                     </div>
                                 )}
 
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div className="space-y-1">
-                                        <Label className="text-[10px] font-black uppercase">Venta ($)</Label>
-                                        <Input type="text" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={(isCurrentClientCompleted && !isAdmin) || isSaving} />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-[10px] font-black uppercase">Cobro ($)</Label>
-                                        <Input type="text" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={(isCurrentClientCompleted && !isAdmin) || isSaving} />
-                                    </div>
-                                    <div className="space-y-1">
-                                        <Label className="text-[10px] font-black uppercase">Devolución ($)</Label>
-                                        <Input type="text" placeholder="0.00" className="h-12 text-lg font-bold" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={(isCurrentClientCompleted && !isAdmin) || isSaving} />
-                                    </div>
+                                    {['valorVenta', 'valorCobro', 'devoluciones'].map(f => (
+                                        <div key={f} className="space-y-1">
+                                            <Label className="text-[10px] font-black uppercase text-muted-foreground">{f === 'valorVenta' ? 'Venta' : f === 'valorCobro' ? 'Cobro' : 'Devolución'} ($)</Label>
+                                            <Input type="text" placeholder="0.00" className="h-14 text-xl font-black text-primary border-2" value={String(activeClient[f as keyof ClientInRoute] ?? '')} onChange={e => handleFieldChange(f as any, e.target.value)} disabled={activeClient.visitStatus === 'Completado' && !isAdmin} />
+                                        </div>
+                                    ))}
                                 </div>
                                 
-                                <Button onClick={handleConfirmCheckOut} className="w-full h-16 text-lg font-black mt-6 rounded-2xl shadow-xl" disabled={isFinishDisabled}>
-                                    {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <LogOut className="mr-2 h-6 w-6" />} 
-                                    {isCurrentClientCompleted ? (isAdmin ? "ACTUALIZAR GESTIÓN" : "VISITA FINALIZADA") : "FINALIZAR VISITA"}
+                                <Button onClick={handleConfirmCheckOut} className="w-full h-20 text-xl font-black rounded-3xl shadow-2xl mt-10 transition-transform active:scale-95" disabled={isSaving || (activeClient.visitStatus === 'Completado' && !isAdmin) || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim())}>
+                                    {isSaving ? <LoaderCircle className="animate-spin h-8 w-8" /> : <LogOut className="mr-3 h-8 w-8" />} 
+                                    {activeClient.visitStatus === 'Completado' ? "ACTUALIZAR GESTIÓN" : "FINALIZAR VISITA"}
                                 </Button>
                             </div>
                         </div>
@@ -697,28 +472,22 @@ function RouteManagementContent() {
     )}
 
     <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
-            <DialogHeader><DialogTitle>Añadir Clientes a Hoy</DialogTitle></DialogHeader>
-            <div className="space-y-4 flex-1 overflow-hidden flex flex-col">
-                <Input placeholder="Buscar por RUC o Nombre..." value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)} />
-                <ScrollArea className="flex-1 border rounded-lg p-2">
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col rounded-3xl p-0 overflow-hidden">
+            <DialogHeader className="p-6 pb-2"><DialogTitle className="text-2xl font-black uppercase text-primary">Añadir Clientes a Hoy</DialogTitle></DialogHeader>
+            <div className="p-6 space-y-4 flex-1 flex flex-col overflow-hidden">
+                <Input placeholder="Buscar por RUC o Nombre..." value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)} className="h-12 border-2" />
+                <ScrollArea className="flex-1 border-2 rounded-2xl p-2 bg-muted/5">
                     <div className="space-y-2">
-                        {filteredSearchClients.map(c => {
-                            const existing = currentRouteClientsFull.find(e => String(e.ruc).trim() === String(c.ruc).trim());
+                        {availableClients.filter(c => c.ejecutivo === (allUsers.find(u => u.id === selectedRoute?.createdBy)?.name || user?.name) && (c.nombre_cliente.toLowerCase().includes(addClientSearchTerm.toLowerCase()) || String(c.ruc).includes(addClientSearchTerm))).map(c => {
                             const isSel = multiSelectedClients.some(sc => sc.ruc === c.ruc);
+                            const existing = currentRouteClientsFull.find(e => String(e.ruc).trim() === String(c.ruc).trim());
                             const isManaged = existing?.visitStatus === 'Completado';
-                            const isOtherDay = existing && !isToday(existing.date instanceof Timestamp ? existing.date.toDate() : new Date(existing.date as any));
-
                             return (
-                                <div key={c.ruc} className={cn("p-3 rounded-lg border flex items-center gap-3 cursor-pointer", isSel && "bg-primary/5 border-primary")} onClick={() => setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => sc.ruc !== c.ruc) : [...multiSelectedClients, c])}>
+                                <div key={c.ruc} className={cn("p-4 rounded-xl border-2 flex items-center gap-4 cursor-pointer transition-all", isSel ? "border-primary bg-primary/5" : "border-transparent bg-white")} onClick={() => setMultiSelectedClients(isSel ? multiSelectedClients.filter(sc => sc.ruc !== c.ruc) : [...multiSelectedClients, c])}>
                                     <Checkbox checked={isSel} />
                                     <div className="flex-1">
-                                        <div className="flex items-center gap-2">
-                                            <p className="text-sm font-bold uppercase">{c.nombre_comercial}</p>
-                                            {isManaged && <Badge variant="outline" className="text-[8px] bg-orange-50 text-orange-700">YA GESTIONADO</Badge>}
-                                            {isOtherDay && <Badge variant="outline" className="text-[8px] bg-blue-50 text-blue-700">EN OTRO DÍA</Badge>}
-                                        </div>
-                                        <p className="text-[10px] text-muted-foreground">{c.ruc}</p>
+                                        <div className="flex items-center gap-2"><p className="text-sm font-black uppercase">{c.nombre_comercial}</p>{isManaged && <Badge variant="outline" className="text-[8px] font-black bg-orange-50 text-orange-700">GESTIONADO</Badge>}</div>
+                                        <p className="text-[10px] font-mono text-muted-foreground">{c.ruc}</p>
                                     </div>
                                 </div>
                             );
@@ -726,12 +495,12 @@ function RouteManagementContent() {
                     </div>
                 </ScrollArea>
                 <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase">Observación de Re-adición / Adelanto (Obligatoria si ya existe)</Label>
-                    <Textarea placeholder="Indica el motivo..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
+                    <Label className="text-[10px] font-black uppercase text-primary">Observación de Re-adición</Label>
+                    <Textarea placeholder="Indica el motivo si el cliente ya fue gestionado..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} className="h-24 font-bold border-2" />
                 </div>
             </div>
-            <DialogFooter>
-                <Button onClick={handleAddClientsToRoute} disabled={multiSelectedClients.length === 0 || isSaving}>Añadir Seleccionados</Button>
+            <DialogFooter className="p-6 bg-muted/10">
+                <Button onClick={handleAddClientsToRoute} disabled={multiSelectedClients.length === 0 || isSaving} className="font-black px-10 h-12 uppercase">Añadir Seleccionados</Button>
             </DialogFooter>
         </DialogContent>
     </Dialog>
@@ -739,10 +508,4 @@ function RouteManagementContent() {
   );
 }
 
-export default function RouteManagementPage() {
-  return (
-    <Suspense fallback={<div className="p-8">Cargando panel...</div>}>
-      <RouteManagementContent />
-    </Suspense>
-  );
-}
+export default function RouteManagementPage() { return <Suspense fallback={<div className="p-8">Cargando...</div>}><RouteManagementContent /></Suspense>; }
