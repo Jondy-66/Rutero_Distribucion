@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, Trash2, ThumbsUp, Users, CirclePlus } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, Trash2, ThumbsUp, Users, CirclePlus, X } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -33,7 +33,6 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
         const cleaned: any = { ...c };
         if (c.date instanceof Date) cleaned.date = Timestamp.fromDate(c.date);
         
-        // Robust number parsing for decimals
         const parseValue = (v: any) => {
             if (v === undefined || v === null || v === '') return 0;
             const normalized = String(v).replace(',', '.');
@@ -69,7 +68,6 @@ function RouteManagementContent() {
   const [multiSelectedClients, setMultiSelectedClients] = useState<Client[]>([]);
   const [reAdditionObservation, setReAdditionObservation] = useState('');
 
-  // Lock synchronization for 10s after any local change to prevent flicker
   const lastLocalUpdate = useRef<number>(0);
   const isAdmin = user?.role === 'Administrador';
 
@@ -79,7 +77,6 @@ function RouteManagementContent() {
         if (isAdmin && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
-        // Show today's routes or incomplete routes from last 7 days
         return (r.status !== 'Completada' || isToday(rDate)) && !isBefore(addDays(startOfDay(rDate), 7), startOfDay(new Date()));
     });
   }, [allRoutes, user, isAdmin, selectedAgentId]);
@@ -129,7 +126,6 @@ function RouteManagementContent() {
     
     setCurrentRouteClientsFull(nextClients);
     
-    // Non-blocking background sync
     if (selectedRoute) {
         updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) }).catch(console.error);
     }
@@ -169,7 +165,6 @@ function RouteManagementContent() {
   const handleConfirmCheckOut = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving) return;
     
-    // Mandatory observation for telephone calls
     if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
         return toast({ title: "Observación requerida", description: "Escribe el resumen de la llamada.", variant: "destructive" });
     }
@@ -243,6 +238,7 @@ function RouteManagementContent() {
         setIsAddClientDialogOpen(false);
         setMultiSelectedClients([]);
         setReAdditionObservation('');
+        setAddClientSearchTerm('');
         toast({ title: "Clientes añadidos exitosamente" });
     } catch (e) {
         toast({ title: "Error al añadir clientes", variant: "destructive" });
@@ -337,7 +333,7 @@ function RouteManagementContent() {
                 <div className="space-y-3 px-2 overflow-y-auto max-h-[60vh] pr-1">
                     {routeClients.map((c, i) => (
                         <div 
-                            key={c.originalIndex} 
+                            key={`${c.ruc}-${c.originalIndex}`} 
                             onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isAdmin) && setActiveOriginalIndex(c.originalIndex)} 
                             className={cn(
                                 "flex items-center gap-4 p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200", 
@@ -505,66 +501,94 @@ function RouteManagementContent() {
         </div>
     )}
 
-    {/* DIALOGO PARA AÑADIR CLIENTES */}
+    {/* DIALOGO PARA AÑADIR CLIENTES - OPTIMIZADO PARA PANTALLA */}
     <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
-        <DialogContent className="sm:max-w-md rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl">
-            <DialogHeader className="bg-primary/5 p-8 pb-6">
-                <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-primary">Añadir Clientes a la Ruta</DialogTitle>
+        <DialogContent className="w-[95vw] sm:max-w-xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl flex flex-col max-h-[90vh]">
+            <DialogHeader className="bg-primary/5 p-8 pb-6 shrink-0 relative">
+                <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-primary pr-8">Catálogo de Clientes</DialogTitle>
+                <DialogDescription className="text-[10px] font-bold uppercase text-slate-400 mt-1">Selecciona clientes para re-añadir a tu ruta de hoy</DialogDescription>
+                <DialogClose className="absolute right-6 top-8 opacity-70 hover:opacity-100">
+                    <X className="h-6 w-6" />
+                </DialogClose>
             </DialogHeader>
-            <div className="px-8 py-6 space-y-6">
+            
+            <div className="px-8 py-4 space-y-4 shrink-0 border-b">
                 <div className="relative">
                     <Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-400" />
                     <Input 
-                        placeholder="Buscar por RUC o Nombre..." 
+                        placeholder="Buscar por RUC o Nombre del Cliente..." 
                         value={addClientSearchTerm} 
                         onChange={e => setAddClientSearchTerm(e.target.value)} 
-                        className="h-12 pl-12 font-bold rounded-2xl border-2 border-slate-100" 
+                        className="h-12 pl-12 font-bold rounded-2xl border-2 border-slate-100 focus:border-primary transition-all" 
                     />
                 </div>
-                <ScrollArea className="h-72 pr-2">
-                    <div className="space-y-2">
-                        {availableClients
-                            .filter(c => String(c.nombre_cliente || '').toLowerCase().includes(addClientSearchTerm.toLowerCase()) || String(c.ruc || '').includes(addClientSearchTerm))
-                            .map(c => (
-                                <div 
-                                    key={c.id} 
-                                    onClick={() => setMultiSelectedClients(prev => 
-                                        prev.some(s => s.ruc === c.ruc) ? prev.filter(s => s.ruc !== c.ruc) : [...prev, c]
-                                    )} 
-                                    className={cn(
-                                        "p-4 rounded-2xl flex items-center gap-4 cursor-pointer transition-colors border-2", 
-                                        multiSelectedClients.some(s => s.ruc === c.ruc) ? "bg-primary/5 border-primary" : "bg-slate-50/50 border-transparent hover:border-slate-100"
-                                    )}
-                                >
-                                    <Checkbox checked={multiSelectedClients.some(s => s.ruc === c.ruc)} className="rounded-md" />
-                                    <div className="min-w-0 flex-1">
-                                        <p className="text-sm font-black uppercase truncate text-slate-700 leading-none">{c.nombre_comercial}</p>
-                                        <p className="text-[10px] font-mono text-slate-400 mt-1">{c.ruc}</p>
+            </div>
+
+            <ScrollArea className="flex-1 px-8 py-4 bg-slate-50/30">
+                <div className="space-y-3 pb-4">
+                    {availableClients
+                        .filter(c => {
+                            const search = addClientSearchTerm.toLowerCase();
+                            return String(c.nombre_cliente || '').toLowerCase().includes(search) || 
+                                   String(c.nombre_comercial || '').toLowerCase().includes(search) || 
+                                   String(c.ruc || '').includes(search);
+                        })
+                        .map(c => (
+                            <div 
+                                key={c.id} 
+                                onClick={() => setMultiSelectedClients(prev => 
+                                    prev.some(s => s.ruc === c.ruc) ? prev.filter(s => s.ruc !== c.ruc) : [...prev, c]
+                                )} 
+                                className={cn(
+                                    "p-4 rounded-2xl flex items-center gap-4 cursor-pointer transition-all border-2", 
+                                    multiSelectedClients.some(s => s.ruc === c.ruc) 
+                                        ? "bg-primary/10 border-primary shadow-sm" 
+                                        : "bg-white border-slate-100 hover:border-slate-300"
+                                )}
+                            >
+                                <Checkbox checked={multiSelectedClients.some(s => s.ruc === c.ruc)} className="rounded-md h-5 w-5 border-2 border-primary" />
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-black uppercase truncate text-slate-700 leading-tight">{c.nombre_comercial || c.nombre_cliente}</p>
+                                    <div className="flex items-center gap-3 mt-1">
+                                        <p className="text-[10px] font-mono text-slate-400">{c.ruc}</p>
+                                        <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-white border-slate-200 text-slate-400 font-bold uppercase">{c.ejecutivo}</Badge>
                                     </div>
                                 </div>
-                            ))
-                        }
-                    </div>
-                </ScrollArea>
+                            </div>
+                        ))
+                    }
+                    {availableClients.length === 0 && (
+                        <div className="py-20 text-center space-y-2">
+                            <Users className="h-12 w-12 mx-auto text-slate-200" />
+                            <p className="text-sm font-bold text-slate-400 uppercase">No se encontraron clientes en tu panel</p>
+                        </div>
+                    )}
+                </div>
+            </ScrollArea>
+
+            <div className="p-8 pt-6 border-t space-y-6 shrink-0 bg-white">
                 <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Motivo de Re-adición</Label>
+                    <Label className="text-[10px] font-black uppercase text-slate-400 tracking-wider ml-1">Observación de Re-adición (Opcional)</Label>
                     <Textarea 
-                        className="h-24 text-xs font-bold border-2 rounded-2xl px-4 py-3" 
-                        placeholder="¿Por qué estás volviendo a visitar a este cliente?"
+                        className="h-20 text-xs font-bold border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary transition-all resize-none" 
+                        placeholder="Indica el motivo de esta nueva visita..."
                         value={reAdditionObservation} 
                         onChange={e => setReAdditionObservation(e.target.value)} 
                     />
                 </div>
+                <div className="flex items-center gap-4">
+                    <DialogClose asChild>
+                        <Button variant="ghost" className="h-14 font-bold flex-1 text-slate-400 hover:text-slate-600">CANCELAR</Button>
+                    </DialogClose>
+                    <Button 
+                        onClick={handleAddClients} 
+                        disabled={multiSelectedClients.length === 0 || isSaving} 
+                        className="h-14 font-black flex-[2] rounded-2xl text-lg shadow-xl transition-transform hover:scale-[1.02] active:scale-95"
+                    >
+                        {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : `AÑADIR ${multiSelectedClients.length} CLIENTES`}
+                    </Button>
+                </div>
             </div>
-            <DialogFooter className="p-8 pt-0">
-                <Button 
-                    onClick={handleAddClients} 
-                    disabled={multiSelectedClients.length === 0 || isSaving} 
-                    className="w-full font-black h-14 rounded-2xl text-lg shadow-lg"
-                >
-                    AÑADIR SELECCIONADOS ({multiSelectedClients.length})
-                </Button>
-            </DialogFooter>
         </DialogContent>
     </Dialog>
     </>
