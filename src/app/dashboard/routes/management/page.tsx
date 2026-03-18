@@ -44,8 +44,6 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     });
 };
 
-type RouteClient = ClientInRoute & { originalIndex: number; id: string; direccion: string };
-
 function RouteManagementContent() {
   const { user, clients: availableClients, routes: allRoutes, users: allUsers, loading: authLoading, refetchData } = useAuth();
   const { toast } = useToast();
@@ -187,58 +185,133 @@ function RouteManagementContent() {
         </div>
     ) : (
         <div className="grid lg:grid-cols-3 gap-6">
-            <Card className="lg:col-span-1 shadow-md">
-                <CardHeader className="pb-2">
-                    <div className="flex justify-between items-center"><CardTitle className="text-sm font-black uppercase">Visitas de Hoy</CardTitle><Badge className="bg-primary">{routeClients.filter(c => c.visitStatus === 'Completado').length} / {routeClients.length}</Badge></div>
-                    <Progress value={(routeClients.filter(c => c.visitStatus === 'Completado').length / (routeClients.length || 1)) * 100} className="h-1.5 mt-2" />
-                </CardHeader>
-                <CardContent className="px-2 space-y-2">
-                    <Button variant="outline" className="w-full text-[10px] font-black h-8 border-dashed" onClick={() => setIsAddClientDialogOpen(true)}><PlusCircle className="mr-2 h-3 w-3" /> AÑADIR CLIENTE</Button>
-                    <div className="space-y-1">
-                        {routeClients.map((c, i) => (
-                            <div key={c.originalIndex} onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isAdmin) && setActiveOriginalIndex(c.originalIndex)} className={cn("flex items-center justify-between p-3 border-2 rounded-xl cursor-pointer transition-all", activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5" : "border-transparent bg-muted/20", c.visitStatus === 'Completado' && !isAdmin && "opacity-40 grayscale")}>
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2"><p className="font-black text-xs truncate uppercase">{c.nombre_comercial}</p>{c.isReadded && <Badge className="text-[8px] h-3 px-1 bg-orange-50 text-orange-700">RE-ADICIÓN</Badge>}</div>
-                                    <p className="text-[9px] font-mono text-muted-foreground">{c.ruc}</p>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    {isAdmin && <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={(e) => { e.stopPropagation(); handleRemoveClient(c.originalIndex); }}><Trash2 className="h-3.5 w-3.5" /></Button>}
-                                    {c.visitStatus === 'Completado' && <CheckCircle className="h-4 w-4 text-green-500" />}
-                                </div>
-                            </div>
-                        ))}
+            <div className="lg:col-span-1 space-y-6">
+                <div className="space-y-4 px-2">
+                    <div className="flex justify-between items-start">
+                        <div className="space-y-1">
+                            <h2 className="text-2xl font-black text-primary uppercase leading-none truncate max-w-[220px]" title={selectedRoute?.routeName}>
+                                {selectedRoute?.routeName || "Plan de Ruta"}
+                            </h2>
+                            <p className="text-sm font-bold text-muted-foreground capitalize">
+                                {format(new Date(), "EEEE, dd 'De' MMMM", { locale: es })}
+                            </p>
+                        </div>
+                        {isAdmin && (
+                            <Badge variant="secondary" className="bg-slate-100 text-slate-500 border-none font-black text-[10px] px-3 py-1 uppercase tracking-tighter">
+                                VISTA ADMIN
+                            </Badge>
+                        )}
                     </div>
-                </CardContent>
-            </Card>
+
+                    <div className="space-y-2">
+                        <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-tighter">
+                            <span className="text-primary">PROGRESO HOY</span>
+                            <span className="text-slate-600">{routeClients.filter(c => c.visitStatus === 'Completado').length} / {routeClients.length}</span>
+                        </div>
+                        <Progress 
+                            value={(routeClients.filter(c => c.visitStatus === 'Completado').length / (routeClients.length || 1)) * 100} 
+                            className="h-2 bg-slate-100" 
+                        />
+                    </div>
+
+                    <Button 
+                        variant="outline" 
+                        className="w-full h-12 border-dashed border-2 bg-slate-50/50 hover:bg-slate-100 text-muted-foreground font-black text-xs rounded-xl flex items-center justify-center gap-2 transition-all" 
+                        onClick={() => setIsAddClientDialogOpen(true)}
+                    >
+                        <PlusCircle className="h-5 w-5 opacity-50" /> 
+                        Añadir Cliente
+                    </Button>
+                </div>
+
+                <div className="space-y-1 px-2">
+                    {routeClients.map((c, i) => (
+                        <div key={c.originalIndex} onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isAdmin) && setActiveOriginalIndex(c.originalIndex)} className={cn("flex items-center justify-between p-3 border-2 rounded-xl cursor-pointer transition-all", activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-transparent bg-muted/20 hover:bg-muted/30", c.visitStatus === 'Completado' && !isAdmin && "opacity-40 grayscale")}>
+                            <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2"><p className="font-black text-xs truncate uppercase">{c.nombre_comercial}</p>{c.isReadded && <Badge className="text-[8px] h-3 px-1 bg-orange-50 text-orange-700 font-black">RE-ADICIÓN</Badge>}</div>
+                                <p className="text-[9px] font-mono text-muted-foreground">{c.ruc}</p>
+                            </div>
+                            <div className="flex items-center gap-1">
+                                {isAdmin && <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); handleRemoveClient(c.originalIndex); }}><Trash2 className="h-3.5 w-3.5" /></Button>}
+                                {c.visitStatus === 'Completado' && <CheckCircle className="h-4 w-4 text-green-500" />}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
             <div className="lg:col-span-2">
-                <Card className="shadow-2xl border-t-4 border-t-primary min-h-[500px]">
-                    <CardHeader className="bg-muted/10 h-32 flex flex-col justify-center">
+                <Card className="shadow-2xl border-t-4 border-t-primary min-h-[500px] rounded-3xl">
+                    <CardHeader className="bg-muted/10 h-32 flex flex-col justify-center rounded-t-3xl">
                         {activeClient ? (
-                            <div className="space-y-1"><h3 className="text-xl font-black text-primary uppercase">{activeClient.nombre_comercial}</h3><p className="text-[10px] font-bold text-muted-foreground uppercase">{activeClient.direccion}</p></div>
-                        ) : <div className="text-center text-muted-foreground uppercase font-black opacity-30">Selecciona un cliente</div>}
+                            <div className="space-y-1">
+                                <h3 className="text-xl font-black text-primary uppercase leading-tight">{activeClient.nombre_comercial}</h3>
+                                <p className="text-[10px] font-bold text-muted-foreground uppercase">{activeClient.direccion}</p>
+                            </div>
+                        ) : <div className="text-center text-muted-foreground uppercase font-black opacity-30">Selecciona un cliente de la lista</div>}
                     </CardHeader>
                     <CardContent className="p-6 space-y-8">
                         {activeClient && (
                             <>
                             <div className={cn("p-6 rounded-2xl border-2 transition-all", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-muted/20 border-dashed")}>
                                 <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-4"><LogIn className={cn("h-8 w-8", activeClient.checkInTime ? "text-green-600" : "text-muted-foreground")} /><div><h4 className="font-black text-xs uppercase">Entrada</h4><p className="text-[9px] font-bold text-muted-foreground">{activeClient.checkInTime || 'Pendiente'}</p></div></div>
-                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="font-black h-10 px-6">MARCAR ENTRADA</Button>}
+                                    <div className="flex items-center gap-4">
+                                        <LogIn className={cn("h-8 w-8", activeClient.checkInTime ? "text-green-600" : "text-muted-foreground")} />
+                                        <div>
+                                            <h4 className="font-black text-xs uppercase">Registro de Entrada</h4>
+                                            <p className="text-[9px] font-bold text-muted-foreground uppercase">
+                                                {activeClient.checkInTime ? `Marcado a las: ${activeClient.checkInTime}` : 'Pendiente por marcar'}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="font-black h-10 px-6 rounded-xl">MARCAR ENTRADA</Button>}
                                 </div>
                             </div>
                             <div className={cn("space-y-6 transition-opacity", !activeClient.checkInTime && !isAdmin && "opacity-20 pointer-events-none")}>
                                 <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4">
-                                    <Label className={cn("flex flex-col items-center gap-2 border-2 p-4 rounded-xl cursor-pointer", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5" : "border-transparent bg-muted/10")}><RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-6 w-6" /><span className="text-[10px] font-black uppercase">Presencial</span></Label>
-                                    <Label className={cn("flex flex-col items-center gap-2 border-2 p-4 rounded-xl cursor-pointer", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5" : "border-transparent bg-muted/10")}><RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-6 w-6" /><span className="text-[10px] font-black uppercase">Telefónica</span></Label>
+                                    <Label className={cn("flex flex-col items-center gap-2 border-2 p-4 rounded-2xl cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-2 ring-primary/10" : "border-transparent bg-muted/10 hover:bg-muted/20")}>
+                                        <RadioGroupItem value="presencial" className="sr-only" />
+                                        <MapPin className="h-6 w-6" />
+                                        <span className="text-[10px] font-black uppercase">Presencial</span>
+                                    </Label>
+                                    <Label className={cn("flex flex-col items-center gap-2 border-2 p-4 rounded-2xl cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-2 ring-primary/10" : "border-transparent bg-muted/10 hover:bg-muted/20")}>
+                                        <RadioGroupItem value="telefonica" className="sr-only" />
+                                        <Phone className="h-6 w-6" />
+                                        <span className="text-[10px] font-black uppercase">Telefónica</span>
+                                    </Label>
                                 </RadioGroup>
-                                {activeClient.visitType === 'telefonica' && <div className="space-y-2"><Label className="text-[10px] font-black uppercase text-primary">Observación Obligatoria</Label><Textarea placeholder="Detalles de la llamada..." className="h-24 font-bold text-xs" value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} /></div>}
+                                {activeClient.visitType === 'telefonica' && (
+                                    <div className="space-y-2 animate-in fade-in slide-in-from-top-2">
+                                        <Label className="text-[10px] font-black uppercase text-primary">Observación Obligatoria de la Llamada</Label>
+                                        <Textarea 
+                                            placeholder="Detalles de la gestión telefónica..." 
+                                            className="h-24 font-bold text-xs border-2 focus:border-primary" 
+                                            value={activeClient.callObservation || ''} 
+                                            onChange={e => handleFieldChange('callObservation', e.target.value)} 
+                                        />
+                                    </div>
+                                )}
                                 <div className="grid grid-cols-3 gap-4">
                                     {['valorVenta', 'valorCobro', 'devoluciones'].map(f => (
-                                        <div key={f} className="space-y-1"><Label className="text-[9px] font-black uppercase">{f.replace('valor', '')}</Label><Input type="text" className="h-12 text-lg font-black text-primary" placeholder="0.00" value={activeClient[f as keyof ClientInRoute] ?? ''} onChange={e => handleFieldChange(f as any, e.target.value)} /></div>
+                                        <div key={f} className="space-y-1">
+                                            <Label className="text-[9px] font-black uppercase text-slate-500">{f.replace('valor', '')}</Label>
+                                            <Input 
+                                                type="text" 
+                                                className="h-12 text-lg font-black text-primary border-2 focus:border-primary rounded-xl" 
+                                                placeholder="0.00" 
+                                                value={activeClient[f as keyof ClientInRoute] ?? ''} 
+                                                onChange={e => handleFieldChange(f as any, e.target.value)} 
+                                            />
+                                        </div>
                                     ))}
                                 </div>
-                                <Button onClick={handleConfirmCheckOut} className="w-full h-16 text-lg font-black rounded-2xl shadow-xl" disabled={isSaving || (activeClient.visitStatus === 'Completado' && !isAdmin) || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim())}>
-                                    {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : <LogOut className="mr-2 h-6 w-6" />} {activeClient.visitStatus === 'Completado' ? 'ACTUALIZAR GESTIÓN' : 'FINALIZAR VISITA'}
+                                <Button 
+                                    onClick={handleConfirmCheckOut} 
+                                    className="w-full h-16 text-lg font-black rounded-2xl shadow-xl transition-all" 
+                                    disabled={isSaving || (activeClient.visitStatus === 'Completado' && !isAdmin) || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim())}
+                                >
+                                    {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : <LogOut className="mr-2 h-6 w-6" />} 
+                                    {activeClient.visitStatus === 'Completado' ? 'ACTUALIZAR GESTIÓN' : 'FINALIZAR VISITA'}
                                 </Button>
                             </div>
                             </>
@@ -250,24 +323,24 @@ function RouteManagementContent() {
     )}
     <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
         <DialogContent className="sm:max-w-md rounded-3xl">
-            <DialogHeader><DialogTitle className="text-xl font-black uppercase">Añadir Clientes</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle className="text-xl font-black uppercase">Añadir Clientes a la Ruta</DialogTitle></DialogHeader>
             <div className="space-y-4 py-4">
                 <Input placeholder="Buscar por RUC o Nombre..." value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)} className="h-10 font-bold" />
                 <ScrollArea className="h-64 border rounded-xl p-2">
-                    {availableClients.filter(c => c.nombre_cliente.toLowerCase().includes(addClientSearchTerm.toLowerCase())).map(c => (
-                        <div key={c.ruc} onClick={() => setMultiSelectedClients(prev => prev.some(s => s.ruc === c.ruc) ? prev.filter(s => s.ruc !== c.ruc) : [...prev, c])} className={cn("p-3 rounded-lg flex items-center gap-3 cursor-pointer mb-1", multiSelectedClients.some(s => s.ruc === c.ruc) ? "bg-primary/10 border-primary" : "hover:bg-muted")}>
+                    {availableClients.filter(c => c.nombre_cliente.toLowerCase().includes(addClientSearchTerm.toLowerCase()) || c.ruc.includes(addClientSearchTerm)).map(c => (
+                        <div key={c.ruc} onClick={() => setMultiSelectedClients(prev => prev.some(s => s.ruc === c.ruc) ? prev.filter(s => s.ruc !== c.ruc) : [...prev, c])} className={cn("p-3 rounded-lg flex items-center gap-3 cursor-pointer mb-1 transition-colors", multiSelectedClients.some(s => s.ruc === c.ruc) ? "bg-primary/10 border-primary" : "hover:bg-muted")}>
                             <Checkbox checked={multiSelectedClients.some(s => s.ruc === c.ruc)} />
                             <div className="min-w-0 flex-1"><p className="text-xs font-black uppercase truncate">{c.nombre_comercial}</p><p className="text-[9px] font-mono text-muted-foreground">{c.ruc}</p></div>
                         </div>
                     ))}
                 </ScrollArea>
-                <div className="space-y-1"><Label className="text-[10px] font-black uppercase">Motivo de Re-adición</Label><Textarea className="h-20 text-xs font-bold" value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} /></div>
+                <div className="space-y-1"><Label className="text-[10px] font-black uppercase">Motivo de Re-adición</Label><Textarea className="h-20 text-xs font-bold border-2" value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} /></div>
             </div>
-            <DialogFooter><Button onClick={handleAddClients} disabled={multiSelectedClients.length === 0 || isSaving} className="w-full font-black">AÑADIR SELECCIONADOS</Button></DialogFooter>
+            <DialogFooter><Button onClick={handleAddClients} disabled={multiSelectedClients.length === 0 || isSaving} className="w-full font-black h-12 rounded-xl">AÑADIR SELECCIONADOS</Button></DialogFooter>
         </DialogContent>
     </Dialog>
     </>
   );
 }
 
-export default function RouteManagementPage() { return <Suspense fallback={<div className="p-20 text-center">Cargando...</div>}><RouteManagementContent /></Suspense>; }
+export default function RouteManagementPage() { return <Suspense fallback={<div className="p-20 text-center">Cargando panel de gestión...</div>}><RouteManagementContent /></Suspense>; }
