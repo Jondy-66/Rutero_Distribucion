@@ -115,7 +115,6 @@ function RouteManagementContent() {
     [routeClients, activeOriginalIndex]
   );
 
-  // Variable de control para bloqueo de edición
   const isManaged = activeClient?.visitStatus === 'Completado';
   const isEditingDisabled = isManaged && !isAdmin;
 
@@ -291,90 +290,93 @@ function RouteManagementContent() {
         </div>
     ) : (
         <div className="grid lg:grid-cols-3 gap-8">
-            {/* PANEL LATERAL: LISTADO DE CLIENTES */}
-            <div className="lg:col-span-1 space-y-6">
-                <div className="space-y-4 px-2">
-                    <div className="flex justify-between items-start">
-                        <div className="space-y-1">
-                            <h2 className="text-2xl font-black text-primary uppercase leading-tight tracking-tighter truncate max-w-[240px]" title={selectedRoute?.routeName}>
-                                {selectedRoute?.routeName || "Plan de Ruta"}
-                            </h2>
-                            <p className="text-sm font-bold text-muted-foreground capitalize">
-                                {format(new Date(), "EEEE, dd 'De' MMMM", { locale: es })}
-                            </p>
-                        </div>
-                        {isAdmin && (
-                            <Badge variant="secondary" className="bg-slate-100 text-slate-500 border-none font-black text-[10px] px-3 py-1 uppercase tracking-tighter shrink-0">
-                                VISTA ADMIN
-                            </Badge>
-                        )}
-                    </div>
-
-                    <div className="space-y-2 pt-2">
-                        <div className="flex justify-between items-center text-[11px] font-black uppercase tracking-tighter mb-1">
-                            <span className="text-primary">PROGRESO HOY</span>
-                            <span className="text-slate-600">
-                                {routeClients.filter(c => c.visitStatus === 'Completado').length} / {routeClients.length}
-                            </span>
-                        </div>
-                        <Progress 
-                            value={(routeClients.filter(c => c.visitStatus === 'Completado').length / (routeClients.length || 1)) * 100} 
-                            className="h-2.5 bg-slate-100 [&>div]:bg-primary" 
-                        />
-                    </div>
-
-                    <Button 
-                        variant="outline" 
-                        className="w-full h-14 border-dashed border-2 border-slate-200 bg-slate-50/30 hover:bg-slate-100 text-slate-500 font-black text-sm rounded-2xl flex items-center justify-center gap-2 transition-all mt-4" 
-                        onClick={() => setIsAddClientDialogOpen(true)}
-                    >
-                        <CirclePlus className="h-5 w-5 opacity-60" /> 
-                        Añadir Cliente
-                    </Button>
-                </div>
-
-                <div className="space-y-3 px-2 overflow-y-auto max-h-[60vh] pr-1">
-                    {routeClients.map((c, i) => (
-                        <div 
-                            key={`${c.ruc}-${c.originalIndex}`} 
-                            onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isAdmin) && setActiveOriginalIndex(c.originalIndex)} 
-                            className={cn(
-                                "flex items-center gap-4 p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200", 
-                                activeOriginalIndex === c.originalIndex 
-                                    ? "border-primary bg-primary/5 shadow-md scale-[1.02]" 
-                                    : "border-slate-100 bg-white hover:border-slate-200", 
-                                c.visitStatus === 'Completado' && !isAdmin && "opacity-50 grayscale-[0.5]"
+            {/* PANEL LATERAL: LISTADO DE CLIENTES ENCUADRADO */}
+            <div className="lg:col-span-1">
+                <Card className="shadow-2xl border-t-4 border-t-primary min-h-[550px] rounded-[2.5rem] overflow-hidden flex flex-col h-full bg-white">
+                    <CardHeader className="bg-muted/10 px-8 py-6 space-y-1">
+                        <div className="flex justify-between items-start">
+                            <div className="space-y-1">
+                                <h2 className="text-2xl font-black text-primary uppercase leading-tight tracking-tighter truncate max-w-[200px]" title={selectedRoute?.routeName}>
+                                    {selectedRoute?.routeName || "Plan de Ruta"}
+                                </h2>
+                                <p className="text-sm font-bold text-muted-foreground capitalize">
+                                    {format(new Date(), "EEEE, dd 'De' MMMM", { locale: es })}
+                                </p>
+                            </div>
+                            {isAdmin && (
+                                <Badge variant="secondary" className="bg-slate-100 text-slate-500 border-none font-black text-[10px] px-3 py-1 uppercase tracking-tighter shrink-0">
+                                    VISTA ADMIN
+                                </Badge>
                             )}
-                        >
-                            <span className="text-slate-200 font-black text-xs w-4 shrink-0">{i + 1}</span>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                    <p className={cn(
-                                        "font-black text-xs truncate uppercase tracking-tight",
-                                        activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-500"
-                                    )}>
-                                        {c.nombre_comercial}
-                                    </p>
-                                    {c.isReadded && <Badge className="text-[8px] h-3.5 px-1.5 bg-orange-100 text-orange-700 font-black border-none uppercase">RE-ADICIÓN</Badge>}
-                                </div>
-                                <p className="text-[10px] font-mono text-slate-300 mt-0.5">{c.ruc}</p>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                {isAdmin && (
-                                    <Button 
-                                        variant="ghost" 
-                                        size="icon" 
-                                        className="h-8 w-8 text-destructive hover:bg-destructive/10" 
-                                        onClick={(e) => { e.stopPropagation(); handleRemoveClient(c.originalIndex); }}
-                                    >
-                                        <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                )}
-                                {c.visitStatus === 'Completado' && <CheckCircle className={cn("h-5 w-5", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-200")} />}
-                            </div>
                         </div>
-                    ))}
-                </div>
+                    </CardHeader>
+                    <CardContent className="p-8 flex flex-col gap-6 flex-1 min-h-0">
+                        <div className="space-y-2">
+                            <div className="flex justify-between items-center text-[11px] font-black uppercase tracking-tighter mb-1">
+                                <span className="text-primary">PROGRESO HOY</span>
+                                <span className="text-slate-600">
+                                    {routeClients.filter(c => c.visitStatus === 'Completado').length} / {routeClients.length}
+                                </span>
+                            </div>
+                            <Progress 
+                                value={(routeClients.filter(c => c.visitStatus === 'Completado').length / (routeClients.length || 1)) * 100} 
+                                className="h-2.5 bg-slate-100 [&>div]:bg-primary" 
+                            />
+                        </div>
+
+                        <Button 
+                            variant="outline" 
+                            className="w-full h-14 border-dashed border-2 border-slate-200 bg-slate-50/30 hover:bg-slate-100 text-slate-500 font-black text-sm rounded-2xl flex items-center justify-center gap-2 transition-all" 
+                            onClick={() => setIsAddClientDialogOpen(true)}
+                        >
+                            <CirclePlus className="h-5 w-5 opacity-60" /> 
+                            Añadir Cliente
+                        </Button>
+
+                        <div className="space-y-3 overflow-y-auto flex-1 pr-1">
+                            {routeClients.map((c, i) => (
+                                <div 
+                                    key={`${c.ruc}-${c.originalIndex}`} 
+                                    onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isAdmin) && setActiveOriginalIndex(c.originalIndex)} 
+                                    className={cn(
+                                        "flex items-center gap-4 p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200", 
+                                        activeOriginalIndex === c.originalIndex 
+                                            ? "border-primary bg-primary/5 shadow-md scale-[1.02]" 
+                                            : "border-slate-100 bg-white hover:border-slate-200", 
+                                        c.visitStatus === 'Completado' && !isAdmin && "opacity-50 grayscale-[0.5]"
+                                    )}
+                                >
+                                    <span className="text-slate-200 font-black text-xs w-4 shrink-0">{i + 1}</span>
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2">
+                                            <p className={cn(
+                                                "font-black text-xs truncate uppercase tracking-tight",
+                                                activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-500"
+                                            )}>
+                                                {c.nombre_comercial}
+                                            </p>
+                                            {c.isReadded && <Badge className="text-[8px] h-3.5 px-1.5 bg-orange-100 text-orange-700 font-black border-none uppercase">RE-ADICIÓN</Badge>}
+                                        </div>
+                                        <p className="text-[10px] font-mono text-slate-300 mt-0.5">{c.ruc}</p>
+                                    </div>
+                                    <div className="flex items-center gap-1">
+                                        {isAdmin && (
+                                            <Button 
+                                                variant="ghost" 
+                                                size="icon" 
+                                                className="h-8 w-8 text-destructive hover:bg-destructive/10" 
+                                                onClick={(e) => { e.stopPropagation(); handleRemoveClient(c.originalIndex); }}
+                                            >
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                        {c.visitStatus === 'Completado' && <CheckCircle className={cn("h-5 w-5", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-200")} />}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
 
             {/* PANEL DE DETALLE Y GESTIÓN */}
@@ -508,7 +510,7 @@ function RouteManagementContent() {
         </div>
     )}
 
-    {/* DIALOGO PARA AÑADIR CLIENTES - OPTIMIZADO PARA PANTALLA */}
+    {/* DIALOGO PARA AÑADIR CLIENTES */}
     <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
         <DialogContent className="w-[95vw] sm:max-w-xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl flex flex-col max-h-[90vh]">
             <DialogHeader className="bg-primary/5 p-8 pb-6 shrink-0 relative">
@@ -564,12 +566,6 @@ function RouteManagementContent() {
                             </div>
                         ))
                     }
-                    {availableClients.length === 0 && (
-                        <div className="py-20 text-center space-y-2">
-                            <Users className="h-12 w-12 mx-auto text-slate-200" />
-                            <p className="text-sm font-bold text-slate-400 uppercase">No se encontraron clientes en tu panel</p>
-                        </div>
-                    )}
                 </div>
             </ScrollArea>
 
