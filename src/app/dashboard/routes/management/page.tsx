@@ -104,7 +104,7 @@ function RouteManagementContent() {
             return isToday(cDate);
         })
         .map(c => {
-            const details = availableClients.find(ac => String(ac.ruc).trim() === String(c.ruc).trim());
+            const details = availableClients.find(ac => String(ac.ruc || '').trim() === String(c.ruc || '').trim());
             return { ...c, id: details?.id || c.ruc, direccion: details?.direccion || 'N/A' };
         });
   }, [currentRouteClientsFull, availableClients]);
@@ -292,7 +292,7 @@ function RouteManagementContent() {
         </div>
     ) : (
         <div className="grid lg:grid-cols-3 gap-8">
-            {/* PANEL LATERAL: LISTADO DE CLIENTES (RESTORED UI) */}
+            {/* PANEL LATERAL: LISTADO DE CLIENTES */}
             <div className="lg:col-span-1 space-y-6">
                 <div className="space-y-4 px-2">
                     <div className="flex justify-between items-start">
@@ -337,7 +337,7 @@ function RouteManagementContent() {
                 <div className="space-y-3 px-2 overflow-y-auto max-h-[60vh] pr-1">
                     {routeClients.map((c, i) => (
                         <div 
-                            key={c.originalIndex} // FIX: Use unique originalIndex to avoid React key errors with duplicates
+                            key={c.originalIndex} 
                             onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isAdmin) && setActiveOriginalIndex(c.originalIndex)} 
                             className={cn(
                                 "flex items-center gap-4 p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200", 
@@ -524,7 +524,7 @@ function RouteManagementContent() {
                 <ScrollArea className="h-72 pr-2">
                     <div className="space-y-2">
                         {availableClients
-                            .filter(c => c.nombre_cliente.toLowerCase().includes(addClientSearchTerm.toLowerCase()) || c.ruc.includes(addClientSearchTerm))
+                            .filter(c => String(c.nombre_cliente || '').toLowerCase().includes(addClientSearchTerm.toLowerCase()) || String(c.ruc || '').includes(addClientSearchTerm))
                             .map(c => (
                                 <div 
                                     key={c.id} 
