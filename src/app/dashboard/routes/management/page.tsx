@@ -115,8 +115,12 @@ function RouteManagementContent() {
     [routeClients, activeOriginalIndex]
   );
 
+  // Variable de control para bloqueo de edición
+  const isManaged = activeClient?.visitStatus === 'Completado';
+  const isEditingDisabled = isManaged && !isAdmin;
+
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
-    if (activeOriginalIndex === null || (activeClient?.visitStatus === 'Completado' && !isAdmin) || isSaving) return;
+    if (activeOriginalIndex === null || isEditingDisabled || isSaving) return;
     
     lastLocalUpdate.current = Date.now();
     const nextClients = currentRouteClientsFull.map((c, idx) => 
@@ -131,7 +135,7 @@ function RouteManagementContent() {
   };
 
   const handleCheckIn = async () => {
-    if (!selectedRoute || activeOriginalIndex === null || isSaving) return;
+    if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled) return;
     setIsSaving(true);
     lastLocalUpdate.current = Date.now();
 
@@ -162,7 +166,7 @@ function RouteManagementContent() {
   };
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || activeOriginalIndex === null || isSaving) return;
+    if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled) return;
     
     if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
         return toast({ title: "Observación requerida", description: "Escribe el resumen de la llamada.", variant: "destructive" });
@@ -421,10 +425,11 @@ function RouteManagementContent() {
                             )}>
                                 <div className="space-y-4">
                                     <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Tipo de Visita</Label>
-                                    <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-6">
+                                    <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-6" disabled={isEditingDisabled}>
                                         <Label className={cn(
                                             "flex flex-col items-center gap-3 border-2 p-6 rounded-[2rem] cursor-pointer transition-all duration-200", 
-                                            activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "border-slate-100 bg-slate-50/50 hover:bg-slate-100"
+                                            activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "border-slate-100 bg-slate-50/50 hover:bg-slate-100",
+                                            isEditingDisabled && "cursor-not-allowed opacity-70"
                                         )}>
                                             <RadioGroupItem value="presencial" className="sr-only" />
                                             <MapPin className={cn("h-8 w-8", activeClient.visitType === 'presencial' ? "text-primary" : "text-slate-400")} />
@@ -432,7 +437,8 @@ function RouteManagementContent() {
                                         </Label>
                                         <Label className={cn(
                                             "flex flex-col items-center gap-3 border-2 p-6 rounded-[2rem] cursor-pointer transition-all duration-200", 
-                                            activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "border-slate-100 bg-slate-50/50 hover:bg-slate-100"
+                                            activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "border-slate-100 bg-slate-50/50 hover:bg-slate-100",
+                                            isEditingDisabled && "cursor-not-allowed opacity-70"
                                         )}>
                                             <RadioGroupItem value="telefonica" className="sr-only" />
                                             <Phone className={cn("h-8 w-8", activeClient.visitType === 'telefonica' ? "text-primary" : "text-slate-400")} />
@@ -449,6 +455,7 @@ function RouteManagementContent() {
                                             className="h-32 font-bold text-sm border-2 focus:border-primary rounded-2xl px-4 py-3" 
                                             value={activeClient.callObservation || ''} 
                                             onChange={e => handleFieldChange('callObservation', e.target.value)} 
+                                            disabled={isEditingDisabled}
                                         />
                                     </div>
                                 )}
@@ -467,6 +474,7 @@ function RouteManagementContent() {
                                                 placeholder="0.00" 
                                                 value={activeClient[f.key as keyof ClientInRoute] ?? ''} 
                                                 onChange={e => handleFieldChange(f.key as any, e.target.value)} 
+                                                disabled={isEditingDisabled}
                                             />
                                         </div>
                                     ))}
@@ -477,7 +485,7 @@ function RouteManagementContent() {
                                     className="w-full h-20 text-xl font-black rounded-[2rem] shadow-2xl transition-all hover:scale-[1.02] active:scale-100 mt-4" 
                                     disabled={
                                         isSaving || 
-                                        (activeClient.visitStatus === 'Completado' && !isAdmin) || 
+                                        isEditingDisabled || 
                                         !activeClient.visitType || 
                                         (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim())
                                     }
@@ -487,7 +495,7 @@ function RouteManagementContent() {
                                     ) : (
                                         <>
                                             <LogOut className="mr-3 h-7 w-7" /> 
-                                            {activeClient.visitStatus === 'Completado' ? 'ACTUALIZAR GESTIÓN' : 'FINALIZAR VISITA'}
+                                            {activeClient.visitStatus === 'Completado' ? 'VISITA COMPLETADA' : 'FINALIZAR VISITA'}
                                         </>
                                     )}
                                 </Button>
