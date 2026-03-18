@@ -33,7 +33,7 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
         const cleaned: any = { ...c };
         if (c.date instanceof Date) cleaned.date = Timestamp.fromDate(c.date);
         
-        // Robust number parsing
+        // Robust number parsing for decimals
         const parseValue = (v: any) => {
             if (v === undefined || v === null || v === '') return 0;
             const normalized = String(v).replace(',', '.');
@@ -337,7 +337,7 @@ function RouteManagementContent() {
                 <div className="space-y-3 px-2 overflow-y-auto max-h-[60vh] pr-1">
                     {routeClients.map((c, i) => (
                         <div 
-                            key={c.originalIndex} 
+                            key={c.originalIndex} // FIX: Use unique originalIndex to avoid React key errors with duplicates
                             onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isAdmin) && setActiveOriginalIndex(c.originalIndex)} 
                             className={cn(
                                 "flex items-center gap-4 p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200", 
@@ -527,7 +527,7 @@ function RouteManagementContent() {
                             .filter(c => c.nombre_cliente.toLowerCase().includes(addClientSearchTerm.toLowerCase()) || c.ruc.includes(addClientSearchTerm))
                             .map(c => (
                                 <div 
-                                    key={c.ruc} 
+                                    key={c.id} 
                                     onClick={() => setMultiSelectedClients(prev => 
                                         prev.some(s => s.ruc === c.ruc) ? prev.filter(s => s.ruc !== c.ruc) : [...prev, c]
                                     )} 
