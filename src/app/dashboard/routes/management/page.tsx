@@ -309,8 +309,8 @@ function RouteManagementContent() {
     ) : (
         <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1">
-                <Card className="shadow-2xl border-t-4 border-t-primary min-h-[550px] rounded-[2.5rem] overflow-hidden flex flex-col h-full bg-white">
-                    <CardHeader className="bg-muted/10 px-8 py-6 space-y-1">
+                <Card className="shadow-2xl border-t-4 border-t-primary h-[80vh] min-h-[550px] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
+                    <CardHeader className="bg-muted/10 px-8 py-6 space-y-1 shrink-0">
                         <div className="flex justify-between items-start">
                             <div className="space-y-1">
                                 <h2 className="text-2xl font-black text-primary uppercase leading-tight tracking-tighter truncate max-w-[200px]" title={selectedRoute?.routeName}>
@@ -327,8 +327,8 @@ function RouteManagementContent() {
                             )}
                         </div>
                     </CardHeader>
-                    <CardContent className="p-8 flex flex-col gap-6 flex-1 min-h-0">
-                        <div className="space-y-2">
+                    <CardContent className="p-8 flex flex-col gap-6 flex-1 min-h-0 overflow-hidden">
+                        <div className="space-y-2 shrink-0">
                             <div className="flex justify-between items-center text-[11px] font-black uppercase tracking-tighter mb-1">
                                 <span className="text-primary">PROGRESO HOY</span>
                                 <span className="text-slate-600">
@@ -343,61 +343,63 @@ function RouteManagementContent() {
 
                         <Button 
                             variant="outline" 
-                            className="w-full h-14 border-dashed border-2 border-slate-200 bg-slate-50/30 hover:bg-slate-100 text-slate-500 font-black text-sm rounded-2xl flex items-center justify-center gap-2 transition-all" 
+                            className="w-full h-14 border-dashed border-2 border-slate-200 bg-slate-50/30 hover:bg-slate-100 text-slate-500 font-black text-sm rounded-2xl flex items-center justify-center gap-2 transition-all shrink-0" 
                             onClick={() => setIsAddClientDialogOpen(true)}
                         >
                             <CirclePlus className="h-5 w-5 opacity-60" /> 
                             Añadir Cliente
                         </Button>
 
-                        <div className="space-y-3 overflow-y-auto flex-1 pr-1">
-                            {routeClients.map((c, i) => (
-                                <div 
-                                    key={`${c.ruc}-${c.originalIndex}`} 
-                                    onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isAdmin) && setActiveOriginalIndex(c.originalIndex)} 
-                                    className={cn(
-                                        "flex items-center gap-4 p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200", 
-                                        activeOriginalIndex === c.originalIndex 
-                                            ? "border-primary bg-primary/5 shadow-md scale-[1.02]" 
-                                            : "border-slate-100 bg-white hover:border-slate-200"
-                                    )}
-                                >
-                                    <span className="text-slate-300 font-black text-xs w-4 shrink-0">{i + 1}</span>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center gap-2">
-                                            <p className={cn(
-                                                "font-black text-xs truncate uppercase tracking-tight",
-                                                activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-900"
-                                            )}>
-                                                {c.nombre_comercial}
-                                            </p>
-                                            {c.isReadded && <Badge className="text-[8px] h-3.5 px-1.5 bg-orange-100 text-orange-700 font-black border-none uppercase">RE-ADICIÓN</Badge>}
-                                        </div>
-                                        <p className="text-[10px] font-mono text-slate-600 mt-0.5">{c.ruc}</p>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        {isAdmin && (
-                                            <Button 
-                                                variant="ghost" 
-                                                size="icon" 
-                                                className="h-8 w-8 text-destructive hover:bg-destructive/10" 
-                                                onClick={(e) => { e.stopPropagation(); handleRemoveClient(c.originalIndex); }}
-                                            >
-                                                <Trash2 className="h-4 w-4" />
-                                            </Button>
+                        <ScrollArea className="flex-1 pr-1">
+                            <div className="space-y-3 pb-4">
+                                {routeClients.map((c, i) => (
+                                    <div 
+                                        key={`${c.ruc}-${c.originalIndex}`} 
+                                        onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isAdmin) && setActiveOriginalIndex(c.originalIndex)} 
+                                        className={cn(
+                                            "flex items-center gap-4 p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200", 
+                                            activeOriginalIndex === c.originalIndex 
+                                                ? "border-primary bg-primary/5 shadow-md scale-[1.02]" 
+                                                : "border-slate-100 bg-white hover:border-slate-200"
                                         )}
-                                        {c.visitStatus === 'Completado' && <CheckCircle className={cn("h-5 w-5", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-green-500")} />}
+                                    >
+                                        <span className="text-slate-300 font-black text-xs w-4 shrink-0">{i + 1}</span>
+                                        <div className="flex-1 min-w-0">
+                                            <div className="flex items-center gap-2">
+                                                <p className={cn(
+                                                    "font-black text-xs truncate uppercase tracking-tight",
+                                                    activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-900"
+                                                )}>
+                                                    {c.nombre_comercial}
+                                                </p>
+                                                {c.isReadded && <Badge className="text-[8px] h-3.5 px-1.5 bg-orange-100 text-orange-700 font-black border-none uppercase">RE-ADICIÓN</Badge>}
+                                            </div>
+                                            <p className="text-[10px] font-mono text-slate-600 mt-0.5">{c.ruc}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            {isAdmin && (
+                                                <Button 
+                                                    variant="ghost" 
+                                                    size="icon" 
+                                                    className="h-8 w-8 text-destructive hover:bg-destructive/10" 
+                                                    onClick={(e) => { e.stopPropagation(); handleRemoveClient(c.originalIndex); }}
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            )}
+                                            {c.visitStatus === 'Completado' && <CheckCircle className={cn("h-5 w-5", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-green-500")} />}
+                                        </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        </ScrollArea>
                     </CardContent>
                 </Card>
             </div>
 
             <div className="lg:col-span-2">
-                <Card className="shadow-2xl border-t-4 border-t-primary min-h-[550px] rounded-[2.5rem] overflow-hidden">
-                    <CardHeader className="bg-muted/10 h-36 flex flex-col justify-center px-10">
+                <Card className="shadow-2xl border-t-4 border-t-primary min-h-[550px] h-[80vh] rounded-[2.5rem] overflow-hidden flex flex-col">
+                    <CardHeader className="bg-muted/10 h-36 flex flex-col justify-center px-10 shrink-0">
                         {activeClient ? (
                             <div className="space-y-1">
                                 <h3 className="text-2xl font-black text-primary uppercase leading-tight tracking-tight">{activeClient.nombre_comercial}</h3>
@@ -409,7 +411,7 @@ function RouteManagementContent() {
                             </div>
                         )}
                     </CardHeader>
-                    <CardContent className="p-10 space-y-10">
+                    <CardContent className="p-10 space-y-10 flex-1 overflow-y-auto">
                         {activeClient && (
                             <>
                             <div className={cn(
@@ -497,7 +499,7 @@ function RouteManagementContent() {
 
                                 <Button 
                                     onClick={handleConfirmCheckOut} 
-                                    className="w-full h-20 text-xl font-black rounded-[2rem] shadow-2xl transition-all hover:scale-[1.02] active:scale-100 mt-4" 
+                                    className="w-full h-20 text-xl font-black rounded-[2rem] shadow-2xl transition-all hover:scale-[1.02] active:scale-100 mt-4 shrink-0" 
                                     disabled={
                                         isSaving || 
                                         isEditingDisabled || 
@@ -523,8 +525,15 @@ function RouteManagementContent() {
         </div>
     )}
 
-    <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl flex flex-col max-h-[90vh]">
+    <Dialog open={isAddClientDialogOpen} onOpenChange={(open) => {
+        setIsAddClientDialogOpen(open);
+        if(!open) {
+            setMultiSelectedClients([]);
+            setReAdditionObservation('');
+            setAddClientSearchTerm('');
+        }
+    }}>
+        <DialogContent className="w-[95vw] sm:max-w-2xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl flex flex-col h-[85vh] max-h-[85vh]">
             <DialogHeader className="bg-primary/5 p-8 pb-6 shrink-0 relative">
                 <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-primary pr-8">Catálogo de Clientes</DialogTitle>
                 <DialogDescription className="text-[10px] font-bold uppercase text-slate-400 mt-1">Selecciona clientes para re-añadir a tu ruta de hoy</DialogDescription>
@@ -533,24 +542,24 @@ function RouteManagementContent() {
                 </DialogClose>
             </DialogHeader>
             
-            <div className="px-8 py-4 space-y-4 shrink-0 border-b">
+            <div className="px-8 py-4 space-y-4 shrink-0 border-b bg-white">
                 <div className="relative">
                     <Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-400" />
                     <Input 
                         placeholder="Buscar por RUC o Nombre del Cliente..." 
                         value={addClientSearchTerm} 
                         onChange={e => setAddClientSearchTerm(e.target.value)} 
-                        className="h-12 pl-12 font-bold rounded-2xl border-2 border-slate-300 focus:border-primary transition-all" 
+                        className="h-12 pl-12 font-bold rounded-2xl border-2 border-slate-300 focus:border-primary transition-all bg-white" 
                     />
                 </div>
             </div>
 
             <ScrollArea className="flex-1 px-8 py-4 bg-slate-50/30">
-                <div className="space-y-3 pb-4">
+                <div className="grid grid-cols-1 gap-3 pb-6">
                     {availableClients
                         .filter(c => {
                             const search = addClientSearchTerm.toLowerCase();
-                            const rucStr = String(c.ruc || '');
+                            const rucStr = String(c.ruc || '').toLowerCase();
                             return String(c.nombre_cliente || '').toLowerCase().includes(search) || 
                                    String(c.nombre_comercial || '').toLowerCase().includes(search) || 
                                    rucStr.includes(search);
@@ -582,16 +591,18 @@ function RouteManagementContent() {
                 </div>
             </ScrollArea>
 
-            <div className="p-8 pt-6 border-t space-y-6 shrink-0 bg-white">
-                <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider ml-1">Observación de Re-adición (Obligatoria)</Label>
-                    <Textarea 
-                        className="h-20 text-xs font-bold border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary transition-all resize-none" 
-                        placeholder="Indica el motivo de esta nueva visita..."
-                        value={reAdditionObservation} 
-                        onChange={e => setReAdditionObservation(e.target.value)} 
-                    />
-                </div>
+            <div className="p-8 pt-6 border-t space-y-6 shrink-0 bg-white shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
+                {multiSelectedClients.length > 0 && (
+                    <div className="space-y-2 animate-in slide-in-from-bottom-2 duration-300">
+                        <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider ml-1">Observación de Re-adición (Obligatoria)</Label>
+                        <Textarea 
+                            className="h-20 text-xs font-bold border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary transition-all resize-none bg-slate-50/50" 
+                            placeholder="Indica el motivo de esta nueva visita..."
+                            value={reAdditionObservation} 
+                            onChange={e => setReAdditionObservation(e.target.value)} 
+                        />
+                    </div>
+                )}
                 <div className="flex items-center gap-4">
                     <DialogClose asChild>
                         <Button variant="ghost" className="h-14 font-bold flex-1 text-slate-400 hover:text-slate-600">CANCELAR</Button>
