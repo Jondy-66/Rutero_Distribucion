@@ -180,6 +180,7 @@ const mapRouteDoc = (doc: any): RoutePlan => {
             devoluciones: parseFloat(String(c.devoluciones || 0)) || 0,
             promociones: parseFloat(String(c.promociones || 0)) || 0,
             medicacionFrecuente: parseFloat(String(c.medicacionFrecuente || 0)) || 0,
+            visitObservation: c.visitObservation || '',
         }))
     } as RoutePlan;
 };

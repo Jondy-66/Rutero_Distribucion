@@ -249,23 +249,32 @@ function RouteManagementContent() {
   };
 
   const handleAddClients = async () => {
-    if (!selectedRoute || multiSelectedClients.length === 0 || !reAdditionObservation.trim() || isExpired) {
+    if (!selectedRoute || multiSelectedClients.length === 0 || isExpired) {
         if(isExpired) toast({ title: "Acceso denegado", description: "La jornada ha expirado.", variant: "destructive" });
-        else toast({ title: "Atención", description: "Debes ingresar el motivo de la re-adición.", variant: "destructive" });
         return;
     }
+
+    // Validar observación de re-adición si aplica
+    if (needsReadditionObservation && !reAdditionObservation.trim()) {
+        toast({ title: "Atención", description: "Debes ingresar el motivo de la re-adición para los clientes existentes en el plan.", variant: "destructive" });
+        return;
+    }
+
     setIsSaving(true);
 
     try {
-        const newVisits: ClientInRoute[] = multiSelectedClients.map(c => ({
-            ruc: c.ruc,
-            nombre_comercial: c.nombre_comercial,
-            date: new Date(),
-            visitStatus: 'Pendiente',
-            status: 'Activo',
-            isReadded: true,
-            reAdditionObservation
-        }));
+        const newVisits: ClientInRoute[] = multiSelectedClients.map(c => {
+            const isAlreadyInPlan = currentRouteClientsFull.some(cc => cc.ruc === c.ruc && cc.status !== 'Eliminado');
+            return {
+                ruc: c.ruc,
+                nombre_comercial: c.nombre_comercial,
+                date: new Date(),
+                visitStatus: 'Pendiente',
+                status: 'Activo',
+                isReadded: true,
+                reAdditionObservation: isAlreadyInPlan ? reAdditionObservation : ''
+            };
+        });
 
         const nextClients = [...currentRouteClientsFull, ...newVisits];
         await updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) });
@@ -282,6 +291,13 @@ function RouteManagementContent() {
         setIsSaving(false);
     }
   };
+
+  // Determinar si algún cliente seleccionado requiere observación de re-adición
+  const needsReadditionObservation = useMemo(() => {
+    return multiSelectedClients.some(sc => 
+        currentRouteClientsFull.some(cc => cc.ruc === sc.ruc && cc.status !== 'Eliminado')
+    );
+  }, [multiSelectedClients, currentRouteClientsFull]);
 
   if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin mx-auto h-12 w-12" /></div>;
 
@@ -396,13 +412,13 @@ function RouteManagementContent() {
                                             <div className="flex items-center gap-2">
                                                 <p className={cn(
                                                     "font-black text-xs truncate uppercase tracking-tight",
-                                                    activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-900"
+                                                    activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-950"
                                                 )}>
                                                     {c.nombre_comercial}
                                                 </p>
                                                 {c.isReadded && <Badge className="text-[8px] h-3.5 px-1.5 bg-orange-100 text-orange-700 font-black border-none uppercase">RE-ADICIÓN</Badge>}
                                             </div>
-                                            <p className="text-[10px] font-mono text-slate-600 mt-0.5">{c.ruc}</p>
+                                            <p className="text-[10px] font-mono text-slate-700 mt-0.5">{c.ruc}</p>
                                         </div>
                                         <div className="flex items-center gap-1">
                                             {isAdmin && (
@@ -525,6 +541,19 @@ function RouteManagementContent() {
                                     ))}
                                 </div>
 
+                                {(activeClient.visitType === 'presencial' || isAdmin) && (
+                                    <div className="space-y-3 animate-in slide-in-from-top-4 duration-300">
+                                        <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Observaciones de la Visita</Label>
+                                        <Textarea 
+                                            placeholder="Ingresa aquí algún comentario del cliente o motivo por el que no se pudo gestionar..." 
+                                            className="h-32 font-bold text-sm border-2 focus:border-primary rounded-2xl px-4 py-3" 
+                                            value={activeClient.visitObservation || ''} 
+                                            onChange={e => handleFieldChange('visitObservation', e.target.value)} 
+                                            disabled={isEditingDisabled}
+                                        />
+                                    </div>
+                                )}
+
                                 <Button 
                                     onClick={handleConfirmCheckOut} 
                                     className="w-full h-20 text-xl font-black rounded-[2rem] shadow-2xl transition-all hover:scale-[1.02] active:scale-100 mt-4 shrink-0" 
@@ -564,20 +593,20 @@ function RouteManagementContent() {
         <DialogContent className="w-[95vw] sm:max-w-2xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl flex flex-col h-[85vh] max-h-[85vh]">
             <DialogHeader className="bg-primary/5 p-8 pb-6 shrink-0 relative">
                 <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-primary pr-8">Catálogo de Clientes</DialogTitle>
-                <DialogDescription className="text-[10px] font-bold uppercase text-slate-400 mt-1">Selecciona clientes para re-añadir a tu ruta de hoy</DialogDescription>
-                <DialogClose className="absolute right-6 top-8 opacity-70 hover:opacity-100">
-                    <X className="h-6 w-6" />
+                <DialogDescription className="text-[10px] font-bold uppercase text-slate-500 mt-1">Selecciona clientes para re-añadir a tu ruta de hoy</DialogDescription>
+                <DialogClose className="absolute right-6 top-8">
+                    <X className="h-6 w-6 text-slate-900 hover:text-primary transition-colors" />
                 </DialogClose>
             </DialogHeader>
             
             <div className="px-8 py-4 space-y-4 shrink-0 border-b bg-white">
                 <div className="relative">
-                    <Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-400" />
+                    <Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-500" />
                     <Input 
                         placeholder="Buscar por RUC o Nombre del Cliente..." 
                         value={addClientSearchTerm} 
                         onChange={e => setAddClientSearchTerm(e.target.value)} 
-                        className="h-12 pl-12 font-bold rounded-2xl border-2 border-slate-300 focus:border-primary transition-all bg-white text-slate-900" 
+                        className="h-12 pl-12 font-bold rounded-2xl border-2 border-slate-300 focus:border-primary transition-all bg-white text-slate-950" 
                     />
                 </div>
             </div>
@@ -608,10 +637,10 @@ function RouteManagementContent() {
                             >
                                 <Checkbox checked={multiSelectedClients.some(s => s.ruc === c.ruc)} className="rounded-md h-5 w-5 border-2 border-primary" />
                                 <div className="min-w-0 flex-1">
-                                    <p className="text-sm font-black uppercase truncate text-slate-900 leading-tight">{c.nombre_comercial || c.nombre_cliente}</p>
+                                    <p className="text-sm font-black uppercase truncate text-slate-950 leading-tight">{c.nombre_comercial || c.nombre_cliente}</p>
                                     <div className="flex items-center gap-3 mt-1">
-                                        <p className="text-[10px] font-mono text-slate-600">{c.ruc}</p>
-                                        <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-white border-slate-200 text-slate-500 font-bold uppercase">{c.ejecutivo}</Badge>
+                                        <p className="text-[10px] font-mono text-slate-800">{c.ruc}</p>
+                                        <Badge variant="outline" className="text-[8px] h-3.5 px-1 bg-white border-slate-300 text-slate-700 font-bold uppercase">{c.ejecutivo}</Badge>
                                     </div>
                                 </div>
                             </div>
@@ -621,11 +650,11 @@ function RouteManagementContent() {
             </ScrollArea>
 
             <div className="p-8 pt-6 border-t space-y-6 shrink-0 bg-white shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
-                {multiSelectedClients.length > 0 && (
+                {needsReadditionObservation && (
                     <div className="space-y-2 animate-in slide-in-from-bottom-2 duration-300">
-                        <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider ml-1">Observación de Re-adición (Obligatoria)</Label>
+                        <Label className="text-[10px] font-black uppercase text-slate-600 tracking-wider ml-1">Observación de Re-adición (Obligatoria para clientes en plan)</Label>
                         <Textarea 
-                            className="h-20 text-xs font-bold border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary transition-all resize-none bg-slate-50/50" 
+                            className="h-20 text-xs font-bold border-2 border-slate-200 rounded-2xl px-4 py-3 focus:border-primary transition-all resize-none bg-slate-50/50 text-slate-950" 
                             placeholder="Indica el motivo de esta nueva visita..."
                             value={reAdditionObservation} 
                             onChange={e => setReAdditionObservation(e.target.value)} 
@@ -634,11 +663,11 @@ function RouteManagementContent() {
                 )}
                 <div className="flex items-center gap-4">
                     <DialogClose asChild>
-                        <Button variant="ghost" className="h-14 font-bold flex-1 text-slate-400 hover:text-slate-600">CANCELAR</Button>
+                        <Button variant="ghost" className="h-14 font-bold flex-1 text-slate-600 hover:text-slate-900">CANCELAR</Button>
                     </DialogClose>
                     <Button 
                         onClick={handleAddClients} 
-                        disabled={multiSelectedClients.length === 0 || isSaving || !reAdditionObservation.trim()} 
+                        disabled={multiSelectedClients.length === 0 || isSaving || (needsReadditionObservation && !reAdditionObservation.trim())} 
                         className="h-14 font-black flex-[2] rounded-2xl text-lg shadow-xl transition-transform hover:scale-[1.02] active:scale-95"
                     >
                         {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : `AÑADIR ${multiSelectedClients.length} CLIENTES`}
