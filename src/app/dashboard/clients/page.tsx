@@ -16,7 +16,7 @@ import { deleteClient } from '@/lib/firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 import type { Client } from '@/lib/types';
-import { PlusCircle, UploadCloud, Search, MoreHorizontal, Download, Users } from 'lucide-react';
+import { PlusCircle, UploadCloud, Search, MoreHorizontal, Download, Users, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
@@ -64,6 +64,7 @@ export default function ClientsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const [isUploadFinished, setIsUploadFinished] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -123,6 +124,7 @@ export default function ClientsPage() {
     }
 
     setIsUploading(true);
+    setIsUploadFinished(false);
     setUploadProgress(0);
 
     try {
@@ -162,23 +164,30 @@ export default function ClientsPage() {
 
         operationCount++;
 
-        // Firestore permite hasta 500 operaciones por batch
         if (operationCount === 450 || i === total - 1) {
             await currentBatch.commit();
             currentBatch = writeBatch(db);
             operationCount = 0;
-            // Pequeña pausa para permitir que React actualice la UI del progreso
             await new Promise(resolve => setTimeout(resolve, 50));
         }
 
         setUploadProgress(Math.round(((i + 1) / total) * 100));
       }
 
+      setUploadProgress(100);
+      setIsUploadFinished(true);
+      
       toast({
-        title: 'Carga exitosa',
-        description: `${addedCount} clientes añadidos y ${updatedCount} actualizados.`,
+        title: '¡Importación Finalizada!',
+        description: `${addedCount} clientes añadidos y ${updatedCount} actualizados con éxito.`,
       });
-      await refetchData('clients');
+
+      // Esperar 1.2 segundos para que el usuario vea el 100% y el mensaje de éxito antes de cerrar
+      setTimeout(async () => {
+        await refetchData('clients');
+        document.getElementById('close-dialog-clients')?.click();
+      }, 1200);
+
     } catch (error: any) {
       console.error("Batch import error:", error);
       toast({
@@ -188,9 +197,6 @@ export default function ClientsPage() {
       });
     } finally {
       setIsUploading(false);
-      setUploadProgress(0);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      document.getElementById('close-dialog-clients')?.click();
     }
   }
 
@@ -238,10 +244,11 @@ export default function ClientsPage() {
       })
       .filter(client => {
         const search = searchTerm.toLowerCase();
+        const rucStr = String(client.ruc || '');
         return (
-          String(client.nombre_cliente).toLowerCase().includes(search) ||
-          String(client.nombre_comercial).toLowerCase().includes(search) ||
-          String(client.ruc).toLowerCase().includes(search)
+          String(client.nombre_cliente || '').toLowerCase().includes(search) ||
+          String(client.nombre_comercial || '').toLowerCase().includes(search) ||
+          rucStr.includes(search)
         );
       });
   }, [clients, filter, searchTerm, user, selectedEjecutivo]);
@@ -270,7 +277,12 @@ export default function ClientsPage() {
         <div className="flex gap-2">
             <Link href="/dashboard/clients/new"><Button><PlusCircle className="mr-2 h-4 w-4" /> Añadir</Button></Link>
             {canImport && (
-                <Dialog onOpenChange={(open) => !open && setUploadProgress(0)}>
+                <Dialog onOpenChange={(open) => {
+                    if(!open) {
+                        setUploadProgress(0);
+                        setIsUploadFinished(false);
+                    }
+                }}>
                     <DialogTrigger asChild><Button variant="outline"><UploadCloud className="mr-2 h-4 w-4" /> Importar</Button></DialogTrigger>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
@@ -282,17 +294,25 @@ export default function ClientsPage() {
                         </div>
                         <div className="space-y-3 pb-4">
                             <div className="flex justify-between items-center text-[10px] font-black uppercase">
-                                <span className={cn(isUploading ? "text-primary animate-pulse" : "text-muted-foreground")}>
-                                    {isUploading ? `Procesando registros...` : 'Esperando archivo...'}
+                                <span className={cn(
+                                    isUploading ? "text-primary animate-pulse" : 
+                                    isUploadFinished ? "text-green-600 flex items-center gap-1" : "text-muted-foreground"
+                                )}>
+                                    {isUploading ? `Procesando registros...` : 
+                                     isUploadFinished ? <><CheckCircle2 className="h-3 w-3" /> Carga completada con éxito</> : 
+                                     'Esperando archivo...'}
                                 </span>
-                                {isUploading && (
-                                    <span className="text-primary font-black text-xs bg-primary/10 px-2 py-0.5 rounded-full">
+                                {(isUploading || isUploadFinished) && (
+                                    <span className={cn(
+                                        "font-black text-xs px-2 py-0.5 rounded-full",
+                                        isUploadFinished ? "bg-green-100 text-green-700" : "bg-primary/10 text-primary"
+                                    )}>
                                         {uploadProgress}%
                                     </span>
                                 )}
                             </div>
-                            {isUploading && (
-                                <Progress value={uploadProgress} className="h-2 bg-slate-100" />
+                            {(isUploading || isUploadFinished) && (
+                                <Progress value={uploadProgress} className={cn("h-2 bg-slate-100", isUploadFinished && "[&>div]:bg-green-500")} />
                             )}
                         </div>
                         <DialogFooter>

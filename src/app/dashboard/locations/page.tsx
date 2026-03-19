@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/table';
 import { updateClientLocations } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
-import { UploadCloud, Edit } from 'lucide-react';
+import { UploadCloud, Edit, CheckCircle2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -40,6 +40,7 @@ export default function LocationsPage() {
   const { clients, loading, refetchData } = useAuth();
   const [filters, setFilters] = useState({ provincia: '', canton: '', direccion: '' });
   const [isUploading, setIsUploading] = useState(false);
+  const [isUploadFinished, setIsUploadFinished] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -87,6 +88,7 @@ export default function LocationsPage() {
     if (!file) return;
 
     setIsUploading(true);
+    setIsUploadFinished(false);
     setUploadProgress(0);
 
     Papa.parse<LocationData>(file, {
@@ -137,21 +139,27 @@ export default function LocationsPage() {
                 longitud: item.Longitud,
             }));
 
-          // Procesar en bloques para mostrar progreso
           const chunkSize = 50;
           for (let i = 0; i < locationsToUpdate.length; i += chunkSize) {
               const chunk = locationsToUpdate.slice(i, i + chunkSize);
               await updateClientLocations(chunk);
               setUploadProgress(Math.round(((i + chunk.length) / locationsToUpdate.length) * 100));
-              // Pausa breve para que el navegador renderice el progreso
               await new Promise(r => setTimeout(r, 50));
           }
 
+          setUploadProgress(100);
+          setIsUploadFinished(true);
+
           toast({
-            title: 'Carga exitosa',
-            description: `${validData.length} ubicaciones de clientes han sido actualizadas.`,
+            title: '¡Ubicaciones Actualizadas!',
+            description: `${validData.length} coordenadas de clientes han sido guardadas.`,
           });
-          await refetchData('clients'); 
+
+          setTimeout(async () => {
+            await refetchData('clients'); 
+            document.getElementById('close-dialog')?.click();
+          }, 1200);
+
         } catch (error: any) {
           console.error("Failed to update client locations:", error);
           toast({
@@ -161,11 +169,6 @@ export default function LocationsPage() {
           });
         } finally {
           setIsUploading(false);
-          setUploadProgress(0);
-          if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-          }
-          document.getElementById('close-dialog')?.click();
         }
       },
       error: (error) => {
@@ -183,7 +186,12 @@ export default function LocationsPage() {
   return (
     <>
       <PageHeader title="Ubicaciones" description="Gestiona y visualiza las ubicaciones de tus clientes.">
-        <Dialog onOpenChange={(open) => !open && setUploadProgress(0)}>
+        <Dialog onOpenChange={(open) => {
+            if(!open) {
+                setUploadProgress(0);
+                setIsUploadFinished(false);
+            }
+        }}>
           <DialogTrigger asChild>
             <Button>
               <UploadCloud className="mr-2 h-4 w-4" />
@@ -209,17 +217,25 @@ export default function LocationsPage() {
             
             <div className="space-y-3 pb-4">
                 <div className="flex justify-between items-center text-[10px] font-black uppercase">
-                    <span className={cn(isUploading ? "text-primary animate-pulse" : "text-muted-foreground")}>
-                        {isUploading ? `Procesando ubicaciones...` : 'Listo para subir'}
+                    <span className={cn(
+                        isUploading ? "text-primary animate-pulse" : 
+                        isUploadFinished ? "text-green-600 flex items-center gap-1" : "text-muted-foreground"
+                    )}>
+                        {isUploading ? `Procesando ubicaciones...` : 
+                         isUploadFinished ? <><CheckCircle2 className="h-3 w-3" /> Actualización completada</> : 
+                         'Listo para subir'}
                     </span>
-                    {isUploading && (
-                        <span className="text-primary font-black text-xs bg-primary/10 px-2 py-0.5 rounded-full">
+                    {(isUploading || isUploadFinished) && (
+                        <span className={cn(
+                            "font-black text-xs px-2 py-0.5 rounded-full",
+                            isUploadFinished ? "bg-green-100 text-green-700" : "bg-primary/10 text-primary"
+                        )}>
                             {uploadProgress}%
                         </span>
                     )}
                 </div>
-                {isUploading && (
-                    <Progress value={uploadProgress} className="h-2 bg-slate-100" />
+                {(isUploading || isUploadFinished) && (
+                    <Progress value={uploadProgress} className={cn("h-2 bg-slate-100", isUploadFinished && "[&>div]:bg-green-500")} />
                 )}
             </div>
 
