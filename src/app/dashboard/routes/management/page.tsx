@@ -11,7 +11,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, isToday, isBefore, startOfDay, addDays } from 'date-fns';
+import { format, isBefore, startOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -92,12 +92,16 @@ function RouteManagementContent() {
   }, [isAdmin]);
 
   const selectableRoutes = useMemo(() => {
+    const today = new Date();
     return allRoutes.filter(r => {
         if (r.createdBy !== user?.id && !isAdmin) return false;
         if (isAdmin && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
-        return (r.status !== 'Completada' || isToday(rDate)) && !isBefore(addDays(startOfDay(rDate), 7), startOfDay(new Date()));
+        const diffInDays = Math.abs(startOfDay(rDate).getTime() - startOfDay(today).getTime()) / (1000 * 60 * 60 * 24);
+        
+        // Rutas no completadas o de hoy (máximo 7 días de antigüedad para histórico reciente)
+        return (r.status !== 'Completada' || diffInDays < 7);
     });
   }, [allRoutes, user, isAdmin, selectedAgentId]);
 
@@ -113,12 +117,19 @@ function RouteManagementContent() {
   }, [selectedRoute, isAdmin]);
 
   const routeClients = useMemo(() => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    
     return currentRouteClientsFull
         .map((c, index) => ({ ...c, originalIndex: index }))
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            const cDate = c.date instanceof Timestamp ? c.date.toDate() : new Date(c.date as any);
-            return isToday(cDate);
+            
+            // Comparación estricta por fecha YYYY-MM-DD para evitar solapamiento de gestiones de otros días
+            const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date ? new Date(c.date) : null);
+            if (!cDate) return false;
+            
+            const visitDateStr = format(cDate, 'yyyy-MM-dd');
+            return visitDateStr === todayStr;
         })
         .map(c => {
             const details = availableClients.find(ac => String(ac.ruc || '').trim() === String(c.ruc || '').trim());
@@ -132,8 +143,8 @@ function RouteManagementContent() {
   );
 
   const activeClient = useMemo(() => 
-    activeOriginalIndex !== null ? routeClients.find(c => c.originalIndex === activeOriginalIndex) : null, 
-    [routeClients, activeOriginalIndex]
+    activeOriginalIndex !== null ? currentRouteClientsFull[activeOriginalIndex] : null, 
+    [currentRouteClientsFull, activeOriginalIndex]
   );
 
   const isManaged = activeClient?.visitStatus === 'Completado';
@@ -143,9 +154,8 @@ function RouteManagementContent() {
     if (activeOriginalIndex === null || isEditingDisabled || isSaving) return;
     
     lastLocalUpdate.current = Date.now();
-    const nextClients = currentRouteClientsFull.map((c, idx) => 
-        idx === activeOriginalIndex ? { ...c, [field]: value } : c
-    );
+    const nextClients = [...currentRouteClientsFull];
+    nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], [field]: value };
     
     setCurrentRouteClientsFull(nextClients);
     
@@ -176,11 +186,12 @@ function RouteManagementContent() {
     try {
         const location = await getGeoLocation();
 
-        const nextClients = currentRouteClientsFull.map((c, idx) => 
-            idx === activeOriginalIndex 
-                ? { ...c, checkInTime: format(new Date(), 'HH:mm:ss'), checkInLocation: location } 
-                : c
-        );
+        const nextClients = [...currentRouteClientsFull];
+        nextClients[activeOriginalIndex] = { 
+            ...nextClients[activeOriginalIndex], 
+            checkInTime: format(new Date(), 'HH:mm:ss'), 
+            checkInLocation: location 
+        };
 
         await updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) });
         setCurrentRouteClientsFull(nextClients);
@@ -195,7 +206,8 @@ function RouteManagementContent() {
   const handleConfirmCheckOut = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled || isExpired) return;
     
-    if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
+    const clientToFinish = currentRouteClientsFull[activeOriginalIndex];
+    if (clientToFinish?.visitType === 'telefonica' && !clientToFinish.callObservation?.trim()) {
         return toast({ title: "Observación requerida", description: "Escribe el resumen de la llamada.", variant: "destructive" });
     }
 
@@ -205,11 +217,13 @@ function RouteManagementContent() {
     try {
         const location = await getGeoLocation();
 
-        const nextClients = currentRouteClientsFull.map((c, idx) => 
-            idx === activeOriginalIndex 
-                ? { ...c, checkOutTime: format(new Date(), 'HH:mm:ss'), checkOutLocation: location, visitStatus: 'Completado' } 
-                : c
-        );
+        const nextClients = [...currentRouteClientsFull];
+        nextClients[activeOriginalIndex] = { 
+            ...nextClients[activeOriginalIndex], 
+            checkOutTime: format(new Date(), 'HH:mm:ss'), 
+            checkOutLocation: location, 
+            visitStatus: 'Completado' 
+        };
 
         const allDone = nextClients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
         
