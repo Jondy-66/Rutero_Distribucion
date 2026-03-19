@@ -12,7 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { addClientsBatch, deleteClient, updateClient } from '@/lib/firebase/firestore';
+import { addClient, deleteClient, updateClient } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
 import { PlusCircle, UploadCloud, File, Search, MoreHorizontal, Download, Users } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -46,6 +46,7 @@ import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/use-auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Progress } from '@/components/ui/progress';
 
 type ClientCsvData = {
     [key: string]: string;
@@ -61,6 +62,7 @@ export default function ClientsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
@@ -107,7 +109,7 @@ export default function ClientsPage() {
         return newRow;
     });
 
-    const validData = normalizedData.filter(row => row.ruc && row.nombrecliente);
+    const validData = normalizedData.filter(row => row.ruc && (row.nombrecliente || row.nombre_cliente));
 
     const invalidRows = normalizedData.length - validData.length;
     if(invalidRows > 0) {
@@ -127,6 +129,9 @@ export default function ClientsPage() {
         return;
     }
 
+    setIsUploading(true);
+    setUploadProgress(0);
+
     try {
       const rucsInDb = new Map(clients.map(c => [c.ruc, c.id]));
       let addedCount = 0;
@@ -134,7 +139,7 @@ export default function ClientsPage() {
 
       const clientsToProcess = validData.map(item => ({
           ejecutivo: item.ejecutivo || '',
-          ruc: item.ruc,
+          ruc: String(item.ruc).trim(),
           nombre_cliente: item.nombrecliente || item.nombre_cliente || '',
           nombre_comercial: item.nombrecomercial || item.nombre_comercial || '',
           provincia: item.provincia || '',
@@ -144,25 +149,19 @@ export default function ClientsPage() {
           longitud: parseFloat(String(item.longitudtrz || item.longitud || '0').replace(',', '.')) || 0,
       }));
       
-      const clientsToAdd: any[] = [];
-      const clientsToUpdate: { id: string, data: any }[] = [];
+      const total = clientsToProcess.length;
 
-      for (const clientData of clientsToProcess) {
+      for (let i = 0; i < total; i++) {
+        const clientData = clientsToProcess[i];
         if(rucsInDb.has(clientData.ruc)) {
             const clientId = rucsInDb.get(clientData.ruc)!;
-            clientsToUpdate.push({ id: clientId, data: clientData });
+            await updateClient(clientId, clientData);
             updatedCount++;
         } else {
-            clientsToAdd.push(clientData);
+            await addClient({...clientData, status: 'active'});
             addedCount++;
         }
-      }
-
-      if (clientsToAdd.length > 0) {
-        await addClientsBatch(clientsToAdd);
-      }
-      for (const client of clientsToUpdate) {
-        await updateClient(client.id, client.data);
+        setUploadProgress(Math.round(((i + 1) / total) * 100));
       }
 
       toast({
@@ -188,6 +187,7 @@ export default function ClientsPage() {
       }
     } finally {
       setIsUploading(false);
+      setUploadProgress(0);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -198,8 +198,6 @@ export default function ClientsPage() {
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-
-    setIsUploading(true);
 
     if (file.name.endsWith('.csv')) {
         Papa.parse<ClientCsvData>(file, {
@@ -215,7 +213,6 @@ export default function ClientsPage() {
             description: 'No se pudo procesar el archivo CSV.',
             variant: 'destructive',
             });
-            setIsUploading(false);
         }
         });
     } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
@@ -236,18 +233,15 @@ export default function ClientsPage() {
                     description: 'No se pudo procesar el archivo Excel.',
                     variant: 'destructive',
                 });
-                setIsUploading(false);
             }
         };
         reader.onerror = (error) => {
             console.error('Error reading file:', error);
             toast({ title: 'Error', description: 'No se pudo leer el archivo.', variant: 'destructive' });
-            setIsUploading(false);
         };
         reader.readAsBinaryString(file);
     } else {
         toast({ title: 'Formato no soportado', description: 'Por favor, sube un archivo CSV o Excel.', variant: 'destructive' });
-        setIsUploading(false);
     }
   };
 
@@ -320,7 +314,6 @@ export default function ClientsPage() {
   
   const canSeeEjecutivoFilter = user?.role === 'Administrador' || user?.role === 'Supervisor';
   
-  // Lógica de permisos granulares
   const canImport = user?.role === 'Administrador' || user?.permissions?.includes('import-clients');
   const canDelete = user?.role === 'Administrador' || user?.permissions?.includes('delete-clients');
 
@@ -335,7 +328,7 @@ export default function ClientsPage() {
             </Button>
             </Link>
             {canImport && (
-                <Dialog>
+                <Dialog onOpenChange={(open) => !open && setUploadProgress(0)}>
                     <DialogTrigger asChild>
                         <Button variant="outline">
                             <UploadCloud className="mr-2 h-4 w-4" />
@@ -358,8 +351,14 @@ export default function ClientsPage() {
                             disabled={isUploading}
                         />
                         </div>
-                        <DialogFooter className="sm:justify-between">
-                            <span className="text-sm text-muted-foreground">{isUploading ? 'Procesando archivo...' : 'Selecciona un archivo para empezar.'}</span>
+                        <DialogFooter className="sm:justify-between flex-col sm:flex-row items-center gap-4">
+                            <div className="flex flex-col w-full gap-2">
+                                <div className="flex justify-between items-center text-xs text-muted-foreground font-bold uppercase tracking-tight">
+                                    <span>{isUploading ? `Procesando datos...` : 'Selecciona un archivo para empezar.'}</span>
+                                    {isUploading && <span className="text-primary text-sm">{uploadProgress}%</span>}
+                                </div>
+                                {isUploading && <Progress value={uploadProgress} className="h-2" />}
+                            </div>
                             <DialogClose asChild>
                                 <Button type="button" variant="secondary" id="close-dialog-clients">
                                     Cerrar
