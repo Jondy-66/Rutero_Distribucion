@@ -558,6 +558,10 @@ function RouteManagementContent() {
                 <div className="grid grid-cols-1 gap-3 pb-6">
                     {availableClients
                         .filter(c => {
+                            // Filtro estricto: solo clientes asignados al usuario conectado
+                            // El administrador puede ver todos para gestión centralizada
+                            if (user?.role !== 'Administrador' && c.ejecutivo !== user?.name) return false;
+
                             const search = addClientSearchTerm.toLowerCase();
                             const rucStr = String(c.ruc || '').toLowerCase();
                             return String(c.nombre_cliente || '').toLowerCase().includes(search) || 
