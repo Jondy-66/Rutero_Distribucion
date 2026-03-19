@@ -234,7 +234,10 @@ function RouteManagementContent() {
   };
 
   const handleAddClients = async () => {
-    if (!selectedRoute || multiSelectedClients.length === 0) return;
+    if (!selectedRoute || multiSelectedClients.length === 0 || !reAdditionObservation.trim()) {
+        toast({ title: "Atención", description: "Debes ingresar el motivo de la re-adición.", variant: "destructive" });
+        return;
+    }
     setIsSaving(true);
 
     try {
@@ -537,7 +540,7 @@ function RouteManagementContent() {
                         placeholder="Buscar por RUC o Nombre del Cliente..." 
                         value={addClientSearchTerm} 
                         onChange={e => setAddClientSearchTerm(e.target.value)} 
-                        className="h-12 pl-12 font-bold rounded-2xl border-2 border-slate-100 focus:border-primary transition-all" 
+                        className="h-12 pl-12 font-bold rounded-2xl border-2 border-slate-300 focus:border-primary transition-all" 
                     />
                 </div>
             </div>
@@ -581,7 +584,7 @@ function RouteManagementContent() {
 
             <div className="p-8 pt-6 border-t space-y-6 shrink-0 bg-white">
                 <div className="space-y-2">
-                    <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider ml-1">Observación de Re-adición (Opcional)</Label>
+                    <Label className="text-[10px] font-black uppercase text-slate-500 tracking-wider ml-1">Observación de Re-adición (Obligatoria)</Label>
                     <Textarea 
                         className="h-20 text-xs font-bold border-2 border-slate-100 rounded-2xl px-4 py-3 focus:border-primary transition-all resize-none" 
                         placeholder="Indica el motivo de esta nueva visita..."
@@ -595,7 +598,7 @@ function RouteManagementContent() {
                     </DialogClose>
                     <Button 
                         onClick={handleAddClients} 
-                        disabled={multiSelectedClients.length === 0 || isSaving} 
+                        disabled={multiSelectedClients.length === 0 || isSaving || !reAdditionObservation.trim()} 
                         className="h-14 font-black flex-[2] rounded-2xl text-lg shadow-xl transition-transform hover:scale-[1.02] active:scale-95"
                     >
                         {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : `AÑADIR ${multiSelectedClients.length} CLIENTES`}
