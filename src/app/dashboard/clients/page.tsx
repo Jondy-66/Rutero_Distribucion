@@ -123,10 +123,6 @@ export default function ClientsPage() {
         return;
     }
 
-    setIsUploading(true);
-    setIsUploadFinished(false);
-    setUploadProgress(0);
-
     try {
       const rucsInDb = new Map(clients.map(c => [String(c.ruc).trim(), c.id]));
       let addedCount = 0;
@@ -182,7 +178,6 @@ export default function ClientsPage() {
         description: `${addedCount} clientes añadidos y ${updatedCount} actualizados con éxito.`,
       });
 
-      // Esperar 1.2 segundos para que el usuario vea el 100% y el mensaje de éxito antes de cerrar
       setTimeout(async () => {
         await refetchData('clients');
         document.getElementById('close-dialog-clients')?.click();
@@ -195,7 +190,6 @@ export default function ClientsPage() {
         description: 'Ocurrió un fallo al procesar los datos en lote.',
         variant: 'destructive',
       });
-    } finally {
       setIsUploading(false);
     }
   }
@@ -204,20 +198,40 @@ export default function ClientsPage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    // Feedback inmediato al usuario
+    setIsUploading(true);
+    setIsUploadFinished(false);
+    setUploadProgress(0);
+
     if (file.name.endsWith('.csv')) {
         Papa.parse<ClientCsvData>(file, {
         header: true,
         skipEmptyLines: true,
         complete: (results) => processImportedData(results.data, results.meta.fields),
-        error: () => toast({ title: 'Error', description: 'No se pudo procesar el CSV.', variant: 'destructive' })
+        error: () => {
+            toast({ title: 'Error', description: 'No se pudo procesar el CSV.', variant: 'destructive' });
+            setIsUploading(false);
+        }
         });
     } else {
         const reader = new FileReader();
         reader.onload = (e) => {
-            const data = e.target?.result;
-            const workbook = XLSX.read(data, { type: 'binary' });
-            const json: ClientCsvData[] = XLSX.utils.sheet_to_json(XLSX.utils.book_get_sheet_by_name(workbook, workbook.SheetNames[0]));
-            processImportedData(json, json.length > 0 ? Object.keys(json[0]) : []);
+            try {
+                const data = e.target?.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const sheetName = workbook.SheetNames[0];
+                const sheet = workbook.Sheets[sheetName];
+                const json: ClientCsvData[] = XLSX.utils.sheet_to_json(sheet);
+                processImportedData(json, json.length > 0 ? Object.keys(json[0]) : []);
+            } catch (err) {
+                console.error("Excel processing error:", err);
+                toast({ title: 'Error', description: 'No se pudo procesar el archivo Excel.', variant: 'destructive' });
+                setIsUploading(false);
+            }
+        };
+        reader.onerror = () => {
+            toast({ title: 'Error', description: 'Error al leer el archivo.', variant: 'destructive' });
+            setIsUploading(false);
         };
         reader.readAsBinaryString(file);
     }

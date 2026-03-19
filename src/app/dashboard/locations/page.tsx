@@ -167,7 +167,6 @@ export default function LocationsPage() {
             description: 'Ocurrió un error al actualizar las ubicaciones.',
             variant: 'destructive',
           });
-        } finally {
           setIsUploading(false);
         }
       },
