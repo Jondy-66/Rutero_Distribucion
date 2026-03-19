@@ -14,6 +14,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import { ArrowLeft, LoaderCircle, UserCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -64,10 +65,9 @@ export default function NewClientPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
-    setFormData(prev => ({ ...prev, id: value })); // Note: id should be the same as the field name
+    setFormData(prev => ({ ...prev, [id]: value }));
   };
 
-  // Helper manual para inputs de texto ya que handleInputChange tiene un typo en el original
   const updateField = (id: string, value: string) => {
     setFormData(prev => ({ ...prev, [id]: value }));
   };
@@ -177,42 +177,42 @@ export default function NewClientPage() {
 
             <div className="space-y-2">
               <Label htmlFor="ruc" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">RUC / Identificación</Label>
-              <Input id="ruc" placeholder="Ej: 1792233445001" value={formData.ruc} onChange={e => updateField('ruc', e.target.value)} required disabled={isLoading} className="h-11 font-mono" />
+              <Input id="ruc" placeholder="Ej: 1792233445001" value={formData.ruc} onChange={handleInputChange} required disabled={isLoading} className="h-11 font-mono" />
             </div>
 
              <div className="space-y-2 md:col-span-2">
               <Label htmlFor="nombre_cliente" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Nombre o Razón Social</Label>
-              <Input id="nombre_cliente" placeholder="Ej: Supermercados La Favorita" value={formData.nombre_cliente} onChange={e => updateField('nombre_cliente', e.target.value)} required disabled={isLoading} className="h-11 font-black uppercase" />
+              <Input id="nombre_cliente" placeholder="Ej: Supermercados La Favorita" value={formData.nombre_cliente} onChange={handleInputChange} required disabled={isLoading} className="h-11 font-black uppercase" />
             </div>
 
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="nombre_comercial" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Nombre Comercial</Label>
-              <Input id="nombre_comercial" placeholder="Ej: Supermaxi" value={formData.nombre_comercial} onChange={e => updateField('nombre_comercial', e.target.value)} disabled={isLoading} className="h-11 font-bold uppercase" />
+              <Input id="nombre_comercial" placeholder="Ej: Supermaxi" value={formData.nombre_comercial} onChange={handleInputChange} disabled={isLoading} className="h-11 font-bold uppercase" />
             </div>
 
              <div className="space-y-2">
               <Label htmlFor="provincia" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Provincia</Label>
-              <Input id="provincia" placeholder="Ej: Pichincha" value={formData.provincia} onChange={e => updateField('provincia', e.target.value)} disabled={isLoading} className="h-11 font-medium" />
+              <Input id="provincia" placeholder="Ej: Pichincha" value={formData.provincia} onChange={handleInputChange} disabled={isLoading} className="h-11 font-medium" />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="canton" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Cantón</Label>
-              <Input id="canton" placeholder="Ej: Quito" value={formData.canton} onChange={e => updateField('canton', e.target.value)} disabled={isLoading} className="h-11 font-medium" />
+              <Input id="canton" placeholder="Ej: Quito" value={formData.canton} onChange={handleInputChange} disabled={isLoading} className="h-11 font-medium" />
             </div>
 
             <div className="space-y-2 md:col-span-2">
               <Label htmlFor="direccion" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Dirección Exacta</Label>
-              <Input id="direccion" placeholder="Ej: Av. de los Shyris y Naciones Unidas" value={formData.direccion} onChange={e => updateField('direccion', e.target.value)} disabled={isLoading} className="h-11" />
+              <Input id="direccion" placeholder="Ej: Av. de los Shyris y Naciones Unidas" value={formData.direccion} onChange={handleInputChange} disabled={isLoading} className="h-11" />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="latitud" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Latitud (GPS)</Label>
-              <Input id="latitud" type="number" step="any" placeholder="Ej: -0.1762" value={formData.latitud} onChange={e => updateField('latitud', e.target.value)} disabled={isLoading} className="h-11 font-mono" />
+              <Input id="latitud" type="number" step="any" placeholder="Ej: -0.1762" value={formData.latitud} onChange={handleInputChange} disabled={isLoading} className="h-11 font-mono" />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="longitud" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Longitud (GPS)</Label>
-              <Input id="longitud" type="number" step="any" placeholder="Ej: -78.4847" value={formData.longitud} onChange={e => updateField('longitud', e.target.value)} disabled={isLoading} className="h-11 font-mono" />
+              <Input id="longitud" type="number" step="any" placeholder="Ej: -78.4847" value={formData.longitud} onChange={handleInputChange} disabled={isLoading} className="h-11 font-mono" />
             </div>
           </CardContent>
           <CardFooter className="bg-muted/30 border-t p-6">

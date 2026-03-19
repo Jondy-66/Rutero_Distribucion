@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -11,7 +10,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, isBefore, startOfDay, addDays } from 'date-fns';
+import { format, isBefore, startOfDay, addDays, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -111,25 +110,26 @@ function RouteManagementContent() {
   );
 
   useEffect(() => {
-    if (!selectedRoute || (Date.now() - lastLocalUpdate.current < 10000)) return;
+    if (!selectedRoute) return;
+    // Si la ruta cambia, forzamos la actualización de los clientes y limpiamos el activo
     setCurrentRouteClientsFull(selectedRoute.clients || []);
     setIsRouteStarted(selectedRoute.status === 'En Progreso' || isAdmin);
+    setActiveOriginalIndex(null); 
   }, [selectedRoute, isAdmin]);
 
   const routeClients = useMemo(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const today = new Date();
     
     return currentRouteClientsFull
         .map((c, index) => ({ ...c, originalIndex: index }))
         .filter(c => {
             if (c.status === 'Eliminado') return false;
             
-            // Comparación estricta por fecha YYYY-MM-DD para evitar solapamiento de gestiones de otros días
+            // Comparación estricta por día absoluto para garantizar independencia entre jornadas
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date ? new Date(c.date) : null);
             if (!cDate) return false;
             
-            const visitDateStr = format(cDate, 'yyyy-MM-dd');
-            return visitDateStr === todayStr;
+            return isSameDay(startOfDay(cDate), startOfDay(today));
         })
         .map(c => {
             const details = availableClients.find(ac => String(ac.ruc || '').trim() === String(c.ruc || '').trim());
@@ -268,7 +268,7 @@ function RouteManagementContent() {
         return;
     }
 
-    // Validar observación de re-adición si aplica
+    // Validar observación de re-adición si el cliente ya existe en el plan
     if (needsReadditionObservation && !reAdditionObservation.trim()) {
         toast({ title: "Atención", description: "Debes ingresar el motivo de la re-adición para los clientes existentes en el plan.", variant: "destructive" });
         return;
@@ -480,7 +480,7 @@ function RouteManagementContent() {
                                     <div className="flex items-center gap-6">
                                         <LogIn className={cn("h-10 w-10", activeClient.checkInTime ? "text-green-600" : "text-muted-foreground")} />
                                         <div>
-                                            <h4 className="font-black text-sm uppercase tracking-tighter">Registro de Entrada</h4>
+                                            <h4 className="font-black text-sm uppercase tracking-tighter text-slate-950">Registro de Entrada</h4>
                                             <p className="text-xs font-bold text-muted-foreground uppercase mt-1">
                                                 {activeClient.checkInTime ? `Marcado a las: ${activeClient.checkInTime}` : 'Pendiente por marcar'}
                                             </p>
@@ -496,7 +496,7 @@ function RouteManagementContent() {
 
                             <div className={cn(
                                 "space-y-8 transition-all duration-500", 
-                                !activeClient.checkInTime && !isAdmin && "opacity-20 pointer-events-none grayscale"
+                                !activeClient.checkInTime && !isAdmin && "pointer-events-none"
                             )}>
                                 <div className="space-y-4">
                                     <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Tipo de Visita</Label>
@@ -504,20 +504,20 @@ function RouteManagementContent() {
                                         <Label className={cn(
                                             "flex flex-col items-center gap-3 border-2 p-6 rounded-[2rem] cursor-pointer transition-all duration-200", 
                                             activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "border-slate-100 bg-slate-50/50 hover:bg-slate-100",
-                                            isEditingDisabled && "cursor-not-allowed opacity-70"
+                                            isEditingDisabled && "cursor-not-allowed"
                                         )}>
                                             <RadioGroupItem value="presencial" className="sr-only" />
                                             <MapPin className={cn("h-8 w-8", activeClient.visitType === 'presencial' ? "text-primary" : "text-slate-400")} />
-                                            <span className="text-xs font-black uppercase tracking-tighter">Presencial</span>
+                                            <span className="text-xs font-black uppercase tracking-tighter text-slate-950">Presencial</span>
                                         </Label>
                                         <Label className={cn(
                                             "flex flex-col items-center gap-3 border-2 p-6 rounded-[2rem] cursor-pointer transition-all duration-200", 
                                             activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "border-slate-100 bg-slate-50/50 hover:bg-slate-100",
-                                            isEditingDisabled && "cursor-not-allowed opacity-70"
+                                            isEditingDisabled && "cursor-not-allowed"
                                         )}>
                                             <RadioGroupItem value="telefonica" className="sr-only" />
                                             <Phone className={cn("h-8 w-8", activeClient.visitType === 'telefonica' ? "text-primary" : "text-slate-400")} />
-                                            <span className="text-xs font-black uppercase tracking-tighter">Telefónica</span>
+                                            <span className="text-xs font-black uppercase tracking-tighter text-slate-950">Telefónica</span>
                                         </Label>
                                     </RadioGroup>
                                 </div>
@@ -527,7 +527,7 @@ function RouteManagementContent() {
                                         <Label className="text-xs font-black uppercase text-primary tracking-wider">Observación Obligatoria de la Llamada</Label>
                                         <Textarea 
                                             placeholder="Ingresa aquí los detalles clave de la conversación..." 
-                                            className="h-32 font-bold text-sm border-2 focus:border-primary rounded-2xl px-4 py-3" 
+                                            className="h-32 font-bold text-sm border-2 focus:border-primary rounded-2xl px-4 py-3 text-slate-950" 
                                             value={activeClient.callObservation || ''} 
                                             onChange={e => handleFieldChange('callObservation', e.target.value)} 
                                             disabled={isEditingDisabled}
@@ -560,7 +560,7 @@ function RouteManagementContent() {
                                         <Label className="text-xs font-black uppercase text-slate-500 tracking-wider">Observaciones de la Visita</Label>
                                         <Textarea 
                                             placeholder="Ingresa aquí algún comentario del cliente o motivo por el que no se pudo gestionar..." 
-                                            className="h-32 font-bold text-sm border-2 focus:border-primary rounded-2xl px-4 py-3" 
+                                            className="h-32 font-bold text-sm border-2 focus:border-primary rounded-2xl px-4 py-3 text-slate-950" 
                                             value={activeClient.visitObservation || ''} 
                                             onChange={e => handleFieldChange('visitObservation', e.target.value)} 
                                             disabled={isEditingDisabled}
@@ -664,7 +664,7 @@ function RouteManagementContent() {
             </ScrollArea>
 
             <div className="p-8 pt-6 border-t space-y-6 shrink-0 bg-white shadow-[0_-10px_20px_rgba(0,0,0,0.02)]">
-                {needsReadditionObservation && (
+                {(needsReadditionObservation && multiSelectedClients.length > 0) && (
                     <div className="space-y-2 animate-in slide-in-from-bottom-2 duration-300">
                         <Label className="text-[10px] font-black uppercase text-slate-600 tracking-wider ml-1">Observación de Re-adición (Obligatoria para clientes en plan)</Label>
                         <Textarea 
