@@ -1,4 +1,3 @@
-
 'use client';
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -23,6 +22,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { useToast } from '@/hooks/use-toast';
 import Papa from 'papaparse';
 import { useAuth } from '@/hooks/use-auth';
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 
 type LocationData = {
   RUC: string;
@@ -39,6 +40,7 @@ export default function LocationsPage() {
   const { clients, loading, refetchData } = useAuth();
   const [filters, setFilters] = useState({ provincia: '', canton: '', direccion: '' });
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -85,6 +87,8 @@ export default function LocationsPage() {
     if (!file) return;
 
     setIsUploading(true);
+    setUploadProgress(0);
+
     Papa.parse<LocationData>(file, {
       header: true,
       skipEmptyLines: true,
@@ -105,22 +109,14 @@ export default function LocationsPage() {
         
         const dataWithParsedCoords = results.data.map(row => ({
             ...row,
-            Latitud: parseFloat(row.Latitud?.replace(',', '.')),
-            Longitud: parseFloat(row.Longitud?.replace(',', '.'))
+            Latitud: parseFloat(String(row.Latitud).replace(',', '.')),
+            Longitud: parseFloat(String(row.Longitud).replace(',', '.'))
         }));
 
         const validData = dataWithParsedCoords.filter(row => 
             row.RUC && row.Provincia && row.Canton && row.Direccion && !isNaN(row.Latitud) && !isNaN(row.Longitud)
         );
 
-        const invalidRows = results.data.length - validData.length;
-        if(invalidRows > 0) {
-            toast({
-                title: 'Datos inválidos',
-                description: `Se omitieron ${invalidRows} filas por datos faltantes o con formato incorrecto.`,
-            });
-        }
-        
         if (validData.length === 0) {
             toast({
                 title: 'No hay datos válidos',
@@ -141,7 +137,15 @@ export default function LocationsPage() {
                 longitud: item.Longitud,
             }));
 
-          await updateClientLocations(locationsToUpdate);
+          // Procesar en bloques para mostrar progreso
+          const chunkSize = 50;
+          for (let i = 0; i < locationsToUpdate.length; i += chunkSize) {
+              const chunk = locationsToUpdate.slice(i, i + chunkSize);
+              await updateClientLocations(chunk);
+              setUploadProgress(Math.round(((i + chunk.length) / locationsToUpdate.length) * 100));
+              // Pausa breve para que el navegador renderice el progreso
+              await new Promise(r => setTimeout(r, 50));
+          }
 
           toast({
             title: 'Carga exitosa',
@@ -150,21 +154,14 @@ export default function LocationsPage() {
           await refetchData('clients'); 
         } catch (error: any) {
           console.error("Failed to update client locations:", error);
-          if (error.code === 'permission-denied') {
-            toast({
-              title: 'Error de Permisos',
-              description: 'No tienes permiso para actualizar ubicaciones. Revisa las reglas de seguridad de Firestore.',
-              variant: 'destructive',
-            });
-          } else {
-            toast({
-              title: 'Error en la carga',
-              description: 'Ocurrió un error al actualizar las ubicaciones.',
-              variant: 'destructive',
-            });
-          }
+          toast({
+            title: 'Error en la carga',
+            description: 'Ocurrió un error al actualizar las ubicaciones.',
+            variant: 'destructive',
+          });
         } finally {
           setIsUploading(false);
+          setUploadProgress(0);
           if (fileInputRef.current) {
             fileInputRef.current.value = '';
           }
@@ -186,7 +183,7 @@ export default function LocationsPage() {
   return (
     <>
       <PageHeader title="Ubicaciones" description="Gestiona y visualiza las ubicaciones de tus clientes.">
-        <Dialog>
+        <Dialog onOpenChange={(open) => !open && setUploadProgress(0)}>
           <DialogTrigger asChild>
             <Button>
               <UploadCloud className="mr-2 h-4 w-4" />
@@ -197,7 +194,7 @@ export default function LocationsPage() {
             <DialogHeader>
               <DialogTitle>Carga Masiva de Ubicaciones</DialogTitle>
               <DialogDescription>
-                Sube un archivo CSV para actualizar las ubicaciones de los clientes. El archivo debe contener las columnas: RUC, Provincia, Canton, Direccion, Latitud, Longitud. El RUC se usará para encontrar al cliente.
+                Sube un archivo CSV para actualizar las ubicaciones de los clientes. El archivo debe contener las columnas: RUC, Provincia, Canton, Direccion, Latitud, Longitud.
               </DialogDescription>
             </DialogHeader>
             <div className="py-4">
@@ -209,8 +206,24 @@ export default function LocationsPage() {
                 disabled={isUploading}
               />
             </div>
+            
+            <div className="space-y-3 pb-4">
+                <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                    <span className={cn(isUploading ? "text-primary animate-pulse" : "text-muted-foreground")}>
+                        {isUploading ? `Procesando ubicaciones...` : 'Listo para subir'}
+                    </span>
+                    {isUploading && (
+                        <span className="text-primary font-black text-xs bg-primary/10 px-2 py-0.5 rounded-full">
+                            {uploadProgress}%
+                        </span>
+                    )}
+                </div>
+                {isUploading && (
+                    <Progress value={uploadProgress} className="h-2 bg-slate-100" />
+                )}
+            </div>
+
              <DialogFooter className="sm:justify-between">
-                <span className="text-sm text-muted-foreground">{isUploading ? 'Procesando archivo...' : 'Selecciona un archivo para empezar.'}</span>
                 <DialogClose asChild>
                     <Button type="button" variant="secondary" id="close-dialog">
                         Cerrar
@@ -259,7 +272,7 @@ export default function LocationsPage() {
                         paginatedClients.map((client) => (
                             <TableRow key={client.id}>
                             <TableCell>
-                                <div className="font-medium">{client.nombre_comercial}</div>
+                                <div className="font-medium text-slate-900">{client.nombre_comercial}</div>
                                 <div className="text-sm text-muted-foreground">{client.ruc}</div>
                             </TableCell>
                             <TableCell>{client.provincia}</TableCell>

@@ -48,6 +48,7 @@ import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/use-auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
 
 type ClientCsvData = {
     [key: string]: string;
@@ -166,6 +167,8 @@ export default function ClientsPage() {
             await currentBatch.commit();
             currentBatch = writeBatch(db);
             operationCount = 0;
+            // Pequeña pausa para permitir que React actualice la UI del progreso
+            await new Promise(resolve => setTimeout(resolve, 50));
         }
 
         setUploadProgress(Math.round(((i + 1) / total) * 100));
@@ -277,12 +280,20 @@ export default function ClientsPage() {
                         <div className="py-4">
                             <Input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleFileUpload} disabled={isUploading} />
                         </div>
-                        <div className="space-y-3">
+                        <div className="space-y-3 pb-4">
                             <div className="flex justify-between items-center text-[10px] font-black uppercase">
-                                <span>{isUploading ? `Procesando...` : 'Listo para cargar'}</span>
-                                {isUploading && <span className="text-primary">{uploadProgress}%</span>}
+                                <span className={cn(isUploading ? "text-primary animate-pulse" : "text-muted-foreground")}>
+                                    {isUploading ? `Procesando registros...` : 'Esperando archivo...'}
+                                </span>
+                                {isUploading && (
+                                    <span className="text-primary font-black text-xs bg-primary/10 px-2 py-0.5 rounded-full">
+                                        {uploadProgress}%
+                                    </span>
+                                )}
                             </div>
-                            {isUploading && <Progress value={uploadProgress} className="h-2" />}
+                            {isUploading && (
+                                <Progress value={uploadProgress} className="h-2 bg-slate-100" />
+                            )}
                         </div>
                         <DialogFooter>
                             <DialogClose asChild><Button type="button" variant="secondary" id="close-dialog-clients">Cerrar</Button></DialogClose>
@@ -345,7 +356,7 @@ export default function ClientsPage() {
                 ) : (
                   paginatedClients.map((client) => (
                     <TableRow key={client.id}>
-                      <TableCell><div className="font-medium">{client.nombre_cliente}</div></TableCell>
+                      <TableCell><div className="font-medium text-slate-900">{client.nombre_cliente}</div></TableCell>
                       <TableCell className="hidden sm:table-cell">{client.ruc}</TableCell>
                       <TableCell className="hidden lg:table-cell">{client.ejecutivo}</TableCell>
                       <TableCell><Badge variant={(client.status ?? 'active') === 'active' ? 'success' : 'destructive'}>{(client.status ?? 'active') === 'active' ? 'Activo' : 'Inactivo'}</Badge></TableCell>
