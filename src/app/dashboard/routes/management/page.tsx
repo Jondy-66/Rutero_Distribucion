@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, User, PlusCircle, Trash2, ThumbsUp, Users, CirclePlus, X } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, ThumbsUp, Users, CirclePlus, X } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -25,7 +25,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 
 /**
- * Sanitize client data for Firestore storage.
+ * Sanitiza los datos de los clientes para el almacenamiento en Firestore.
+ * Convierte objetos de ubicación simples en GeoPoints nativos.
  */
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
@@ -43,8 +44,13 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
         cleaned.valorCobro = parseValue(c.valorCobro);
         cleaned.devoluciones = parseValue(c.devoluciones);
         
+        // Conversión a GeoPoint para Entrada
         if (c.checkInLocation && (c.checkInLocation as any).latitude) {
             cleaned.checkInLocation = new GeoPoint((c.checkInLocation as any).latitude, (c.checkInLocation as any).longitude);
+        }
+        // Conversión a GeoPoint para Salida
+        if (c.checkOutLocation && (c.checkOutLocation as any).latitude) {
+            cleaned.checkOutLocation = new GeoPoint((c.checkOutLocation as any).latitude, (c.checkOutLocation as any).longitude);
         }
         return cleaned;
     });
@@ -133,20 +139,27 @@ function RouteManagementContent() {
     }
   };
 
+  /**
+   * Captura la geolocalización actual del dispositivo.
+   */
+  const getGeoLocation = () => {
+    return new Promise<any>((resolve) => {
+        if (!navigator.geolocation) return resolve(null);
+        navigator.geolocation.getCurrentPosition(
+            (p) => resolve({ latitude: p.coords.latitude, longitude: p.coords.longitude }),
+            () => resolve(null),
+            { timeout: 5000, enableHighAccuracy: true }
+        );
+    });
+  };
+
   const handleCheckIn = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled) return;
     setIsSaving(true);
     lastLocalUpdate.current = Date.now();
 
     try {
-        const location = await new Promise<any>((resolve) => {
-            if (!navigator.geolocation) return resolve(null);
-            navigator.geolocation.getCurrentPosition(
-                (p) => resolve({ latitude: p.coords.latitude, longitude: p.coords.longitude }),
-                () => resolve(null),
-                { timeout: 5000 }
-            );
-        });
+        const location = await getGeoLocation();
 
         const nextClients = currentRouteClientsFull.map((c, idx) => 
             idx === activeOriginalIndex 
@@ -156,7 +169,7 @@ function RouteManagementContent() {
 
         await updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) });
         setCurrentRouteClientsFull(nextClients);
-        toast({ title: "Entrada Registrada" });
+        toast({ title: "Entrada Registrada", description: location ? "Ubicación capturada con éxito." : "No se pudo obtener la ubicación exacta." });
     } catch (e) {
         toast({ title: "Error al registrar entrada", variant: "destructive" });
     } finally {
@@ -175,9 +188,11 @@ function RouteManagementContent() {
     lastLocalUpdate.current = Date.now();
 
     try {
+        const location = await getGeoLocation();
+
         const nextClients = currentRouteClientsFull.map((c, idx) => 
             idx === activeOriginalIndex 
-                ? { ...c, checkOutTime: format(new Date(), 'HH:mm:ss'), visitStatus: 'Completado' } 
+                ? { ...c, checkOutTime: format(new Date(), 'HH:mm:ss'), checkOutLocation: location, visitStatus: 'Completado' } 
                 : c
         );
 
@@ -190,7 +205,7 @@ function RouteManagementContent() {
 
         setCurrentRouteClientsFull(nextClients);
         if (!isAdmin) setActiveOriginalIndex(null);
-        toast({ title: "Visita Finalizada" });
+        toast({ title: "Visita Finalizada", description: location ? "Ubicación de salida registrada." : "Cerrado sin coordenadas GPS." });
         await refetchData('routes');
     } catch (e) {
         toast({ title: "Error al finalizar", variant: "destructive" });
@@ -349,13 +364,13 @@ function RouteManagementContent() {
                                         <div className="flex items-center gap-2">
                                             <p className={cn(
                                                 "font-black text-xs truncate uppercase tracking-tight",
-                                                activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-800"
+                                                activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-900"
                                             )}>
                                                 {c.nombre_comercial}
                                             </p>
                                             {c.isReadded && <Badge className="text-[8px] h-3.5 px-1.5 bg-orange-100 text-orange-700 font-black border-none uppercase">RE-ADICIÓN</Badge>}
                                         </div>
-                                        <p className="text-[10px] font-mono text-slate-500 mt-0.5">{c.ruc}</p>
+                                        <p className="text-[10px] font-mono text-slate-600 mt-0.5">{c.ruc}</p>
                                     </div>
                                     <div className="flex items-center gap-1">
                                         {isAdmin && (
@@ -509,7 +524,7 @@ function RouteManagementContent() {
         <DialogContent className="w-[95vw] sm:max-w-xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl flex flex-col max-h-[90vh]">
             <DialogHeader className="bg-primary/5 p-8 pb-6 shrink-0 relative">
                 <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-primary pr-8">Catálogo de Clientes</DialogTitle>
-                <DialogDescription className="text-[10px] font-bold uppercase text-slate-500 mt-1">Selecciona clientes para re-añadir a tu ruta de hoy</DialogDescription>
+                <DialogDescription className="text-[10px] font-bold uppercase text-slate-400 mt-1">Selecciona clientes para re-añadir a tu ruta de hoy</DialogDescription>
                 <DialogClose className="absolute right-6 top-8 opacity-70 hover:opacity-100">
                     <X className="h-6 w-6" />
                 </DialogClose>
@@ -532,9 +547,10 @@ function RouteManagementContent() {
                     {availableClients
                         .filter(c => {
                             const search = addClientSearchTerm.toLowerCase();
+                            const rucStr = String(c.ruc || '');
                             return String(c.nombre_cliente || '').toLowerCase().includes(search) || 
                                    String(c.nombre_comercial || '').toLowerCase().includes(search) || 
-                                   String(c.ruc || '').includes(search);
+                                   rucStr.includes(search);
                         })
                         .map(c => (
                             <div 
