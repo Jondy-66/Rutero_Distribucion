@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -6,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, ThumbsUp, Users, CirclePlus, X } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, ThumbsUp, Users, CirclePlus, X, AlertTriangle } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -23,6 +24,7 @@ import { Timestamp, GeoPoint } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 /**
  * Sanitiza los datos de los clientes para el almacenamiento en Firestore.
@@ -72,9 +74,22 @@ function RouteManagementContent() {
   const [addClientSearchTerm, setAddClientSearchTerm] = useState('');
   const [multiSelectedClients, setMultiSelectedClients] = useState<Client[]>([]);
   const [reAdditionObservation, setReAdditionObservation] = useState('');
+  const [isExpired, setIsExpired] = useState(false);
 
   const lastLocalUpdate = useRef<number>(0);
   const isAdmin = user?.role === 'Administrador';
+
+  // Control de Expiración (19:00)
+  useEffect(() => {
+    const check = () => {
+      const now = new Date();
+      const deadline = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 19, 0, 0);
+      setIsExpired(now > deadline && !isAdmin);
+    };
+    check();
+    const timer = setInterval(check, 30000);
+    return () => clearInterval(timer);
+  }, [isAdmin]);
 
   const selectableRoutes = useMemo(() => {
     return allRoutes.filter(r => {
@@ -122,7 +137,7 @@ function RouteManagementContent() {
   );
 
   const isManaged = activeClient?.visitStatus === 'Completado';
-  const isEditingDisabled = isManaged && !isAdmin;
+  const isEditingDisabled = (isManaged || isExpired) && !isAdmin;
 
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (activeOriginalIndex === null || isEditingDisabled || isSaving) return;
@@ -154,7 +169,7 @@ function RouteManagementContent() {
   };
 
   const handleCheckIn = async () => {
-    if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled) return;
+    if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled || isExpired) return;
     setIsSaving(true);
     lastLocalUpdate.current = Date.now();
 
@@ -178,7 +193,7 @@ function RouteManagementContent() {
   };
 
   const handleConfirmCheckOut = async () => {
-    if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled) return;
+    if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled || isExpired) return;
     
     if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
         return toast({ title: "Observación requerida", description: "Escribe el resumen de la llamada.", variant: "destructive" });
@@ -234,8 +249,9 @@ function RouteManagementContent() {
   };
 
   const handleAddClients = async () => {
-    if (!selectedRoute || multiSelectedClients.length === 0 || !reAdditionObservation.trim()) {
-        toast({ title: "Atención", description: "Debes ingresar el motivo de la re-adición.", variant: "destructive" });
+    if (!selectedRoute || multiSelectedClients.length === 0 || !reAdditionObservation.trim() || isExpired) {
+        if(isExpired) toast({ title: "Acceso denegado", description: "La jornada ha expirado.", variant: "destructive" });
+        else toast({ title: "Atención", description: "Debes ingresar el motivo de la re-adición.", variant: "destructive" });
         return;
     }
     setIsSaving(true);
@@ -273,6 +289,16 @@ function RouteManagementContent() {
     <>
     <PageHeader title="Gestión de Ruta" description="Control diario de visitas y registros de gestión." />
     
+    {isExpired && !isAdmin && (
+        <Alert variant="destructive" className="mb-6 border-red-600 bg-red-50">
+            <AlertTriangle className="h-4 w-4 text-red-600" />
+            <AlertTitle className="text-red-800 font-black uppercase">Jornada Expirada</AlertTitle>
+            <AlertDescription className="text-red-700 font-bold uppercase text-[10px]">
+                HAS SUPERADO EL TIEMPO LÍMITE (19:00). EL REGISTRO DE GESTIÓN HA SIDO BLOQUEADO. CONTACTA A TU SUPERVISOR.
+            </AlertDescription>
+        </Alert>
+    )}
+
     {!isRouteStarted ? (
         <Card className="max-w-md mx-auto shadow-xl border-t-4 border-t-primary">
             <CardHeader><CardTitle>Iniciar Jornada</CardTitle></CardHeader>
@@ -291,8 +317,9 @@ function RouteManagementContent() {
                     <Button 
                         className="w-full font-black h-12" 
                         onClick={() => updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => setIsRouteStarted(true))}
+                        disabled={isExpired}
                     >
-                        INICIAR JORNADA
+                        {isExpired ? 'JORNADA EXPIRADA' : 'INICIAR JORNADA'}
                     </Button>
                 )}
             </CardContent>
@@ -345,6 +372,7 @@ function RouteManagementContent() {
                             variant="outline" 
                             className="w-full h-14 border-dashed border-2 border-slate-200 bg-slate-50/30 hover:bg-slate-100 text-slate-500 font-black text-sm rounded-2xl flex items-center justify-center gap-2 transition-all shrink-0" 
                             onClick={() => setIsAddClientDialogOpen(true)}
+                            disabled={isExpired}
                         >
                             <CirclePlus className="h-5 w-5 opacity-60" /> 
                             Añadir Cliente
@@ -429,7 +457,7 @@ function RouteManagementContent() {
                                         </div>
                                     </div>
                                     {!activeClient.checkInTime && (
-                                        <Button onClick={handleCheckIn} className="font-black h-12 px-8 rounded-2xl text-sm shadow-md transition-transform hover:scale-105">
+                                        <Button onClick={handleCheckIn} className="font-black h-12 px-8 rounded-2xl text-sm shadow-md transition-transform hover:scale-105" disabled={isExpired}>
                                             MARCAR ENTRADA
                                         </Button>
                                     )}
@@ -549,7 +577,7 @@ function RouteManagementContent() {
                         placeholder="Buscar por RUC o Nombre del Cliente..." 
                         value={addClientSearchTerm} 
                         onChange={e => setAddClientSearchTerm(e.target.value)} 
-                        className="h-12 pl-12 font-bold rounded-2xl border-2 border-slate-300 focus:border-primary transition-all bg-white" 
+                        className="h-12 pl-12 font-bold rounded-2xl border-2 border-slate-300 focus:border-primary transition-all bg-white text-slate-900" 
                     />
                 </div>
             </div>
@@ -558,10 +586,7 @@ function RouteManagementContent() {
                 <div className="grid grid-cols-1 gap-3 pb-6">
                     {availableClients
                         .filter(c => {
-                            // Filtro estricto: solo clientes asignados al usuario conectado
-                            // El administrador puede ver todos para gestión centralizada
                             if (user?.role !== 'Administrador' && c.ejecutivo !== user?.name) return false;
-
                             const search = addClientSearchTerm.toLowerCase();
                             const rucStr = String(c.ruc || '').toLowerCase();
                             return String(c.nombre_cliente || '').toLowerCase().includes(search) || 
