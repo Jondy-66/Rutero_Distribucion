@@ -172,6 +172,7 @@ export default function ClientsPage() {
 
       setUploadProgress(100);
       setIsUploadFinished(true);
+      setIsUploading(false);
       
       toast({
         title: '¡Importación Finalizada!',
@@ -295,6 +296,7 @@ export default function ClientsPage() {
                     if(!open) {
                         setUploadProgress(0);
                         setIsUploadFinished(false);
+                        setIsUploading(false);
                     }
                 }}>
                     <DialogTrigger asChild><Button variant="outline"><UploadCloud className="mr-2 h-4 w-4" /> Importar</Button></DialogTrigger>

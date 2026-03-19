@@ -149,6 +149,7 @@ export default function LocationsPage() {
 
           setUploadProgress(100);
           setIsUploadFinished(true);
+          setIsUploading(false);
 
           toast({
             title: '¡Ubicaciones Actualizadas!',
@@ -189,6 +190,7 @@ export default function LocationsPage() {
             if(!open) {
                 setUploadProgress(0);
                 setIsUploadFinished(false);
+                setIsUploading(false);
             }
         }}>
           <DialogTrigger asChild>
