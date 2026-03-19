@@ -12,13 +12,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { addClient, deleteClient, updateClient } from '@/lib/firebase/firestore';
+import { deleteClient } from '@/lib/firebase/firestore';
+import { db } from '@/lib/firebase/config';
+import { writeBatch, doc, collection } from 'firebase/firestore';
 import type { Client } from '@/lib/types';
-import { PlusCircle, UploadCloud, File, Search, MoreHorizontal, Download, Users } from 'lucide-react';
+import { PlusCircle, UploadCloud, Search, MoreHorizontal, Download, Users } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
-  DropdownMenuCheckboxItem,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
@@ -100,7 +101,6 @@ export default function ClientsPage() {
       return;
     }
     
-    // Normalize keys in data objects
     const normalizedData = data.map(row => {
         const newRow: ClientCsvData = {};
         for(const key in row) {
@@ -111,18 +111,10 @@ export default function ClientsPage() {
 
     const validData = normalizedData.filter(row => row.ruc && (row.nombrecliente || row.nombre_cliente));
 
-    const invalidRows = normalizedData.length - validData.length;
-    if(invalidRows > 0) {
-        toast({
-            title: 'Datos inválidos',
-            description: `Se omitieron ${invalidRows} filas por datos faltantes (Ruc y Nombre_cliente son obligatorios).`,
-        });
-    }
-    
     if (validData.length === 0) {
         toast({
-            title: 'No hay datos válidos',
-            description: `No se encontraron filas con datos válidos para procesar.`,
+            title: 'Sin datos válidos',
+            description: `No se encontraron filas con RUC y Nombre de Cliente válidos.`,
             variant: 'destructive',
         });
         setIsUploading(false);
@@ -133,7 +125,7 @@ export default function ClientsPage() {
     setUploadProgress(0);
 
     try {
-      const rucsInDb = new Map(clients.map(c => [c.ruc, c.id]));
+      const rucsInDb = new Map(clients.map(c => [String(c.ruc).trim(), c.id]));
       let addedCount = 0;
       let updatedCount = 0;
 
@@ -150,47 +142,51 @@ export default function ClientsPage() {
       }));
       
       const total = clientsToProcess.length;
+      let currentBatch = writeBatch(db);
+      let operationCount = 0;
 
       for (let i = 0; i < total; i++) {
         const clientData = clientsToProcess[i];
+        
         if(rucsInDb.has(clientData.ruc)) {
             const clientId = rucsInDb.get(clientData.ruc)!;
-            await updateClient(clientId, clientData);
+            const clientRef = doc(db, 'clients', clientId);
+            currentBatch.update(clientRef, clientData);
             updatedCount++;
         } else {
-            await addClient({...clientData, status: 'active'});
+            const newClientRef = doc(collection(db, 'clients'));
+            currentBatch.set(newClientRef, {...clientData, status: 'active'});
             addedCount++;
         }
+
+        operationCount++;
+
+        // Firestore permite hasta 500 operaciones por batch
+        if (operationCount === 450 || i === total - 1) {
+            await currentBatch.commit();
+            currentBatch = writeBatch(db);
+            operationCount = 0;
+        }
+
         setUploadProgress(Math.round(((i + 1) / total) * 100));
       }
 
       toast({
         title: 'Carga exitosa',
-        description: `${addedCount} clientes añadidos y ${updatedCount} clientes actualizados.`,
+        description: `${addedCount} clientes añadidos y ${updatedCount} actualizados.`,
       });
       await refetchData('clients');
-    } catch (error: any)
-    {
-      console.error("Failed to add or update clients:", error);
-      if (error.code === 'permission-denied') {
-        toast({
-          title: 'Error de Permisos',
-          description: 'No tienes permiso para añadir o actualizar clientes.',
-          variant: 'destructive',
-        });
-      } else {
-        toast({
-          title: 'Error en la carga',
-          description: 'Ocurrió un error al procesar los clientes.',
-          variant: 'destructive',
-        });
-      }
+    } catch (error: any) {
+      console.error("Batch import error:", error);
+      toast({
+        title: 'Error en la carga',
+        description: 'Ocurrió un fallo al procesar los datos en lote.',
+        variant: 'destructive',
+      });
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
       document.getElementById('close-dialog-clients')?.click();
     }
   }
@@ -203,45 +199,18 @@ export default function ClientsPage() {
         Papa.parse<ClientCsvData>(file, {
         header: true,
         skipEmptyLines: true,
-        complete: async (results) => {
-            processImportedData(results.data, results.meta.fields);
-        },
-        error: (error) => {
-            console.error('Error parsing CSV:', error);
-            toast({
-            title: 'Error de archivo',
-            description: 'No se pudo procesar el archivo CSV.',
-            variant: 'destructive',
-            });
-        }
+        complete: (results) => processImportedData(results.data, results.meta.fields),
+        error: () => toast({ title: 'Error', description: 'No se pudo procesar el CSV.', variant: 'destructive' })
         });
-    } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+    } else {
         const reader = new FileReader();
         reader.onload = (e) => {
-            try {
-                const data = e.target?.result;
-                const workbook = XLSX.read(data, { type: 'binary' });
-                const sheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[sheetName];
-                const json: ClientCsvData[] = XLSX.utils.sheet_to_json(worksheet);
-                const headers = json.length > 0 ? Object.keys(json[0]) : [];
-                processImportedData(json, headers);
-            } catch (error) {
-                 console.error('Error processing Excel file:', error);
-                toast({
-                    title: 'Error de archivo',
-                    description: 'No se pudo procesar el archivo Excel.',
-                    variant: 'destructive',
-                });
-            }
-        };
-        reader.onerror = (error) => {
-            console.error('Error reading file:', error);
-            toast({ title: 'Error', description: 'No se pudo leer el archivo.', variant: 'destructive' });
+            const data = e.target?.result;
+            const workbook = XLSX.read(data, { type: 'binary' });
+            const json: ClientCsvData[] = XLSX.utils.sheet_to_json(XLSX.utils.book_get_sheet_by_name(workbook, workbook.SheetNames[0]));
+            processImportedData(json, json.length > 0 ? Object.keys(json[0]) : []);
         };
         reader.readAsBinaryString(file);
-    } else {
-        toast({ title: 'Formato no soportado', description: 'Por favor, sube un archivo CSV o Excel.', variant: 'destructive' });
     }
   };
 
@@ -253,9 +222,7 @@ export default function ClientsPage() {
   const filteredClients = useMemo(() => {
     return clients
       .filter(client => {
-        if (user?.role === 'Usuario') {
-            return client.ejecutivo === user.name;
-        }
+        if (user?.role === 'Usuario') return client.ejecutivo === user.name;
         return true;
       })
       .filter(client => {
@@ -271,160 +238,97 @@ export default function ClientsPage() {
         return (
           String(client.nombre_cliente).toLowerCase().includes(search) ||
           String(client.nombre_comercial).toLowerCase().includes(search) ||
-          String(client.ruc).toLowerCase().includes(search) ||
-          String(client.ejecutivo).toLowerCase().includes(search) ||
-          String(client.provincia).toLowerCase().includes(search)
+          String(client.ruc).toLowerCase().includes(search)
         );
       });
   }, [clients, filter, searchTerm, user, selectedEjecutivo]);
   
   const paginatedClients = useMemo(() => {
     const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-    const endIndex = startIndex + ITEMS_PER_PAGE;
-    return filteredClients.slice(startIndex, endIndex);
+    return filteredClients.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   }, [filteredClients, currentPage]);
 
   const totalPages = Math.ceil(filteredClients.length / ITEMS_PER_PAGE);
 
   const handleDownloadExcel = () => {
-    if (filteredClients.length === 0) {
-      toast({ title: "Sin Datos", description: "No hay clientes para exportar.", variant: "destructive" });
-      return;
-    }
-
-    const dataToExport = filteredClients.map(client => ({
-      'Ejecutivo': client.ejecutivo,
-      'RUC': client.ruc,
-      'Nombre Cliente': client.nombre_cliente,
-      'Nombre Comercial': client.nombre_comercial,
-      'Provincia': client.provincia,
-      'Cantón': client.canton,
-      'Dirección': client.direccion,
-      'Estado': client.status,
-      'Latitud': client.latitud,
-      'Longitud': client.longitud,
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    if (filteredClients.length === 0) return;
+    const worksheet = XLSX.utils.json_to_sheet(filteredClients);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Clientes");
     XLSX.writeFile(workbook, "reporte_clientes.xlsx");
-    toast({ title: "Descarga Iniciada", description: "Tu reporte de clientes se está descargando." });
   };
-  
-  const canSeeEjecutivoFilter = user?.role === 'Administrador' || user?.role === 'Supervisor';
   
   const canImport = user?.role === 'Administrador' || user?.permissions?.includes('import-clients');
   const canDelete = user?.role === 'Administrador' || user?.permissions?.includes('delete-clients');
 
   return (
     <>
-      <PageHeader title="Clientes" description="Visualiza, gestiona e importa los datos de tus clientes.">
+      <PageHeader title="Clientes" description="Gestión y carga masiva de cartera.">
         <div className="flex gap-2">
-            <Link href="/dashboard/clients/new">
-            <Button>
-                <PlusCircle className="mr-2 h-4 w-4" />
-                Añadir Cliente
-            </Button>
-            </Link>
+            <Link href="/dashboard/clients/new"><Button><PlusCircle className="mr-2 h-4 w-4" /> Añadir</Button></Link>
             {canImport && (
                 <Dialog onOpenChange={(open) => !open && setUploadProgress(0)}>
-                    <DialogTrigger asChild>
-                        <Button variant="outline">
-                            <UploadCloud className="mr-2 h-4 w-4" />
-                            Importar
-                        </Button>
-                    </DialogTrigger>
-                    <DialogContent>
+                    <DialogTrigger asChild><Button variant="outline"><UploadCloud className="mr-2 h-4 w-4" /> Importar</Button></DialogTrigger>
+                    <DialogContent className="sm:max-w-md">
                         <DialogHeader>
-                            <DialogTitle>Importar Clientes desde CSV o Excel</DialogTitle>
-                            <DialogDescription>
-                                Sube un archivo para añadir o actualizar clientes. Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia. Opcionales: latitud, longitud.
-                            </DialogDescription>
+                            <DialogTitle>Importación Masiva</DialogTitle>
+                            <DialogDescription>Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia.</DialogDescription>
                         </DialogHeader>
                         <div className="py-4">
-                        <Input
-                            type="file"
-                            accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
-                            ref={fileInputRef}
-                            onChange={handleFileUpload}
-                            disabled={isUploading}
-                        />
+                            <Input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleFileUpload} disabled={isUploading} />
                         </div>
-                        <DialogFooter className="sm:justify-between flex-col sm:flex-row items-center gap-4">
-                            <div className="flex flex-col w-full gap-2">
-                                <div className="flex justify-between items-center text-xs text-muted-foreground font-bold uppercase tracking-tight">
-                                    <span>{isUploading ? `Procesando datos...` : 'Selecciona un archivo para empezar.'}</span>
-                                    {isUploading && <span className="text-primary text-sm">{uploadProgress}%</span>}
-                                </div>
-                                {isUploading && <Progress value={uploadProgress} className="h-2" />}
+                        <div className="space-y-3">
+                            <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                                <span>{isUploading ? `Procesando...` : 'Listo para cargar'}</span>
+                                {isUploading && <span className="text-primary">{uploadProgress}%</span>}
                             </div>
-                            <DialogClose asChild>
-                                <Button type="button" variant="secondary" id="close-dialog-clients">
-                                    Cerrar
-                                </Button>
-                            </DialogClose>
+                            {isUploading && <Progress value={uploadProgress} className="h-2" />}
+                        </div>
+                        <DialogFooter>
+                            <DialogClose asChild><Button type="button" variant="secondary" id="close-dialog-clients">Cerrar</Button></DialogClose>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
             )}
-            <Button variant="outline" onClick={handleDownloadExcel}>
-                <Download className="mr-2 h-4 w-4" />
-                Descargar Excel
-            </Button>
+            <Button variant="outline" onClick={handleDownloadExcel}><Download className="mr-2 h-4 w-4" /> Excel</Button>
         </div>
       </PageHeader>
       
       <Card>
         <CardHeader>
           <CardTitle>Lista de Clientes</CardTitle>
-          <CardDescription>Una lista de todos los clientes en tu base de datos.</CardDescription>
+          <CardDescription>Base de datos completa de clientes.</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
-            <Tabs defaultValue="all" onValueChange={(value) => setFilter(value)}>
+            <Tabs defaultValue="all" onValueChange={setFilter}>
               <TabsList>
                 <TabsTrigger value="all">Todos</TabsTrigger>
                 <TabsTrigger value="active">Activos</TabsTrigger>
                 <TabsTrigger value="inactive">Inactivos</TabsTrigger>
               </TabsList>
             </Tabs>
-            <div className="flex flex-col sm:flex-row w-full sm:w-auto sm:items-center gap-2">
-                {canSeeEjecutivoFilter && (
+            <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
+                {(user?.role === 'Administrador' || user?.role === 'Supervisor') && (
                     <Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo}>
-                        <SelectTrigger className="w-full sm:w-[180px]">
-                            <Users className="mr-2 h-4 w-4" />
-                            <SelectValue placeholder="Filtrar por ejecutivo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {uniqueEjecutivos.map(ejecutivo => (
-                                <SelectItem key={ejecutivo} value={ejecutivo}>
-                                    {ejecutivo === 'all' ? 'Todos los ejecutivos' : ejecutivo}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
+                        <SelectTrigger className="w-full sm:w-[180px]"><Users className="mr-2 h-4 w-4" /><SelectValue placeholder="Ejecutivo" /></SelectTrigger>
+                        <SelectContent>{uniqueEjecutivos.map(e => <SelectItem key={e} value={e}>{e === 'all' ? 'Todos' : e}</SelectItem>)}</SelectContent>
                     </Select>
                 )}
               <div className="relative w-full sm:max-w-xs">
                 <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input 
-                  placeholder="Buscar clientes..." 
-                  className="w-full pl-8" 
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                />
+                <Input placeholder="Buscar..." className="pl-8" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
             </div>
           </div>
-          <div className="border rounded-lg mt-4 overflow-x-auto">
+          <div className="border rounded-lg overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nombre Cliente</TableHead>
+                  <TableHead>Cliente</TableHead>
                   <TableHead className="hidden sm:table-cell">RUC</TableHead>
                   <TableHead className="hidden lg:table-cell">Ejecutivo</TableHead>
                   <TableHead>Estado</TableHead>
-                  <TableHead className="hidden md:table-cell">Dirección</TableHead>
                   <TableHead className="text-right">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
@@ -434,56 +338,28 @@ export default function ClientsPage() {
                     <TableRow key={i}>
                       <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
                       <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
-                      <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
                       <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
-                      <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
                       <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                     </TableRow>
                   ))
                 ) : (
                   paginatedClients.map((client) => (
                     <TableRow key={client.id}>
-                      <TableCell>
-                        <div className="font-medium">{client.nombre_cliente}</div>
-                        <div className="text-sm text-muted-foreground md:hidden">{client.ruc}</div>
-                      </TableCell>
+                      <TableCell><div className="font-medium">{client.nombre_cliente}</div></TableCell>
                       <TableCell className="hidden sm:table-cell">{client.ruc}</TableCell>
                       <TableCell className="hidden lg:table-cell">{client.ejecutivo}</TableCell>
-                      <TableCell>
-                        <Badge variant={(client.status ?? 'active') === 'active' ? 'success' : 'destructive'}>
-                          {(client.status ?? 'active') === 'active' ? 'Activo' : 'Inactivo'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="hidden md:table-cell">{client.direccion}</TableCell>
+                      <TableCell><Badge variant={(client.status ?? 'active') === 'active' ? 'success' : 'destructive'}>{(client.status ?? 'active') === 'active' ? 'Activo' : 'Inactivo'}</Badge></TableCell>
                       <TableCell className="text-right">
                         <AlertDialog>
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button aria-haspopup="true" size="icon" variant="ghost">
-                                <MoreHorizontal className="h-4 w-4" />
-                                <span className="sr-only">Alternar menú</span>
-                              </Button>
-                            </DropdownMenuTrigger>
+                            <DropdownMenuTrigger asChild><Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                               <DropdownMenuItem onClick={() => handleEdit(client.id)}>Editar</DropdownMenuItem>
-                              {canDelete && (
-                                <>
-                                    <DropdownMenuSeparator />
-                                    <AlertDialogTrigger asChild>
-                                        <DropdownMenuItem className="text-red-600">Eliminar</DropdownMenuItem>
-                                    </AlertDialogTrigger>
-                                </>
-                              )}
+                              {canDelete && <AlertDialogTrigger asChild><DropdownMenuItem className="text-red-600">Eliminar</DropdownMenuItem></AlertDialogTrigger>}
                             </DropdownMenuContent>
                           </DropdownMenu>
                            <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                              <AlertDialogDescription>
-                                Esta acción no se puede deshacer. Esto eliminará permanentemente al cliente.
-                              </AlertDialogDescription>
-                            </AlertDialogHeader>
+                            <AlertDialogHeader><AlertDialogTitle>¿Eliminar cliente?</AlertDialogTitle></AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancelar</AlertDialogCancel>
                               <AlertDialogAction onClick={() => handleDelete(client.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
@@ -498,32 +374,11 @@ export default function ClientsPage() {
             </Table>
           </div>
         </CardContent>
-        <CardFooter>
-            <div className="flex items-center justify-between w-full">
-                <div className="text-xs text-muted-foreground">
-                Mostrando <strong>{paginatedClients.length}</strong> de <strong>{filteredClients.length}</strong> clientes
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                        disabled={currentPage === 1}
-                    >
-                        Anterior
-                    </Button>
-                    <span className="text-sm font-medium">
-                        Página {currentPage} de {totalPages}
-                    </span>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                        disabled={currentPage === totalPages}
-                    >
-                        Siguiente
-                    </Button>
-                </div>
+        <CardFooter className="flex justify-between text-xs text-muted-foreground">
+            <div>Mostrando {paginatedClients.length} de {filteredClients.length}</div>
+            <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}>Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}>Siguiente</Button>
             </div>
         </CardFooter>
       </Card>
