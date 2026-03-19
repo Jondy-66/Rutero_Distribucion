@@ -93,14 +93,22 @@ function RouteManagementContent() {
   const selectableRoutes = useMemo(() => {
     const today = new Date();
     return allRoutes.filter(r => {
+        // Filtrar por pertenencia (dueño o admin)
         if (r.createdBy !== user?.id && !isAdmin) return false;
         if (isAdmin && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
+        // REGLA DE NEGOCIO: Solo se pueden iniciar/gestionar rutas aprobadas (Planificada) o ya en curso
+        // Las rutas en "Pendiente de Aprobación" o "Rechazada" NO deben aparecer aquí.
+        if (r.status === 'Pendiente de Aprobación' || r.status === 'Rechazada') return false;
+
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
         const diffInDays = Math.abs(startOfDay(rDate).getTime() - startOfDay(today).getTime()) / (1000 * 60 * 60 * 24);
         
-        // Rutas no completadas o de hoy (máximo 7 días de antigüedad para histórico reciente)
-        return (r.status !== 'Completada' || diffInDays < 7);
+        // Rutas completadas se muestran solo si son recientes (histórico de 7 días)
+        if (r.status === 'Completada') return diffInDays < 7;
+        
+        // El resto (Planificada, En Progreso, Incompleta) son seleccionables
+        return true;
     });
   }, [allRoutes, user, isAdmin, selectedAgentId]);
 
@@ -340,8 +348,14 @@ function RouteManagementContent() {
                     </Select>
                 )}
                 <Select value={selectedRouteId} onValueChange={setSelectedRouteId}>
-                    <SelectTrigger><Route className="mr-2 h-4 w-4 text-primary" /><SelectValue placeholder="Selecciona una ruta" /></SelectTrigger>
-                    <SelectContent>{selectableRoutes.map(r => <SelectItem key={r.id} value={r.id}>{r.routeName}</SelectItem>)}</SelectContent>
+                    <SelectTrigger><Route className="mr-2 h-4 w-4 text-primary" /><SelectValue placeholder="Selecciona una ruta aprobada" /></SelectTrigger>
+                    <SelectContent>
+                        {selectableRoutes.length > 0 ? (
+                            selectableRoutes.map(r => <SelectItem key={r.id} value={r.id}>{r.routeName} ({r.status})</SelectItem>)
+                        ) : (
+                            <SelectItem value="none" disabled>No tienes rutas listas para iniciar.</SelectItem>
+                        )}
+                    </SelectContent>
                 </Select>
                 {selectedRoute && (
                     <Button 
