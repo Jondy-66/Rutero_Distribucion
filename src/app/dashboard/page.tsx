@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
@@ -44,7 +43,8 @@ export default function DashboardPage() {
   const canSeeUserCount = user?.role === 'Administrador' || user?.role === 'Supervisor';
 
   const activeRoute = useMemo(() => {
-    // Buscamos cualquier ruta en progreso del usuario actual
+    // Buscamos cualquier ruta en progreso del usuario actual. 
+    // Excluimos Incompletas y Completadas porque ya son terminales.
     return routes.find(r => r.createdBy === user?.id && r.status === 'En Progreso');
   }, [routes, user]);
 
@@ -68,7 +68,6 @@ export default function DashboardPage() {
 
     const interval = setInterval(() => {
       const now = new Date();
-      // Nueva hora de cierre: 19:00 (7:00 PM)
       const expirationDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 19, 0, 0); 
       const diff = expirationDate.getTime() - now.getTime();
 
@@ -126,16 +125,18 @@ export default function DashboardPage() {
     const relevantRoutes = routes.filter(route => {
         const routeDate = route.date;
         const isOwnerOrAdmin = user?.role === 'Administrador' || route.createdBy === user?.id;
+        // Consideramos Completadas e Incompletas para las métricas de actividad
+        const isTerminalStatus = route.status === 'Completada' || route.status === 'Incompleta';
         return (
             isOwnerOrAdmin &&
-            route.status === 'Completada' &&
+            isTerminalStatus &&
             routeDate &&
-            isWithinInterval(routeDate, { start, end })
+            isWithinInterval(routeDate instanceof Timestamp ? routeDate.toDate() : routeDate, { start, end })
         );
     });
 
     relevantRoutes.forEach(route => {
-        const routeDate = route.date;
+        const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
         if (routeDate) {
             const dayIndex = getDay(routeDate) === 0 ? 6 : getDay(routeDate) - 1; // Lunes = 0, Domingo = 6
             if (dayIndex >= 0 && dayIndex < 7) {
@@ -152,15 +153,16 @@ export default function DashboardPage() {
   }, [routes, user]);
   
   const performanceData = useMemo(() => {
-    const completedRoutes = routes.filter(r => r.status === 'Completada');
-    if (completedRoutes.length === 0) {
-        return { level: 'Sin datos', message: 'No hay rutas completadas para analizar.' };
+    // Rendimiento basado en todas las rutas terminales (cerradas)
+    const finishedRoutes = routes.filter(r => r.status === 'Completada' || r.status === 'Incompleta');
+    if (finishedRoutes.length === 0) {
+        return { level: 'Sin datos', message: 'No hay rutas finalizadas para analizar.' };
     }
 
     let totalPlanned = 0;
     let totalVisited = 0;
 
-    completedRoutes.forEach(route => {
+    finishedRoutes.forEach(route => {
         const plannedInRoute = route.clients.filter(c => c.status !== 'Eliminado').length;
         const visitedInRoute = route.clients.filter(c => c.visitStatus === 'Completado').length;
         totalPlanned += plannedInRoute;
@@ -168,7 +170,7 @@ export default function DashboardPage() {
     });
 
     if (totalPlanned === 0) {
-         return { level: 'Sin datos', message: 'Las rutas completadas no tienen clientes planificados.' };
+         return { level: 'Sin datos', message: 'Las rutas no tienen clientes planificados.' };
     }
 
     const percentage = (totalVisited / totalPlanned) * 100;
@@ -186,37 +188,39 @@ export default function DashboardPage() {
     compliancePercentage,
     averageManagementTime
   } = useMemo(() => {
-    const programmedRoutes = routes.filter(r => r.status !== 'Rechazada');
-    const completedRoutes = programmedRoutes.filter(r => r.status === 'Completada');
+    const programmedRoutes = routes.filter(r => r.status !== 'Rechazada' && r.status !== 'Pendiente de Aprobación');
+    const finishedRoutes = programmedRoutes.filter(r => r.status === 'Completada' || r.status === 'Incompleta');
 
     let totalManagementSeconds = 0;
     let managedClientsCount = 0;
 
-    completedRoutes.forEach(route => {
+    finishedRoutes.forEach(route => {
         route.clients.forEach(client => {
             if (client.visitStatus === 'Completado' && client.checkInTime && client.checkOutTime) {
-                const [inHours, inMinutes, inSeconds] = client.checkInTime.split(':').map(Number);
-                const [outHours, outMinutes, outSeconds] = client.checkOutTime.split(':').map(Number);
+                try {
+                    const [inHours, inMinutes, inSeconds] = client.checkInTime.split(':').map(Number);
+                    const [outHours, outMinutes, outSeconds] = client.checkOutTime.split(':').map(Number);
 
-                const checkInDate = new Date();
-                checkInDate.setHours(inHours, inMinutes, inSeconds);
+                    const checkInDate = new Date();
+                    checkInDate.setHours(inHours, inMinutes, inSeconds);
 
-                const checkOutDate = new Date();
-                checkOutDate.setHours(outHours, outMinutes, outSeconds);
+                    const checkOutDate = new Date();
+                    checkOutDate.setHours(outHours, outMinutes, outSeconds);
 
-                const diff = (checkOutDate.getTime() - checkInDate.getTime()) / 1000;
-                if (diff > 0) {
-                    totalManagementSeconds += diff;
-                    managedClientsCount++;
-                }
+                    const diff = (checkOutDate.getTime() - checkInDate.getTime()) / 1000;
+                    if (diff > 0) {
+                        totalManagementSeconds += diff;
+                        managedClientsCount++;
+                    }
+                } catch(e) {}
             }
         });
     });
 
     return {
         totalProgrammedRoutes: programmedRoutes.length,
-        completedRoutesCount: completedRoutes.length,
-        compliancePercentage: programmedRoutes.length > 0 ? (completedRoutes.length / programmedRoutes.length) * 100 : 0,
+        completedRoutesCount: finishedRoutes.length,
+        compliancePercentage: programmedRoutes.length > 0 ? (finishedRoutes.length / programmedRoutes.length) * 100 : 0,
         averageManagementTime: managedClientsCount > 0 ? Math.round((totalManagementSeconds / managedClientsCount) / 60) : 0
     };
   }, [routes]);
@@ -294,7 +298,7 @@ export default function DashboardPage() {
               </CardContent>
             </Card>
         )}
-        {canSeeUserCount && !activeRoute && ( // Ocultamos si hay ruta activa para dar espacio
+        {canSeeUserCount && !activeRoute && ( 
             <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Usuarios Activos</CardTitle>
@@ -327,17 +331,17 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                         {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{totalProgrammedRoutes}</div>}
-                        <p className="text-xs text-muted-foreground">Rutas totales en el sistema</p>
+                        <p className="text-xs text-muted-foreground">Rutas aprobadas totales</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Rutas Completadas con Éxito</CardTitle>
+                        <CardTitle className="text-sm font-medium">Rutas Finalizadas</CardTitle>
                         <CheckCircle className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>
                         {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{completedRoutesCount}</div>}
-                        <p className="text-xs text-muted-foreground">Rutas finalizadas correctamente</p>
+                        <p className="text-xs text-muted-foreground">Incluye Incompletas y Completadas</p>
                     </CardContent>
                 </Card>
                 <Card>
@@ -347,12 +351,12 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                         {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{compliancePercentage.toFixed(2)}%</div>}
-                        <p className="text-xs text-muted-foreground">De las rutas programadas</p>
+                        <p className="text-xs text-muted-foreground">Planificada vs Finalizada</p>
                     </CardContent>
                 </Card>
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Tiempo Promedio de Gestión</CardTitle>
+                        <CardTitle className="text-sm font-medium">Tiempo Prom. Gestión</CardTitle>
                         <Timer className="h-4 w-4 text-muted-foreground" />
                     </CardHeader>
                     <CardContent>

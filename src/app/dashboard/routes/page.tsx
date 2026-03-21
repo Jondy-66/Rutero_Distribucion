@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -17,7 +16,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { deleteRoute, updateRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock, Trash2, Users, CheckCircle, Info } from 'lucide-react';
+import { MoreHorizontal, PlusCircle, CheckCircle2, AlertCircle, XCircle, Clock, Trash2, Users, CheckCircle, Info, Flag } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -40,6 +39,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import { Timestamp } from 'firebase/firestore';
@@ -50,6 +52,11 @@ export default function RoutesListPage() {
   const { user, routes: allRoutesFromContext, loading: authLoading, dataLoading, refetchData } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
+
+  // Estados para Finalización Manual
+  const [routeToFinalize, setRouteToFinalize] = useState<RoutePlan | null>(null);
+  const [finalizeReason, setFinalizeReason] = useState('');
+  const [isSaving, setIsSaving] = useState(false);
 
   const filteredRoutes = useMemo(() => {
     if (!user) return [];
@@ -71,14 +78,32 @@ export default function RoutesListPage() {
     }
   };
 
-  const handleMarkAsCompleted = async (routeId: string) => {
+  const handleMarkAsCompleted = async () => {
+    if (!routeToFinalize) return;
+    
+    const allClientsCount = routeToFinalize.clients.filter(c => c.status !== 'Eliminado').length;
+    const completedCount = routeToFinalize.clients.filter(c => c.status !== 'Eliminado' && c.visitStatus === 'Completado').length;
+    const isActuallyComplete = completedCount === allClientsCount;
+
+    if (!isActuallyComplete && !finalizeReason.trim()) {
+        toast({ title: "Atención", description: "Indica el motivo del cierre incompleto.", variant: "destructive" });
+        return;
+    }
+
+    setIsSaving(true);
     try {
-      await updateRoute(routeId, { status: 'Completada', statusReason: 'Finalizada manualmente por el usuario.' });
-      toast({ title: "Ruta Finalizada", description: "La ruta ha sido marcada como Completada." });
+      await updateRoute(routeToFinalize.id, { 
+        status: isActuallyComplete ? 'Completada' : 'Incompleta', 
+        statusReason: isActuallyComplete ? 'Finalizada por el usuario.' : finalizeReason 
+      });
+      toast({ title: "Plan Finalizado", description: isActuallyComplete ? "Ruta completada." : "Ruta cerrada como incompleta." });
+      setRouteToFinalize(null);
+      setFinalizeReason('');
       await refetchData('routes');
     } catch (error: any) {
-      console.error("Failed to complete route:", error);
-      toast({ title: "Error", description: "No se pudo completar la ruta.", variant: "destructive" });
+      toast({ title: "Error", description: "No se pudo finalizar la ruta.", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -113,10 +138,6 @@ export default function RoutesListPage() {
     if (route.date) {
         const d = route.date instanceof Timestamp ? route.date.toDate() : (route.date instanceof Date ? route.date : new Date(route.date));
         return format(d, 'PPP', { locale: es });
-    }
-    if (route.clients && route.clients.length > 0 && route.clients[0].date) {
-      const d = route.clients[0].date instanceof Timestamp ? (route.clients[0].date as any).toDate() : route.clients[0].date;
-      return format(d, 'PPP', { locale: es });
     }
     return 'N/A';
   };
@@ -171,11 +192,10 @@ export default function RoutesListPage() {
                             ))
                         ) : filteredRoutes.length > 0 ? (
                             filteredRoutes.map((route) => {
-                                const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
                                 const canEdit = user?.id === route.createdBy && (route.status === 'Rechazada' || route.status === 'Planificada' || route.status === 'En Progreso');
                                 const canAdminEdit = user?.role === 'Administrador' && route.status !== 'Completada';
                                 const canDelete = user?.role === 'Administrador' || (user?.id === route.createdBy && route.status === 'Rechazada');
-                                const canAdminComplete = user?.role === 'Administrador' && route.status === 'En Progreso';
+                                const canComplete = route.status === 'En Progreso';
                                 
                                 const clientCount = route.clients?.length || 0;
 
@@ -206,19 +226,17 @@ export default function RoutesListPage() {
                                           <DropdownMenuTrigger asChild>
                                             <Button aria-haspopup="true" size="icon" variant="ghost">
                                               <MoreHorizontal className="h-4 w-4" />
-                                              <span className="sr-only">Alternar menú</span>
+                                              <span className="sr-only">Menú</span>
                                             </Button>
                                           </DropdownMenuTrigger>
                                           <DropdownMenuContent align="end">
                                             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                            {canReview && <DropdownMenuItem onClick={() => handleAction(route.id)}>Revisar</DropdownMenuItem>}
-                                            {(canEdit || canAdminEdit) && <DropdownMenuItem onClick={() => handleAction(route.id)}>Editar / Ver Detalle</DropdownMenuItem>}
-                                            {!canReview && !canEdit && !canAdminEdit && <DropdownMenuItem onClick={() => handleAction(route.id)}>Ver Detalles</DropdownMenuItem>}
+                                            {(canEdit || canAdminEdit) && <DropdownMenuItem onClick={() => handleAction(route.id)}>Editar / Detalle</DropdownMenuItem>}
                                             
-                                            {canAdminComplete && (
-                                                <DropdownMenuItem onClick={() => handleMarkAsCompleted(route.id)}>
-                                                    <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                                                    Finalizar Ruta (Completada)
+                                            {canComplete && (
+                                                <DropdownMenuItem onClick={() => setRouteToFinalize(route)} className="font-bold text-green-600">
+                                                    <Flag className="mr-2 h-4 w-4" />
+                                                    Finalizar Plan (Cierre)
                                                 </DropdownMenuItem>
                                             )}
 
@@ -237,14 +255,12 @@ export default function RoutesListPage() {
                                         </DropdownMenu>
                                         <AlertDialogContent>
                                           <AlertDialogHeader>
-                                            <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                              Esta acción no se puede deshacer. Esto eliminará permanentemente la ruta de tu cuenta.
-                                            </AlertDialogDescription>
+                                            <AlertDialogTitle>¿Eliminar ruta?</AlertDialogTitle>
+                                            <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
                                           </AlertDialogHeader>
                                           <AlertDialogFooter>
                                             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                            <AlertDialogAction onClick={() => handleDelete(route.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                                            <AlertDialogAction onClick={() => handleDelete(route.id)} className="bg-destructive">Eliminar</AlertDialogAction>
                                           </AlertDialogFooter>
                                         </AlertDialogContent>
                                       </AlertDialog>
@@ -254,9 +270,7 @@ export default function RoutesListPage() {
                             })
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center h-24">
-                                    No has creado ninguna ruta.
-                                </TableCell>
+                                <TableCell colSpan={6} className="text-center h-24">No hay rutas registradas.</TableCell>
                             </TableRow>
                         )}
                     </TableBody>
@@ -264,6 +278,43 @@ export default function RoutesListPage() {
             </div>
         </CardContent>
       </Card>
+
+      {/* Diálogo de Cierre Manual */}
+      <Dialog open={!!routeToFinalize} onOpenChange={(o) => !o && setRouteToFinalize(null)}>
+        <DialogContent className="max-w-md rounded-3xl p-8">
+            <DialogHeader>
+                <DialogTitle className="text-2xl font-black text-primary uppercase">Cierre de Plan Semanal</DialogTitle>
+                <DialogDescription className="font-bold text-[10px] uppercase mt-2">
+                    Si el plan tiene visitas pendientes, se marcará como 'Incompleto' y deberás justificar por qué no se gestionaron.
+                </DialogDescription>
+            </DialogHeader>
+            
+            {routeToFinalize && routeToFinalize.clients.some(c => c.status !== 'Eliminado' && c.visitStatus === 'Pendiente') && (
+                <div className="space-y-2 mt-4">
+                    <Label className="text-[10px] font-black uppercase text-slate-500">Motivo del Cierre Incompleto (Obligatorio)</Label>
+                    <Textarea 
+                        className="h-32 border-2 rounded-2xl font-bold"
+                        placeholder="Ej: Algunos locales estaban cerrados o no se alcanzó a visitar por logística..."
+                        value={finalizeReason}
+                        onChange={e => setFinalizeReason(e.target.value)}
+                    />
+                </div>
+            )}
+
+            <DialogFooter className="mt-8 gap-3 sm:flex-col">
+                <Button 
+                    className="w-full h-14 font-black text-lg rounded-2xl shadow-xl"
+                    disabled={isSaving || (routeToFinalize?.clients.some(c => c.status !== 'Eliminado' && c.visitStatus === 'Pendiente') && !finalizeReason.trim())}
+                    onClick={handleMarkAsCompleted}
+                >
+                    {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : "CONFIRMAR FINALIZACIÓN"}
+                </Button>
+                <DialogClose asChild>
+                    <Button variant="ghost" className="w-full font-bold">CANCELAR</Button>
+                </DialogClose>
+            </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

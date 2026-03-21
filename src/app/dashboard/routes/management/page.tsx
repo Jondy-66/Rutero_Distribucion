@@ -2,11 +2,11 @@
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, ThumbsUp, Users, CirclePlus, X, AlertTriangle } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, ThumbsUp, Users, CirclePlus, X, AlertTriangle, Flag } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -75,6 +75,10 @@ function RouteManagementContent() {
   const [reAdditionObservation, setReAdditionObservation] = useState('');
   const [isExpired, setIsExpired] = useState(false);
 
+  // Estados para Finalización de Plan
+  const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
+  const [finalizeReason, setFinalizeReason] = useState('');
+
   const lastLocalUpdate = useRef<number>(0);
   const isAdmin = user?.role === 'Administrador';
 
@@ -93,21 +97,16 @@ function RouteManagementContent() {
   const selectableRoutes = useMemo(() => {
     const today = new Date();
     return allRoutes.filter(r => {
-        // Filtrar por pertenencia (dueño o admin)
         if (r.createdBy !== user?.id && !isAdmin) return false;
         if (isAdmin && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
-        // REGLA DE NEGOCIO: Solo se pueden iniciar/gestionar rutas aprobadas (Planificada) o ya en curso
-        // Las rutas en "Pendiente de Aprobación" o "Rechazada" NO deben aparecer aquí.
         if (r.status === 'Pendiente de Aprobación' || r.status === 'Rechazada') return false;
 
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
         const diffInDays = Math.abs(startOfDay(rDate).getTime() - startOfDay(today).getTime()) / (1000 * 60 * 60 * 24);
         
-        // Rutas completadas se muestran solo si son recientes (histórico de 7 días)
-        if (r.status === 'Completada') return diffInDays < 7;
+        if (r.status === 'Completada' || r.status === 'Incompleta') return diffInDays < 7;
         
-        // El resto (Planificada, En Progreso, Incompleta) son seleccionables
         return true;
     });
   }, [allRoutes, user, isAdmin, selectedAgentId]);
@@ -119,7 +118,6 @@ function RouteManagementContent() {
 
   useEffect(() => {
     if (!selectedRoute) return;
-    // Si la ruta cambia, forzamos la actualización de los clientes y limpiamos el activo
     setCurrentRouteClientsFull(selectedRoute.clients || []);
     setIsRouteStarted(selectedRoute.status === 'En Progreso' || isAdmin);
     setActiveOriginalIndex(null); 
@@ -132,11 +130,8 @@ function RouteManagementContent() {
         .map((c, index) => ({ ...c, originalIndex: index }))
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            
-            // Comparación estricta por día absoluto para garantizar independencia entre jornadas
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date ? new Date(c.date) : null);
             if (!cDate) return false;
-            
             return isSameDay(startOfDay(cDate), startOfDay(today));
         })
         .map(c => {
@@ -172,9 +167,6 @@ function RouteManagementContent() {
     }
   };
 
-  /**
-   * Captura la geolocalización actual del dispositivo.
-   */
   const getGeoLocation = () => {
     return new Promise<any>((resolve) => {
         if (!navigator.geolocation) return resolve(null);
@@ -189,21 +181,17 @@ function RouteManagementContent() {
   const handleCheckIn = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled || isExpired) return;
     setIsSaving(true);
-    lastLocalUpdate.current = Date.now();
-
     try {
         const location = await getGeoLocation();
-
         const nextClients = [...currentRouteClientsFull];
         nextClients[activeOriginalIndex] = { 
             ...nextClients[activeOriginalIndex], 
             checkInTime: format(new Date(), 'HH:mm:ss'), 
             checkInLocation: location 
         };
-
         await updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) });
         setCurrentRouteClientsFull(nextClients);
-        toast({ title: "Entrada Registrada", description: location ? "Ubicación capturada con éxito." : "No se pudo obtener la ubicación exacta." });
+        toast({ title: "Entrada Registrada" });
     } catch (e) {
         toast({ title: "Error al registrar entrada", variant: "destructive" });
     } finally {
@@ -213,18 +201,14 @@ function RouteManagementContent() {
 
   const handleConfirmCheckOut = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled || isExpired) return;
-    
     const clientToFinish = currentRouteClientsFull[activeOriginalIndex];
     if (clientToFinish?.visitType === 'telefonica' && !clientToFinish.callObservation?.trim()) {
-        return toast({ title: "Observación requerida", description: "Escribe el resumen de la llamada.", variant: "destructive" });
+        return toast({ title: "Observación requerida", variant: "destructive" });
     }
 
     setIsSaving(true);
-    lastLocalUpdate.current = Date.now();
-
     try {
         const location = await getGeoLocation();
-
         const nextClients = [...currentRouteClientsFull];
         nextClients[activeOriginalIndex] = { 
             ...nextClients[activeOriginalIndex], 
@@ -234,7 +218,6 @@ function RouteManagementContent() {
         };
 
         const allDone = nextClients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
-        
         await updateRoute(selectedRoute.id, { 
             clients: sanitizeClients(nextClients),
             status: allDone ? 'Completada' : 'En Progreso'
@@ -242,7 +225,7 @@ function RouteManagementContent() {
 
         setCurrentRouteClientsFull(nextClients);
         if (!isAdmin) setActiveOriginalIndex(null);
-        toast({ title: "Visita Finalizada", description: location ? "Ubicación de salida registrada." : "Cerrado sin coordenadas GPS." });
+        toast({ title: "Visita Finalizada" });
         await refetchData('routes');
     } catch (e) {
         toast({ title: "Error al finalizar", variant: "destructive" });
@@ -251,18 +234,43 @@ function RouteManagementContent() {
     }
   };
 
+  const handleFinalizeRoutePlan = async () => {
+    if (!selectedRoute || isSaving) return;
+    
+    const allClientsCount = currentRouteClientsFull.filter(c => c.status !== 'Eliminado').length;
+    const completedCount = currentRouteClientsFull.filter(c => c.status !== 'Eliminado' && c.visitStatus === 'Completado').length;
+    const isActuallyComplete = completedCount === allClientsCount;
+
+    if (!isActuallyComplete && !finalizeReason.trim()) {
+        toast({ title: "Motivo requerido", description: "Debes ingresar una observación para cerrar el plan incompleto.", variant: "destructive" });
+        return;
+    }
+
+    setIsSaving(true);
+    try {
+        await updateRoute(selectedRoute.id, {
+            status: isActuallyComplete ? 'Completada' : 'Incompleta',
+            statusReason: isActuallyComplete ? 'Plan finalizado al 100%.' : finalizeReason
+        });
+        toast({ title: "Plan Finalizado", description: isActuallyComplete ? "Ruta completada con éxito." : "Ruta cerrada como incompleta." });
+        await refetchData('routes');
+        setIsFinalizeDialogOpen(false);
+        router.push('/dashboard');
+    } catch (e) {
+        toast({ title: "Error al cerrar plan", variant: "destructive" });
+    } finally {
+        setIsSaving(false);
+    }
+  };
+
   const handleRemoveClient = async (idx: number) => {
     if (!selectedRoute || !isAdmin) return;
     setIsSaving(true);
-    lastLocalUpdate.current = Date.now();
-
     try {
-        const nextClients = currentRouteClientsFull.map((c, i) => 
-            i === idx ? { ...c, status: 'Eliminado' } : c
-        );
+        const nextClients = currentRouteClientsFull.map((c, i) => i === idx ? { ...c, status: 'Eliminado' } : c);
         await updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) });
         setCurrentRouteClientsFull(nextClients);
-        toast({ title: "Cliente removido de la ruta" });
+        toast({ title: "Cliente removido" });
     } catch (e) {
         toast({ title: "Error al eliminar", variant: "destructive" });
     } finally {
@@ -271,19 +279,12 @@ function RouteManagementContent() {
   };
 
   const handleAddClients = async () => {
-    if (!selectedRoute || multiSelectedClients.length === 0 || isExpired) {
-        if(isExpired) toast({ title: "Acceso denegado", description: "La jornada ha expirado.", variant: "destructive" });
-        return;
-    }
-
-    // Validar observación de re-adición si el cliente ya existe en el plan
+    if (!selectedRoute || multiSelectedClients.length === 0 || isExpired) return;
     if (needsReadditionObservation && !reAdditionObservation.trim()) {
-        toast({ title: "Atención", description: "Debes ingresar el motivo de la re-adición para los clientes existentes en el plan.", variant: "destructive" });
+        toast({ title: "Atención", description: "Ingresa el motivo de re-adición.", variant: "destructive" });
         return;
     }
-
     setIsSaving(true);
-
     try {
         const newVisits: ClientInRoute[] = multiSelectedClients.map(c => {
             const isAlreadyInPlan = currentRouteClientsFull.some(cc => cc.ruc === c.ruc && cc.status !== 'Eliminado');
@@ -297,28 +298,22 @@ function RouteManagementContent() {
                 reAdditionObservation: isAlreadyInPlan ? reAdditionObservation : ''
             };
         });
-
         const nextClients = [...currentRouteClientsFull, ...newVisits];
         await updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) });
-        
         setCurrentRouteClientsFull(nextClients);
         setIsAddClientDialogOpen(false);
         setMultiSelectedClients([]);
         setReAdditionObservation('');
-        setAddClientSearchTerm('');
-        toast({ title: "Clientes añadidos exitosamente" });
+        toast({ title: "Clientes añadidos" });
     } catch (e) {
-        toast({ title: "Error al añadir clientes", variant: "destructive" });
+        toast({ title: "Error al añadir", variant: "destructive" });
     } finally {
         setIsSaving(false);
     }
   };
 
-  // Determinar si algún cliente seleccionado requiere observación de re-adición
   const needsReadditionObservation = useMemo(() => {
-    return multiSelectedClients.some(sc => 
-        currentRouteClientsFull.some(cc => cc.ruc === sc.ruc && cc.status !== 'Eliminado')
-    );
+    return multiSelectedClients.some(sc => currentRouteClientsFull.some(cc => cc.ruc === sc.ruc && cc.status !== 'Eliminado'));
   }, [multiSelectedClients, currentRouteClientsFull]);
 
   if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin mx-auto h-12 w-12" /></div>;
@@ -373,9 +368,24 @@ function RouteManagementContent() {
             <div className="bg-green-100 p-8 rounded-full mb-6 animate-bounce">
                 <ThumbsUp className="h-16 w-16 text-green-600" />
             </div>
-            <h2 className="text-3xl font-black text-green-700 uppercase mb-4 tracking-tighter">¡Jornada de hoy completada!</h2>
+            <h2 className="text-3xl font-black text-green-700 uppercase mb-2 tracking-tighter">¡Jornada de hoy completada!</h2>
             <p className="text-muted-foreground font-medium mb-8 max-w-xs">Has gestionado todos los clientes programados para hoy con éxito.</p>
-            <Button className="font-black px-10 h-14 rounded-2xl text-lg shadow-lg" onClick={() => router.push('/dashboard')}>VOLVER AL PANEL</Button>
+            
+            <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
+                <Button 
+                    variant="outline" 
+                    className="flex-1 font-black h-14 rounded-2xl text-lg border-2" 
+                    onClick={() => router.push('/dashboard')}
+                >
+                    VOLVER AL PANEL
+                </Button>
+                <Button 
+                    className="flex-1 font-black h-14 rounded-2xl text-lg shadow-lg bg-primary"
+                    onClick={() => setIsFinalizeDialogOpen(true)}
+                >
+                    <Flag className="mr-2 h-5 w-5" /> FINALIZAR PLAN
+                </Button>
+            </div>
         </div>
     ) : (
         <div className="grid lg:grid-cols-3 gap-8">
@@ -383,8 +393,8 @@ function RouteManagementContent() {
                 <Card className="shadow-2xl border-t-4 border-t-primary h-[80vh] min-h-[550px] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
                     <CardHeader className="bg-muted/10 px-8 py-6 space-y-1 shrink-0">
                         <div className="flex justify-between items-start">
-                            <div className="space-y-1">
-                                <h2 className="text-2xl font-black text-primary uppercase leading-tight tracking-tighter truncate max-w-[200px]" title={selectedRoute?.routeName}>
+                            <div className="space-y-1 min-w-0">
+                                <h2 className="text-2xl font-black text-primary uppercase leading-tight tracking-tighter truncate" title={selectedRoute?.routeName}>
                                     {selectedRoute?.routeName || "Plan de Ruta"}
                                 </h2>
                                 <p className="text-sm font-bold text-muted-foreground capitalize">
@@ -609,6 +619,45 @@ function RouteManagementContent() {
             </div>
         </div>
     )}
+
+    {/* Diálogo de Finalización de Plan */}
+    <Dialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
+        <DialogContent className="max-w-md rounded-3xl p-8">
+            <DialogHeader>
+                <DialogTitle className="text-2xl font-black text-primary uppercase">Cerrar Plan de Ruta</DialogTitle>
+                <DialogDescription className="font-bold text-xs uppercase mt-2">
+                    {currentRouteClientsFull.filter(c => c.status !== 'Eliminado' && c.visitStatus === 'Pendiente').length > 0 
+                        ? "Advertencia: El plan tiene visitas pendientes de días anteriores. Al finalizarlo ahora, se marcará como 'Incompleto' y deberás indicar el motivo."
+                        : "¿Deseas dar por terminada tu gestión semanal y cerrar este plan definitivamente?"}
+                </DialogDescription>
+            </DialogHeader>
+            
+            {currentRouteClientsFull.filter(c => c.status !== 'Eliminado' && c.visitStatus === 'Pendiente').length > 0 && (
+                <div className="space-y-2 mt-4">
+                    <Label className="text-[10px] font-black uppercase text-slate-500">Motivo de Cierre Incompleto (Obligatorio)</Label>
+                    <Textarea 
+                        className="h-32 border-2 rounded-2xl font-bold"
+                        placeholder="Ej: Algunos clientes no pudieron ser visitados por falta de tiempo o cierre de locales..."
+                        value={finalizeReason}
+                        onChange={e => setFinalizeReason(e.target.value)}
+                    />
+                </div>
+            )}
+
+            <DialogFooter className="mt-8 gap-3 sm:flex-col">
+                <Button 
+                    className="w-full h-14 font-black text-lg rounded-2xl shadow-xl"
+                    disabled={isSaving || (currentRouteClientsFull.some(c => c.status !== 'Eliminado' && c.visitStatus === 'Pendiente') && !finalizeReason.trim())}
+                    onClick={handleFinalizeRoutePlan}
+                >
+                    {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : "CONFIRMAR CIERRE FINAL"}
+                </Button>
+                <DialogClose asChild>
+                    <Button variant="ghost" className="w-full font-bold">CANCELAR</Button>
+                </DialogClose>
+            </DialogFooter>
+        </DialogContent>
+    </Dialog>
 
     <Dialog open={isAddClientDialogOpen} onOpenChange={(open) => {
         setIsAddClientDialogOpen(open);
