@@ -253,7 +253,7 @@ export default function MyCompletedRoutesPage() {
                                     <TableCell>
                                       <Badge variant={
                                         route.status === 'Completada' ? 'success' :
-                                        (route.status === 'Rechazada' || route.status === 'Incompleta') ? 'destructive' :
+                                        (route.status === 'Rechazada') ? 'destructive' :
                                         'secondary'
                                       }>
                                         {route.status}

@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { getRoutes, deleteRoute, updateRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw, CheckCircle, Info, PlayCircle } from 'lucide-react';
+import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw, CheckCircle, PlayCircle } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -43,7 +43,6 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Timestamp } from 'firebase/firestore';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function TeamRoutesPage() {
   const { user, users, loading: authLoading, refetchData } = useAuth();
@@ -138,42 +137,14 @@ export default function TeamRoutesPage() {
       toast({ title: "Error", description: "No se pudo reactivar la ruta.", variant: "destructive" });
     }
   };
-
-  const handleMarkAsCompleted = async (routeId: string) => {
-    try {
-      await updateRoute(routeId, { status: 'Completada', statusReason: 'Finalizada manualmente por un administrador.' });
-      toast({ title: "Ruta Finalizada", description: "La ruta ha sido marcada como Completada manualmente." });
-      fetchRoutesData();
-      await refetchData('routes');
-    } catch (error: any) {
-      console.error("Failed to complete route:", error);
-      toast({ title: "Error", description: "No se pudo completar la ruta.", variant: "destructive" });
-    }
-  };
   
-  const getBadgeForStatus = (route: RoutePlan) => {
-    const { status, statusReason } = route;
+  const getBadgeForStatus = (status: string) => {
     switch (status) {
         case 'Planificada': return <Badge variant="secondary"><CheckCircle2 className="mr-1 h-3 w-3"/>{status}</Badge>;
         case 'En Progreso': return <Badge variant="default"><Clock className="mr-1 h-3 w-3"/>{status}</Badge>;
         case 'Completada': return <Badge variant="success"><CheckCircle2 className="mr-1 h-3 w-3"/>{status}</Badge>;
         case 'Pendiente de Aprobación': return <Badge variant="outline" className="text-amber-600 border-amber-500"><AlertCircle className="mr-1 h-3 w-3"/>Pendiente</Badge>;
         case 'Rechazada': return <Badge variant="destructive"><XCircle className="mr-1 h-3 w-3"/>{status}</Badge>;
-        case 'Incompleta': 
-            return (
-                <TooltipProvider>
-                    <Tooltip>
-                        <TooltipTrigger asChild>
-                            <Badge variant="destructive" className="cursor-help">
-                                <AlertCircle className="mr-1 h-3 w-3"/>{status}
-                            </Badge>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                            <p className="max-w-xs text-xs">{statusReason || "Ruta cerrada con visitas pendientes."}</p>
-                        </TooltipContent>
-                    </Tooltip>
-                </TooltipProvider>
-            );
         default: return <Badge variant="outline">{status}</Badge>;
     }
   }
@@ -259,25 +230,17 @@ export default function TeamRoutesPage() {
                             filteredRoutes.map((route, index) => {
                                 const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
                                 const canDelete = user?.role === 'Administrador';
-                                const canReactivate = user?.role === 'Administrador' && (route.status === 'Completada' || route.status === 'Incompleta' || route.status === 'Rechazada');
-                                const canAdminComplete = user?.role === 'Administrador' && route.status === 'En Progreso';
+                                const canReactivate = user?.role === 'Administrador' && (route.status === 'Completada' || route.status === 'Rechazada');
                                 const canManageLive = user?.role === 'Administrador' && route.status === 'En Progreso';
                                
                                 return (
                                 <TableRow key={route.id}>
                                     <TableCell className="font-medium">{index + 1}</TableCell>
-                                    <TableCell className="font-medium">
-                                        <div className="flex flex-col">
-                                            <span>{route.routeName}</span>
-                                            {route.status === 'Incompleta' && route.statusReason && (
-                                                <span className="text-[10px] text-muted-foreground italic truncate max-w-[200px]">{route.statusReason}</span>
-                                            )}
-                                        </div>
-                                    </TableCell>
+                                    <TableCell className="font-medium">{route.routeName}</TableCell>
                                     <TableCell>{getCreatorName(route.createdBy)}</TableCell>
                                     <TableCell>{getRouteDate(route)}</TableCell>
                                     <TableCell>
-                                        {getBadgeForStatus(route)}
+                                        {getBadgeForStatus(route.status)}
                                     </TableCell>
                                     <TableCell className="text-center">{route.clients?.length || 0}</TableCell>
                                     <TableCell className="text-right">
@@ -299,13 +262,6 @@ export default function TeamRoutesPage() {
                                                         <DropdownMenuItem onClick={() => handleManageLive(route.id)} className="font-bold text-primary">
                                                             <PlayCircle className="mr-2 h-4 w-4" />
                                                             Gestionar Jornada
-                                                        </DropdownMenuItem>
-                                                    )}
-
-                                                    {canAdminComplete && (
-                                                        <DropdownMenuItem onClick={() => handleMarkAsCompleted(route.id)}>
-                                                            <CheckCircle className="mr-2 h-4 w-4 text-green-600" />
-                                                            Finalizar Ruta (Completada)
                                                         </DropdownMenuItem>
                                                     )}
 

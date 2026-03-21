@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -6,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, ThumbsUp, Users, CirclePlus, X, AlertTriangle, Flag } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, ThumbsUp, Users, CirclePlus, X, AlertTriangle } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -75,10 +76,6 @@ function RouteManagementContent() {
   const [reAdditionObservation, setReAdditionObservation] = useState('');
   const [isExpired, setIsExpired] = useState(false);
 
-  // Estados para Finalización de Plan
-  const [isFinalizeDialogOpen, setIsFinalizeDialogOpen] = useState(false);
-  const [finalizeReason, setFinalizeReason] = useState('');
-
   const lastLocalUpdate = useRef<number>(0);
   const isAdmin = user?.role === 'Administrador';
 
@@ -105,7 +102,7 @@ function RouteManagementContent() {
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
         const diffInDays = Math.abs(startOfDay(rDate).getTime() - startOfDay(today).getTime()) / (1000 * 60 * 60 * 24);
         
-        if (r.status === 'Completada' || r.status === 'Incompleta') return diffInDays < 7;
+        if (r.status === 'Completada') return diffInDays < 7;
         
         return true;
     });
@@ -234,35 +231,6 @@ function RouteManagementContent() {
     }
   };
 
-  const handleFinalizeRoutePlan = async () => {
-    if (!selectedRoute || isSaving) return;
-    
-    const allClientsCount = currentRouteClientsFull.filter(c => c.status !== 'Eliminado').length;
-    const completedCount = currentRouteClientsFull.filter(c => c.status !== 'Eliminado' && c.visitStatus === 'Completado').length;
-    const isActuallyComplete = completedCount === allClientsCount;
-
-    if (!isActuallyComplete && !finalizeReason.trim()) {
-        toast({ title: "Motivo requerido", description: "Debes ingresar una observación para cerrar el plan incompleto.", variant: "destructive" });
-        return;
-    }
-
-    setIsSaving(true);
-    try {
-        await updateRoute(selectedRoute.id, {
-            status: isActuallyComplete ? 'Completada' : 'Incompleta',
-            statusReason: isActuallyComplete ? 'Plan finalizado al 100%.' : finalizeReason
-        });
-        toast({ title: "Plan Finalizado", description: isActuallyComplete ? "Ruta completada con éxito." : "Ruta cerrada como incompleta." });
-        await refetchData('routes');
-        setIsFinalizeDialogOpen(false);
-        router.push('/dashboard');
-    } catch (e) {
-        toast({ title: "Error al cerrar plan", variant: "destructive" });
-    } finally {
-        setIsSaving(false);
-    }
-  };
-
   const handleRemoveClient = async (idx: number) => {
     if (!selectedRoute || !isAdmin) return;
     setIsSaving(true);
@@ -371,21 +339,13 @@ function RouteManagementContent() {
             <h2 className="text-3xl font-black text-green-700 uppercase mb-2 tracking-tighter">¡Jornada de hoy completada!</h2>
             <p className="text-muted-foreground font-medium mb-8 max-w-xs">Has gestionado todos los clientes programados para hoy con éxito.</p>
             
-            <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md">
-                <Button 
-                    variant="outline" 
-                    className="flex-1 font-black h-14 rounded-2xl text-lg border-2" 
-                    onClick={() => router.push('/dashboard')}
-                >
-                    VOLVER AL PANEL
-                </Button>
-                <Button 
-                    className="flex-1 font-black h-14 rounded-2xl text-lg shadow-lg bg-primary"
-                    onClick={() => setIsFinalizeDialogOpen(true)}
-                >
-                    <Flag className="mr-2 h-5 w-5" /> FINALIZAR PLAN
-                </Button>
-            </div>
+            <Button 
+                variant="outline" 
+                className="font-black h-14 rounded-2xl text-lg border-2 px-10" 
+                onClick={() => router.push('/dashboard')}
+            >
+                VOLVER AL PANEL
+            </Button>
         </div>
     ) : (
         <div className="grid lg:grid-cols-3 gap-8">
@@ -619,45 +579,6 @@ function RouteManagementContent() {
             </div>
         </div>
     )}
-
-    {/* Diálogo de Finalización de Plan */}
-    <Dialog open={isFinalizeDialogOpen} onOpenChange={setIsFinalizeDialogOpen}>
-        <DialogContent className="max-w-md rounded-3xl p-8">
-            <DialogHeader>
-                <DialogTitle className="text-2xl font-black text-primary uppercase">Cerrar Plan de Ruta</DialogTitle>
-                <DialogDescription className="font-bold text-xs uppercase mt-2">
-                    {currentRouteClientsFull.filter(c => c.status !== 'Eliminado' && c.visitStatus === 'Pendiente').length > 0 
-                        ? "Advertencia: El plan tiene visitas pendientes de días anteriores. Al finalizarlo ahora, se marcará como 'Incompleto' y deberás indicar el motivo."
-                        : "¿Deseas dar por terminada tu gestión semanal y cerrar este plan definitivamente?"}
-                </DialogDescription>
-            </DialogHeader>
-            
-            {currentRouteClientsFull.filter(c => c.status !== 'Eliminado' && c.visitStatus === 'Pendiente').length > 0 && (
-                <div className="space-y-2 mt-4">
-                    <Label className="text-[10px] font-black uppercase text-slate-500">Motivo de Cierre Incompleto (Obligatorio)</Label>
-                    <Textarea 
-                        className="h-32 border-2 rounded-2xl font-bold"
-                        placeholder="Ej: Algunos clientes no pudieron ser visitados por falta de tiempo o cierre de locales..."
-                        value={finalizeReason}
-                        onChange={e => setFinalizeReason(e.target.value)}
-                    />
-                </div>
-            )}
-
-            <DialogFooter className="mt-8 gap-3 sm:flex-col">
-                <Button 
-                    className="w-full h-14 font-black text-lg rounded-2xl shadow-xl"
-                    disabled={isSaving || (currentRouteClientsFull.some(c => c.status !== 'Eliminado' && c.visitStatus === 'Pendiente') && !finalizeReason.trim())}
-                    onClick={handleFinalizeRoutePlan}
-                >
-                    {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : "CONFIRMAR CIERRE FINAL"}
-                </Button>
-                <DialogClose asChild>
-                    <Button variant="ghost" className="w-full font-bold">CANCELAR</Button>
-                </DialogClose>
-            </DialogFooter>
-        </DialogContent>
-    </Dialog>
 
     <Dialog open={isAddClientDialogOpen} onOpenChange={(open) => {
         setIsAddClientDialogOpen(open);

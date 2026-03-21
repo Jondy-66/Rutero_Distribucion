@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useAuth } from '@/hooks/use-auth';
@@ -44,7 +45,6 @@ export default function DashboardPage() {
 
   const activeRoute = useMemo(() => {
     // Buscamos cualquier ruta en progreso del usuario actual. 
-    // Excluimos Incompletas y Completadas porque ya son terminales.
     return routes.find(r => r.createdBy === user?.id && r.status === 'En Progreso');
   }, [routes, user]);
 
@@ -125,8 +125,7 @@ export default function DashboardPage() {
     const relevantRoutes = routes.filter(route => {
         const routeDate = route.date;
         const isOwnerOrAdmin = user?.role === 'Administrador' || route.createdBy === user?.id;
-        // Consideramos Completadas e Incompletas para las métricas de actividad
-        const isTerminalStatus = route.status === 'Completada' || route.status === 'Incompleta';
+        const isTerminalStatus = route.status === 'Completada';
         return (
             isOwnerOrAdmin &&
             isTerminalStatus &&
@@ -153,8 +152,7 @@ export default function DashboardPage() {
   }, [routes, user]);
   
   const performanceData = useMemo(() => {
-    // Rendimiento basado en todas las rutas terminales (cerradas)
-    const finishedRoutes = routes.filter(r => r.status === 'Completada' || r.status === 'Incompleta');
+    const finishedRoutes = routes.filter(r => r.status === 'Completada');
     if (finishedRoutes.length === 0) {
         return { level: 'Sin datos', message: 'No hay rutas finalizadas para analizar.' };
     }
@@ -189,7 +187,7 @@ export default function DashboardPage() {
     averageManagementTime
   } = useMemo(() => {
     const programmedRoutes = routes.filter(r => r.status !== 'Rechazada' && r.status !== 'Pendiente de Aprobación');
-    const finishedRoutes = programmedRoutes.filter(r => r.status === 'Completada' || r.status === 'Incompleta');
+    const finishedRoutes = programmedRoutes.filter(r => r.status === 'Completada');
 
     let totalManagementSeconds = 0;
     let managedClientsCount = 0;
@@ -341,7 +339,7 @@ export default function DashboardPage() {
                     </CardHeader>
                     <CardContent>
                         {loading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{completedRoutesCount}</div>}
-                        <p className="text-xs text-muted-foreground">Incluye Incompletas y Completadas</p>
+                        <p className="text-xs text-muted-foreground">Solo rutas al 100%</p>
                     </CardContent>
                 </Card>
                 <Card>
