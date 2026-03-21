@@ -11,7 +11,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, isBefore, startOfDay, addDays, isSameDay } from 'date-fns';
+import { format, startOfDay, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -76,7 +76,6 @@ function RouteManagementContent() {
   const [reAdditionObservation, setReAdditionObservation] = useState('');
   const [isExpired, setIsExpired] = useState(false);
 
-  const lastLocalUpdate = useRef<number>(0);
   const isAdmin = user?.role === 'Administrador';
 
   // Control de Expiración (19:00)
@@ -97,6 +96,7 @@ function RouteManagementContent() {
         if (r.createdBy !== user?.id && !isAdmin) return false;
         if (isAdmin && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
+        // Filtro estricto: Solo rutas que el usuario puede ejecutar
         if (r.status === 'Pendiente de Aprobación' || r.status === 'Rechazada') return false;
 
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
@@ -121,7 +121,7 @@ function RouteManagementContent() {
   }, [selectedRoute, isAdmin]);
 
   const routeClients = useMemo(() => {
-    const today = new Date();
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     
     return currentRouteClientsFull
         .map((c, index) => ({ ...c, originalIndex: index }))
@@ -129,7 +129,8 @@ function RouteManagementContent() {
             if (c.status === 'Eliminado') return false;
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date ? new Date(c.date) : null);
             if (!cDate) return false;
-            return isSameDay(startOfDay(cDate), startOfDay(today));
+            // Comparación estricta por string para evitar desfases de zona horaria
+            return format(cDate, 'yyyy-MM-dd') === todayStr;
         })
         .map(c => {
             const details = availableClients.find(ac => String(ac.ruc || '').trim() === String(c.ruc || '').trim());
@@ -153,7 +154,6 @@ function RouteManagementContent() {
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (activeOriginalIndex === null || isEditingDisabled || isSaving) return;
     
-    lastLocalUpdate.current = Date.now();
     const nextClients = [...currentRouteClientsFull];
     nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], [field]: value };
     
@@ -409,8 +409,8 @@ function RouteManagementContent() {
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <p className={cn(
-                                                    "font-black text-xs truncate uppercase tracking-tight",
-                                                    activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-950"
+                                                    "font-black text-xs truncate uppercase tracking-tight text-slate-950",
+                                                    activeOriginalIndex === c.originalIndex && "text-primary"
                                                 )}>
                                                     {c.nombre_comercial}
                                                 </p>
@@ -444,7 +444,7 @@ function RouteManagementContent() {
                     <CardHeader className="bg-muted/10 h-36 flex flex-col justify-center px-10 shrink-0">
                         {activeClient ? (
                             <div className="space-y-1">
-                                <h3 className="text-2xl font-black text-primary uppercase leading-tight tracking-tight">{activeClient.nombre_comercial}</h3>
+                                <h3 className="text-2xl font-black text-primary uppercase leading-tight tracking-tight text-slate-950">{activeClient.nombre_comercial}</h3>
                                 <p className="text-xs font-bold text-muted-foreground uppercase">{activeClient.direccion}</p>
                             </div>
                         ) : (
@@ -529,7 +529,7 @@ function RouteManagementContent() {
                                             <Label className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">{f.label}</Label>
                                             <Input 
                                                 type="text" 
-                                                className="h-14 text-xl font-black text-primary border-2 border-slate-100 focus:border-primary rounded-2xl bg-slate-50/30 px-4 text-center" 
+                                                className="h-14 text-xl font-black text-primary border-2 border-slate-100 focus:border-primary rounded-2xl bg-slate-50/30 px-4 text-center text-slate-950" 
                                                 placeholder="0.00" 
                                                 value={activeClient[f.key as keyof ClientInRoute] ?? ''} 
                                                 onChange={e => handleFieldChange(f.key as any, e.target.value)} 

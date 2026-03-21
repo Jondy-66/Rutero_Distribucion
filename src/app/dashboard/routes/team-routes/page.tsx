@@ -127,6 +127,17 @@ export default function TeamRoutesPage() {
     }
   };
 
+  const handleFinalize = async (routeId: string) => {
+    try {
+      await updateRoute(routeId, { status: 'Completada' });
+      toast({ title: "Ruta Finalizada", description: "La ruta ha sido marcada como completada manualmente." });
+      fetchRoutesData();
+    } catch (error: any) {
+      console.error("Failed to finalize route:", error);
+      toast({ title: "Error", description: "No se pudo finalizar la ruta.", variant: "destructive" });
+    }
+  };
+
   const handleReactivate = async (routeId: string) => {
     try {
       await updateRoute(routeId, { status: 'En Progreso' });
@@ -228,10 +239,12 @@ export default function TeamRoutesPage() {
                             ))
                         ) : filteredRoutes.length > 0 ? (
                             filteredRoutes.map((route, index) => {
-                                const canReview = (user?.role === 'Supervisor' || user?.role === 'Administrador') && route.status === 'Pendiente de Aprobación';
-                                const canDelete = user?.role === 'Administrador';
-                                const canReactivate = user?.role === 'Administrador' && (route.status === 'Completada' || route.status === 'Rechazada');
-                                const canManageLive = user?.role === 'Administrador' && route.status === 'En Progreso';
+                                const isAdmin = user?.role === 'Administrador';
+                                const canReview = (user?.role === 'Supervisor' || isAdmin) && route.status === 'Pendiente de Aprobación';
+                                const canDelete = isAdmin;
+                                const canReactivate = isAdmin && (route.status === 'Completada' || route.status === 'Rechazada');
+                                const canManageLive = isAdmin && route.status === 'En Progreso';
+                                const canFinalize = isAdmin && (route.status === 'En Progreso' || route.status === 'Planificada');
                                
                                 return (
                                 <TableRow key={route.id}>
@@ -262,6 +275,13 @@ export default function TeamRoutesPage() {
                                                         <DropdownMenuItem onClick={() => handleManageLive(route.id)} className="font-bold text-primary">
                                                             <PlayCircle className="mr-2 h-4 w-4" />
                                                             Gestionar Jornada
+                                                        </DropdownMenuItem>
+                                                    )}
+
+                                                    {canFinalize && (
+                                                        <DropdownMenuItem onClick={() => handleFinalize(route.id)} className="font-bold text-blue-600">
+                                                            <CheckCircle className="mr-2 h-4 w-4" />
+                                                            Finalizar Ruta
                                                         </DropdownMenuItem>
                                                     )}
 
