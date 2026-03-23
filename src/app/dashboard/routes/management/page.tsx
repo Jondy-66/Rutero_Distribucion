@@ -1,9 +1,9 @@
 
 'use client';
-import { useState, useEffect, useMemo, useRef, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -11,7 +11,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, startOfDay, isSameDay, endOfWeek, isBefore } from 'date-fns';
+import { format, startOfDay, endOfWeek, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -26,10 +26,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-/**
- * Sanitiza los datos de los clientes para el almacenamiento en Firestore.
- * Convierte objetos de ubicación simples en GeoPoints nativos.
- */
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
         const cleaned: any = { ...c };
@@ -46,11 +42,9 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
         cleaned.valorCobro = parseValue(c.valorCobro);
         cleaned.devoluciones = parseValue(c.devoluciones);
         
-        // Conversión a GeoPoint para Entrada
         if (c.checkInLocation && (c.checkInLocation as any).latitude) {
             cleaned.checkInLocation = new GeoPoint((c.checkInLocation as any).latitude, (c.checkInLocation as any).longitude);
         }
-        // Conversión a GeoPoint para Salida
         if (c.checkOutLocation && (c.checkOutLocation as any).latitude) {
             cleaned.checkOutLocation = new GeoPoint((c.checkOutLocation as any).latitude, (c.checkOutLocation as any).longitude);
         }
@@ -77,8 +71,9 @@ function RouteManagementContent() {
   const [isExpired, setIsExpired] = useState(false);
 
   const isAdmin = user?.role === 'Administrador';
+  const isSupervisor = user?.role === 'Supervisor';
+  const isManager = isAdmin || isSupervisor;
 
-  // Control de Expiración (19:00)
   useEffect(() => {
     const check = () => {
       const now = new Date();
@@ -90,24 +85,39 @@ function RouteManagementContent() {
     return () => clearInterval(timer);
   }, [isAdmin]);
 
+  const managedUsers = useMemo(() => {
+    if (!user) return [];
+    if (user.role === 'Administrador') {
+      return allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
+    }
+    if (user.role === 'Supervisor') {
+      return allUsers.filter(u => u.supervisorId === user.id);
+    }
+    return [];
+  }, [allUsers, user]);
+
   const selectableRoutes = useMemo(() => {
     const today = startOfDay(new Date());
+    const managedUserIds = new Set(managedUsers.map(u => u.id));
+
     return allRoutes.filter(r => {
-        if (r.createdBy !== user?.id && !isAdmin) return false;
-        if (isAdmin && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
+        const isOwnRoute = r.createdBy === user?.id;
+        const isTeamRoute = managedUserIds.has(r.createdBy);
+
+        if (!isOwnRoute && !isTeamRoute && !isAdmin) return false;
         
-        // Filtro estricto: Solo rutas que el usuario puede ejecutar
+        if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
+        
         if (r.status === 'Pendiente de Aprobación' || r.status === 'Rechazada') return false;
 
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
-        const routeEndOfWeek = endOfWeek(rDate, { weekStartsOn: 1 }); // Domingo de la semana de la ruta
+        const routeEndOfWeek = endOfWeek(rDate, { weekStartsOn: 1 });
 
-        // REGLA DE ORO: No mostrar rutas de semanas que ya terminaron (pasado el domingo)
         if (isBefore(routeEndOfWeek, today)) return false;
         
         return true;
     });
-  }, [allRoutes, user, isAdmin, selectedAgentId]);
+  }, [allRoutes, user, isAdmin, isManager, selectedAgentId, managedUsers]);
 
   const selectedRoute = useMemo(() => 
     allRoutes.find(r => r.id === (selectedRouteId || searchParams.get('routeId'))), 
@@ -116,8 +126,6 @@ function RouteManagementContent() {
 
   useEffect(() => {
     if (!selectedRoute) return;
-
-    // Validación extra para evitar gestionar rutas pasadas si se accede por URL
     const rDate = selectedRoute.date instanceof Timestamp ? selectedRoute.date.toDate() : new Date(selectedRoute.date as any);
     const routeEndOfWeek = endOfWeek(rDate, { weekStartsOn: 1 });
     const isPastWeek = isBefore(routeEndOfWeek, startOfDay(new Date()));
@@ -133,9 +141,9 @@ function RouteManagementContent() {
     }
 
     setCurrentRouteClientsFull(selectedRoute.clients || []);
-    setIsRouteStarted(selectedRoute.status === 'En Progreso' || isAdmin);
+    setIsRouteStarted(selectedRoute.status === 'En Progreso' || isAdmin || isSupervisor);
     setActiveOriginalIndex(null); 
-  }, [selectedRoute, isAdmin, toast]);
+  }, [selectedRoute, isAdmin, isSupervisor, toast]);
 
   const routeClients = useMemo(() => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
@@ -146,7 +154,6 @@ function RouteManagementContent() {
             if (c.status === 'Eliminado') return false;
             const cDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date ? new Date(c.date) : null);
             if (!cDate) return false;
-            // Comparación estricta por string para evitar desfases horarios
             return format(cDate, 'yyyy-MM-dd') === todayStr;
         })
         .map(c => {
@@ -238,7 +245,7 @@ function RouteManagementContent() {
         });
 
         setCurrentRouteClientsFull(nextClients);
-        if (!isAdmin) setActiveOriginalIndex(null);
+        if (!isAdmin && !isSupervisor) setActiveOriginalIndex(null);
         toast({ title: "Visita Finalizada" });
         await refetchData('routes');
     } catch (e) {
@@ -319,45 +326,54 @@ function RouteManagementContent() {
 
     {!isRouteStarted ? (
         <Card className="max-w-md mx-auto shadow-xl border-t-4 border-t-primary">
-            <CardHeader><CardTitle>Iniciar Jornada</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-slate-950 font-black uppercase">Seleccionar Jornada</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-                {isAdmin && (
+                {isManager && (
                     <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-                        <SelectTrigger><Users className="mr-2 h-4 w-4" /><SelectValue placeholder="Todos los agentes" /></SelectTrigger>
-                        <SelectContent>{allUsers.filter(u => u.role !== 'Administrador').map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}</SelectContent>
+                        <SelectTrigger className="h-12 border-2 border-slate-200 font-bold text-slate-950">
+                            <Users className="mr-2 h-4 w-4 text-primary" />
+                            <SelectValue placeholder={isAdmin ? "Todos los agentes" : "Mi equipo"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all" className="font-bold">Todos los disponibles</SelectItem>
+                            {managedUsers.map(u => <SelectItem key={u.id} value={u.id} className="font-bold">{u.name}</SelectItem>)}
+                        </SelectContent>
                     </Select>
                 )}
                 <Select value={selectedRouteId} onValueChange={setSelectedRouteId}>
-                    <SelectTrigger><Route className="mr-2 h-4 w-4 text-primary" /><SelectValue placeholder="Selecciona una ruta aprobada" /></SelectTrigger>
+                    <SelectTrigger className="h-12 border-2 border-slate-200 font-bold text-slate-950">
+                        <Route className="mr-2 h-4 w-4 text-primary" />
+                        <SelectValue placeholder="Selecciona una ruta..." />
+                    </SelectTrigger>
                     <SelectContent>
                         {selectableRoutes.length > 0 ? (
-                            selectableRoutes.map(r => <SelectItem key={r.id} value={r.id}>{r.routeName} ({r.status})</SelectItem>)
+                            selectableRoutes.map(r => <SelectItem key={r.id} value={r.id} className="font-bold">{r.routeName} ({r.status})</SelectItem>)
                         ) : (
-                            <SelectItem value="none" disabled>No hay rutas disponibles para gestionar.</SelectItem>
+                            <SelectItem value="none" disabled className="font-bold">No hay rutas disponibles.</SelectItem>
                         )}
                     </SelectContent>
                 </Select>
                 {selectedRoute && (
                     <Button 
-                        className="w-full font-black h-12" 
+                        className="w-full font-black h-12 rounded-xl text-lg shadow-lg" 
                         onClick={() => updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => setIsRouteStarted(true))}
                         disabled={isExpired}
                     >
-                        {isExpired ? 'JORNADA EXPIRADA' : 'INICIAR JORNADA'}
+                        {isExpired ? 'JORNADA EXPIRADA' : 'INICIAR GESTIÓN'}
                     </Button>
                 )}
             </CardContent>
         </Card>
-    ) : isTodayCompleted && !isAdmin ? (
+    ) : isTodayCompleted && !isManager ? (
         <div className="flex flex-col items-center justify-center min-h-[50vh] text-center bg-white rounded-3xl shadow-xl p-10 border-4 border-green-50 animate-in zoom-in-95 duration-300">
             <div className="bg-green-100 p-8 rounded-full mb-6 animate-bounce">
                 <ThumbsUp className="h-16 w-16 text-green-600" />
             </div>
             <h2 className="text-3xl font-black text-green-700 uppercase mb-2 tracking-tighter">¡Jornada de hoy completada!</h2>
-            <p className="text-muted-foreground font-medium mb-8 max-w-xs">Has gestionado todos los clientes programados para hoy con éxito.</p>
+            <p className="text-slate-950 font-black mb-8 max-w-xs uppercase text-xs">Has gestionado todos los clientes programados para hoy con éxito.</p>
             <Button 
                 variant="outline" 
-                className="font-black h-14 rounded-2xl text-lg border-2 px-10" 
+                className="font-black h-14 rounded-2xl text-lg border-2 px-10 border-primary text-primary" 
                 onClick={() => router.push('/dashboard')}
             >
                 VOLVER AL PANEL
@@ -367,37 +383,37 @@ function RouteManagementContent() {
         <div className="grid lg:grid-cols-3 gap-8">
             <div className="lg:col-span-1">
                 <Card className="shadow-2xl border-t-4 border-t-primary h-[80vh] min-h-[550px] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
-                    <CardHeader className="bg-muted/10 px-8 py-6 space-y-1 shrink-0">
+                    <CardHeader className="bg-muted/10 px-8 py-6 space-y-1 shrink-0 border-b">
                         <div className="flex justify-between items-start">
                             <div className="space-y-1 min-w-0">
                                 <h2 className="text-2xl font-black text-primary uppercase leading-tight tracking-tighter truncate" title={selectedRoute?.routeName}>
                                     {selectedRoute?.routeName || "Plan de Ruta"}
                                 </h2>
-                                <p className="text-sm font-bold text-muted-foreground capitalize">
+                                <p className="text-xs font-black text-slate-950 uppercase">
                                     {format(new Date(), "EEEE, dd 'De' MMMM", { locale: es })}
                                 </p>
                             </div>
-                            {isAdmin && <Badge variant="secondary" className="bg-slate-100 text-slate-950 font-black text-[10px] px-3 py-1 uppercase tracking-tighter shrink-0">ADMIN</Badge>}
+                            {isManager && <Badge className="bg-slate-950 text-white font-black text-[10px] px-3 py-1 uppercase shrink-0">{user?.role}</Badge>}
                         </div>
                     </CardHeader>
                     <CardContent className="p-8 flex flex-col gap-6 flex-1 min-h-0 overflow-hidden">
                         <div className="space-y-2 shrink-0">
                             <div className="flex justify-between items-center text-[11px] font-black uppercase tracking-tighter mb-1">
                                 <span className="text-primary">PROGRESO HOY</span>
-                                <span className="text-slate-950">
+                                <span className="text-slate-950 font-black">
                                     {routeClients.filter(c => c.visitStatus === 'Completado').length} / {routeClients.length}
                                 </span>
                             </div>
-                            <Progress value={(routeClients.filter(c => c.visitStatus === 'Completado').length / (routeClients.length || 1)) * 100} className="h-2.5 bg-slate-100 [&>div]:bg-primary" />
+                            <Progress value={(routeClients.filter(c => c.visitStatus === 'Completado').length / (routeClients.length || 1)) * 100} className="h-3 bg-slate-100 [&>div]:bg-primary" />
                         </div>
 
                         <Button 
                             variant="outline" 
-                            className="w-full h-14 border-dashed border-2 border-slate-300 bg-slate-50/30 hover:bg-slate-100 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 transition-all shrink-0" 
+                            className="w-full h-14 border-dashed border-2 border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-950 font-black text-sm rounded-2xl flex items-center justify-center gap-2 transition-all shrink-0 shadow-sm" 
                             onClick={() => setIsAddClientDialogOpen(true)}
                             disabled={isExpired}
                         >
-                            <CirclePlus className="h-5 w-5" /> 
+                            <CirclePlus className="h-5 w-5 text-primary" /> 
                             Añadir Cliente
                         </Button>
 
@@ -406,19 +422,19 @@ function RouteManagementContent() {
                                 {routeClients.map((c, i) => (
                                     <div 
                                         key={`${c.ruc}-${c.originalIndex}`} 
-                                        onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isAdmin) && setActiveOriginalIndex(c.originalIndex)} 
+                                        onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isManager) && setActiveOriginalIndex(c.originalIndex)} 
                                         className={cn(
                                             "flex items-center gap-4 p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200", 
                                             activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-slate-100 bg-white hover:border-slate-300"
                                         )}
                                     >
-                                        <span className="text-slate-400 font-black text-xs w-4 shrink-0">{i + 1}</span>
+                                        <span className="text-slate-950 font-black text-xs w-4 shrink-0">{i + 1}</span>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2">
                                                 <p className={cn("font-black text-xs truncate uppercase tracking-tight text-slate-950", activeOriginalIndex === c.originalIndex && "text-primary")}>{c.nombre_comercial}</p>
-                                                {c.isReadded && <Badge className="text-[8px] h-3.5 px-1.5 bg-orange-100 text-orange-700 font-black border-none uppercase">RE-ADICIÓN</Badge>}
+                                                {c.isReadded && <Badge className="text-[8px] h-3.5 px-1.5 bg-orange-600 text-white font-black border-none uppercase">RE-ADICIÓN</Badge>}
                                             </div>
-                                            <p className="text-[10px] font-mono text-slate-950 mt-0.5">{c.ruc}</p>
+                                            <p className="text-[10px] font-black text-slate-950 mt-0.5 opacity-80">{c.ruc}</p>
                                         </div>
                                         <div className="flex items-center gap-1">
                                             {isAdmin && (
@@ -435,27 +451,27 @@ function RouteManagementContent() {
             </div>
 
             <div className="lg:col-span-2">
-                <Card className="shadow-2xl border-t-4 border-t-primary min-h-[550px] h-[80vh] rounded-[2.5rem] overflow-hidden flex flex-col">
-                    <CardHeader className="bg-muted/10 h-36 flex flex-col justify-center px-10 shrink-0">
+                <Card className="shadow-2xl border-t-4 border-t-primary min-h-[550px] h-[80vh] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
+                    <CardHeader className="bg-muted/10 h-36 flex flex-col justify-center px-10 shrink-0 border-b">
                         {activeClient ? (
                             <div className="space-y-1">
-                                <h3 className="text-2xl font-black text-primary uppercase leading-tight tracking-tight text-slate-950">{activeClient.nombre_comercial}</h3>
-                                <p className="text-xs font-bold text-slate-950 uppercase">{activeClient.direccion}</p>
+                                <h3 className="text-2xl font-black text-primary uppercase leading-tight tracking-tight">{activeClient.nombre_comercial}</h3>
+                                <p className="text-xs font-black text-slate-950 uppercase">{activeClient.direccion}</p>
                             </div>
                         ) : (
-                            <div className="text-center text-slate-950 uppercase font-black opacity-30 tracking-widest">Selecciona un cliente de la lista</div>
+                            <div className="text-center text-slate-950 uppercase font-black opacity-40 tracking-widest text-lg">Selecciona un cliente para gestionar</div>
                         )}
                     </CardHeader>
                     <CardContent className="p-10 space-y-10 flex-1 overflow-y-auto">
                         {activeClient && (
                             <>
-                            <div className={cn("p-8 rounded-[2rem] border-2 transition-all duration-300", activeClient.checkInTime ? "bg-green-50 border-green-200 shadow-sm" : "bg-muted/20 border-dashed border-slate-300")}>
+                            <div className={cn("p-8 rounded-[2rem] border-2 transition-all duration-300", activeClient.checkInTime ? "bg-green-50 border-green-200 shadow-sm" : "bg-slate-50 border-dashed border-slate-300")}>
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-6">
                                         <LogIn className={cn("h-10 w-10", activeClient.checkInTime ? "text-green-600" : "text-slate-950")} />
                                         <div>
                                             <h4 className="font-black text-sm uppercase tracking-tighter text-slate-950">Registro de Entrada</h4>
-                                            <p className="text-xs font-bold text-slate-950 uppercase mt-1">
+                                            <p className="text-xs font-black text-slate-950 uppercase mt-1">
                                                 {activeClient.checkInTime ? `Marcado a las: ${activeClient.checkInTime}` : 'Pendiente por marcar'}
                                             </p>
                                         </div>
@@ -466,16 +482,16 @@ function RouteManagementContent() {
                                 </div>
                             </div>
 
-                            <div className={cn("space-y-8 transition-all duration-500", !activeClient.checkInTime && !isAdmin && "pointer-events-none")}>
+                            <div className={cn("space-y-8 transition-all duration-500", !activeClient.checkInTime && !isManager && "pointer-events-none")}>
                                 <div className="space-y-4">
-                                    <Label className="text-xs font-black uppercase text-slate-950 tracking-wider">Tipo de Visita</Label>
+                                    <Label className="text-xs font-black uppercase text-slate-950 tracking-wider ml-1">Tipo de Visita</Label>
                                     <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-6" disabled={isEditingDisabled}>
-                                        <Label className={cn("flex flex-col items-center gap-3 border-2 p-6 rounded-[2rem] cursor-pointer transition-all duration-200", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "border-slate-100 bg-slate-50/50 hover:bg-slate-100")}>
+                                        <Label className={cn("flex flex-col items-center gap-3 border-2 p-6 rounded-[2rem] cursor-pointer transition-all duration-200", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "border-slate-100 bg-slate-50 hover:bg-slate-100 shadow-sm")}>
                                             <RadioGroupItem value="presencial" className="sr-only" />
                                             <MapPin className={cn("h-8 w-8", activeClient.visitType === 'presencial' ? "text-primary" : "text-slate-950")} />
                                             <span className="text-xs font-black uppercase tracking-tighter text-slate-950">Presencial</span>
                                         </Label>
-                                        <Label className={cn("flex flex-col items-center gap-3 border-2 p-6 rounded-[2rem] cursor-pointer transition-all duration-200", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "border-slate-100 bg-slate-50/50 hover:bg-slate-100")}>
+                                        <Label className={cn("flex flex-col items-center gap-3 border-2 p-6 rounded-[2rem] cursor-pointer transition-all duration-200", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "border-slate-100 bg-slate-50 hover:bg-slate-100 shadow-sm")}>
                                             <RadioGroupItem value="telefonica" className="sr-only" />
                                             <Phone className={cn("h-8 w-8", activeClient.visitType === 'telefonica' ? "text-primary" : "text-slate-950")} />
                                             <span className="text-xs font-black uppercase tracking-tighter text-slate-950">Telefónica</span>
@@ -485,8 +501,8 @@ function RouteManagementContent() {
 
                                 {activeClient.visitType === 'telefonica' && (
                                     <div className="space-y-3 animate-in slide-in-from-top-4 duration-300">
-                                        <Label className="text-xs font-black uppercase text-primary tracking-wider">Observación Obligatoria de la Llamada</Label>
-                                        <Textarea placeholder="Ingresa detalles de la conversación..." className="h-32 font-bold text-sm border-2 focus:border-primary rounded-2xl text-slate-950" value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} disabled={isEditingDisabled} />
+                                        <Label className="text-xs font-black uppercase text-primary tracking-wider ml-1">Observación Obligatoria de la Llamada</Label>
+                                        <Textarea placeholder="Ingresa detalles de la conversación..." className="h-32 font-black text-sm border-2 border-slate-200 focus:border-primary rounded-2xl text-slate-950 shadow-sm" value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} disabled={isEditingDisabled} />
                                     </div>
                                 )}
 
@@ -498,15 +514,15 @@ function RouteManagementContent() {
                                     ].map(f => (
                                         <div key={f.key} className="space-y-2">
                                             <Label className="text-[10px] font-black uppercase text-slate-950 tracking-widest ml-1">{f.label}</Label>
-                                            <Input type="text" className="h-14 text-xl font-black text-primary border-2 border-slate-100 focus:border-primary rounded-2xl bg-slate-50/30 text-center text-slate-950" placeholder="0.00" value={activeClient[f.key as keyof ClientInRoute] ?? ''} onChange={e => handleFieldChange(f.key as any, e.target.value)} disabled={isEditingDisabled} />
+                                            <Input type="text" className="h-14 text-xl font-black text-primary border-2 border-slate-200 focus:border-primary rounded-2xl bg-slate-50 text-center text-slate-950 shadow-sm" placeholder="0.00" value={activeClient[f.key as keyof ClientInRoute] ?? ''} onChange={e => handleFieldChange(f.key as any, e.target.value)} disabled={isEditingDisabled} />
                                         </div>
                                     ))}
                                 </div>
 
-                                {(activeClient.visitType === 'presencial' || isAdmin) && (
+                                {(activeClient.visitType === 'presencial' || isManager) && (
                                     <div className="space-y-3 animate-in slide-in-from-top-4 duration-300">
-                                        <Label className="text-xs font-black uppercase text-slate-950 tracking-wider">Observaciones de la Visita</Label>
-                                        <Textarea placeholder="Comentarios del cliente o motivos del resultado..." className="h-32 font-bold text-sm border-2 focus:border-primary rounded-2xl text-slate-950" value={activeClient.visitObservation || ''} onChange={e => handleFieldChange('visitObservation', e.target.value)} disabled={isEditingDisabled} />
+                                        <Label className="text-xs font-black uppercase text-slate-950 tracking-wider ml-1">Observaciones de la Visita</Label>
+                                        <Textarea placeholder="Comentarios del cliente o motivos del resultado..." className="h-32 font-black text-sm border-2 border-slate-200 focus:border-primary rounded-2xl text-slate-950 shadow-sm bg-slate-50" value={activeClient.visitObservation || ''} onChange={e => handleFieldChange('visitObservation', e.target.value)} disabled={isEditingDisabled} />
                                     </div>
                                 )}
 
@@ -527,19 +543,19 @@ function RouteManagementContent() {
     )}
 
     <Dialog open={isAddClientDialogOpen} onOpenChange={(open) => { setIsAddClientDialogOpen(open); if(!open) { setMultiSelectedClients([]); setReAdditionObservation(''); setAddClientSearchTerm(''); } }}>
-        <DialogContent className="w-[95vw] sm:max-w-2xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl flex flex-col h-[85vh]">
+        <DialogContent className="w-[95vw] sm:max-w-2xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl flex flex-col h-[85vh] bg-white">
             <DialogHeader className="bg-primary/5 p-8 pb-6 shrink-0 relative">
                 <DialogTitle className="text-2xl font-black uppercase tracking-tighter text-primary pr-8">Catálogo de Clientes</DialogTitle>
-                <DialogDescription className="text-[10px] font-bold uppercase text-slate-950 mt-1">Selecciona clientes para re-añadir a tu ruta de hoy</DialogDescription>
+                <DialogDescription className="text-[10px] font-black uppercase text-slate-950 mt-1">Selecciona clientes para añadir a tu ruta de hoy</DialogDescription>
                 <DialogClose className="absolute right-6 top-8"><X className="h-6 w-6 text-slate-950 hover:text-primary transition-colors" /></DialogClose>
             </DialogHeader>
             <div className="px-8 py-4 shrink-0 border-b bg-white">
                 <div className="relative">
-                    <Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-950" />
+                    <Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-950 font-black" />
                     <Input placeholder="Buscar por RUC o Nombre..." value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)} className="h-12 pl-12 font-black rounded-2xl border-2 border-slate-300 focus:border-primary text-slate-950" />
                 </div>
             </div>
-            <ScrollArea className="flex-1 px-8 py-4 bg-slate-50/30">
+            <ScrollArea className="flex-1 px-8 py-4 bg-slate-50">
                 <div className="grid grid-cols-1 gap-3 pb-6">
                     {availableClients
                         .filter(c => {
@@ -548,26 +564,26 @@ function RouteManagementContent() {
                             return String(c.nombre_cliente || '').toLowerCase().includes(search) || String(c.nombre_comercial || '').toLowerCase().includes(search) || String(c.ruc).includes(search);
                         })
                         .map(c => (
-                            <div key={c.id} onClick={() => setMultiSelectedClients(prev => prev.some(s => s.ruc === c.ruc) ? prev.filter(s => s.ruc !== c.ruc) : [...prev, c])} className={cn("p-4 rounded-2xl flex items-center gap-4 cursor-pointer transition-all border-2", multiSelectedClients.some(s => s.ruc === c.ruc) ? "bg-primary/10 border-primary shadow-sm" : "bg-white border-slate-100 hover:border-slate-300")}>
+                            <div key={c.id} onClick={() => setMultiSelectedClients(prev => prev.some(s => s.ruc === c.ruc) ? prev.filter(s => s.ruc !== c.ruc) : [...prev, c])} className={cn("p-4 rounded-2xl flex items-center gap-4 cursor-pointer transition-all border-2", multiSelectedClients.some(s => s.ruc === c.ruc) ? "bg-primary/10 border-primary shadow-md" : "bg-white border-slate-100 hover:border-slate-300 shadow-sm")}>
                                 <Checkbox checked={multiSelectedClients.some(s => s.ruc === c.ruc)} className="rounded-md h-5 w-5 border-2 border-primary" />
                                 <div className="min-w-0 flex-1">
                                     <p className="text-sm font-black uppercase truncate text-slate-950">{c.nombre_comercial || c.nombre_cliente}</p>
-                                    <p className="text-[10px] font-mono text-slate-950 mt-1">{c.ruc}</p>
+                                    <p className="text-[10px] font-black text-slate-950 mt-1 opacity-80">{c.ruc}</p>
                                 </div>
                             </div>
                         ))
                     }
                 </div>
             </ScrollArea>
-            <div className="p-8 pt-6 border-t space-y-6 shrink-0 bg-white">
+            <div className="p-8 pt-6 border-t space-y-6 shrink-0 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
                 {needsReadditionObservation && multiSelectedClients.length > 0 && (
                     <div className="space-y-2 animate-in slide-in-from-bottom-2 duration-300">
-                        <Label className="text-[10px] font-black uppercase text-slate-950 tracking-wider">Observación de Re-adición (Obligatoria)</Label>
-                        <Textarea className="h-20 text-xs font-bold border-2 border-slate-300 rounded-2xl px-4 py-3 focus:border-primary text-slate-950 bg-slate-50/50" placeholder="Indica el motivo de esta nueva visita..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
+                        <Label className="text-[10px] font-black uppercase text-primary tracking-wider ml-1">Observación de Re-adición (Obligatoria)</Label>
+                        <Textarea className="h-20 text-xs font-black border-2 border-slate-300 rounded-2xl px-4 py-3 focus:border-primary text-slate-950 bg-slate-50 shadow-inner" placeholder="Indica el motivo de esta nueva visita..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
                     </div>
                 )}
                 <div className="flex items-center gap-4">
-                    <DialogClose asChild><Button variant="ghost" className="h-14 font-black flex-1 text-slate-950">CANCELAR</Button></DialogClose>
+                    <DialogClose asChild><Button variant="ghost" className="h-14 font-black flex-1 text-slate-950 border-2 border-slate-100 rounded-2xl">CANCELAR</Button></DialogClose>
                     <Button onClick={handleAddClients} disabled={multiSelectedClients.length === 0 || isSaving || (needsReadditionObservation && !reAdditionObservation.trim())} className="h-14 font-black flex-[2] rounded-2xl text-lg shadow-xl">{isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : `AÑADIR ${multiSelectedClients.length} CLIENTES`}</Button>
                 </div>
             </div>
