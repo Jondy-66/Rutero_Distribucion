@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -99,7 +98,7 @@ export default function SellerReportsPage() {
       }, {} as Record<K, T[]>);
 
     const managedSellerIds = managedSellers.map(s => s.id);
-    const relevantStatuses: RoutePlan['status'][] = ['En Progreso', 'Completada', 'Incompleta', 'Planificada'];
+    const relevantStatuses: RoutePlan['status'][] = ['En Progreso', 'Completada', 'Planificada'];
 
     let routesToConsider = allRoutes.filter(route => 
         managedSellerIds.includes(route.createdBy) && relevantStatuses.includes(route.status)
@@ -183,6 +182,7 @@ export default function SellerReportsPage() {
                         'Vendedor': dailyLog.sellerName,
                         'Nombre de Ruta': dailyLog.routeName,
                         'Fecha de Gestión': format(dailyLog.date, 'PPP', { locale: es }),
+                        'Estado del Día': dailyLog.status,
                         'RUC Cliente': client.ruc,
                         'Nombre Cliente': client.nombre_comercial,
                         'Hora de Check-in': client.checkInTime || 'N/A',
