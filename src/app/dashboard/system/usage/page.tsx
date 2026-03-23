@@ -75,7 +75,7 @@ export default function SystemUsagePage() {
             <CardContent>
               <div className="text-2xl font-black text-slate-950 mb-2">{stat.count.toLocaleString()}</div>
               <div className="space-y-1">
-                <div className="flex justify-between text-[9px] font-black uppercase">
+                <div className="flex justify-between text-[9px] font-black uppercase text-slate-950">
                   <span>Capacidad Estimada</span>
                   <span>{((stat.count / stat.limit) * 100).toFixed(1)}%</span>
                 </div>
@@ -89,21 +89,21 @@ export default function SystemUsagePage() {
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 shadow-lg border-t-4 border-t-primary">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+            <CardTitle className="flex items-center gap-2 font-black text-slate-950">
               <Activity className="h-5 w-5 text-primary" />
               Logs de Auditoría (Últimos 50)
             </CardTitle>
-            <CardDescription>Eventos registrados por el servidor y procesos automáticos.</CardDescription>
+            <CardDescription className="text-slate-950 font-bold uppercase text-[10px]">Eventos registrados por el servidor y procesos automáticos.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="border rounded-xl overflow-hidden">
               <Table>
                 <TableHeader className="bg-slate-50">
                   <TableRow>
-                    <TableHead className="font-black uppercase text-[10px]">Evento</TableHead>
-                    <TableHead className="font-black uppercase text-[10px]">Fecha / Hora</TableHead>
-                    <TableHead className="font-black uppercase text-[10px]">Registros</TableHead>
-                    <TableHead className="font-black uppercase text-[10px]">Estado</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] text-slate-950">Evento</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] text-slate-950">Fecha / Hora</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] text-slate-950">Registros</TableHead>
+                    <TableHead className="font-black uppercase text-[10px] text-slate-950">Estado</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -119,11 +119,11 @@ export default function SystemUsagePage() {
                   ) : logs.length > 0 ? (
                     logs.map((log) => (
                       <TableRow key={log.id}>
-                        <TableCell className="font-bold text-xs">{log.type}</TableCell>
-                        <TableCell className="text-xs">{format(log.timestamp, 'dd/MM/yyyy HH:mm:ss', { locale: es })}</TableCell>
-                        <TableCell className="font-mono text-xs">{log.processed}</TableCell>
+                        <TableCell className="font-black text-xs text-slate-950">{log.type}</TableCell>
+                        <TableCell className="text-xs font-black text-slate-950">{format(log.timestamp, 'dd/MM/yyyy HH:mm:ss', { locale: es })}</TableCell>
+                        <TableCell className="font-black text-xs text-slate-950">{log.processed}</TableCell>
                         <TableCell>
-                          <Badge variant="success" className="text-[9px] font-black uppercase">
+                          <Badge variant="success" className="text-[9px] font-black uppercase border-none">
                             <CheckCircle2 className="mr-1 h-3 w-3" /> Exitoso
                           </Badge>
                         </TableCell>
@@ -131,7 +131,7 @@ export default function SystemUsagePage() {
                     ))
                   ) : (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center h-24 text-muted-foreground font-bold uppercase text-[10px]">Sin registros recientes.</TableCell>
+                      <TableCell colSpan={4} className="text-center h-24 text-slate-950 font-black uppercase text-[10px]">Sin registros recientes.</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -143,7 +143,7 @@ export default function SystemUsagePage() {
         <div className="space-y-6">
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 font-black text-slate-950">
                 <Server className="h-5 w-5 text-primary" />
                 Infraestructura
               </CardTitle>
@@ -154,14 +154,14 @@ export default function SystemUsagePage() {
                   <Database className="h-5 w-5 text-green-600" />
                   <span className="text-xs font-black text-green-800 uppercase">Firestore DB</span>
                 </div>
-                <Badge className="bg-green-600">ONLINE</Badge>
+                <Badge className="bg-green-600 font-black border-none">ONLINE</Badge>
               </div>
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-xl border border-blue-100">
                 <div className="flex items-center gap-3">
                   <Activity className="h-5 w-5 text-blue-600" />
                   <span className="text-xs font-black text-blue-800 uppercase">AI Predictions</span>
                 </div>
-                <Badge className="bg-blue-600">READY</Badge>
+                <Badge className="bg-blue-600 font-black border-none">READY</Badge>
               </div>
               <div className="flex items-center justify-between p-3 bg-orange-50 rounded-xl border border-orange-100">
                 <div className="flex items-center gap-3">
@@ -173,14 +173,14 @@ export default function SystemUsagePage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg bg-slate-900 text-white border-none">
+          <Card className="shadow-lg bg-slate-950 text-white border-none">
             <CardHeader>
               <CardTitle className="text-sm font-black uppercase flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-orange-400" />
                 Aviso de Cuotas
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-[10px] font-bold text-slate-300 leading-relaxed uppercase">
+            <CardContent className="text-[10px] font-black text-slate-300 leading-relaxed uppercase">
               LA APLICACIÓN OPERA BAJO LÍMITES OPERATIVOS DE GOOGLE CLOUD. LAS IMPORTACIONES MASIVAS (MÁS DE 500 REGISTROS) DEBEN REALIZARSE EN HORARIOS DE BAJO TRÁFICO PARA EVITAR LA SUSPENSIÓN TEMPORAL DEL SERVICIO POR LÍMITES DE ESCRITURA.
             </CardContent>
           </Card>

@@ -7,11 +7,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, ThumbsUp, Users, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, ChevronDown, ChevronRight } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, ChevronDown, ChevronRight } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, startOfDay, endOfWeek, isBefore, isSameDay } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -23,9 +23,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Timestamp, GeoPoint } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 const ensureDate = (d: any): Date => {
   if (!d) return new Date();
@@ -134,22 +132,19 @@ function RouteManagementContent() {
     setActiveOriginalIndex(null); 
   }, [selectedRoute, isAdmin, isSupervisor]);
 
-  const groupedClients = useMemo(() => {
-    const groups: { [dateKey: string]: (ClientInRoute & { originalIndex: number; direccion: string })[] } = {};
-    
-    currentRouteClientsFull.forEach((c, index) => {
-        if (c.status === 'Eliminado') return;
-        const cDate = ensureDate(c.date);
-        const dateKey = format(cDate, 'yyyy-MM-dd');
-        
-        const details = availableClients.find(ac => String(ac.ruc || '').trim() === String(c.ruc || '').trim());
-        const clientWithMeta = { ...c, originalIndex: index, direccion: details?.direccion || 'N/A' };
-        
-        if (!groups[dateKey]) groups[dateKey] = [];
-        groups[dateKey].push(clientWithMeta);
-    });
-
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+  // FILTRADO ESTRICTO: SOLO CLIENTES DE HOY
+  const todaysClients = useMemo(() => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    return currentRouteClientsFull
+        .map((c, index) => {
+            const details = availableClients.find(ac => String(ac.ruc || '').trim() === String(c.ruc || '').trim());
+            return { ...c, originalIndex: index, direccion: details?.direccion || 'N/A' };
+        })
+        .filter(c => {
+            if (c.status === 'Eliminado') return false;
+            const cDate = ensureDate(c.date);
+            return format(cDate, 'yyyy-MM-dd') === todayStr;
+        });
   }, [currentRouteClientsFull, availableClients]);
 
   const activeClient = useMemo(() => 
@@ -361,7 +356,7 @@ function RouteManagementContent() {
                                 <h2 className="text-xl font-black text-primary uppercase leading-tight tracking-tighter truncate max-w-[200px]" title={selectedRoute?.routeName}>
                                     {selectedRoute?.routeName || "Plan de Ruta"}
                                 </h2>
-                                <p className="text-[10px] font-black text-slate-950 uppercase">Semana en Gestión</p>
+                                <p className="text-[10px] font-black text-slate-950 uppercase">Gestión de Hoy: {format(new Date(), 'EEEE dd', { locale: es })}</p>
                             </div>
                             <Badge className="bg-slate-950 text-white font-black text-[9px] px-2 py-0.5 uppercase shrink-0">{user?.role}</Badge>
                         </div>
@@ -374,51 +369,48 @@ function RouteManagementContent() {
                             disabled={isExpired}
                         >
                             <CirclePlus className="h-4 w-4 text-primary" /> 
-                            Añadir Cliente
+                            Añadir Cliente a Hoy
                         </Button>
 
                         <ScrollArea className="flex-1 pr-1">
-                            <div className="space-y-4 pb-6">
-                                {groupedClients.map(([dateKey, clientsInGroup]) => {
-                                    const isToday = dateKey === format(new Date(), 'yyyy-MM-dd');
-                                    return (
-                                        <Collapsible key={dateKey} defaultOpen={isToday} className="space-y-2">
-                                            <CollapsibleTrigger className="flex items-center gap-2 w-full text-left p-2 rounded-lg bg-slate-50 border border-slate-200 hover:bg-slate-100 transition-all">
-                                                <CalendarIcon className={cn("h-4 w-4", isToday ? "text-primary" : "text-slate-950")} />
-                                                <span className={cn("text-[10px] font-black uppercase flex-1", isToday ? "text-primary" : "text-slate-950")}>
-                                                    {format(new Date(dateKey + 'T00:00:00'), "EEEE dd 'de' MMMM", { locale: es })}
-                                                </span>
-                                                <ChevronDown className="h-3 w-3 text-slate-950" />
-                                            </CollapsibleTrigger>
-                                            <CollapsibleContent className="space-y-2 pl-2">
-                                                {clientsInGroup.map((c, i) => (
-                                                    <div 
-                                                        key={`${c.ruc}-${c.originalIndex}`} 
-                                                        onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isManager) && setActiveOriginalIndex(c.originalIndex)} 
-                                                        className={cn(
-                                                            "flex items-center gap-3 p-3 border-2 rounded-xl cursor-pointer transition-all duration-200 bg-white", 
-                                                            activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-slate-100 hover:border-slate-300"
-                                                        )}
-                                                    >
-                                                        <div className="flex-1 min-w-0">
-                                                            <p className={cn("font-black text-[11px] truncate uppercase tracking-tight text-slate-950", activeOriginalIndex === c.originalIndex && "text-primary")}>{c.nombre_comercial}</p>
-                                                            <div className="flex items-center gap-2 mt-0.5">
-                                                                <p className="text-[9px] font-black text-slate-950 uppercase">{c.ruc}</p>
-                                                                {c.isReadded && <Badge className="text-[7px] h-3 px-1 bg-orange-600 text-white font-black border-none uppercase">RE-ADICIÓN</Badge>}
-                                                            </div>
-                                                        </div>
-                                                        <div className="flex items-center gap-1">
-                                                            {isAdmin && (
-                                                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); handleRemoveClient(c.originalIndex); }}><Trash2 className="h-3.5 w-3.5" /></Button>
-                                                            )}
-                                                            {c.visitStatus === 'Completado' && <CheckCircle className={cn("h-4 w-4", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-green-600")} />}
-                                                        </div>
-                                                    </div>
-                                                ))}
-                                            </CollapsibleContent>
-                                        </Collapsible>
-                                    );
-                                })}
+                            <div className="space-y-3 pb-6">
+                                {todaysClients.length > 0 ? (
+                                    todaysClients.map((c) => (
+                                        <div 
+                                            key={`${c.ruc}-${c.originalIndex}`} 
+                                            onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isManager) && setActiveOriginalIndex(c.originalIndex)} 
+                                            className={cn(
+                                                "flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 bg-white", 
+                                                activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-slate-100 hover:border-slate-300"
+                                            )}
+                                        >
+                                            <div className="flex-1 min-w-0">
+                                                <p className={cn("font-black text-xs truncate uppercase tracking-tight text-slate-950", activeOriginalIndex === c.originalIndex && "text-primary")}>
+                                                    {c.nombre_comercial}
+                                                </p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <p className="text-[9px] font-black text-slate-950 uppercase">{c.ruc}</p>
+                                                    {c.isReadded && <Badge className="text-[8px] h-3 px-1 bg-orange-600 text-white font-black border-none uppercase">RE-ADICIÓN</Badge>}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-1">
+                                                {isAdmin && (
+                                                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); handleRemoveClient(c.originalIndex); }}><Trash2 className="h-3.5 w-3.5" /></Button>
+                                                )}
+                                                {c.visitStatus === 'Completado' && (
+                                                    <Badge variant="success" className="font-black text-[9px] uppercase border-none">
+                                                        <CheckCircle className="h-3 w-3 mr-1" /> OK
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="text-center py-12 px-4 rounded-[2rem] bg-slate-50 border-2 border-dashed border-slate-200">
+                                        <CalendarIcon className="h-8 w-8 mx-auto text-slate-300 mb-3" />
+                                        <p className="text-[10px] font-black text-slate-950 uppercase">No tienes paradas programadas para hoy.</p>
+                                    </div>
+                                )}
                             </div>
                         </ScrollArea>
                     </CardContent>
@@ -431,7 +423,7 @@ function RouteManagementContent() {
                         {activeClient ? (
                             <div className="space-y-1">
                                 <h3 className="text-2xl font-black text-primary uppercase leading-tight tracking-tight">{activeClient.nombre_comercial}</h3>
-                                <p className="text-xs font-black text-slate-950 uppercase">{(availableClients.find(ac => ac.ruc === activeClient.ruc))?.direccion || 'N/A'}</p>
+                                <p className="text-xs font-black text-slate-950 uppercase">{activeClient.direccion}</p>
                             </div>
                         ) : (
                             <div className="text-center text-slate-950 uppercase font-black tracking-widest text-lg">Selecciona un cliente para gestionar</div>
