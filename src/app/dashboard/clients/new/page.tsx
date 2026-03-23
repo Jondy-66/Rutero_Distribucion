@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -100,11 +101,7 @@ export default function NewClientPage() {
 
     } catch (error: any) {
       console.error(error);
-      if (error.code === 'permission-denied') {
-        toast({ title: "Error de Permisos", description: "No tienes permiso para crear clientes.", variant: "destructive" });
-      } else {
-        toast({ title: "Error", description: error.message || "No se pudo crear el cliente.", variant: "destructive" });
-      }
+      toast({ title: "Error", description: error.message || "No se pudo crear el cliente.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -140,7 +137,7 @@ export default function NewClientPage() {
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             
             <div className="space-y-2">
-              <Label htmlFor="ejecutivo" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Ejecutivo Asignado</Label>
+              <Label htmlFor="ejecutivo" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Ejecutivo Asignado</Label>
               {isSeller ? (
                 <div className="relative">
                     <Input 
@@ -157,13 +154,13 @@ export default function NewClientPage() {
                     onValueChange={(value) => updateField('ejecutivo', value)}
                     disabled={isLoading || authLoading}
                 >
-                    <SelectTrigger className="h-11 font-bold">
+                    <SelectTrigger className="h-11 font-black text-slate-950">
                         <SelectValue placeholder="Seleccionar un ejecutivo..." />
                     </SelectTrigger>
                     <SelectContent>
                         {availableExecutives.length > 0 ? (
                             availableExecutives.map(exec => (
-                                <SelectItem key={exec.id} value={exec.name} className="font-medium">
+                                <SelectItem key={exec.id} value={exec.name} className="font-bold">
                                     {exec.name} ({exec.role})
                                 </SelectItem>
                             ))
@@ -176,43 +173,43 @@ export default function NewClientPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="ruc" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">RUC / Identificación</Label>
-              <Input id="ruc" placeholder="Ej: 1792233445001" value={formData.ruc} onChange={handleInputChange} required disabled={isLoading} className="h-11 font-mono" />
+              <Label htmlFor="ruc" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">RUC / Identificación</Label>
+              <Input id="ruc" placeholder="Ej: 1792233445001" value={formData.ruc} onChange={handleInputChange} required disabled={isLoading} className="h-11 font-mono font-bold text-slate-950" />
             </div>
 
              <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="nombre_cliente" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Nombre o Razón Social</Label>
-              <Input id="nombre_cliente" placeholder="Ej: Supermercados La Favorita" value={formData.nombre_cliente} onChange={handleInputChange} required disabled={isLoading} className="h-11 font-black uppercase" />
+              <Label htmlFor="nombre_cliente" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Nombre o Razón Social</Label>
+              <Input id="nombre_cliente" placeholder="Ej: Supermercados La Favorita" value={formData.nombre_cliente} onChange={handleInputChange} required disabled={isLoading} className="h-11 font-black uppercase text-slate-950" />
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="nombre_comercial" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Nombre Comercial</Label>
-              <Input id="nombre_comercial" placeholder="Ej: Supermaxi" value={formData.nombre_comercial} onChange={handleInputChange} disabled={isLoading} className="h-11 font-bold uppercase" />
+              <Label htmlFor="nombre_comercial" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Nombre Comercial</Label>
+              <Input id="nombre_comercial" placeholder="Ej: Supermaxi" value={formData.nombre_comercial} onChange={handleInputChange} disabled={isLoading} className="h-11 font-black uppercase text-slate-950" />
             </div>
 
              <div className="space-y-2">
-              <Label htmlFor="provincia" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Provincia</Label>
-              <Input id="provincia" placeholder="Ej: Pichincha" value={formData.provincia} onChange={handleInputChange} disabled={isLoading} className="h-11 font-medium" />
+              <Label htmlFor="provincia" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Provincia</Label>
+              <Input id="provincia" placeholder="Ej: Pichincha" value={formData.provincia} onChange={handleInputChange} disabled={isLoading} className="h-11 font-bold text-slate-950" />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="canton" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Cantón</Label>
-              <Input id="canton" placeholder="Ej: Quito" value={formData.canton} onChange={handleInputChange} disabled={isLoading} className="h-11 font-medium" />
+              <Label htmlFor="canton" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Cantón</Label>
+              <Input id="canton" placeholder="Ej: Quito" value={formData.canton} onChange={handleInputChange} disabled={isLoading} className="h-11 font-bold text-slate-950" />
             </div>
 
             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="direccion" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Dirección Exacta</Label>
-              <Input id="direccion" placeholder="Ej: Av. de los Shyris y Naciones Unidas" value={formData.direccion} onChange={handleInputChange} disabled={isLoading} className="h-11" />
+              <Label htmlFor="direccion" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Dirección Exacta</Label>
+              <Input id="direccion" placeholder="Ej: Av. de los Shyris y Naciones Unidas" value={formData.direccion} onChange={handleInputChange} disabled={isLoading} className="h-11 font-bold text-slate-950" />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="latitud" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Latitud (GPS)</Label>
-              <Input id="latitud" type="number" step="any" placeholder="Ej: -0.1762" value={formData.latitud} onChange={handleInputChange} disabled={isLoading} className="h-11 font-mono" />
+              <Label htmlFor="latitud" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Latitud (GPS)</Label>
+              <Input id="latitud" type="number" step="any" placeholder="Ej: -0.1762" value={formData.latitud} onChange={handleInputChange} disabled={isLoading} className="h-11 font-mono font-bold text-slate-950" />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="longitud" className="font-bold uppercase text-[10px] tracking-widest text-muted-foreground">Longitud (GPS)</Label>
-              <Input id="longitud" type="number" step="any" placeholder="Ej: -78.4847" value={formData.longitud} onChange={handleInputChange} disabled={isLoading} className="h-11 font-mono" />
+              <Label htmlFor="longitud" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Longitud (GPS)</Label>
+              <Input id="longitud" type="number" step="any" placeholder="Ej: -78.4847" value={formData.longitud} onChange={handleInputChange} disabled={isLoading} className="h-11 font-mono font-bold text-slate-950" />
             </div>
           </CardContent>
           <CardFooter className="bg-muted/30 border-t p-6">
