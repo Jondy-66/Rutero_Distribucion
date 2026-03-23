@@ -61,7 +61,7 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
 };
 
 function RouteManagementContent() {
-  const { user, clients: availableClients, routes: allRoutes, users: allUsers, loading: authLoading, refetchData } = useAuth();
+  const { user, clients: availableClients, routes: allRoutes, users: allUsers, loading: authLoading, dataLoading, refetchData } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -82,6 +82,7 @@ function RouteManagementContent() {
   const isSupervisor = user?.role === 'Supervisor';
   const isManager = isAdmin || isSupervisor;
 
+  // Bloqueo de jornada a las 19:00
   useEffect(() => {
     const check = () => {
       const now = new Date();
@@ -93,7 +94,6 @@ function RouteManagementContent() {
     return () => clearInterval(timer);
   }, [isAdmin]);
 
-  // Lista de usuarios para el selector (incluye al propio usuario si es supervisor)
   const managedUsersForSelector = useMemo(() => {
     if (!user) return [];
     let base: User[] = [];
@@ -101,7 +101,6 @@ function RouteManagementContent() {
       base = allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista' || u.role === 'Supervisor');
     } else if (user.role === 'Supervisor') {
       const subordinates = allUsers.filter(u => u.supervisorId === user.id);
-      // El supervisor debe poder seleccionarse a sí mismo para gestionar su propia ruta
       base = [user, ...subordinates];
     }
     return base;
@@ -115,16 +114,14 @@ function RouteManagementContent() {
         const isOwnRoute = r.createdBy === user?.id;
         const isTeamRoute = managedUserIds.has(r.createdBy);
 
-        // Seguridad: Debe ser ruta propia, de equipo o ser admin
         if (!isOwnRoute && !isTeamRoute && !isAdmin) return false;
         
-        // Filtrar por agente seleccionado si es manager
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
-        // Solo mostrar rutas aprobadas o en curso
+        // Regla: No iniciar rutas sin aprobación
         if (r.status === 'Pendiente de Aprobación' || r.status === 'Rechazada') return false;
 
-        // Restricción: No mostrar rutas de semanas pasadas (pasado el domingo)
+        // Regla: Bloquear rutas de semanas pasadas
         const rDate = ensureDate(r.date);
         const routeEndOfWeek = endOfWeek(rDate, { weekStartsOn: 1 });
         if (isBefore(routeEndOfWeek, today)) return false;
@@ -145,11 +142,7 @@ function RouteManagementContent() {
     const isPastWeek = isBefore(routeEndOfWeek, startOfDay(new Date()));
 
     if (isPastWeek && !isAdmin) {
-        toast({ 
-            title: "Ruta de Semana Pasada", 
-            description: "No es posible gestionar rutas cuya semana operativa ya finalizó.", 
-            variant: "destructive" 
-        });
+        toast({ title: "Ruta Expirada", description: "Esta ruta pertenece a una semana cerrada.", variant: "destructive" });
         setSelectedRouteId(undefined);
         return;
     }
@@ -159,6 +152,7 @@ function RouteManagementContent() {
     setActiveOriginalIndex(null); 
   }, [selectedRoute, isAdmin, isSupervisor, toast]);
 
+  // FILTRADO ESTRICTO POR FECHA (YYYY-MM-DD) - EVITA DUPLICADOS ENTRE DÍAS
   const routeClients = useMemo(() => {
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     
@@ -321,7 +315,9 @@ function RouteManagementContent() {
     return multiSelectedClients.some(sc => currentRouteClientsFull.some(cc => cc.ruc === sc.ruc && cc.status !== 'Eliminado'));
   }, [multiSelectedClients, currentRouteClientsFull]);
 
-  if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin mx-auto h-12 w-12" /></div>;
+  // MANEJO DE ESTADO DE CARGA RESILIENTE
+  const isDataSyncing = authLoading || (dataLoading && allRoutes.length === 0);
+  if (isDataSyncing) return <div className="p-20 text-center"><LoaderCircle className="animate-spin mx-auto h-12 w-12 text-primary" /><p className="mt-4 font-black uppercase text-xs text-slate-950">Sincronizando rutas...</p></div>;
 
   return (
     <>
@@ -366,7 +362,7 @@ function RouteManagementContent() {
                         {selectableRoutes.length > 0 ? (
                             selectableRoutes.map(r => <SelectItem key={r.id} value={r.id} className="font-black">{r.routeName} ({r.status})</SelectItem>)
                         ) : (
-                            <SelectItem value="none" disabled className="font-black">No hay rutas disponibles para gestionar.</SelectItem>
+                            <SelectItem value="none" disabled className="font-black">No hay rutas aprobadas disponibles para gestionar.</SelectItem>
                         )}
                     </SelectContent>
                 </Select>
@@ -612,7 +608,7 @@ function RouteManagementContent() {
 
 export default function RouteManagementPage() { 
     return (
-        <Suspense fallback={<div className="p-20 text-center"><LoaderCircle className="animate-spin mx-auto h-12 w-12" /></div>}>
+        <Suspense fallback={<div className="p-20 text-center"><LoaderCircle className="animate-spin mx-auto h-12 w-12 text-primary" /></div>}>
             <RouteManagementContent />
         </Suspense>
     ); 
