@@ -1,7 +1,7 @@
 
 import { db } from './config';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp, limit } from 'firebase/firestore';
-import type { User, Client, RoutePlan, ClientInRoute, Notification, PhoneContact, Customer, CrmSale, CrmCall } from '@/lib/types';
+import type { User, Client, RoutePlan, ClientInRoute, Notification, PhoneContact, Customer, CrmSale, CrmCall, SystemLog } from '@/lib/types';
 import { updateUserPasswordAsAdmin } from './auth';
 
 // --- COLECCIÓN DE CRM: CUSTOMERS ---
@@ -274,3 +274,13 @@ export const addPhoneContactsBatch = async (contactsData: Omit<PhoneContact, 'id
     for (const contact of contactsData) { batch.set(doc(collection(db, 'phoneContacts')), contact); }
     await batch.commit();
 }
+
+export const getSystemLogs = async (): Promise<SystemLog[]> => {
+  const q = query(collection(db, 'system_logs'), orderBy('timestamp', 'desc'), limit(50));
+  const snapshot = await getDocs(q);
+  return snapshot.docs.map(doc => ({
+    id: doc.id,
+    ...doc.data(),
+    timestamp: doc.data().timestamp instanceof Timestamp ? doc.data().timestamp.toDate() : doc.data().timestamp
+  })) as SystemLog[];
+};

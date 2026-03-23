@@ -23,6 +23,7 @@ import {
   Database,
   Phone,
   BarChart,
+  Settings2,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -84,7 +85,6 @@ const usersNavItem = {
 /**
  * Componente de navegación principal para el panel de control.
  * Muestra los enlaces de navegación en la barra lateral según el rol del usuario.
- * @returns {React.ReactElement} El componente de navegación.
  */
 export function DashboardNav() {
   const pathname = usePathname();
@@ -99,7 +99,7 @@ export function DashboardNav() {
     pathname.startsWith('/dashboard/crm')
   );
   const [isUsersOpen, setIsUsersOpen] = useState(
-    pathname.startsWith('/dashboard/users')
+    pathname.startsWith('/dashboard/users') || pathname.startsWith('/dashboard/system')
   );
   const [isReportsOpen, setIsReportsOpen] = useState(
     pathname.startsWith('/dashboard/reports')
@@ -353,16 +353,16 @@ export function DashboardNav() {
           <Collapsible open={isUsersOpen} onOpenChange={setIsUsersOpen}>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
-                <SidebarMenuButton tooltip="Usuarios">
+                <SidebarMenuButton tooltip="Administración">
                   <Users className="h-5 w-5" />
-                  <span>Usuarios</span>
+                  <span>Administración</span>
                 </SidebarMenuButton>
               </CollapsibleTrigger>
             </SidebarMenuItem>
             <CollapsibleContent>
               <SidebarMenuSub>
                 <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/users' || pathname.startsWith('/dashboard/users/[id]')}>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/users'}>
                       <Link href="/dashboard/users">
                         <Users />
                         <span>Todos los Usuarios</span>
@@ -382,6 +382,14 @@ export function DashboardNav() {
                       <Link href="/dashboard/users/permissions">
                         <Lock />
                         <span>Permisos</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/system/usage'}>
+                      <Link href="/dashboard/system/usage">
+                        <Settings2 />
+                        <span>Uso del Sistema</span>
                       </Link>
                     </SidebarMenuSubButton>
                 </SidebarMenuSubItem>

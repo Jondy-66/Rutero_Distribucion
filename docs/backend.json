@@ -47,6 +47,19 @@
         "notes": { "type": "string" }
       },
       "required": ["id", "customer_id", "agent_id", "outcome", "timestamp"]
+    },
+    "SystemLog": {
+      "title": "SystemLog",
+      "type": "object",
+      "description": "Registros de eventos del sistema, procesos cron y errores críticos.",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["CRON_REFRESH", "IMPORT_ERROR", "AUTH_SECURITY"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "processed": { "type": "number" },
+        "details": { "type": "array", "items": { "type": "object" } }
+      },
+      "required": ["type", "timestamp"]
     }
   },
   "auth": {
@@ -55,6 +68,7 @@
   "firestore": {
     "/customers/{customerId}": { "schema": { "$ref": "#/entities/Customer" }, "description": "Clientes asignados a teleoperadores" },
     "/sales/{saleId}": { "schema": { "$ref": "#/entities/Sale" }, "description": "Historial de ventas para predicción de ciclo" },
-    "/calls/{callId}": { "schema": { "$ref": "#/entities/Call" }, "description": "Bitácora de llamadas" }
+    "/calls/{callId}": { "schema": { "$ref": "#/entities/Call" }, "description": "Bitácora de llamadas" },
+    "/system_logs/{logId}": { "schema": { "$ref": "#/entities/SystemLog" }, "description": "Auditoría de procesos de fondo y cron jobs" }
   }
 }

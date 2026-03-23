@@ -142,3 +142,11 @@ export type Notification = {
     link: string;
     createdAt: Date | null;
 }
+
+export type SystemLog = {
+  id: string;
+  type: string;
+  timestamp: Timestamp | Date;
+  processed: number;
+  details?: any[];
+};

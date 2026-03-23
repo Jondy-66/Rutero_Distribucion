@@ -18,12 +18,13 @@ import {
   Legend,
   Cell,
 } from 'recharts';
-import { Target, TrendingUp, Users, Wallet } from 'lucide-react';
+import { Target, TrendingUp, Users, Wallet, Activity, Database } from 'lucide-react';
 import Image from 'next/image';
 import { useMemo } from 'react';
 import { isWithinInterval, startOfWeek, endOfWeek, eachDayOfInterval, format, getDay, startOfMonth, endOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
+import { Progress } from '@/components/ui/progress';
 
 
 const portfolioData = [
@@ -76,7 +77,7 @@ const CircularProgress = ({ value, label, subLabel, colorClass = 'text-primary' 
 
 
 export default function AdminDashboardPage() {
-    const { users, routes, loading } = useAuth();
+    const { users, routes, clients, loading } = useAuth();
     
     const weeklySalesData = useMemo(() => {
         const today = new Date();
@@ -302,37 +303,63 @@ export default function AdminDashboardPage() {
                 </CardContent>
             </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><Wallet />Estado de Cartera (Ejemplo)</CardTitle>
-                </CardHeader>
-                <CardContent>
-                    <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                        <Pie
-                        data={portfolioData}
-                        cx="50%"
-                        cy="50%"
-                        labelLine={false}
-                        outerRadius={80}
-                        fill="#8884d8"
-                        dataKey="value"
-                        label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                        >
-                        {portfolioData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={entry.fill} />
-                        ))}
-                        </Pie>
-                        <Tooltip 
-                         contentStyle={{
-                            backgroundColor: 'hsl(var(--background))', 
-                            border: '1px solid hsl(var(--border))'
-                          }}
-                        />
-                    </PieChart>
-                    </ResponsiveContainer>
-                </CardContent>
-            </Card>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2 text-sm uppercase font-black"><Wallet />Cartera</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <ResponsiveContainer width="100%" height={150}>
+                        <PieChart>
+                            <Pie
+                            data={portfolioData}
+                            cx="50%"
+                            cy="50%"
+                            labelLine={false}
+                            outerRadius={60}
+                            fill="#8884d8"
+                            dataKey="value"
+                            >
+                            {portfolioData.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.fill} />
+                            ))}
+                            </Pie>
+                            <Tooltip 
+                            contentStyle={{
+                                backgroundColor: 'hsl(var(--background))', 
+                                border: '1px solid hsl(var(--border))'
+                            }}
+                            />
+                        </PieChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+
+                <Card className="bg-slate-950 text-white border-none">
+                    <CardHeader className="pb-2">
+                        <CardTitle className="text-xs font-black uppercase flex items-center gap-2">
+                            <Activity className="h-4 w-4 text-orange-400" />
+                            Status de Cuota
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-1">
+                            <div className="flex justify-between text-[9px] font-black uppercase">
+                                <span>Base de Datos</span>
+                                <span>{((clients.length / 10000) * 100).toFixed(1)}%</span>
+                            </div>
+                            <Progress value={(clients.length / 10000) * 100} className="h-1.5 bg-slate-800" />
+                        </div>
+                        <div className="pt-2 border-t border-slate-800">
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Salud del Sistema</p>
+                            <div className="flex items-center gap-2 mt-1">
+                                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                                <span className="text-[11px] font-black uppercase">Operativo</span>
+                            </div>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
       </div>
       
