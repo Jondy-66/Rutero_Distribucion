@@ -11,7 +11,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, startOfWeek, endOfWeek, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -101,7 +101,6 @@ function RouteManagementContent() {
       const subordinates = allUsers.filter(u => u.supervisorId === user.id);
       base = subordinates;
     }
-    // Siempre incluimos al usuario actual si es supervisor
     if (user.role === 'Supervisor') {
         const exists = base.some(u => u.id === user.id);
         if(!exists) base = [user, ...base];
@@ -112,8 +111,8 @@ function RouteManagementContent() {
   const selectableRoutes = useMemo(() => {
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     const today = new Date();
+    // Definimos el inicio de la semana actual (Lunes)
     const currentMonday = startOfWeek(today, { weekStartsOn: 1 });
-    const currentSunday = endOfWeek(today, { weekStartsOn: 1 });
 
     return allRoutes.filter(r => {
         const isOwnRoute = r.createdBy === user?.id;
@@ -126,9 +125,9 @@ function RouteManagementContent() {
         // Solo rutas activas
         if (r.status !== 'Planificada' && r.status !== 'En Progreso') return false;
 
-        // Solo rutas de la semana actual (bloqueo de pasadas)
+        // Bloqueo de rutas de semanas pasadas (permitimos actuales y futuras)
         const rDate = ensureDate(r.date);
-        if (rDate < startOfDay(currentMonday) || rDate > endOfDay(currentSunday)) {
+        if (rDate < startOfDay(currentMonday)) {
             if (!isAdmin) return false; 
         }
         
@@ -158,6 +157,7 @@ function RouteManagementContent() {
         .filter(c => {
             if (c.status === 'Eliminado') return false;
             const cDate = ensureDate(c.date);
+            // Comparación estricta por cadena de texto para evitar desfases de zona horaria
             return format(cDate, 'yyyy-MM-dd') === todayStr;
         });
   }, [currentRouteClientsFull, availableClients]);
