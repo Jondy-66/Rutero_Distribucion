@@ -50,10 +50,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (isDataInitialized.current) return;
     setDataLoading(true);
     
-    const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor';
+    // El Auditor, Administrador y Supervisor deben ver todos los datos para reportes y supervisión
+    const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor' || currentUser.role === 'Auditor';
     
     try {
-        // Cargamos usuarios - Para vendedores es vital tener la lista de nombres de supervisores
+        // Cargamos usuarios - Para todos los roles es vital tener la lista de nombres
         const usersRes = await getUsers().catch(e => { 
           console.error("Error cargando usuarios:", e); 
           return []; 
@@ -79,7 +80,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   
   const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'routes' | 'phoneContacts') => {
       if (!user) return;
-      const isSourcingAll = user.role === 'Administrador' || user.role === 'Supervisor';
+      const isSourcingAll = user.role === 'Administrador' || user.role === 'Supervisor' || user.role === 'Auditor';
       
       try {
           if (dataType === 'clients') setClients(isSourcingAll ? await getClients() : await getMyClients(user.name));
