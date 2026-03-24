@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -113,23 +114,14 @@ function RouteManagementContent() {
 
   const selectableRoutes = useMemo(() => {
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
-    const today = new Date();
-    const currentMonday = startOfWeek(today, { weekStartsOn: 1 });
-
+    
     return allRoutes.filter(r => {
         const isOwnRoute = r.createdBy === user?.id;
         const isTeamRoute = managedUserIds.has(r.createdBy);
 
         if (!isOwnRoute && !isTeamRoute && !isAdmin) return false;
-        
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
-        
         if (r.status !== 'Planificada' && r.status !== 'En Progreso') return false;
-
-        const rDate = ensureDate(r.date);
-        if (rDate < addDays(currentMonday, -1)) {
-            if (!isAdmin) return false; 
-        }
         
         return true;
     });
@@ -314,9 +306,9 @@ function RouteManagementContent() {
     {isExpired && !isAdmin && (
         <Alert variant="destructive" className="mb-6 border-red-600 bg-red-50">
             <AlertTriangle className="h-4 w-4 text-red-600" />
-            <AlertTitle className="text-red-800 font-black uppercase">Jornada Expirada</AlertTitle>
-            <AlertDescription className="text-red-700 font-bold uppercase text-[10px]">
-                HAS SUPERADO EL TIEMPO LÍMITE (19:00). EL REGISTRO DE GESTIÓN HA SIDO BLOQUEADO. CONTACTA A TU SUPERVISOR.
+            <AlertTitle className="text-red-800 font-black uppercase text-xs">Jornada Expirada</AlertTitle>
+            <AlertDescription className="text-red-700 font-bold uppercase text-[9px]">
+                HAS SUPERADO EL TIEMPO LÍMITE (19:00). EL REGISTRO DE GESTIÓN HA SIDO BLOQUEADO.
             </AlertDescription>
         </Alert>
     )}
@@ -349,7 +341,7 @@ function RouteManagementContent() {
                     <SelectContent>
                         {selectableRoutes.length > 0 ? (
                             selectableRoutes.map(r => (
-                                <SelectItem key={r.id} value={r.id} className="font-black text-slate-950">
+                                <SelectItem key={r.id} value={r.id} className="font-black text-slate-950 uppercase text-xs">
                                     {r.routeName} ({r.status})
                                 </SelectItem>
                             ))
@@ -540,7 +532,7 @@ function RouteManagementContent() {
                             </div>
                             </>
                         ) : (
-                            <div className="flex-1 flex items-center justify-center text-slate-950 font-black uppercase text-center">
+                            <div className="flex-1 flex items-center justify-center text-slate-950 font-black uppercase text-center text-lg tracking-widest">
                                 Selecciona un cliente de hoy para ver su detalle
                             </div>
                         )}
@@ -567,7 +559,7 @@ function RouteManagementContent() {
                 <div className="grid grid-cols-1 gap-3 pb-6">
                     {availableClients
                         .filter(c => {
-                            if (user?.role !== 'Administrador' && c.ejecutivo !== user?.name) return false;
+                            if (user?.role !== 'Administrador' && user?.role !== 'Auditor' && c.ejecutivo !== user?.name) return false;
                             const search = addClientSearchTerm.toLowerCase();
                             return String(c.nombre_cliente || '').toLowerCase().includes(search) || String(c.nombre_comercial || '').toLowerCase().includes(search) || String(c.ruc).includes(search);
                         })

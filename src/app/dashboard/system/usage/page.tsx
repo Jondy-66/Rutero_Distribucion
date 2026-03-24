@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -95,7 +96,7 @@ export default function SystemUsagePage() {
             <CardDescription className="text-slate-950 font-bold uppercase text-[10px]">Eventos registrados por el servidor.</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="border rounded-xl overflow-hidden">
+            <div className="border-2 border-slate-100 rounded-xl overflow-hidden">
               <Table>
                 <TableHeader className="bg-slate-50">
                   <TableRow>
@@ -117,7 +118,7 @@ export default function SystemUsagePage() {
                     ))
                   ) : logs.length > 0 ? (
                     logs.map((log) => (
-                      <TableRow key={log.id}>
+                      <TableRow key={log.id} className="hover:bg-slate-50/50">
                         <TableCell className="font-black text-xs text-slate-950 uppercase">{log.type}</TableCell>
                         <TableCell className="text-xs font-black text-slate-950">{format(log.timestamp, 'dd/MM/yyyy HH:mm:ss', { locale: es })}</TableCell>
                         <TableCell className="font-black text-xs text-slate-950">{log.processed}</TableCell>
@@ -153,21 +154,21 @@ export default function SystemUsagePage() {
                   <Database className="h-5 w-5 text-green-600" />
                   <span className="text-xs font-black text-green-800 uppercase">Firestore DB</span>
                 </div>
-                <Badge className="bg-green-600 font-black border-none text-white">ONLINE</Badge>
+                <Badge className="bg-green-600 font-black border-none text-white text-[9px] uppercase">ONLINE</Badge>
               </div>
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-xl border border-blue-100">
                 <div className="flex items-center gap-3">
                   <Activity className="h-5 w-5 text-blue-600" />
                   <span className="text-xs font-black text-blue-800 uppercase">AI Predictions</span>
                 </div>
-                <Badge className="bg-blue-600 font-black border-none text-white">READY</Badge>
+                <Badge className="bg-blue-600 font-black border-none text-white text-[9px] uppercase">READY</Badge>
               </div>
               <div className="flex items-center justify-between p-3 bg-orange-50 rounded-xl border border-orange-100">
                 <div className="flex items-center gap-3">
                   <Clock className="h-5 w-5 text-orange-600" />
                   <span className="text-xs font-black text-orange-700 uppercase">Cron Jobs</span>
                 </div>
-                <span className="text-[10px] font-black text-orange-700">ACTIVO (24H)</span>
+                <span className="text-[10px] font-black text-orange-700 uppercase tracking-tighter">ACTIVO (24H)</span>
               </div>
             </CardContent>
           </Card>
@@ -179,7 +180,7 @@ export default function SystemUsagePage() {
                 Aviso de Cuotas
               </CardTitle>
             </CardHeader>
-            <CardContent className="text-[10px] font-black text-slate-300 leading-relaxed uppercase">
+            <CardContent className="text-[9px] font-black text-slate-300 leading-relaxed uppercase">
               LA APLICACIÓN OPERA BAJO LÍMITES OPERATIVOS DE GOOGLE CLOUD. LAS IMPORTACIONES MASIVAS (MÁS DE 500 REGISTROS) DEBEN REALIZARSE EN HORARIOS DE BAJO TRÁFICO.
             </CardContent>
           </Card>

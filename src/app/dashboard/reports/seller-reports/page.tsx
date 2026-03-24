@@ -78,7 +78,7 @@ export default function SellerReportsPage() {
 
   const managedSellers = useMemo(() => {
     if (!currentUser) return [];
-    if (currentUser.role === 'Administrador') {
+    if (currentUser.role === 'Administrador' || currentUser.role === 'Auditor') {
       return allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
     }
     if (currentUser.role === 'Supervisor') {
@@ -235,11 +235,11 @@ export default function SellerReportsPage() {
     )
   }
 
-  if (currentUser?.role !== 'Supervisor' && currentUser?.role !== 'Administrador') {
+  if (currentUser?.role !== 'Supervisor' && currentUser?.role !== 'Administrador' && currentUser?.role !== 'Auditor') {
     return (
       <PageHeader
         title="Acceso Denegado"
-        description="Esta página solo está disponible para supervisores y administradores."
+        description="Esta página solo está disponible para supervisores, auditores y administradores."
       />
     )
   }
@@ -258,22 +258,22 @@ export default function SellerReportsPage() {
       
       <Card>
         <CardHeader>
-            <CardTitle>Gestiones Diarias por Vendedor</CardTitle>
-            <CardDescription>
+            <CardTitle className="font-black text-slate-950 uppercase">Gestiones Diarias por Vendedor</CardTitle>
+            <CardDescription className="font-bold text-[10px] text-slate-950 uppercase">
                 Selecciona un vendedor y un rango de fechas para ver el detalle de sus jornadas de trabajo.
             </CardDescription>
         </CardHeader>
         <CardContent>
             <div className="flex flex-col sm:flex-row gap-4 mb-4">
                  <Select value={selectedSellerId} onValueChange={setSelectedSellerId}>
-                    <SelectTrigger className="w-full sm:max-w-xs">
-                        <Users className="mr-2 h-4 w-4" />
+                    <SelectTrigger className="w-full sm:max-w-xs h-11 border-2 border-slate-200 font-black text-slate-950">
+                        <Users className="mr-2 h-4 w-4 text-primary" />
                         <SelectValue placeholder="Seleccionar vendedor" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">Todos los Vendedores</SelectItem>
+                        <SelectItem value="all" className="font-black text-slate-950">Todos los Vendedores</SelectItem>
                         {managedSellers.map(seller => (
-                            <SelectItem key={seller.id} value={seller.id}>{seller.name}</SelectItem>
+                            <SelectItem key={seller.id} value={seller.id} className="font-black text-slate-950">{seller.name}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
@@ -284,11 +284,11 @@ export default function SellerReportsPage() {
                           id="date"
                           variant={"outline"}
                           className={cn(
-                            "w-[300px] justify-start text-left font-normal",
+                            "w-[300px] justify-start text-left font-black h-11 border-2 border-slate-200 text-slate-950",
                             !dateRange && "text-muted-foreground"
                           )}
                         >
-                          <CalendarIcon className="mr-2 h-4 w-4" />
+                          <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
                           {dateRange?.from ? (
                             dateRange.to ? (
                               <>
@@ -317,16 +317,16 @@ export default function SellerReportsPage() {
                     </Popover>
                 </div>
             </div>
-             <div className="border rounded-lg">
+             <div className="border-2 border-slate-100 rounded-xl overflow-hidden">
                 <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-slate-50">
                         <TableRow>
-                        <TableHead>Nombre de Ruta</TableHead>
-                        <TableHead>Vendedor</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Progreso</TableHead>
-                        <TableHead>Estado del Día</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Ruta</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Vendedor</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Fecha</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Progreso</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Estado</TableHead>
+                        <TableHead className="text-right font-black text-slate-950 uppercase text-[10px]">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -343,28 +343,28 @@ export default function SellerReportsPage() {
                             ))
                         ) : dailyReports.length > 0 ? (
                             dailyReports.map((log) => (
-                                <TableRow key={log.id}>
-                                    <TableCell className="font-medium">{log.routeName}</TableCell>
-                                    <TableCell>{log.sellerName}</TableCell>
-                                    <TableCell>{format(log.date, 'PPP', { locale: es })}</TableCell>
-                                    <TableCell>{`${log.completedClients} de ${log.totalClients}`}</TableCell>
+                                <TableRow key={log.id} className="hover:bg-slate-50/50">
+                                    <TableCell className="font-black text-slate-950 text-xs uppercase">{log.routeName}</TableCell>
+                                    <TableCell className="font-black text-slate-950 text-xs uppercase">{log.sellerName}</TableCell>
+                                    <TableCell className="font-black text-slate-950 text-xs uppercase">{format(log.date, 'dd MMM yyyy', { locale: es })}</TableCell>
+                                    <TableCell className="font-black text-primary text-xs uppercase">{`${log.completedClients} de ${log.totalClients}`}</TableCell>
                                     <TableCell>
-                                        <Badge variant={log.status === 'Completado' ? 'success' : 'destructive'}>
+                                        <Badge variant={log.status === 'Completado' ? 'success' : 'destructive'} className="font-black text-[9px] uppercase border-none">
                                             {log.status}
                                         </Badge>
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon">
-                                                    <MoreHorizontal className="h-4 w-4" />
+                                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100">
+                                                    <MoreHorizontal className="h-4 w-4 text-slate-950" />
                                                 </Button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => handleViewDetails(log.originalRouteId)}>
-                                                    <Eye className="mr-2 h-4 w-4" />
-                                                    Ver Ruta Original
+                                            <DropdownMenuContent align="end" className="w-48">
+                                                <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500">Opciones</DropdownMenuLabel>
+                                                <DropdownMenuItem onClick={() => handleViewDetails(log.originalRouteId)} className="font-black text-xs uppercase text-slate-950">
+                                                    <Eye className="mr-2 h-4 w-4 text-primary" />
+                                                    Ver Ruta Completa
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
@@ -373,8 +373,8 @@ export default function SellerReportsPage() {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center h-24">
-                                    No hay gestiones diarias para mostrar con los filtros seleccionados.
+                                <TableCell colSpan={6} className="text-center h-24 font-black text-slate-950 uppercase text-xs">
+                                    No hay gestiones diarias para mostrar.
                                 </TableCell>
                             </TableRow>
                         )}
