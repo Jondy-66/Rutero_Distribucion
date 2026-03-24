@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -53,8 +52,8 @@ export default function SystemUsagePage() {
     ];
   }, [clients, users, routes, phoneContacts]);
 
-  if (user?.role !== 'Administrador') {
-    return <PageHeader title="Acceso Restringido" description="Solo administradores pueden ver esta página." />;
+  if (user?.role !== 'Administrador' && user?.role !== 'Auditor') {
+    return <PageHeader title="Acceso Restringido" description="Solo administradores y auditores pueden ver esta página." />;
   }
 
   return (

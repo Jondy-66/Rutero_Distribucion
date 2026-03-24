@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -24,17 +23,18 @@ const modules = [
     { id: 'locations', label: 'Gestión de Ubicaciones' },
     { id: 'map', label: 'Visualización de Mapa' },
     { id: 'reports', label: 'Reportes y Exportaciones' },
+    { id: 'seller-reports', label: 'Reportes Vendedores (Gestión Diaria)' },
     { id: 'routes', label: 'Gestión de Rutas' },
     { id: 'users', label: 'Administración de Usuarios' },
     { id: 'recover-clients', label: 'RECUPERAR CLIENTES (Rescate de Datos)' },
 ];
 
 const defaultPermissionsByRole: Record<User['role'], string[]> = {
-    'Administrador': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'locations', 'map', 'reports', 'routes', 'users', 'recover-clients'],
-    'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'map', 'reports', 'routes', 'recover-clients'],
+    'Administrador': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'locations', 'map', 'reports', 'seller-reports', 'routes', 'users', 'recover-clients'],
+    'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'map', 'reports', 'seller-reports', 'routes', 'recover-clients'],
     'Usuario': ['dashboard', 'clients', 'map', 'routes'],
     'Telemercaderista': ['dashboard', 'clients', 'map', 'routes'],
-    'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'routes'],
+    'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'seller-reports', 'routes'],
 };
 
 export default function PermissionsPage() {

@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -43,98 +42,47 @@ import {
 } from '@/components/ui/collapsible';
 import { useState } from 'react';
 
-const navItems = [
-  {
-    href: '/dashboard',
-    label: 'Panel',
-    icon: LayoutDashboard,
-    roles: ['Usuario', 'Telemercaderista', 'Auditor'],
-    id: 'dashboard',
-  },
-  {
-    href: '/dashboard/clients',
-    label: 'Clientes',
-    icon: Briefcase,
-    roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista', 'Auditor'],
-    id: 'clients',
-  },
-  {
-    href: '/dashboard/locations',
-    label: 'Ubicaciones',
-    icon: MapPin,
-    roles: ['Administrador', 'Auditor'],
-    id: 'locations',
-  },
-  {
-    href: '/dashboard/map',
-    label: 'Mapa',
-    icon: Map,
-    roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista', 'Auditor'],
-    id: 'map',
-  },
-];
-
-const usersNavItem = {
-  href: '/dashboard/users',
-  label: 'Usuarios',
-  icon: Users,
-  roles: ['Administrador'],
-  id: 'users',
-};
-
 /**
  * Componente de navegación principal para el panel de control.
- * Muestra los enlaces de navegación en la barra lateral según el rol del usuario.
+ * Muestra los enlaces de navegación en la barra lateral según el rol y permisos del usuario.
  */
 export function DashboardNav() {
   const pathname = usePathname();
   const { user } = useAuth();
-  const [isRoutesOpen, setIsRoutesOpen] = useState(
-    pathname.startsWith('/dashboard/routes')
-  );
-  const [isPlanningOpen, setIsPlanningOpen] = useState(
-    pathname.startsWith('/dashboard/routes')
-  );
-   const [isCrmOpen, setIsCrmOpen] = useState(
-    pathname.startsWith('/dashboard/crm')
-  );
-  const [isUsersOpen, setIsUsersOpen] = useState(
-    pathname.startsWith('/dashboard/users') || pathname.startsWith('/dashboard/system')
-  );
-  const [isReportsOpen, setIsReportsOpen] = useState(
-    pathname.startsWith('/dashboard/reports')
-  );
-  const [isDashboardOpen, setIsDashboardOpen] = useState(
-    pathname.startsWith('/dashboard/admin-dashboard') || pathname === '/dashboard'
-  );
+  
+  const [isRoutesOpen, setIsRoutesOpen] = useState(pathname.startsWith('/dashboard/routes'));
+  const [isPlanningOpen, setIsPlanningOpen] = useState(pathname.startsWith('/dashboard/routes'));
+  const [isCrmOpen, setIsCrmOpen] = useState(pathname.startsWith('/dashboard/crm'));
+  const [isUsersOpen, setIsUsersOpen] = useState(pathname.startsWith('/dashboard/users') || pathname.startsWith('/dashboard/system'));
+  const [isReportsOpen, setIsReportsOpen] = useState(pathname.startsWith('/dashboard/reports'));
+  const [isDashboardOpen, setIsDashboardOpen] = useState(pathname.startsWith('/dashboard/admin-dashboard') || pathname === '/dashboard');
 
-
-  const filteredNavItems = navItems.filter((item) => {
-    if (!user || !user.role) return false;
-    return item.roles.includes(user.role);
-  });
-
-  const canSeeReports = user?.role === 'Supervisor' || user?.role === 'Administrador' || user?.role === 'Usuario' || user?.role === 'Telemercaderista' || user?.role === 'Auditor';
-  const isSupervisorOrAdmin = user?.role === 'Supervisor' || user?.role === 'Administrador' || user?.role === 'Auditor';
-
-  const canSeeRoutes =
-    user?.role === 'Administrador' ||
-    user?.role === 'Supervisor' ||
-    user?.role === 'Usuario' ||
-    user?.role === 'Telemercaderista' ||
-    user?.role === 'Auditor';
+  // Ayudante para verificar permisos granulares con soporte de fallback por rol
+  const hasPerm = (id: string) => {
+    if (!user) return false;
+    if (user.role === 'Administrador') return true;
     
-  const canSeeUsers =
-    user?.role && usersNavItem.roles.includes(user.role);
-  
-  const canSeeTeamRoutes = user?.role === 'Administrador' || user?.role === 'Supervisor';
-  
-  const canSeeCrm = user?.role === 'Administrador' || user?.role === 'Supervisor' || user?.role === 'Telemercaderista';
+    // Si el usuario tiene un array de permisos definido, lo usamos como fuente de verdad
+    if (user.permissions && user.permissions.length > 0) {
+      return user.permissions.includes(id);
+    }
+    
+    // Fallback a permisos por defecto si no hay array de permisos en el perfil
+    const roleDefaults: Record<string, string[]> = {
+      'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'map', 'reports', 'seller-reports', 'routes'],
+      'Usuario': ['dashboard', 'clients', 'map', 'routes'],
+      'Telemercaderista': ['dashboard', 'clients', 'map', 'routes'],
+      'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'seller-reports', 'routes'],
+    };
+    
+    return (roleDefaults[user.role] || []).includes(id);
+  };
 
   return (
     <nav>
       <SidebarMenu>
-        {isSupervisorOrAdmin && (
+        {/* PANEL DE CONTROL / KPIs */}
+        {hasPerm('admin-dashboard') && (
           <Collapsible open={isDashboardOpen} onOpenChange={setIsDashboardOpen}>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
@@ -166,26 +114,43 @@ export function DashboardNav() {
             </CollapsibleContent>
           </Collapsible>
         )}
-        
-        {filteredNavItems.map((item) => (
-          <SidebarMenuItem key={item.href}>
-            <SidebarMenuButton
-              asChild
-              isActive={
-                pathname === item.href ||
-                (item.href !== '/dashboard' && pathname.startsWith(item.href))
-              }
-              tooltip={item.label}
-            >
-              <Link href={item.href}>
-                <item.icon className="h-5 w-5" />
-                <span>{item.label}</span>
+
+        {/* MODULOS BASICOS */}
+        {hasPerm('clients') && (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname.startsWith('/dashboard/clients')} tooltip="Clientes">
+              <Link href="/dashboard/clients">
+                <Briefcase className="h-5 w-5" />
+                <span>Clientes</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
-        ))}
+        )}
 
-         {canSeeReports && (
+        {hasPerm('locations') && (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/dashboard/locations'} tooltip="Ubicaciones">
+              <Link href="/dashboard/locations">
+                <MapPin className="h-5 w-5" />
+                <span>Ubicaciones</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        )}
+
+        {hasPerm('map') && (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/dashboard/map'} tooltip="Mapa">
+              <Link href="/dashboard/map">
+                <Map className="h-5 w-5" />
+                <span>Mapa</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        )}
+
+        {/* REPORTES */}
+        {hasPerm('reports') && (
           <Collapsible open={isReportsOpen} onOpenChange={setIsReportsOpen}>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
@@ -197,39 +162,30 @@ export function DashboardNav() {
             </SidebarMenuItem>
             <CollapsibleContent>
               <SidebarMenuSub>
-                {isSupervisorOrAdmin ? (
-                  <>
-                    <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-reports'}>
-                          <Link href="/dashboard/reports/my-reports">
-                            <FileText />
-                            <span>Rutas Asignadas</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                    <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/seller-reports'}>
-                          <Link href="/dashboard/reports/seller-reports">
-                            <Users />
-                            <span>Reportes Vendedores</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                     <SidebarMenuSubItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-completed-routes'}>
-                          <Link href="/dashboard/reports/my-completed-routes">
-                            <List />
-                            <span>Rutas Completadas</span>
-                          </Link>
-                        </SidebarMenuSubButton>
-                    </SidebarMenuSubItem>
-                  </>
-                ) : (
+                <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-completed-routes'}>
+                      <Link href="/dashboard/reports/my-completed-routes">
+                        <List />
+                        <span>Rutas Completadas</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                {(user?.role === 'Supervisor' || user?.role === 'Administrador' || user?.role === 'Auditor') && (
                   <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-completed-routes'}>
-                        <Link href="/dashboard/reports/my-completed-routes">
-                          <List />
-                          <span>Mis Rutas Completadas</span>
+                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-reports'}>
+                        <Link href="/dashboard/reports/my-reports">
+                          <FileText />
+                          <span>Rutas Asignadas</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                )}
+                {hasPerm('seller-reports') && (
+                  <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/seller-reports'}>
+                        <Link href="/dashboard/reports/seller-reports">
+                          <Users />
+                          <span>Reportes Vendedores</span>
                         </Link>
                       </SidebarMenuSubButton>
                   </SidebarMenuSubItem>
@@ -238,7 +194,9 @@ export function DashboardNav() {
             </CollapsibleContent>
           </Collapsible>
         )}
-        {canSeeRoutes && (
+
+        {/* RUTAS */}
+        {hasPerm('routes') && (
           <Collapsible open={isRoutesOpen} onOpenChange={setIsRoutesOpen}>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
@@ -296,7 +254,7 @@ export function DashboardNav() {
                       </Link>
                     </SidebarMenuSubButton>
                 </SidebarMenuItem>
-                 {canSeeTeamRoutes && (
+                 {(user?.role === 'Administrador' || user?.role === 'Supervisor') && (
                     <SidebarMenuItem>
                         <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/team-routes'}>
                             <Link href="/dashboard/routes/team-routes">
@@ -310,7 +268,9 @@ export function DashboardNav() {
             </CollapsibleContent>
           </Collapsible>
         )}
-        {canSeeCrm && (
+
+        {/* CRM */}
+        {hasPerm('dashboard') && (user?.role === 'Administrador' || user?.role === 'Supervisor' || user?.role === 'Telemercaderista') && (
            <Collapsible open={isCrmOpen} onOpenChange={setIsCrmOpen}>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
@@ -350,7 +310,9 @@ export function DashboardNav() {
             </CollapsibleContent>
           </Collapsible>
         )}
-        {canSeeUsers && (
+
+        {/* ADMINISTRACION SISTEMA */}
+        {hasPerm('users') && (
           <Collapsible open={isUsersOpen} onOpenChange={setIsUsersOpen}>
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>

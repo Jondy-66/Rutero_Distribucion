@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -7,11 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, CheckCircle2, ThumbsUp } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, ThumbsUp } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, startOfWeek, endOfWeek, startOfDay, endOfDay, addDays } from 'date-fns';
+import { format, startOfWeek, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -92,7 +91,6 @@ function RouteManagementContent() {
     return () => clearInterval(timer);
   }, [isAdmin]);
 
-  // MOTOR DE VINCULACIÓN RESILIENTE
   const managedUsersForSelector = useMemo(() => {
     if (!user) return [];
     let base: User[] = [];
