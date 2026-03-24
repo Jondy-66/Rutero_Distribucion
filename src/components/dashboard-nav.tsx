@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -23,6 +24,7 @@ import {
   Phone,
   BarChart,
   Settings2,
+  RefreshCw,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -353,6 +355,14 @@ export function DashboardNav() {
                       <Link href="/dashboard/system/usage">
                         <Settings2 />
                         <span>Uso del Sistema</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/system/cron'}>
+                      <Link href="/dashboard/system/cron">
+                        <RefreshCw />
+                        <span>Cron Jobs</span>
                       </Link>
                     </SidebarMenuSubButton>
                 </SidebarMenuSubItem>

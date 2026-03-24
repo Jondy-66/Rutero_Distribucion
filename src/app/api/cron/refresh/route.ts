@@ -9,15 +9,13 @@ const adminApp = initializeAdminApp();
  * @fileoverview Endpoint de sincronización forzada para Cron Jobs.
  * 
  * Este endpoint realiza un "barrido" de todos los ejecutivos activos y llama 
- * a la API de Render para asegurar que el servicio no entre en modo suspensión
- * y las predicciones estén siempre frescas.
+ * a la API de Render para asegurar que el servicio no entre en modo suspensión.
  */
 export async function GET(request: Request) {
   // 1. Verificación de Seguridad
   const authHeader = request.headers.get('authorization');
   const cronSecret = process.env.CRON_SECRET;
 
-  // Si se ha definido un secreto, validar que el cron envíe 'Bearer <secreto>'
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
     console.warn("Intento de ejecución de CRON no autorizado.");
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
@@ -29,13 +27,27 @@ export async function GET(request: Request) {
 
   try {
     const db = getFirestore(adminApp);
-    const token = process.env.API_PREDICCION_TOKEN;
+    
+    // 2. Cargar configuración de Cron desde Firestore
+    const configSnap = await db.collection('system_config').doc('cron').get();
+    const config = configSnap.exists ? configSnap.data() : { enabled: true, active24h: true, scheduledDays: [1,2,3,4,5] };
 
-    if (!token) {
-      throw new Error("Token de API externa no configurado.");
+    // 3. Validar si el Cron debe ejecutarse hoy
+    if (!config?.enabled) {
+      return NextResponse.json({ message: 'Cron Job está desactivado globalmente.' });
     }
 
-    // 2. Obtener ejecutivos activos
+    const today = new Date().getDay(); // 0 = Domingo, 1 = Lunes...
+    const isScheduledToday = config?.scheduledDays?.includes(today);
+
+    if (!isScheduledToday && !config?.active24h) {
+      return NextResponse.json({ message: 'Hoy no es un día programado para ejecución y modo 24h está desactivado.' });
+    }
+
+    const token = process.env.API_PREDICCION_TOKEN;
+    if (!token) throw new Error("Token de API externa no configurado.");
+
+    // 4. Obtener ejecutivos activos
     const usersSnapshot = await db.collection('users')
       .where('role', 'in', ['Usuario', 'Telemercaderista'])
       .where('status', '==', 'active')
@@ -49,7 +61,7 @@ export async function GET(request: Request) {
 
     const report = [];
 
-    // 3. Despertar API de Render y refrescar datos con Backoff
+    // 5. Despertar API de Render y refrescar datos con Backoff para evitar Error 429
     for (const ejecutivo of ejecutivos) {
       const url = new URL("https://api-distribucion-rutas.onrender.com/predecir_ejecutivo");
       url.searchParams.append("ejecutivo", ejecutivo);
@@ -78,13 +90,18 @@ export async function GET(request: Request) {
       }
     }
 
-    // 4. Registrar log en Firestore
+    // 6. Registrar log en Firestore y actualizar última ejecución
+    const now = new Date();
     await db.collection('system_logs').add({
       type: 'CRON_REFRESH',
-      timestamp: new Date(),
+      timestamp: now,
       processed: ejecutivos.length,
       details: report
     });
+
+    await db.collection('system_config').doc('cron').set({
+      lastRun: now
+    }, { merge: true });
 
     return NextResponse.json({ success: true, report });
 

@@ -13,6 +13,14 @@ export type User = {
   permissions?: string[];
 };
 
+export type CronConfig = {
+  enabled: boolean;
+  active24h: boolean;
+  scheduledDays: number[]; // 0-6 (Domingo-Sábado)
+  lastRun?: Timestamp | Date;
+  updatedAt?: Timestamp | Date;
+};
+
 export type Customer = {
   id: string;
   name: string;

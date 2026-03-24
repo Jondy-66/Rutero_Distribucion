@@ -1,8 +1,28 @@
 
 import { db } from './config';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp, limit } from 'firebase/firestore';
-import type { User, Client, RoutePlan, ClientInRoute, Notification, PhoneContact, Customer, CrmSale, CrmCall, SystemLog } from '@/lib/types';
+import type { User, Client, RoutePlan, ClientInRoute, Notification, PhoneContact, Customer, CrmSale, CrmCall, SystemLog, CronConfig } from '@/lib/types';
 import { updateUserPasswordAsAdmin } from './auth';
+
+// --- CONFIGURACIÓN DEL SISTEMA ---
+export const getCronConfig = async (): Promise<CronConfig> => {
+    const docRef = doc(db, 'system_config', 'cron');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        return docSnap.data() as CronConfig;
+    }
+    // Valores por defecto
+    return {
+        enabled: true,
+        active24h: true,
+        scheduledDays: [1, 2, 3, 4, 5],
+    };
+};
+
+export const updateCronConfig = async (config: Partial<CronConfig>) => {
+    const docRef = doc(db, 'system_config', 'cron');
+    return setDoc(docRef, { ...config, updatedAt: serverTimestamp() }, { merge: true });
+};
 
 // --- COLECCIÓN DE CRM: CUSTOMERS ---
 const customersCollection = collection(db, 'customers');
