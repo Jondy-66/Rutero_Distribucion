@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -33,6 +34,7 @@ const defaultPermissionsByRole: Record<User['role'], string[]> = {
     'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'map', 'reports', 'routes', 'recover-clients'],
     'Usuario': ['dashboard', 'clients', 'map', 'routes'],
     'Telemercaderista': ['dashboard', 'clients', 'map', 'routes'],
+    'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'routes'],
 };
 
 export default function PermissionsPage() {
@@ -157,7 +159,7 @@ export default function PermissionsPage() {
                                     onCheckedChange={(checked) => handlePermissionChange(module.id, Boolean(checked))}
                                     disabled={isSaving}
                                 />
-                                <Label htmlFor={`perm-${module.id}`} className="font-bold cursor-pointer flex-1 uppercase text-[11px]">
+                                <Label htmlFor={`perm-${module.id}`} className="font-bold cursor-pointer flex-1 uppercase text-[11px] text-slate-950">
                                     {module.label}
                                 </Label>
                             </div>

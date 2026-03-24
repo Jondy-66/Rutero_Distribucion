@@ -5,7 +5,7 @@ export type User = {
   id: string;
   name: string;
   email: string;
-  role: 'Administrador' | 'Supervisor' | 'Usuario' | 'Telemercaderista';
+  role: 'Administrador' | 'Supervisor' | 'Usuario' | 'Telemercaderista' | 'Auditor';
   avatar?: string;
   status?: 'active' | 'inactive';
   supervisorId?: string;

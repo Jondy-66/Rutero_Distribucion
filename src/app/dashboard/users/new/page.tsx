@@ -30,7 +30,7 @@ export default function NewUserPage() {
   const { users, loading, refetchData } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [role, setRole] = useState<'Administrador' | 'Supervisor' | 'Usuario' | 'Telemercaderista'>('Usuario');
+  const [role, setRole] = useState<'Administrador' | 'Supervisor' | 'Usuario' | 'Telemercaderista' | 'Auditor'>('Usuario');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -165,6 +165,7 @@ export default function NewUserPage() {
                   <SelectItem value="Supervisor">Supervisor</SelectItem>
                   <SelectItem value="Usuario">Usuario</SelectItem>
                   <SelectItem value="Telemercaderista">Telemercaderista</SelectItem>
+                  <SelectItem value="Auditor">Auditor</SelectItem>
                 </SelectContent>
               </Select>
             </div>

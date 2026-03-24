@@ -1,3 +1,4 @@
+
 'use client';
 import { useEffect, useState, use } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -206,6 +207,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
                         <SelectItem value="Supervisor">Supervisor</SelectItem>
                         <SelectItem value="Usuario">Usuario</SelectItem>
                         <SelectItem value="Telemercaderista">Telemercaderista</SelectItem>
+                        <SelectItem value="Auditor">Auditor</SelectItem>
                         </SelectContent>
                     </Select>
                     </div>
