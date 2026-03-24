@@ -118,7 +118,6 @@ function RouteManagementContent() {
         
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
-        // FILTRADO ESTRICTO: Solo rutas activas de la semana actual.
         if (r.status !== 'Planificada' && r.status !== 'En Progreso') return false;
 
         const rDate = ensureDate(r.date);
@@ -376,11 +375,11 @@ function RouteManagementContent() {
                     </CardHeader>
                     <CardContent className="p-6 flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
                         {isTodayFinished && (
-                            <Alert className="bg-green-50 border-green-600 border-2 shrink-0">
+                            <Alert className="bg-green-50 border-green-600 border-2 shrink-0 mb-2">
                                 <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                <AlertTitle className="text-green-800 font-black uppercase text-xs">¡Ruta Finalizada!</AlertTitle>
+                                <AlertTitle className="text-green-800 font-black uppercase text-xs">¡Jornada Finalizada!</AlertTitle>
                                 <AlertDescription className="text-green-700 font-bold uppercase text-[10px]">
-                                    Has completado todas las visitas de hoy.
+                                    Has completado todas las visitas programadas para hoy.
                                 </AlertDescription>
                             </Alert>
                         )}

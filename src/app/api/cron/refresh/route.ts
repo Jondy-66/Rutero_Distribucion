@@ -49,13 +49,16 @@ export async function GET(request: Request) {
 
     const report = [];
 
-    // 3. Despertar API de Render y refrescar datos
+    // 3. Despertar API de Render y refrescar datos con Backoff
     for (const ejecutivo of ejecutivos) {
       const url = new URL("https://api-distribucion-rutas.onrender.com/predecir_ejecutivo");
       url.searchParams.append("ejecutivo", ejecutivo);
       url.searchParams.append("dias", "7");
 
       try {
+        // Pausa de seguridad de 1 segundo para evitar Error 429
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
         const response = await fetch(url.toString(), {
           method: 'GET',
           headers: {

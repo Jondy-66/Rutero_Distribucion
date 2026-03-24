@@ -24,7 +24,6 @@ type GetPrediccionesParams = {
  * @returns {Promise<Prediction[]>} Una promesa que se resuelve con un array de objetos de predicción.
  */
 export async function getPredicciones({ fecha_inicio, dias, lat_base, lon_base, max_km, ejecutivo }: GetPrediccionesParams): Promise<Prediction[]> {
-  // Apunta a la ruta de API local que actúa como proxy.
   const url = new URL("/api/predicciones", window.location.origin);
   if (fecha_inicio) url.searchParams.append("fecha_inicio", fecha_inicio);
   if (dias) url.searchParams.append("dias", String(dias));
@@ -33,13 +32,13 @@ export async function getPredicciones({ fecha_inicio, dias, lat_base, lon_base, 
   if (max_km) url.searchParams.append("max_km", String(max_km));
   if (ejecutivo) url.searchParams.append("ejecutivo", ejecutivo);
   
-  // El token ahora se maneja en el servidor, por lo que no se envía desde el cliente.
-  const headers: HeadersInit = {};
-
-  const response = await fetch(url, { headers });
+  const response = await fetch(url);
   
   if (!response.ok) {
-    // Intenta parsear el error del cuerpo de la respuesta para dar más detalles.
+    if (response.status === 429) {
+        throw new Error("El servidor está procesando demasiadas solicitudes. Por favor, espera 10 segundos e intenta de nuevo.");
+    }
+    
     try {
         const errorBody = await response.json();
         throw new Error(errorBody.message || `Error en la API: ${response.statusText}`);
@@ -72,7 +71,11 @@ export async function getRutaOptima({ origen, waypoints, api_key }: GetRutaOptim
   waypoints.forEach((wp) => url.searchParams.append("waypoints", wp.trim()));
  
   const response = await fetch(url);
+  
   if (!response.ok) {
+    if (response.status === 429) {
+        throw new Error("Límite de solicitudes excedido. Espera un momento antes de volver a calcular la ruta.");
+    }
     throw new Error(`Error en la API: ${response.statusText}`);
   }
   return response.json();
