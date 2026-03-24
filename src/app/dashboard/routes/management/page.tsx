@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, CheckCircle2 } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, CheckCircle2, ThumbsUp } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -99,7 +99,12 @@ function RouteManagementContent() {
       base = allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista' || u.role === 'Supervisor');
     } else if (user.role === 'Supervisor') {
       const subordinates = allUsers.filter(u => u.supervisorId === user.id);
-      base = [user, ...subordinates];
+      base = subordinates;
+    }
+    // Siempre incluimos al usuario actual si es supervisor
+    if (user.role === 'Supervisor') {
+        const exists = base.some(u => u.id === user.id);
+        if(!exists) base = [user, ...base];
     }
     return base;
   }, [allUsers, user]);
@@ -118,8 +123,10 @@ function RouteManagementContent() {
         
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
+        // Solo rutas activas
         if (r.status !== 'Planificada' && r.status !== 'En Progreso') return false;
 
+        // Solo rutas de la semana actual (bloqueo de pasadas)
         const rDate = ensureDate(r.date);
         if (rDate < startOfDay(currentMonday) || rDate > endOfDay(currentSunday)) {
             if (!isAdmin) return false; 
@@ -375,13 +382,15 @@ function RouteManagementContent() {
                     </CardHeader>
                     <CardContent className="p-6 flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
                         {isTodayFinished && (
-                            <Alert className="bg-green-50 border-green-600 border-2 shrink-0 mb-2">
-                                <CheckCircle2 className="h-5 w-5 text-green-600" />
-                                <AlertTitle className="text-green-800 font-black uppercase text-xs">¡Jornada Finalizada!</AlertTitle>
-                                <AlertDescription className="text-green-700 font-bold uppercase text-[10px]">
-                                    Has completado todas las visitas programadas para hoy.
-                                </AlertDescription>
-                            </Alert>
+                            <div className="bg-green-100 border-4 border-green-600 rounded-[2rem] p-6 flex flex-col items-center justify-center text-center gap-3 mb-4 shadow-inner animate-in zoom-in-95 duration-500">
+                                <div className="bg-green-600 p-3 rounded-full shadow-md">
+                                    <ThumbsUp className="h-8 w-8 text-white" />
+                                </div>
+                                <div className="space-y-1">
+                                    <h3 className="text-xl font-black text-slate-950 uppercase tracking-tighter">¡Ruta Finalizada!</h3>
+                                    <p className="text-[9px] font-black text-slate-950 uppercase">Buen trabajo, has terminado tus visitas de hoy.</p>
+                                </div>
+                            </div>
                         )}
 
                         <Button 
@@ -447,12 +456,28 @@ function RouteManagementContent() {
                                 <h3 className="text-2xl font-black text-primary uppercase leading-tight tracking-tight">{activeClient.nombre_comercial}</h3>
                                 <p className="text-xs font-black text-slate-950 uppercase">{activeClient.direccion}</p>
                             </div>
+                        ) : isTodayFinished ? (
+                            <div className="text-center text-green-600 uppercase font-black tracking-widest text-lg flex items-center justify-center gap-2">
+                                <ThumbsUp className="h-6 w-6" /> JORNADA COMPLETADA
+                            </div>
                         ) : (
                             <div className="text-center text-slate-950 uppercase font-black tracking-widest text-lg">Selecciona un cliente de hoy</div>
                         )}
                     </CardHeader>
-                    <CardContent className="p-10 space-y-8 flex-1 overflow-y-auto">
-                        {activeClient && (
+                    <CardContent className="p-10 space-y-8 flex-1 overflow-y-auto flex flex-col">
+                        {!activeClient && isTodayFinished ? (
+                            <div className="flex-1 flex flex-col items-center justify-center p-10 animate-in fade-in zoom-in duration-700">
+                                <div className="bg-green-600 p-10 rounded-full shadow-[0_0_50px_rgba(22,163,74,0.3)] mb-8">
+                                    <ThumbsUp className="h-24 w-24 text-white" />
+                                </div>
+                                <h2 className="text-5xl font-black text-slate-950 uppercase tracking-tighter mb-4">¡LO LOGRASTE!</h2>
+                                <p className="text-xl font-black text-slate-950 uppercase tracking-widest text-center max-w-md">
+                                    HAS FINALIZADO TODA TU RUTA DE HOY. 
+                                    <br />
+                                    ¡EXCELENTE TRABAJO!
+                                </p>
+                            </div>
+                        ) : activeClient ? (
                             <>
                             <div className={cn("p-6 rounded-[1.5rem] border-2 transition-all duration-300", activeClient.checkInTime ? "bg-green-50 border-green-200 shadow-sm" : "bg-slate-50 border-dashed border-slate-300")}>
                                 <div className="flex items-center justify-between">
@@ -522,6 +547,10 @@ function RouteManagementContent() {
                                 </Button>
                             </div>
                             </>
+                        ) : (
+                            <div className="flex-1 flex items-center justify-center text-slate-400 font-black uppercase text-center opacity-30">
+                                Selecciona un cliente de la lista para ver su detalle
+                            </div>
                         )}
                     </CardContent>
                 </Card>
