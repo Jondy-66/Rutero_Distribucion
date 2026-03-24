@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, CheckCircle2 } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -118,13 +118,12 @@ function RouteManagementContent() {
         
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
-        // REGLA ESTRICTA DE ESTADO: Solo rutas activas. Ignorar completadas, pendientes o rechazadas.
+        // FILTRADO ESTRICTO: Solo rutas activas de la semana actual.
         if (r.status !== 'Planificada' && r.status !== 'En Progreso') return false;
 
-        // REGLA DE FECHA: Solo rutas de la semana actual para evitar gestiones de semanas pasadas
         const rDate = ensureDate(r.date);
         if (rDate < startOfDay(currentMonday) || rDate > endOfDay(currentSunday)) {
-            if (!isAdmin) return false; // El admin puede verlas todas, el usuario solo las de su semana
+            if (!isAdmin) return false; 
         }
         
         return true;
@@ -156,6 +155,10 @@ function RouteManagementContent() {
             return format(cDate, 'yyyy-MM-dd') === todayStr;
         });
   }, [currentRouteClientsFull, availableClients]);
+
+  const isTodayFinished = useMemo(() => {
+    return todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado');
+  }, [todaysClients]);
 
   const activeClient = useMemo(() => 
     activeOriginalIndex !== null ? currentRouteClientsFull[activeOriginalIndex] : null, 
@@ -372,6 +375,16 @@ function RouteManagementContent() {
                         </div>
                     </CardHeader>
                     <CardContent className="p-6 flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
+                        {isTodayFinished && (
+                            <Alert className="bg-green-50 border-green-600 border-2 shrink-0">
+                                <CheckCircle2 className="h-5 w-5 text-green-600" />
+                                <AlertTitle className="text-green-800 font-black uppercase text-xs">¡Ruta Finalizada!</AlertTitle>
+                                <AlertDescription className="text-green-700 font-bold uppercase text-[10px]">
+                                    Has completado todas las visitas de hoy.
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
                         <Button 
                             variant="outline" 
                             className="w-full h-12 border-dashed border-2 border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 shrink-0" 
