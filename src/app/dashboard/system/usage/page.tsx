@@ -166,7 +166,7 @@ export default function SystemUsagePage() {
               <div className="flex items-center justify-between p-3 bg-orange-50 rounded-xl border border-orange-100">
                 <div className="flex items-center gap-3">
                   <Clock className="h-5 w-5 text-orange-600" />
-                  <span className="text-xs font-black text-orange-800 uppercase">Cron Jobs</span>
+                  <span className="text-xs font-black text-orange-700 uppercase">Cron Jobs</span>
                 </div>
                 <span className="text-[10px] font-black text-orange-700">ACTIVO (24H)</span>
               </div>
