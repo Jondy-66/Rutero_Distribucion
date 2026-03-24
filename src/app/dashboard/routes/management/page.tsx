@@ -92,14 +92,13 @@ function RouteManagementContent() {
     return () => clearInterval(timer);
   }, [isAdmin]);
 
-  // MOTOR DE VINCULACIÓN RESILIENTE: Mapea subordinados por ID o por Nombre para evitar discrepancias
+  // MOTOR DE VINCULACIÓN RESILIENTE
   const managedUsersForSelector = useMemo(() => {
     if (!user) return [];
     let base: User[] = [];
     if (user.role === 'Administrador') {
-      base = allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista' || u.role === 'Supervisor');
+      base = allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista' || u.role === 'Supervisor' || u.role === 'Auditor');
     } else if (user.role === 'Supervisor') {
-      // Coincidencia por ID o por Nombre (resiliencia de base de datos)
       const subordinates = allUsers.filter(u => 
         u.supervisorId === user.id || 
         (u.supervisorId && u.supervisorId.trim().toLowerCase() === user.name.trim().toLowerCase())
@@ -107,7 +106,6 @@ function RouteManagementContent() {
       base = subordinates;
     }
     
-    // El supervisor siempre puede verse a sí mismo para gestionar su propia ruta
     if (user.role === 'Supervisor' || user.role === 'Administrador') {
         const exists = base.some(u => u.id === user.id);
         if(!exists) base = [user, ...base];
@@ -118,7 +116,6 @@ function RouteManagementContent() {
   const selectableRoutes = useMemo(() => {
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     const today = new Date();
-    // Permitimos un margen de 1 día extra hacia atrás por zonas horarias, pero bloqueamos rutas de la semana pasada (Lunes anterior)
     const currentMonday = startOfWeek(today, { weekStartsOn: 1 });
 
     return allRoutes.filter(r => {
@@ -129,10 +126,8 @@ function RouteManagementContent() {
         
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
-        // Solo rutas activas
         if (r.status !== 'Planificada' && r.status !== 'En Progreso') return false;
 
-        // Bloqueo flexible: Solo ocultamos si es realmente de una semana anterior cerrada
         const rDate = ensureDate(r.date);
         if (rDate < addDays(currentMonday, -1)) {
             if (!isAdmin) return false; 
@@ -165,7 +160,6 @@ function RouteManagementContent() {
         .filter(c => {
             if (c.status === 'Eliminado') return false;
             const cDate = ensureDate(c.date);
-            // Comparación estricta por cadena de texto para evitar desfases
             return format(cDate, 'yyyy-MM-dd') === todayStr;
         });
   }, [currentRouteClientsFull, availableClients]);
@@ -393,18 +387,6 @@ function RouteManagementContent() {
                         </div>
                     </CardHeader>
                     <CardContent className="p-6 flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
-                        {isTodayFinished && (
-                            <div className="bg-green-100 border-4 border-green-600 rounded-[2rem] p-6 flex flex-col items-center justify-center text-center gap-3 mb-4 shadow-inner animate-in zoom-in-95 duration-500">
-                                <div className="bg-green-600 p-3 rounded-full shadow-md">
-                                    <ThumbsUp className="h-8 w-8 text-white" />
-                                </div>
-                                <div className="space-y-1">
-                                    <h3 className="text-xl font-black text-slate-950 uppercase tracking-tighter">¡Ruta Finalizada!</h3>
-                                    <p className="text-[9px] font-black text-slate-950 uppercase">Buen trabajo, has terminado tus visitas de hoy.</p>
-                                </div>
-                            </div>
-                        )}
-
                         <Button 
                             variant="outline" 
                             className="w-full h-12 border-dashed border-2 border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 shrink-0" 

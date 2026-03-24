@@ -48,28 +48,28 @@ const navItems = [
     href: '/dashboard',
     label: 'Panel',
     icon: LayoutDashboard,
-    roles: ['Usuario', 'Telemercaderista'],
+    roles: ['Usuario', 'Telemercaderista', 'Auditor'],
     id: 'dashboard',
   },
   {
     href: '/dashboard/clients',
     label: 'Clientes',
     icon: Briefcase,
-    roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista'],
+    roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista', 'Auditor'],
     id: 'clients',
   },
   {
     href: '/dashboard/locations',
     label: 'Ubicaciones',
     icon: MapPin,
-    roles: ['Administrador'],
+    roles: ['Administrador', 'Auditor'],
     id: 'locations',
   },
   {
     href: '/dashboard/map',
     label: 'Mapa',
     icon: Map,
-    roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista'],
+    roles: ['Administrador', 'Supervisor', 'Usuario', 'Telemercaderista', 'Auditor'],
     id: 'map',
   },
 ];
@@ -114,14 +114,15 @@ export function DashboardNav() {
     return item.roles.includes(user.role);
   });
 
-  const canSeeReports = user?.role === 'Supervisor' || user?.role === 'Administrador' || user?.role === 'Usuario' || user?.role === 'Telemercaderista';
-  const isSupervisorOrAdmin = user?.role === 'Supervisor' || user?.role === 'Administrador';
+  const canSeeReports = user?.role === 'Supervisor' || user?.role === 'Administrador' || user?.role === 'Usuario' || user?.role === 'Telemercaderista' || user?.role === 'Auditor';
+  const isSupervisorOrAdmin = user?.role === 'Supervisor' || user?.role === 'Administrador' || user?.role === 'Auditor';
 
   const canSeeRoutes =
     user?.role === 'Administrador' ||
     user?.role === 'Supervisor' ||
     user?.role === 'Usuario' ||
-    user?.role === 'Telemercaderista';
+    user?.role === 'Telemercaderista' ||
+    user?.role === 'Auditor';
     
   const canSeeUsers =
     user?.role && usersNavItem.roles.includes(user.role);
