@@ -92,16 +92,23 @@ function RouteManagementContent() {
     return () => clearInterval(timer);
   }, [isAdmin]);
 
+  // MOTOR DE VINCULACIÓN RESILIENTE: Mapea subordinados por ID o por Nombre para evitar discrepancias
   const managedUsersForSelector = useMemo(() => {
     if (!user) return [];
     let base: User[] = [];
     if (user.role === 'Administrador') {
       base = allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista' || u.role === 'Supervisor');
     } else if (user.role === 'Supervisor') {
-      const subordinates = allUsers.filter(u => u.supervisorId === user.id);
+      // Coincidencia por ID o por Nombre (resiliencia de base de datos)
+      const subordinates = allUsers.filter(u => 
+        u.supervisorId === user.id || 
+        (u.supervisorId && u.supervisorId.trim().toLowerCase() === user.name.trim().toLowerCase())
+      );
       base = subordinates;
     }
-    if (user.role === 'Supervisor') {
+    
+    // El supervisor siempre puede verse a sí mismo para gestionar su propia ruta
+    if (user.role === 'Supervisor' || user.role === 'Administrador') {
         const exists = base.some(u => u.id === user.id);
         if(!exists) base = [user, ...base];
     }
@@ -111,7 +118,7 @@ function RouteManagementContent() {
   const selectableRoutes = useMemo(() => {
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     const today = new Date();
-    // Definimos el inicio de la semana actual (Lunes)
+    // Permitimos un margen de 1 día extra hacia atrás por zonas horarias, pero bloqueamos rutas de la semana pasada (Lunes anterior)
     const currentMonday = startOfWeek(today, { weekStartsOn: 1 });
 
     return allRoutes.filter(r => {
@@ -125,9 +132,9 @@ function RouteManagementContent() {
         // Solo rutas activas
         if (r.status !== 'Planificada' && r.status !== 'En Progreso') return false;
 
-        // Bloqueo de rutas de semanas pasadas (permitimos actuales y futuras)
+        // Bloqueo flexible: Solo ocultamos si es realmente de una semana anterior cerrada
         const rDate = ensureDate(r.date);
-        if (rDate < startOfDay(currentMonday)) {
+        if (rDate < addDays(currentMonday, -1)) {
             if (!isAdmin) return false; 
         }
         
@@ -135,10 +142,11 @@ function RouteManagementContent() {
     });
   }, [allRoutes, user, isAdmin, isManager, selectedAgentId, managedUsersForSelector]);
 
-  const selectedRoute = useMemo(() => 
-    allRoutes.find(r => r.id === (selectedRouteId || searchParams.get('routeId'))), 
-    [selectedRouteId, allRoutes, searchParams]
-  );
+  const selectedRoute = useMemo(() => {
+    const routeId = selectedRouteId || searchParams.get('routeId');
+    if (!routeId) return undefined;
+    return allRoutes.find(r => r.id === routeId);
+  }, [selectedRouteId, allRoutes, searchParams]);
 
   useEffect(() => {
     if (!selectedRoute) return;
@@ -157,7 +165,7 @@ function RouteManagementContent() {
         .filter(c => {
             if (c.status === 'Eliminado') return false;
             const cDate = ensureDate(c.date);
-            // Comparación estricta por cadena de texto para evitar desfases de zona horaria
+            // Comparación estricta por cadena de texto para evitar desfases
             return format(cDate, 'yyyy-MM-dd') === todayStr;
         });
   }, [currentRouteClientsFull, availableClients]);
@@ -332,9 +340,9 @@ function RouteManagementContent() {
                             <SelectValue placeholder="Filtrar por agente..." />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="all" className="font-black">Todos los disponibles</SelectItem>
+                            <SelectItem value="all" className="font-black text-slate-950">Todos los disponibles</SelectItem>
                             {managedUsersForSelector.map(u => (
-                                <SelectItem key={u.id} value={u.id} className="font-black">
+                                <SelectItem key={u.id} value={u.id} className="font-black text-slate-950">
                                     {u.name} {u.id === user?.id ? "(TÚ)" : ""}
                                 </SelectItem>
                             ))}
@@ -348,7 +356,11 @@ function RouteManagementContent() {
                     </SelectTrigger>
                     <SelectContent>
                         {selectableRoutes.length > 0 ? (
-                            selectableRoutes.map(r => <SelectItem key={r.id} value={r.id} className="font-black">{r.routeName} ({r.status})</SelectItem>)
+                            selectableRoutes.map(r => (
+                                <SelectItem key={r.id} value={r.id} className="font-black text-slate-950">
+                                    {r.routeName} ({r.status})
+                                </SelectItem>
+                            ))
                         ) : (
                             <SelectItem value="none" disabled className="font-black text-slate-950">No hay rutas activas para esta semana.</SelectItem>
                         )}
@@ -429,7 +441,7 @@ function RouteManagementContent() {
                                                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); handleRemoveClient(c.originalIndex); }}><Trash2 className="h-3.5 w-3.5" /></Button>
                                                 )}
                                                 {c.visitStatus === 'Completado' && (
-                                                    <Badge variant="success" className="font-black text-[9px] uppercase border-none">
+                                                    <Badge variant="success" className="font-black text-[9px] uppercase border-none bg-green-500 text-white">
                                                         <CheckCircle className="h-3 w-3 mr-1" /> OK
                                                     </Badge>
                                                 )}
@@ -496,7 +508,7 @@ function RouteManagementContent() {
                                 </div>
                             </div>
 
-                            <div className={cn("space-y-8 transition-all duration-500", !activeClient.checkInTime && !isManager && "pointer-events-none")}>
+                            <div className={cn("space-y-8 transition-all duration-500", !activeClient.checkInTime && !isManager && "opacity-10 pointer-events-none")}>
                                 <div className="space-y-4">
                                     <Label className="text-xs font-black uppercase text-slate-950 tracking-wider ml-1">Tipo de Visita</Label>
                                     <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-6" disabled={isEditingDisabled}>
@@ -548,8 +560,8 @@ function RouteManagementContent() {
                             </div>
                             </>
                         ) : (
-                            <div className="flex-1 flex items-center justify-center text-slate-400 font-black uppercase text-center opacity-30">
-                                Selecciona un cliente de la lista para ver su detalle
+                            <div className="flex-1 flex items-center justify-center text-slate-950 font-black uppercase text-center">
+                                Selecciona un cliente de hoy para ver su detalle
                             </div>
                         )}
                     </CardContent>

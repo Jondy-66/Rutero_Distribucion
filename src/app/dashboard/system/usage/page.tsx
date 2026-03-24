@@ -70,7 +70,7 @@ export default function SystemUsagePage() {
         {firestoreStats.map((stat) => (
           <Card key={stat.label} className="shadow-md">
             <CardHeader className="pb-2">
-              <CardTitle className="text-xs font-black uppercase text-muted-foreground">{stat.label}</CardTitle>
+              <CardTitle className="text-xs font-black uppercase text-slate-950">{stat.label}</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-black text-slate-950 mb-2">{stat.count.toLocaleString()}</div>
@@ -89,11 +89,11 @@ export default function SystemUsagePage() {
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2 shadow-lg border-t-4 border-t-primary">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-black text-slate-950">
+            <CardTitle className="flex items-center gap-2 font-black text-slate-950 uppercase tracking-tighter">
               <Activity className="h-5 w-5 text-primary" />
-              Logs de Auditoría (Últimos 50)
+              Logs de Auditoría
             </CardTitle>
-            <CardDescription className="text-slate-950 font-bold uppercase text-[10px]">Eventos registrados por el servidor y procesos automáticos.</CardDescription>
+            <CardDescription className="text-slate-950 font-bold uppercase text-[10px]">Eventos registrados por el servidor.</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="border rounded-xl overflow-hidden">
@@ -119,11 +119,11 @@ export default function SystemUsagePage() {
                   ) : logs.length > 0 ? (
                     logs.map((log) => (
                       <TableRow key={log.id}>
-                        <TableCell className="font-black text-xs text-slate-950">{log.type}</TableCell>
+                        <TableCell className="font-black text-xs text-slate-950 uppercase">{log.type}</TableCell>
                         <TableCell className="text-xs font-black text-slate-950">{format(log.timestamp, 'dd/MM/yyyy HH:mm:ss', { locale: es })}</TableCell>
                         <TableCell className="font-black text-xs text-slate-950">{log.processed}</TableCell>
                         <TableCell>
-                          <Badge variant="success" className="text-[9px] font-black uppercase border-none">
+                          <Badge variant="success" className="text-[9px] font-black uppercase border-none bg-green-100 text-green-700">
                             <CheckCircle2 className="mr-1 h-3 w-3" /> Exitoso
                           </Badge>
                         </TableCell>
@@ -143,7 +143,7 @@ export default function SystemUsagePage() {
         <div className="space-y-6">
           <Card className="shadow-lg">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2 font-black text-slate-950">
+              <CardTitle className="flex items-center gap-2 font-black text-slate-950 uppercase">
                 <Server className="h-5 w-5 text-primary" />
                 Infraestructura
               </CardTitle>
@@ -154,14 +154,14 @@ export default function SystemUsagePage() {
                   <Database className="h-5 w-5 text-green-600" />
                   <span className="text-xs font-black text-green-800 uppercase">Firestore DB</span>
                 </div>
-                <Badge className="bg-green-600 font-black border-none">ONLINE</Badge>
+                <Badge className="bg-green-600 font-black border-none text-white">ONLINE</Badge>
               </div>
               <div className="flex items-center justify-between p-3 bg-blue-50 rounded-xl border border-blue-100">
                 <div className="flex items-center gap-3">
                   <Activity className="h-5 w-5 text-blue-600" />
                   <span className="text-xs font-black text-blue-800 uppercase">AI Predictions</span>
                 </div>
-                <Badge className="bg-blue-600 font-black border-none">READY</Badge>
+                <Badge className="bg-blue-600 font-black border-none text-white">READY</Badge>
               </div>
               <div className="flex items-center justify-between p-3 bg-orange-50 rounded-xl border border-orange-100">
                 <div className="flex items-center gap-3">
@@ -181,7 +181,7 @@ export default function SystemUsagePage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-[10px] font-black text-slate-300 leading-relaxed uppercase">
-              LA APLICACIÓN OPERA BAJO LÍMITES OPERATIVOS DE GOOGLE CLOUD. LAS IMPORTACIONES MASIVAS (MÁS DE 500 REGISTROS) DEBEN REALIZARSE EN HORARIOS DE BAJO TRÁFICO PARA EVITAR LA SUSPENSIÓN TEMPORAL DEL SERVICIO POR LÍMITES DE ESCRITURA.
+              LA APLICACIÓN OPERA BAJO LÍMITES OPERATIVOS DE GOOGLE CLOUD. LAS IMPORTACIONES MASIVAS (MÁS DE 500 REGISTROS) DEBEN REALIZARSE EN HORARIOS DE BAJO TRÁFICO.
             </CardContent>
           </Card>
         </div>
