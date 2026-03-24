@@ -38,13 +38,13 @@ export default function MyReportsPage() {
   const [loadingRoutes, setLoadingRoutes] = useState(true);
 
   useEffect(() => {
-    if (user && (user.role === 'Supervisor' || user.role === 'Administrador')) {
+    if (user && (user.role === 'Supervisor' || user.role === 'Administrador' || user.role === 'Auditor')) {
         setLoadingRoutes(true);
         if (allRoutes) {
             let supervisorRoutes;
             if (user.role === 'Supervisor') {
                 supervisorRoutes = allRoutes.filter(route => route.supervisorId === user.id);
-            } else { // Administrador
+            } else { // Administrador o Auditor ven todo
                 supervisorRoutes = allRoutes;
             }
             setRoutes(supervisorRoutes);
@@ -94,15 +94,15 @@ export default function MyReportsPage() {
   };
   
   if (authLoading) {
-    return <PageHeader title="Mis Rutas Asignadas" description="Cargando..." />
+    return <PageHeader title="Rutas Asignadas para Auditoría" description="Cargando..." />
   }
 
-  if (user?.role !== 'Supervisor' && user?.role !== 'Administrador' && !authLoading) {
+  if (user?.role !== 'Supervisor' && user?.role !== 'Administrador' && user?.role !== 'Auditor' && !authLoading) {
     return (
         <div>
             <PageHeader
                 title="Acceso Denegado"
-                description="Esta página solo está disponible para supervisores y administradores."
+                description="Esta página solo está disponible para supervisores, auditores y administradores."
             />
         </div>
     )
@@ -111,8 +111,8 @@ export default function MyReportsPage() {
   return (
     <>
       <PageHeader
-        title="Mis Rutas Asignadas"
-        description="Visualiza y descarga los reportes de las rutas que tienes asignadas."
+        title="Rutas Asignadas para Auditoría"
+        description="Visualiza y descarga los reportes de todas las rutas del sistema."
       >
         <div className="flex justify-end gap-2">
             <Button variant="outline" onClick={handleDownloadExcel} disabled={loadingRoutes || routes.length === 0}>
@@ -128,9 +128,9 @@ export default function MyReportsPage() {
       
       <Card>
         <CardHeader>
-            <CardTitle>Rutas Asignadas</CardTitle>
+            <CardTitle>Listado de Rutas</CardTitle>
             <CardDescription>
-                Un listado de todas las rutas que tienes asignadas.
+                Un listado completo de las rutas planificadas en el sistema.
             </CardDescription>
         </CardHeader>
         <CardContent>
@@ -168,7 +168,7 @@ export default function MyReportsPage() {
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={4} className="text-center h-24">
-                                    No tienes rutas asignadas.
+                                    No hay rutas para mostrar.
                                 </TableCell>
                             </TableRow>
                         )}

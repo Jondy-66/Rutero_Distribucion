@@ -78,8 +78,9 @@ export default function SellerReportsPage() {
 
   const managedSellers = useMemo(() => {
     if (!currentUser) return [];
+    // Administradores y Auditores ven a todos los usuarios que no sean administradores (incluye supervisores si tienen rutas)
     if (currentUser.role === 'Administrador' || currentUser.role === 'Auditor') {
-      return allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
+      return allUsers.filter(u => u.role !== 'Administrador');
     }
     if (currentUser.role === 'Supervisor') {
       return allUsers.filter(u => u.supervisorId === currentUser.id);
@@ -248,7 +249,7 @@ export default function SellerReportsPage() {
     <>
       <PageHeader
         title="Reportes de Vendedores"
-        description="Visualiza y descarga los reportes de las gestiones diarias por los vendedores a tu cargo."
+        description="Visualiza y descarga los reportes de las gestiones diarias de toda la fuerza de ventas."
       >
         <Button onClick={handleDownloadExcel} disabled={authLoading || dailyReports.length === 0}>
           <Download className="mr-2" />
@@ -260,7 +261,7 @@ export default function SellerReportsPage() {
         <CardHeader>
             <CardTitle className="font-black text-slate-950 uppercase">Gestiones Diarias por Vendedor</CardTitle>
             <CardDescription className="font-bold text-[10px] text-slate-950 uppercase">
-                Selecciona un vendedor y un rango de fechas para ver el detalle de sus jornadas de trabajo.
+                Selecciona un vendedor y un rango de fechas para auditar el detalle de sus jornadas.
             </CardDescription>
         </CardHeader>
         <CardContent>
@@ -271,9 +272,9 @@ export default function SellerReportsPage() {
                         <SelectValue placeholder="Seleccionar vendedor" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all" className="font-black text-slate-950">Todos los Vendedores</SelectItem>
+                        <SelectItem value="all" className="font-black text-slate-950">Todos los Usuarios</SelectItem>
                         {managedSellers.map(seller => (
-                            <SelectItem key={seller.id} value={seller.id} className="font-black text-slate-950">{seller.name}</SelectItem>
+                            <SelectItem key={seller.id} value={seller.id} className="font-black text-slate-950">{seller.name} ({seller.role})</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
