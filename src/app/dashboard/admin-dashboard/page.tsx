@@ -220,7 +220,7 @@ export default function AdminDashboardPage() {
     <>
       <div className="relative w-full rounded-xl bg-card p-6 overflow-hidden mb-6 shadow-lg">
           <Image 
-            src="https://i.ibb.co/gLWLM1M/rut-img1.png"
+            src="https://i.ibb.co/gLWLM13M/rut-img1.png"
             data-ai-hint="business people celebrating"
             alt="Fuerza de ventas"
             fill

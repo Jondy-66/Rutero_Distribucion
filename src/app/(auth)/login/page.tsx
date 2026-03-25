@@ -148,7 +148,7 @@ export default function LoginPage() {
             <div className="grid grid-cols-1 lg:grid-cols-2">
                 <div className="relative hidden lg:block">
                     <Image
-                        src="https://i.ibb.co/gLWLM1M/rut-img1.png"
+                        src="https://i.ibb.co/gLWLM13M/rut-img1.png"
                         data-ai-hint="logistics map"
                         alt="Mapa de rutas de fondo"
                         width={600}
