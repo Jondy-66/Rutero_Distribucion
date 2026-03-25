@@ -5,30 +5,40 @@ service cloud.firestore {
     function isSignedIn() { return request.auth != null; }
     function isAdmin() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Administrador'; }
     function isSupervisor() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Supervisor'; }
+    function isAuditor() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Auditor'; }
     function isAssignedAgent(data) { return request.auth.uid == data.agent_id; }
 
     match /users/{userId} {
-      // Permitir lectura total (get y list) para que cualquier usuario vea nombres de supervisores/ejecutivos sin restricciones
       allow read: if isSignedIn(); 
       allow write: if isAdmin();
     }
 
     match /customers/{customerId} {
-      allow read, update: if isSignedIn() && (isAssignedAgent(resource.data) || isAdmin());
+      allow read, update: if isSignedIn() && (isAssignedAgent(resource.data) || isAdmin() || isAuditor());
       allow create: if isAdmin();
       allow delete: if isAdmin();
     }
 
     match /sales/{saleId} {
-      allow read: if isSignedIn() && (isAssignedAgent(resource.data) || isAdmin());
+      allow read: if isSignedIn() && (isAssignedAgent(resource.data) || isAdmin() || isAuditor());
       allow create: if isSignedIn() && (isAssignedAgent(request.resource.data) || isAdmin());
       allow delete: if isAdmin();
     }
 
     match /calls/{callId} {
-      allow read: if isSignedIn() && (isAssignedAgent(resource.data) || isAdmin());
+      allow read: if isSignedIn() && (isAssignedAgent(resource.data) || isAdmin() || isAuditor());
       allow create: if isSignedIn() && (isAssignedAgent(request.resource.data) || isAdmin());
       allow delete: if isAdmin();
+    }
+    
+    match /system_config/{docId} {
+      allow read: if isSignedIn() && (isAdmin() || isAuditor());
+      allow write: if isAdmin();
+    }
+
+    match /system_logs/{logId} {
+      allow read: if isSignedIn() && (isAdmin() || isAuditor());
+      allow write: if isAdmin();
     }
     
     match /clients/{clientId} { allow read, write: if isSignedIn(); }

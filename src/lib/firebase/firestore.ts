@@ -2,16 +2,19 @@
 import { db } from './config';
 import { collection, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc, setDoc, query, orderBy, serverTimestamp, where, writeBatch, Timestamp, limit } from 'firebase/firestore';
 import type { User, Client, RoutePlan, ClientInRoute, Notification, PhoneContact, Customer, CrmSale, CrmCall, SystemLog, CronConfig } from '@/lib/types';
-import { updateUserPasswordAsAdmin } from './auth';
 
 // --- CONFIGURACIÓN DEL SISTEMA ---
 export const getCronConfig = async (): Promise<CronConfig> => {
-    const docRef = doc(db, 'system_config', 'cron');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        return docSnap.data() as CronConfig;
+    try {
+        const docRef = doc(db, 'system_config', 'cron');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+            return docSnap.data() as CronConfig;
+        }
+    } catch (e) {
+        console.error("Error fetching cron config:", e);
     }
-    // Valores por defecto
+    // Valores por defecto si no existe o hay error de permisos
     return {
         enabled: true,
         active24h: true,
@@ -296,11 +299,27 @@ export const addPhoneContactsBatch = async (contactsData: Omit<PhoneContact, 'id
 }
 
 export const getSystemLogs = async (): Promise<SystemLog[]> => {
-  const q = query(collection(db, 'system_logs'), orderBy('timestamp', 'desc'), limit(50));
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({
-    id: doc.id,
-    ...doc.data(),
-    timestamp: doc.data().timestamp instanceof Timestamp ? doc.data().timestamp.toDate() : doc.data().timestamp
-  })) as SystemLog[];
+  try {
+    const q = query(collection(db, 'system_logs'), orderBy('timestamp', 'desc'), limit(50));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => {
+        const data = doc.data();
+        let timestamp: Date;
+        if (data.timestamp instanceof Timestamp) {
+            timestamp = data.timestamp.toDate();
+        } else if (data.timestamp) {
+            timestamp = new Date(data.timestamp);
+        } else {
+            timestamp = new Date();
+        }
+        return {
+            id: doc.id,
+            ...data,
+            timestamp
+        };
+    }) as SystemLog[];
+  } catch (e) {
+    console.error("Error fetching system logs:", e);
+    return [];
+  }
 };
