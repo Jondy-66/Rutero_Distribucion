@@ -11,7 +11,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, startOfWeek, addDays } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -24,6 +24,8 @@ import { Timestamp, GeoPoint } from 'firebase/firestore';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 const ensureDate = (d: any): Date => {
   if (!d) return new Date();
@@ -33,10 +35,28 @@ const ensureDate = (d: any): Date => {
   return isNaN(date.getTime()) ? new Date() : date;
 };
 
+/**
+ * Sanitiza la lista de clientes para asegurar que Firestore acepte los datos.
+ * Elimina undefined y asegura tipos correctos.
+ */
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
-        const cleaned: any = { ...c };
-        if (c.date instanceof Date) cleaned.date = Timestamp.fromDate(c.date);
+        const cleaned: any = { 
+            ruc: c.ruc || '',
+            nombre_comercial: c.nombre_comercial || 'Sin Nombre',
+            visitStatus: c.visitStatus || 'Pendiente',
+            status: c.status || 'Activo',
+            visitType: c.visitType || null,
+            isReadded: !!c.isReadded,
+            reAdditionObservation: c.reAdditionObservation || '',
+            visitObservation: c.visitObservation || '',
+            callObservation: c.callObservation || '',
+            checkInTime: c.checkInTime || null,
+            checkOutTime: c.checkOutTime || null
+        };
+
+        const dateObj = ensureDate(c.date);
+        cleaned.date = Timestamp.fromDate(dateObj);
         
         const parseValue = (v: any) => {
             if (v === undefined || v === null || v === '') return 0;
@@ -48,13 +68,21 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
         cleaned.valorVenta = parseValue(c.valorVenta);
         cleaned.valorCobro = parseValue(c.valorCobro);
         cleaned.devoluciones = parseValue(c.devoluciones);
+        cleaned.promociones = parseValue(c.promociones);
+        cleaned.medicacionFrecuente = parseValue(c.medicacionFrecuente);
         
         if (c.checkInLocation && (c.checkInLocation as any).latitude) {
             cleaned.checkInLocation = new GeoPoint((c.checkInLocation as any).latitude, (c.checkInLocation as any).longitude);
+        } else {
+            cleaned.checkInLocation = null;
         }
+
         if (c.checkOutLocation && (c.checkOutLocation as any).latitude) {
             cleaned.checkOutLocation = new GeoPoint((c.checkOutLocation as any).latitude, (c.checkOutLocation as any).longitude);
+        } else {
+            cleaned.checkOutLocation = null;
         }
+
         return cleaned;
     });
 };
@@ -95,14 +123,10 @@ function RouteManagementContent() {
   const managedUsersForSelector = useMemo(() => {
     if (!user) return [];
     let base: User[] = [];
-    if (user.role === 'Administrador') {
-      base = allUsers.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista' || u.role === 'Supervisor' || u.role === 'Auditor');
+    if (user.role === 'Administrador' || user.role === 'Auditor') {
+      base = allUsers.filter(u => u.role !== 'Administrador');
     } else if (user.role === 'Supervisor') {
-      const subordinates = allUsers.filter(u => 
-        u.supervisorId === user.id || 
-        (u.supervisorId && u.supervisorId.trim().toLowerCase() === user.name.trim().toLowerCase())
-      );
-      base = subordinates;
+      base = allUsers.filter(u => u.supervisorId === user.id);
     }
     
     if (user.role === 'Supervisor' || user.role === 'Administrador') {
@@ -172,7 +196,14 @@ function RouteManagementContent() {
     nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], [field]: value };
     setCurrentRouteClientsFull(nextClients);
     if (selectedRoute) {
-        updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) }).catch(console.error);
+        updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) })
+          .catch(async (error) => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: `routes/${selectedRoute.id}`,
+              operation: 'update',
+              requestResourceData: { clients: nextClients }
+            }));
+          });
     }
   };
 
@@ -275,18 +306,23 @@ function RouteManagementContent() {
                 visitStatus: 'Pendiente',
                 status: 'Activo',
                 isReadded: true,
-                reAdditionObservation: isAlreadyInPlan ? reAdditionObservation : ''
+                reAdditionObservation: isAlreadyInPlan ? reAdditionObservation : '',
+                valorVenta: 0,
+                valorCobro: 0,
+                devoluciones: 0
             };
         });
         const nextClients = [...currentRouteClientsFull, ...newVisits];
-        await updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) });
+        const sanitized = sanitizeClients(nextClients);
+        await updateRoute(selectedRoute.id, { clients: sanitized });
         setCurrentRouteClientsFull(nextClients);
         setIsAddClientDialogOpen(false);
         setMultiSelectedClients([]);
         setReAdditionObservation('');
         toast({ title: "Clientes añadidos" });
-    } catch (e) {
-        toast({ title: "Error al añadir", variant: "destructive" });
+    } catch (e: any) {
+        console.error("Error al añadir clientes:", e);
+        toast({ title: "Error al añadir", description: e.message || "No se pudo actualizar la ruta.", variant: "destructive" });
     } finally {
         setIsSaving(false);
     }
@@ -346,7 +382,7 @@ function RouteManagementContent() {
                                 </SelectItem>
                             ))
                         ) : (
-                            <SelectItem value="none" disabled className="font-black text-slate-950">No hay rutas activas para esta semana.</SelectItem>
+                            <SelectItem value="none" disabled className="font-black text-slate-950">No hay rutas activas para gestionar.</SelectItem>
                         )}
                     </SelectContent>
                 </Select>
@@ -423,7 +459,7 @@ function RouteManagementContent() {
                                 ) : (
                                     <div className="text-center py-12 px-4 rounded-[2rem] bg-slate-50 border-2 border-dashed border-slate-200">
                                         <CalendarIcon className="h-8 w-8 mx-auto text-slate-300 mb-3" />
-                                        <p className="text-[10px] font-black text-slate-950 uppercase">No hay visitas programadas para hoy en esta ruta.</p>
+                                        <p className="text-[10px] font-black text-slate-950 uppercase">No hay visitas programadas para hoy.</p>
                                     </div>
                                 )}
                             </div>
@@ -533,7 +569,7 @@ function RouteManagementContent() {
                             </>
                         ) : (
                             <div className="flex-1 flex items-center justify-center text-slate-950 font-black uppercase text-center text-lg tracking-widest">
-                                Selecciona un cliente de hoy para ver su detalle
+                                Selecciona un cliente de hoy
                             </div>
                         )}
                     </CardContent>
@@ -578,8 +614,8 @@ function RouteManagementContent() {
             <div className="p-8 pt-6 border-t space-y-6 shrink-0 bg-white shadow-[0_-4px_20px_rgba(0,0,0,0.05)]">
                 {needsReadditionObservation && multiSelectedClients.length > 0 && (
                     <div className="space-y-2 animate-in slide-in-from-bottom-2 duration-300">
-                        <Label className="text-[10px] font-black uppercase text-primary tracking-wider ml-1">Observación de Re-adición (Obligatoria)</Label>
-                        <Textarea className="h-20 text-xs font-black border-2 border-slate-300 rounded-2xl px-4 py-3 focus:border-primary text-slate-950 bg-slate-50 shadow-inner" placeholder="Indica el motivo de esta nueva visita..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
+                        <Label className="text-[10px] font-black uppercase text-primary tracking-wider ml-1">Motivo de Re-adición (Obligatorio)</Label>
+                        <Textarea className="h-20 text-xs font-black border-2 border-slate-300 rounded-2xl px-4 py-3 focus:border-primary text-slate-950 bg-slate-50 shadow-inner" placeholder="Indica el motivo..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
                     </div>
                 )}
                 <div className="flex items-center gap-4">
