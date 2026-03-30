@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -8,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, AlertCircle, ShieldCheck } from 'lucide-react';
-import { addRoutesBatch, getUser } from '@/lib/firebase/firestore';
+import { addRoutesBatch, getUser, addNotification } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
@@ -75,7 +74,7 @@ export default function NewRoutePage() {
     return users.filter(u => u.role === 'Supervisor' || u.role === 'Administrador');
   }, [users]);
 
-  // MOTOR DE RESOLUCIÓN DE IDENTIDAD V3 - RESILIENTE Y MULTICAPA
+  // MOTOR DE RESOLUCIÓN DE IDENTIDAD V3
   useEffect(() => {
     const sid = currentUser?.supervisorId?.trim();
     
@@ -85,7 +84,6 @@ export default function NewRoutePage() {
     }
 
     const resolveSupervisor = async () => {
-      // Capa 1: Búsqueda en memoria (rápida)
       let found = users.find(u => 
         u.id === sid || 
         (u as any).uid === sid ||
@@ -100,7 +98,6 @@ export default function NewRoutePage() {
         return;
       }
 
-      // Capa 2: Búsqueda directa en Firestore (cuando la carga inicial termina)
       if (!loading) {
         try {
           const directUser = await getUser(sid);
@@ -108,7 +105,6 @@ export default function NewRoutePage() {
             setResolvedSupervisor(directUser);
             setSelectedSupervisorId(directUser.id);
           } else {
-            // Capa 3: Búsqueda por coincidencia de nombre si el ID no es un UID válido
             if (sid.length < 20) { 
                 const byName = users.find(u => u.name?.toLowerCase().includes(sid.toLowerCase()));
                 if (byName) {
@@ -243,7 +239,21 @@ export default function NewRoutePage() {
             ...rest,
             status: (sendForApproval ? 'Pendiente de Aprobación' : 'Planificada') as RoutePlan['status']
         }));
+        
         await addRoutesBatch(routesToSave);
+
+        if (sendForApproval) {
+            // NOTIFICAR A LOS SUPERVISORES POR CADA RUTA ENVIADA
+            for (const r of routesToSave) {
+                await addNotification({
+                    userId: r.supervisorId,
+                    title: 'Nueva Ruta para Aprobación',
+                    message: `${currentUser?.name} ha enviado la ruta "${r.routeName}" para tu revisión.`,
+                    link: `/dashboard/routes/team-routes`
+                }).catch(e => console.error("Error al notificar supervisor:", e));
+            }
+        }
+
         toast({ title: 'Rutas Guardadas con Éxito' });
         await refetchData('routes');
         router.push('/dashboard/routes');

@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -37,6 +36,7 @@ const ensureDate = (d: any): Date => {
 
 /**
  * Sanitiza la lista de clientes para asegurar que Firestore acepte los datos.
+ * Esta versión es extra defensiva contra valores undefined o formatos incorrectos.
  */
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
@@ -196,7 +196,6 @@ function RouteManagementContent() {
     setCurrentRouteClientsFull(nextClients);
     
     if (selectedRoute) {
-        // ACTUALIZACIÓN NO BLOQUEANTE
         updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) })
           .catch(async (error) => {
             errorEmitter.emit('permission-error', new FirestorePermissionError({
@@ -222,12 +221,10 @@ function RouteManagementContent() {
   const handleCheckIn = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled || isExpired) return;
     
-    // Actualización local inmediata para fluidez
-    const nextClients = [...currentRouteClientsFull];
-    const checkInTime = format(new Date(), 'HH:mm:ss');
-    
     setIsSaving(true);
     const location = await getGeoLocation();
+    const nextClients = [...currentRouteClientsFull];
+    const checkInTime = format(new Date(), 'HH:mm:ss');
     
     nextClients[activeOriginalIndex] = { 
         ...nextClients[activeOriginalIndex], 
@@ -237,7 +234,6 @@ function RouteManagementContent() {
     
     setCurrentRouteClientsFull(nextClients);
     
-    // Sincronización en segundo plano
     updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) })
         .then(() => toast({ title: "Entrada Registrada" }))
         .catch(async (error) => {
@@ -273,7 +269,6 @@ function RouteManagementContent() {
     
     const allDone = nextClients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
     
-    // Sincronización en segundo plano
     updateRoute(selectedRoute.id, { 
         clients: sanitizeClients(nextClients),
         status: allDone ? 'Completada' : 'En Progreso'
@@ -317,14 +312,14 @@ function RouteManagementContent() {
             ruc: c.ruc,
             nombre_comercial: c.nombre_comercial,
             date: new Date(),
-            visitStatus: 'Pendiente',
+            visitStatus: 'Pending',
             status: 'Activo',
             isReadded: true,
             reAdditionObservation: isAlreadyInPlan ? reAdditionObservation : '',
             valorVenta: 0,
             valorCobro: 0,
             devoluciones: 0
-        };
+        } as ClientInRoute;
     });
     
     const nextClients = [...currentRouteClientsFull, ...newVisits];
@@ -338,6 +333,7 @@ function RouteManagementContent() {
             setReAdditionObservation('');
         })
         .catch(e => {
+            console.error("Error batch sync:", e);
             toast({ title: "Error al añadir", variant: "destructive" });
         })
         .finally(() => setIsSaving(false));
