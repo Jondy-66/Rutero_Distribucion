@@ -16,7 +16,7 @@ import { deleteClient } from '@/lib/firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 import type { Client } from '@/lib/types';
-import { PlusCircle, UploadCloud, Search, MoreHorizontal, Download, Users, CheckCircle2 } from 'lucide-react';
+import { PlusCircle, UploadCloud, Search, MoreHorizontal, Download, Users, CheckCircle2, ArrowRightLeft, LoaderCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
@@ -43,6 +43,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { useAuth } from '@/hooks/use-auth';
@@ -68,6 +69,12 @@ export default function ClientsPage() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  // Estados para Migración
+  const [isMigrateDialogOpen, setIsMigrateDialogOpen] = useState(false);
+  const [sourceExecutive, setSourceExecutive] = useState('');
+  const [targetExecutive, setTargetExecutive] = useState('');
+  const [isMigrating, setIsMigrating] = useState(false);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -199,7 +206,6 @@ export default function ClientsPage() {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Feedback inmediato al usuario
     setIsUploading(true);
     setIsUploadFinished(false);
     setUploadProgress(0);
@@ -238,10 +244,67 @@ export default function ClientsPage() {
     }
   };
 
+  const handleMigrateClients = async () => {
+    if (!sourceExecutive || !targetExecutive || sourceExecutive === targetExecutive) {
+        toast({ title: "Atención", description: "Selecciona dos ejecutivos diferentes.", variant: "destructive" });
+        return;
+    }
+
+    setIsMigrating(true);
+    try {
+        const clientsToMigrate = clients.filter(c => c.ejecutivo === sourceExecutive);
+        
+        if (clientsToMigrate.length === 0) {
+            toast({ title: "Sin Clientes", description: `El ejecutivo ${sourceExecutive} no tiene clientes asignados.`, variant: "destructive" });
+            setIsMigrating(false);
+            return;
+        }
+
+        const total = clientsToMigrate.length;
+        let currentBatch = writeBatch(db);
+        let count = 0;
+
+        for (let i = 0; i < total; i++) {
+            const client = clientsToMigrate[i];
+            const clientRef = doc(db, 'clients', client.id);
+            currentBatch.update(clientRef, { ejecutivo: targetExecutive });
+            count++;
+
+            // Límites de batch de Firestore
+            if (count === 450 || i === total - 1) {
+                await currentBatch.commit();
+                currentBatch = writeBatch(db);
+                count = 0;
+                // Pequeña pausa para no saturar la red si el batch es gigante
+                await new Promise(r => setTimeout(r, 50));
+            }
+        }
+
+        toast({ 
+            title: "Migración Exitosa", 
+            description: `Se han transferido ${total} clientes de ${sourceExecutive} a ${targetExecutive}.` 
+        });
+        
+        await refetchData('clients');
+        setIsMigrateDialogOpen(false);
+        setSourceExecutive('');
+        setTargetExecutive('');
+    } catch (error) {
+        console.error("Migration error:", error);
+        toast({ title: "Error", description: "Ocurrió un fallo durante la transferencia masiva.", variant: "destructive" });
+    } finally {
+        setIsMigrating(false);
+    }
+  };
+
   const uniqueEjecutivos = useMemo(() => {
     const ejecutivos = new Set(clients.map(c => c.ejecutivo).filter(Boolean));
     return ['all', ...Array.from(ejecutivos)];
   }, [clients]);
+
+  const executivesForMigration = useMemo(() => {
+    return uniqueEjecutivos.filter(e => e !== 'all');
+  }, [uniqueEjecutivos]);
 
   const filteredClients = useMemo(() => {
     return clients
@@ -283,14 +346,75 @@ export default function ClientsPage() {
     XLSX.writeFile(workbook, "reporte_clientes.xlsx");
   };
   
-  const canImport = user?.role === 'Administrador' || user?.permissions?.includes('import-clients');
-  const canDelete = user?.role === 'Administrador' || user?.permissions?.includes('delete-clients');
+  const isAdmin = user?.role === 'Administrador';
+  const canImport = isAdmin || user?.permissions?.includes('import-clients');
+  const canDelete = isAdmin || user?.permissions?.includes('delete-clients');
 
   return (
     <>
       <PageHeader title="Clientes" description="Gestión y carga masiva de cartera.">
-        <div className="flex gap-2">
-            <Link href="/dashboard/clients/new"><Button><PlusCircle className="mr-2 h-4 w-4" /> Añadir</Button></Link>
+        <div className="flex flex-wrap gap-2">
+            <Link href="/dashboard/clients/new"><Button className="font-black"><PlusCircle className="mr-2 h-4 w-4" /> Añadir</Button></Link>
+            
+            {isAdmin && (
+                <Dialog open={isMigrateDialogOpen} onOpenChange={setIsMigrateDialogOpen}>
+                    <DialogTrigger asChild>
+                        <Button variant="outline" className="font-black border-2 border-primary text-primary hover:bg-primary/5">
+                            <ArrowRightLeft className="mr-2 h-4 w-4" /> Migrar Cartera
+                        </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-md rounded-2xl border-none shadow-2xl">
+                        <DialogHeader>
+                            <DialogTitle className="text-2xl font-black uppercase text-slate-950">Migrar Clientes</DialogTitle>
+                            <DialogDescription className="text-xs font-bold uppercase text-slate-500">
+                                Transfiere todos los clientes de un ejecutivo hacia otro de forma masiva.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-6 py-6">
+                            <div className="space-y-2">
+                                <Label className="font-black uppercase text-[10px] text-slate-950">Ejecutivo de Origen (Quien entrega)</Label>
+                                <Select value={sourceExecutive} onValueChange={setSourceExecutive} disabled={isMigrating}>
+                                    <SelectTrigger className="h-12 border-2 border-slate-200 font-black text-slate-950">
+                                        <SelectValue placeholder="Seleccionar origen..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {executivesForMigration.map(e => <SelectItem key={e} value={e} className="font-black">{e}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            
+                            <div className="flex justify-center">
+                                <div className="bg-primary/10 p-2 rounded-full">
+                                    <ArrowRightLeft className="h-6 w-6 text-primary rotate-90" />
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="font-black uppercase text-[10px] text-slate-950">Ejecutivo de Destino (Quien recibe)</Label>
+                                <Select value={targetExecutive} onValueChange={setTargetExecutive} disabled={isMigrating}>
+                                    <SelectTrigger className="h-12 border-2 border-slate-200 font-black text-slate-950">
+                                        <SelectValue placeholder="Seleccionar destino..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {executivesForMigration.map(e => <SelectItem key={e} value={e} className="font-black">{e}</SelectItem>)}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+                        <DialogFooter className="gap-2">
+                            <DialogClose asChild><Button variant="ghost" className="font-black uppercase" disabled={isMigrating}>Cancelar</Button></DialogClose>
+                            <Button 
+                                onClick={handleMigrateClients} 
+                                className="font-black uppercase h-12 shadow-lg" 
+                                disabled={isMigrating || !sourceExecutive || !targetExecutive}
+                            >
+                                {isMigrating ? <><LoaderCircle className="animate-spin mr-2 h-4 w-4" /> Procesando...</> : 'Confirmar Migración'}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            )}
+
             {canImport && (
                 <Dialog onOpenChange={(open) => {
                     if(!open) {
@@ -299,17 +423,17 @@ export default function ClientsPage() {
                         setIsUploading(false);
                     }
                 }}>
-                    <DialogTrigger asChild><Button variant="outline"><UploadCloud className="mr-2 h-4 w-4" /> Importar</Button></DialogTrigger>
+                    <DialogTrigger asChild><Button variant="outline" className="font-black"><UploadCloud className="mr-2 h-4 w-4" /> Importar</Button></DialogTrigger>
                     <DialogContent className="sm:max-w-md">
                         <DialogHeader>
-                            <DialogTitle>Importación Masiva</DialogTitle>
-                            <DialogDescription>Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia.</DialogDescription>
+                            <DialogTitle className="font-black uppercase">Importación Masiva</DialogTitle>
+                            <DialogDescription className="font-bold text-xs">Columnas requeridas: Ejecutivo, Ruc, Nombre_cliente, Nombre_comercial, Canton, Direccion, Provincia.</DialogDescription>
                         </DialogHeader>
                         <div className="py-4">
-                            <Input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleFileUpload} disabled={isUploading} />
+                            <Input type="file" accept=".csv, .xlsx, .xls" ref={fileInputRef} onChange={handleFileUpload} disabled={isUploading} className="h-12 font-black border-2" />
                         </div>
                         <div className="space-y-3 pb-4">
-                            <div className="flex justify-between items-center text-[10px] font-black uppercase">
+                            <div className="flex justify-between items-center text-[10px] font-black uppercase text-slate-950">
                                 <span className={cn(
                                     isUploading ? "text-primary animate-pulse" : 
                                     isUploadFinished ? "text-green-600 flex items-center gap-1" : "text-muted-foreground"
@@ -332,51 +456,54 @@ export default function ClientsPage() {
                             )}
                         </div>
                         <DialogFooter>
-                            <DialogClose asChild><Button type="button" variant="secondary" id="close-dialog-clients">Cerrar</Button></DialogClose>
+                            <DialogClose asChild><Button type="button" variant="secondary" id="close-dialog-clients" className="font-black">Cerrar</Button></DialogClose>
                         </DialogFooter>
                     </DialogContent>
                 </Dialog>
             )}
-            <Button variant="outline" onClick={handleDownloadExcel}><Download className="mr-2 h-4 w-4" /> Excel</Button>
+            <Button variant="outline" onClick={handleDownloadExcel} className="font-black"><Download className="mr-2 h-4 w-4" /> Excel</Button>
         </div>
       </PageHeader>
       
-      <Card>
+      <Card className="border-t-4 border-t-primary shadow-xl">
         <CardHeader>
-          <CardTitle>Lista de Clientes</CardTitle>
-          <CardDescription>Base de datos completa de clientes.</CardDescription>
+          <CardTitle className="font-black uppercase text-slate-950">Lista de Clientes</CardTitle>
+          <CardDescription className="font-bold text-[10px] uppercase text-slate-500">Base de datos completa de clientes asignados en el sistema.</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-4">
-            <Tabs defaultValue="all" onValueChange={setFilter}>
-              <TabsList>
-                <TabsTrigger value="all">Todos</TabsTrigger>
-                <TabsTrigger value="active">Activos</TabsTrigger>
-                <TabsTrigger value="inactive">Inactivos</TabsTrigger>
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+            <Tabs defaultValue="all" onValueChange={setFilter} className="w-full sm:w-auto">
+              <TabsList className="bg-slate-100 p-1 border-2 border-slate-200 rounded-xl">
+                <TabsTrigger value="all" className="font-black uppercase text-[10px] data-[state=active]:bg-white data-[state=active]:text-primary">Todos</TabsTrigger>
+                <TabsTrigger value="active" className="font-black uppercase text-[10px] data-[state=active]:bg-white data-[state=active]:text-green-600">Activos</TabsTrigger>
+                <TabsTrigger value="inactive" className="font-black uppercase text-[10px] data-[state=active]:bg-white data-[state=active]:text-destructive">Inactivos</TabsTrigger>
               </TabsList>
             </Tabs>
             <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
-                {(user?.role === 'Administrador' || user?.role === 'Supervisor') && (
+                {(user?.role === 'Administrador' || user?.role === 'Supervisor' || user?.role === 'Auditor') && (
                     <Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo}>
-                        <SelectTrigger className="w-full sm:w-[180px]"><Users className="mr-2 h-4 w-4" /><SelectValue placeholder="Ejecutivo" /></SelectTrigger>
-                        <SelectContent>{uniqueEjecutivos.map(e => <SelectItem key={e} value={e}>{e === 'all' ? 'Todos' : e}</SelectItem>)}</SelectContent>
+                        <SelectTrigger className="w-full sm:w-[200px] h-11 border-2 border-slate-200 font-black text-slate-950 rounded-xl">
+                            <Users className="mr-2 h-4 w-4 text-primary" />
+                            <SelectValue placeholder="Ejecutivo" />
+                        </SelectTrigger>
+                        <SelectContent>{uniqueEjecutivos.map(e => <SelectItem key={e} value={e} className="font-black">{e === 'all' ? 'Todos los Ejecutivos' : e}</SelectItem>)}</SelectContent>
                     </Select>
                 )}
               <div className="relative w-full sm:max-w-xs">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Buscar..." className="pl-8" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                <Search className="absolute left-3 top-3.5 h-4 w-4 text-slate-950 font-black" />
+                <Input placeholder="Buscar por RUC o Nombre..." className="h-11 pl-10 border-2 border-slate-200 font-black text-slate-950 rounded-xl" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
               </div>
             </div>
           </div>
-          <div className="border rounded-lg overflow-x-auto">
+          <div className="border-2 border-slate-100 rounded-2xl overflow-hidden shadow-inner">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-slate-50">
                 <TableRow>
-                  <TableHead>Cliente</TableHead>
-                  <TableHead className="hidden sm:table-cell">RUC</TableHead>
-                  <TableHead className="hidden lg:table-cell">Ejecutivo</TableHead>
-                  <TableHead>Estado</TableHead>
-                  <TableHead className="text-right">Acciones</TableHead>
+                  <TableHead className="font-black text-slate-950 uppercase text-[10px] h-12">Cliente</TableHead>
+                  <TableHead className="hidden sm:table-cell font-black text-slate-950 uppercase text-[10px]">RUC</TableHead>
+                  <TableHead className="hidden lg:table-cell font-black text-slate-950 uppercase text-[10px]">Ejecutivo</TableHead>
+                  <TableHead className="font-black text-slate-950 uppercase text-[10px]">Estado</TableHead>
+                  <TableHead className="text-right font-black text-slate-950 uppercase text-[10px]">Acciones</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -391,25 +518,27 @@ export default function ClientsPage() {
                   ))
                 ) : (
                   paginatedClients.map((client) => (
-                    <TableRow key={client.id}>
-                      <TableCell><div className="font-medium text-slate-900">{client.nombre_cliente}</div></TableCell>
-                      <TableCell className="hidden sm:table-cell">{client.ruc}</TableCell>
-                      <TableCell className="hidden lg:table-cell">{client.ejecutivo}</TableCell>
-                      <TableCell><Badge variant={(client.status ?? 'active') === 'active' ? 'success' : 'destructive'}>{(client.status ?? 'active') === 'active' ? 'Activo' : 'Inactivo'}</Badge></TableCell>
+                    <TableRow key={client.id} className="hover:bg-slate-50/50">
+                      <TableCell><div className="font-black text-slate-950 text-xs uppercase">{client.nombre_cliente}</div></TableCell>
+                      <TableCell className="hidden sm:table-cell font-mono font-bold text-slate-600">{client.ruc}</TableCell>
+                      <TableCell className="hidden lg:table-cell font-black text-primary text-[10px] uppercase">{client.ejecutivo}</TableCell>
+                      <TableCell><Badge variant={(client.status ?? 'active') === 'active' ? 'success' : 'destructive'} className="font-black text-[9px] uppercase border-none">{(client.status ?? 'active') === 'active' ? 'Activo' : 'Inactivo'}</Badge></TableCell>
                       <TableCell className="text-right">
                         <AlertDialog>
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild><Button size="icon" variant="ghost"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => handleEdit(client.id)}>Editar</DropdownMenuItem>
-                              {canDelete && <AlertDialogTrigger asChild><DropdownMenuItem className="text-red-600">Eliminar</DropdownMenuItem></AlertDialogTrigger>}
+                            <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="hover:bg-slate-100 rounded-full"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-40">
+                              <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500">Opciones</DropdownMenuLabel>
+                              <DropdownMenuItem onClick={() => handleEdit(client.id)} className="font-black text-xs uppercase">Editar Ficha</DropdownMenuItem>
+                              {canDelete && <AlertDialogTrigger asChild><DropdownMenuItem className="text-red-600 font-black text-xs uppercase">Eliminar</DropdownMenuItem></AlertDialogTrigger>}
                             </DropdownMenuContent>
                           </DropdownMenu>
-                           <AlertDialogContent>
-                            <AlertDialogHeader><AlertDialogTitle>¿Eliminar cliente?</AlertDialogTitle></AlertDialogHeader>
+                           <AlertDialogContent className="rounded-2xl border-none">
+                            <AlertDialogHeader><AlertDialogTitle className="font-black uppercase text-slate-950">¿Eliminar cliente?</AlertDialogTitle></AlertDialogHeader>
+                            <AlertDialogDescription className="font-bold text-xs uppercase">Esta acción eliminará la ficha de {client.nombre_cliente} permanentemente.</AlertDialogDescription>
                             <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleDelete(client.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                              <AlertDialogCancel className="font-black">Cancelar</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => handleDelete(client.id)} className="bg-destructive hover:bg-destructive/90 font-black">ELIMINAR</AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
                         </AlertDialog>
@@ -421,11 +550,11 @@ export default function ClientsPage() {
             </Table>
           </div>
         </CardContent>
-        <CardFooter className="flex justify-between text-xs text-muted-foreground">
-            <div>Mostrando {paginatedClients.length} de {filteredClients.length}</div>
+        <CardFooter className="flex justify-between items-center bg-slate-50 p-6 rounded-b-2xl border-t-2 border-slate-100">
+            <div className="text-[10px] font-black uppercase text-slate-500">Mostrando {paginatedClients.length} de {filteredClients.length} registros</div>
             <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1}>Anterior</Button>
-                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages}>Siguiente</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="font-black uppercase text-[10px] h-9 border-2">Anterior</Button>
+                <Button variant="outline" size="sm" onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="font-black uppercase text-[10px] h-9 border-2">Siguiente</Button>
             </div>
         </CardFooter>
       </Card>
