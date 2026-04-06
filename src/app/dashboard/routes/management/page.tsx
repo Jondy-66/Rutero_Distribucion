@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -10,7 +11,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute, addNotification } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
+import { format, startOfWeek, isWithinInterval, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -110,15 +111,10 @@ function RouteManagementContent() {
   useEffect(() => {
     const check = () => {
       const now = new Date();
-      const day = now.getDay(); // 0 = Dom, 1 = Lun, ..., 5 = Vie, 6 = Sab
+      const day = now.getDay(); 
       const hours = now.getHours();
-      
-      // Regla Semanal: Bloqueo desde Viernes 19:00 hasta Domingo 23:59
       const isPastFridayDeadline = (day === 5 && hours >= 19) || day === 6 || day === 0;
-      
-      // Regla Diaria: Bloqueo después de las 19:00 en cualquier día
       const isPastDailyDeadline = hours >= 19;
-
       setIsExpired((isPastFridayDeadline || isPastDailyDeadline) && !isAdmin);
     };
     check();
@@ -134,7 +130,6 @@ function RouteManagementContent() {
     } else if (user.role === 'Supervisor') {
       base = allUsers.filter(u => u.supervisorId === user.id);
     }
-    
     if (user.role === 'Supervisor' || user.role === 'Administrador') {
         const exists = base.some(u => u.id === user.id);
         if(!exists) base = [user, ...base];
@@ -144,10 +139,7 @@ function RouteManagementContent() {
 
   const selectableRoutes = useMemo(() => {
     const now = new Date();
-    // Ventana de la semana actual (ISO: Lunes a Domingo)
-    const start = startOfWeek(now, { weekStartsOn: 1 });
-    const end = endOfWeek(now, { weekStartsOn: 1 });
-    
+    const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     
     return allRoutes.filter(r => {
@@ -156,10 +148,13 @@ function RouteManagementContent() {
 
         if (!isOwnRoute && !isTeamRoute && !isAdmin) return false;
         
-        // Filtro Estricto: Solo rutas de la semana en curso
+        // Prioridad: Si está en progreso, mostrar siempre al dueño para que la termine
+        if (isOwnRoute && r.status === 'En Progreso') return true;
+
+        // Filtro Semanal Robusto: Comparamos el Lunes de la ruta con el Lunes de hoy
         if (r.date) {
-            const rDate = ensureDate(r.date);
-            if (!isWithinInterval(rDate, { start, end })) return false;
+            const routeWeekStart = startOfWeek(ensureDate(r.date), { weekStartsOn: 1 });
+            if (routeWeekStart.getTime() !== currentWeekStart.getTime()) return false;
         }
 
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
@@ -183,7 +178,7 @@ function RouteManagementContent() {
   }, [selectedRoute, isAdmin, isSupervisor]);
 
   const todaysClients = useMemo(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const today = new Date();
     return currentRouteClientsFull
         .map((c, index) => {
             const details = availableClients.find(ac => String(ac.ruc || '').trim() === String(c.ruc || '').trim());
@@ -192,7 +187,7 @@ function RouteManagementContent() {
         .filter(c => {
             if (c.status === 'Eliminado') return false;
             const cDate = ensureDate(c.date);
-            return format(cDate, 'yyyy-MM-dd') === todayStr;
+            return isSameDay(cDate, today);
         });
   }, [currentRouteClientsFull, availableClients]);
 
@@ -331,7 +326,7 @@ function RouteManagementContent() {
             ruc: c.ruc,
             nombre_comercial: c.nombre_comercial,
             date: new Date(),
-            visitStatus: 'Pending',
+            visitStatus: 'Pendiente',
             status: 'Activo',
             isReadded: true,
             reAdditionObservation: isAlreadyInPlan ? reAdditionObservation : '',
@@ -435,7 +430,6 @@ function RouteManagementContent() {
             </Card>
         ) : (
             <div className="grid lg:grid-cols-3 gap-8">
-                {/* LISTA DE CLIENTES IZQUIERDA */}
                 <div className="lg:col-span-1">
                     <Card className="shadow-2xl border-t-4 border-t-primary h-[85vh] min-h-[600px] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
                         <CardHeader className="bg-muted/10 px-8 py-6 border-b shrink-0">
@@ -505,7 +499,6 @@ function RouteManagementContent() {
                     </Card>
                 </div>
 
-                {/* PANEL DE GESTIÓN DERECHA */}
                 <div className="lg:col-span-2">
                     <Card className="shadow-2xl border-t-4 border-t-primary min-h-[600px] h-[85vh] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
                         <CardHeader className="bg-muted/10 h-36 flex flex-col justify-center px-10 shrink-0 border-b">
@@ -618,7 +611,6 @@ function RouteManagementContent() {
             </div>
         )}
 
-        {/* DIÁLOGO AÑADIR CLIENTE */}
         <Dialog open={isAddClientDialogOpen} onOpenChange={(open) => { setIsAddClientDialogOpen(open); if(!open) { setMultiSelectedClients([]); setReAdditionObservation(''); setAddClientSearchTerm(''); } }}>
             <DialogContent className="w-[95vw] sm:max-w-2xl rounded-[2.5rem] p-0 overflow-hidden border-none shadow-2xl flex flex-col h-[85vh] bg-white">
                 <DialogHeader className="bg-primary/5 p-8 pb-6 shrink-0 relative">
