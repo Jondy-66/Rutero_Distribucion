@@ -10,7 +10,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute, addNotification } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, startOfWeek, endOfWeek, isWithinInterval } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -36,7 +36,6 @@ const ensureDate = (d: any): Date => {
 
 /**
  * Sanitiza la lista de clientes para asegurar que Firestore acepte los datos.
- * Esta versión es extra defensiva contra valores undefined o formatos incorrectos.
  */
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
@@ -111,8 +110,16 @@ function RouteManagementContent() {
   useEffect(() => {
     const check = () => {
       const now = new Date();
-      const deadline = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 19, 0, 0);
-      setIsExpired(now > deadline && !isAdmin);
+      const day = now.getDay(); // 0 = Dom, 1 = Lun, ..., 5 = Vie, 6 = Sab
+      const hours = now.getHours();
+      
+      // Regla Semanal: Bloqueo desde Viernes 19:00 hasta Domingo 23:59
+      const isPastFridayDeadline = (day === 5 && hours >= 19) || day === 6 || day === 0;
+      
+      // Regla Diaria: Bloqueo después de las 19:00 en cualquier día
+      const isPastDailyDeadline = hours >= 19;
+
+      setIsExpired((isPastFridayDeadline || isPastDailyDeadline) && !isAdmin);
     };
     check();
     const timer = setInterval(check, 30000);
@@ -136,6 +143,11 @@ function RouteManagementContent() {
   }, [allUsers, user]);
 
   const selectableRoutes = useMemo(() => {
+    const now = new Date();
+    // Ventana de la semana actual (ISO: Lunes a Domingo)
+    const start = startOfWeek(now, { weekStartsOn: 1 });
+    const end = endOfWeek(now, { weekStartsOn: 1 });
+    
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     
     return allRoutes.filter(r => {
@@ -143,6 +155,13 @@ function RouteManagementContent() {
         const isTeamRoute = managedUserIds.has(r.createdBy);
 
         if (!isOwnRoute && !isTeamRoute && !isAdmin) return false;
+        
+        // Filtro Estricto: Solo rutas de la semana en curso
+        if (r.date) {
+            const rDate = ensureDate(r.date);
+            if (!isWithinInterval(rDate, { start, end })) return false;
+        }
+
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         if (r.status !== 'Planificada' && r.status !== 'En Progreso') return false;
         
@@ -347,7 +366,7 @@ function RouteManagementContent() {
       return (
         <div className="p-20 text-center">
             <LoaderCircle className="animate-spin mx-auto h-12 w-12 text-primary" />
-            <p className="mt-4 font-black uppercase text-xs text-slate-950">Sincronizando jornada...</p>
+            <p className="mt-4 font-black uppercase text-xs text-slate-950">Sincronizando jornada semanal...</p>
         </div>
       );
   }
@@ -359,16 +378,16 @@ function RouteManagementContent() {
         {isExpired && !isAdmin && (
             <Alert variant="destructive" className="mb-6 border-red-600 bg-red-50">
                 <AlertTriangle className="h-4 w-4 text-red-600" />
-                <AlertTitle className="text-red-800 font-black uppercase text-xs">Jornada Expirada</AlertTitle>
+                <AlertTitle className="text-red-800 font-black uppercase text-xs">Jornada Cerrada</AlertTitle>
                 <AlertDescription className="text-red-700 font-bold uppercase text-[9px]">
-                    HAS SUPERADO EL TIEMPO LÍMITE (19:00). EL REGISTRO DE GESTIÓN HA SIDO BLOQUEADO.
+                    HAS SUPERADO EL TIEMPO LÍMITE (19:00 O CIERRE SEMANAL VIERNES). EL REGISTRO DE GESTIÓN HA SIDO BLOQUEADO POR POLÍTICA DE SEGURIDAD.
                 </AlertDescription>
             </Alert>
         )}
 
         {!isRouteStarted ? (
             <Card className="max-w-md mx-auto shadow-xl border-t-4 border-t-primary">
-                <CardHeader><CardTitle className="text-slate-950 font-black uppercase text-center">Seleccionar Jornada</CardTitle></CardHeader>
+                <CardHeader><CardTitle className="text-slate-950 font-black uppercase text-center">Seleccionar Ruta Semanal</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                     {isManager && (
                         <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
@@ -399,7 +418,7 @@ function RouteManagementContent() {
                                     </SelectItem>
                                 ))
                             ) : (
-                                <SelectItem value="none" disabled className="font-black text-slate-950">No hay rutas activas para gestionar.</SelectItem>
+                                <SelectItem value="none" disabled className="font-black text-slate-950">No hay rutas planificadas para esta semana.</SelectItem>
                             )}
                         </SelectContent>
                     </Select>
@@ -409,7 +428,7 @@ function RouteManagementContent() {
                             onClick={() => updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => setIsRouteStarted(true))}
                             disabled={isExpired}
                         >
-                            {isExpired ? 'JORNADA EXPIRADA' : 'INICIAR GESTIÓN'}
+                            {isExpired ? 'JORNADA CERRADA' : 'INICIAR GESTIÓN SEMANAL'}
                         </Button>
                     )}
                 </CardContent>
