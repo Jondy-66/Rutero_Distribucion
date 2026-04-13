@@ -1,59 +1,32 @@
+
 # Manual Funcional del Aplicativo "Rutero"
 
-**Versión:** 1.3
+**Versión:** 1.4
 **Fecha:** Octubre 2025
-**Autor(es):** Jonathan Diaz / Asistente AI
-**Departamento:** Distribución 
 **Empresa:** Farmaenlace
-
----
- 
-## Índice de Contenido
-1.	[Introducción](#1-introducción)
-2.	[Descripción General del Sistema](#2-descripción-general-del-sistema)
-3.	[Roles de Usuario y Permisos](#3-roles-de-usuario-y-permisos)
-4.	[Módulos Funcionales del Sistema](#4-módulos-funcionales-del-sistema)
-5.	[Flujo de Procesos](#5-flujo-de-procesos)
-6.	[Pantallas y Navegación](#6-pantallas-y-navegación)
-7.	[Reportes y Consultas](#7-reportes-y-consultas)
-8.	[Reglas de Negocio Globales](#8-reglas-de-negocio-globales)
-9.	[Excepciones y Mensajes del Sistema](#9-excepciones-y-mensajes-del-sistema)
-10.	[Consideraciones Funcionales Especiales](#10-consideraciones-funcionales-especiales)
-11.	[Control de Cambios](#11-control-de-cambios)
-12.	[Anexos](#12-anexos)
 
 ---
 
 ## 1. Introducción
-El presente manual funcional describe las características, flujos y reglas de negocio del aplicativo "Rutero", diseñado para optimizar la logística de ventas y cobranzas.
+Rutero es la herramienta oficial para la gestión de fuerza de ventas y cobranza de Farmaenlace, optimizando la logística diaria mediante IA y seguimiento GPS.
 
-## 2. Descripción General del Sistema
-**Rutero** es una plataforma integral para la gestión de rutas. Facilita la planificación inteligente (manual o asistida por IA), la ejecución en campo con seguimiento en tiempo real y la supervisión administrativa.
+## 2. Roles de Usuario y Permisos
+- **Administrador:** Control total. Puede gestionar rutas de cualquier usuario, migrar carteras entre ejecutivos y desbloquear cuentas.
+- **Supervisor:** Gestiona su equipo directo, aprueba rutas y audita gestiones diarias.
+- **Auditor:** Nuevo rol con visibilidad de "Solo Lectura" total sobre reportes, rutas y clientes de toda la organización.
+- **Usuario (Vendedor):** Ejecutor principal. Planifica su semana y registra paradas (Venta, Cobro, Devolución).
 
-## 3. Roles de Usuario y Permisos
-- **Administrador:** Control total. Gestión de usuarios, clientes, ubicaciones y rutas globales.
-- **Supervisor:** Gestiona su equipo directo, aprueba rutas y genera reportes de rendimiento.
-- **Usuario (Vendedor) / Telemercaderista:** Ejecutor de la ruta. Realiza check-in/out, registra ventas y cobranzas.
+## 3. Flujo de Gestión de Ruta
+1.  **Planificación:** Se recomienda planificar la semana entre viernes y domingo.
+2.  **Inicio de Semana:** Todas las rutas aprobadas aparecerán en el selector el **Lunes** por la mañana.
+3.  **Ejecución:**
+    *   **Check-in:** Obligatorio para abrir el formulario de gestión.
+    *   **Registro:** El texto es **Negro Intenso** para máxima visibilidad bajo el sol.
+    *   **Check-out:** Finaliza la visita y guarda la ubicación GPS.
+4.  **Cierre:** El sistema felicita al usuario con un panel gigante de **"¡LO LOGRASTE!"** al terminar todas las paradas del día.
 
-## 4. Módulos Funcionales del Sistema
-- **Gestión de Ruta:** Interfaz para la ejecución diaria. Permite marcar entradas, registrar datos de gestión y finalizar visitas.
-- **CRM:** Gestión de base telefónica e interacciones remotas.
-- **Usuarios y Permisos:** Administración de accesos y roles.
+## 4. Reglas Especiales para Administradores
+Los administradores pueden entrar al módulo de **Rutas de Equipo** y seleccionar **"Gestionar Jornada"** en cualquier ruta. Esto permite ayudar a un vendedor que tenga problemas técnicos o que no haya podido finalizar su ruta antes del cierre de las 19:00.
 
-## 5. Flujo de Procesos
-
-### 5.1. Gestión de Ruta
-1.  **Inicio de Jornada:** El usuario selecciona la ruta planificada para el día.
-2.  **Gestión de Visita:**
-    *   **Check-in:** Registro de ubicación y hora de llegada.
-    *   **Registro de Datos:** Captura de valores de venta y cobro.
-    *   **Check-out:** Finalización de la visita.
-
-## 8. Reglas de Negocio Globales
-- **Persistencia de Sesión:** El sistema mantiene la ruta seleccionada activamente.
-- **Filtro de Seguridad:** Los usuarios visualizan los datos asignados según su rol.
-
-## 11. Control de Cambios
-| Versión | Fecha         | Autor          | Descripción del Cambio                                 |
-|---------|---------------|----------------|--------------------------------------------------------|
-| 1.3     | Octubre 2025  | Asistente AI   | Actualización de módulos CRM y Reportes. |
+## 5. Consideraciones de Fin de Semana
+Si planificas un sábado o domingo, la fecha de la ruta se ajustará automáticamente al lunes siguiente para que no tengas problemas de visibilidad al iniciar tu semana.
