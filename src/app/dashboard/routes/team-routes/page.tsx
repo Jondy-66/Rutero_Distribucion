@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { getRoutes, deleteRoute, updateRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw, CheckCircle, PlayCircle } from 'lucide-react';
+import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw, CheckCircle, PlayCircle, Users as UsersIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -192,36 +192,37 @@ export default function TeamRoutesPage() {
       
       <Card>
         <CardHeader>
-            <CardTitle>Rutas Enviadas para Aprobación</CardTitle>
-            <CardDescription>
+            <CardTitle className="font-black text-slate-950 uppercase">Rutas Enviadas para Aprobación</CardTitle>
+            <CardDescription className="font-bold text-[10px] text-slate-500 uppercase">
                 Un listado de todas las rutas enviadas por los usuarios que gestionas.
             </CardDescription>
         </CardHeader>
         <CardContent>
             <div className="mb-4">
                 <Select value={selectedUser} onValueChange={setSelectedUser}>
-                    <SelectTrigger className="w-full sm:max-w-xs">
+                    <SelectTrigger className="w-full sm:max-w-xs h-11 border-2 border-slate-200 font-black text-slate-950">
+                        <UsersIcon className="mr-2 h-4 w-4 text-primary" />
                         <SelectValue placeholder="Filtrar por usuario" />
                     </SelectTrigger>
                     <SelectContent>
-                        <SelectItem value="all">Todos los Usuarios</SelectItem>
+                        <SelectItem value="all" className="font-black">Todos los Usuarios</SelectItem>
                         {managedUsers.map(u => (
-                            <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>
+                            <SelectItem key={u.id} value={u.id} className="font-black">{u.name}</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
             </div>
-             <div className="border rounded-lg overflow-x-auto">
+             <div className="border-2 border-slate-100 rounded-xl overflow-hidden shadow-inner">
                 <Table>
-                    <TableHeader>
+                    <TableHeader className="bg-slate-50">
                         <TableRow>
-                        <TableHead>#</TableHead>
-                        <TableHead>Nombre de Ruta</TableHead>
-                        <TableHead>Creado por</TableHead>
-                        <TableHead>Fecha</TableHead>
-                        <TableHead>Estado</TableHead>
-                        <TableHead>Clientes</TableHead>
-                        <TableHead className="text-right">Acciones</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">#</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Nombre de Ruta</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Creado por</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Fecha</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Estado</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Clientes</TableHead>
+                        <TableHead className="text-right font-black text-slate-950 uppercase text-[10px]">Acciones</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -243,50 +244,50 @@ export default function TeamRoutesPage() {
                                 const canReview = (user?.role === 'Supervisor' || isAdmin) && route.status === 'Pendiente de Aprobación';
                                 const canDelete = isAdmin;
                                 const canReactivate = isAdmin && (route.status === 'Completada' || route.status === 'Rechazada');
-                                const canManageLive = isAdmin && route.status === 'En Progreso';
+                                const canManageLive = isAdmin && (route.status === 'En Progreso' || route.status === 'Planificada');
                                 const canFinalize = isAdmin && (route.status === 'En Progreso' || route.status === 'Planificada');
                                
                                 return (
-                                <TableRow key={route.id}>
-                                    <TableCell className="font-medium">{index + 1}</TableCell>
-                                    <TableCell className="font-medium">{route.routeName}</TableCell>
-                                    <TableCell>{getCreatorName(route.createdBy)}</TableCell>
-                                    <TableCell>{getRouteDate(route)}</TableCell>
+                                <TableRow key={route.id} className="hover:bg-slate-50/50">
+                                    <TableCell className="font-black text-slate-950 text-xs">{index + 1}</TableCell>
+                                    <TableCell className="font-black text-slate-950 text-xs uppercase">{route.routeName}</TableCell>
+                                    <TableCell className="font-black text-primary text-xs uppercase">{getCreatorName(route.createdBy)}</TableCell>
+                                    <TableCell className="font-black text-slate-950 text-xs uppercase">{getRouteDate(route)}</TableCell>
                                     <TableCell>
                                         {getBadgeForStatus(route.status)}
                                     </TableCell>
-                                    <TableCell className="text-center">{route.clients?.length || 0}</TableCell>
+                                    <TableCell className="text-center font-black text-slate-950">{route.clients?.length || 0}</TableCell>
                                     <TableCell className="text-right">
                                         <AlertDialog>
                                             <DropdownMenu>
                                                 <DropdownMenuTrigger asChild>
-                                                    <Button aria-haspopup="true" size="icon" variant="ghost">
+                                                    <Button aria-haspopup="true" size="icon" variant="ghost" className="rounded-full hover:bg-slate-100">
                                                         <MoreHorizontal className="h-4 w-4" />
                                                         <span className="sr-only">Alternar menú</span>
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end">
-                                                    <DropdownMenuLabel>Acciones</DropdownMenuLabel>
-                                                    <DropdownMenuItem onClick={() => handleAction(route.id)}>
+                                                <DropdownMenuContent align="end" className="w-56">
+                                                    <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500">Acciones</DropdownMenuLabel>
+                                                    <DropdownMenuItem onClick={() => handleAction(route.id)} className="font-black text-xs uppercase">
                                                         {canReview ? "Revisar" : "Ver Detalles"}
                                                     </DropdownMenuItem>
                                                     
                                                     {canManageLive && (
-                                                        <DropdownMenuItem onClick={() => handleManageLive(route.id)} className="font-bold text-primary">
+                                                        <DropdownMenuItem onClick={() => handleManageLive(route.id)} className="font-black text-xs uppercase text-primary">
                                                             <PlayCircle className="mr-2 h-4 w-4" />
                                                             Gestionar Jornada
                                                         </DropdownMenuItem>
                                                     )}
 
                                                     {canFinalize && (
-                                                        <DropdownMenuItem onClick={() => handleFinalize(route.id)} className="font-bold text-blue-600">
+                                                        <DropdownMenuItem onClick={() => handleFinalize(route.id)} className="font-black text-xs uppercase text-blue-600">
                                                             <CheckCircle className="mr-2 h-4 w-4" />
                                                             Finalizar Ruta
                                                         </DropdownMenuItem>
                                                     )}
 
                                                     {canReactivate && (
-                                                        <DropdownMenuItem onClick={() => handleReactivate(route.id)}>
+                                                        <DropdownMenuItem onClick={() => handleReactivate(route.id)} className="font-black text-xs uppercase">
                                                             <RefreshCw className="mr-2 h-4 w-4" />
                                                             Reactivar (En Progreso)
                                                         </DropdownMenuItem>
@@ -296,7 +297,7 @@ export default function TeamRoutesPage() {
                                                         <>
                                                             <DropdownMenuSeparator />
                                                             <AlertDialogTrigger asChild>
-                                                                <DropdownMenuItem className="text-red-600">
+                                                                <DropdownMenuItem className="text-red-600 font-black text-xs uppercase">
                                                                     <Trash2 className="mr-2 h-4 w-4" />
                                                                     Eliminar
                                                                 </DropdownMenuItem>
@@ -305,16 +306,16 @@ export default function TeamRoutesPage() {
                                                     )}
                                                 </DropdownMenuContent>
                                             </DropdownMenu>
-                                            <AlertDialogContent>
+                                            <AlertDialogContent className="rounded-2xl border-none shadow-2xl">
                                                 <AlertDialogHeader>
-                                                    <AlertDialogTitle>¿Estás absolutamente seguro?</AlertDialogTitle>
-                                                    <AlertDialogDescription>
+                                                    <AlertDialogTitle className="font-black text-slate-950 uppercase">¿Estás absolutamente seguro?</AlertDialogTitle>
+                                                    <AlertDialogDescription className="font-bold text-xs uppercase text-slate-500 leading-relaxed">
                                                         Esta acción no se puede deshacer. Esto eliminará permanentemente la ruta de la base de datos.
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={() => handleDelete(route.id)} className="bg-destructive hover:bg-destructive/90">Eliminar</AlertDialogAction>
+                                                    <AlertDialogCancel className="font-black uppercase">Cancelar</AlertDialogCancel>
+                                                    <AlertDialogAction onClick={() => handleDelete(route.id)} className="bg-destructive hover:bg-destructive/90 font-black uppercase shadow-lg">Eliminar</AlertDialogAction>
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
                                         </AlertDialog>
@@ -324,7 +325,7 @@ export default function TeamRoutesPage() {
                             })
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center h-24">
+                                <TableCell colSpan={7} className="text-center h-24 font-black text-slate-950 uppercase text-xs">
                                     No hay rutas de equipo para mostrar.
                                 </TableCell>
                             </TableRow>

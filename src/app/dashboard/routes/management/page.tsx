@@ -139,6 +139,7 @@ function RouteManagementContent() {
 
   const selectableRoutes = useMemo(() => {
     const now = new Date();
+    // Lunes de la semana actual a las 00:00:00
     const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     
@@ -148,19 +149,23 @@ function RouteManagementContent() {
 
         if (!isOwnRoute && !isTeamRoute && !isAdmin) return false;
         
-        // Prioridad: Si está en progreso, mostrar siempre al dueño para que la termine
-        if (isOwnRoute && r.status === 'En Progreso') return true;
+        // Rutas iniciadas siempre visibles
+        if (r.status === 'En Progreso') return true;
 
-        // Filtro Semanal Robusto: Comparamos el Lunes de la ruta con el Lunes de hoy
-        if (r.date) {
-            const routeWeekStart = startOfWeek(ensureDate(r.date), { weekStartsOn: 1 });
-            if (routeWeekStart.getTime() !== currentWeekStart.getTime()) return false;
+        // Rutas planificadas: Mostramos la de esta semana y cualquier semana futura
+        if (r.status === 'Planificada') {
+            if (r.date) {
+                const routeDate = ensureDate(r.date);
+                const routeWeekStart = startOfWeek(routeDate, { weekStartsOn: 1 });
+                // Si la semana de la ruta es anterior a la actual, se oculta
+                if (routeWeekStart < currentWeekStart) return false;
+            }
+            
+            if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
+            return true;
         }
-
-        if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
-        if (r.status !== 'Planificada' && r.status !== 'En Progreso') return false;
         
-        return true;
+        return false;
     });
   }, [allRoutes, user, isAdmin, isManager, selectedAgentId, managedUsersForSelector]);
 
@@ -173,6 +178,7 @@ function RouteManagementContent() {
   useEffect(() => {
     if (!selectedRoute) return;
     setCurrentRouteClientsFull(selectedRoute.clients || []);
+    // Para administradores, habilitamos el panel directamente si quieren gestionar
     setIsRouteStarted(selectedRoute.status === 'En Progreso' || isAdmin || isSupervisor);
     setActiveOriginalIndex(null); 
   }, [selectedRoute, isAdmin, isSupervisor]);
