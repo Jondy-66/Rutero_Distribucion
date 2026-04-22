@@ -169,6 +169,7 @@ export function SupervisorMap() {
 
         <div className="flex-1 rounded-2xl overflow-hidden border-4 border-slate-100 shadow-2xl relative">
             <MapContainer 
+                key={selectedUserId || 'initial'}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}

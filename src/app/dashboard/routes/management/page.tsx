@@ -11,7 +11,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, startOfWeek, isSameDay, startOfDay } from 'date-fns';
+import { format, isSameDay, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -108,11 +108,8 @@ function RouteManagementContent() {
   useEffect(() => {
     const check = () => {
       const now = new Date();
-      const day = now.getDay(); 
       const hours = now.getHours();
-      const isPastFridayDeadline = (day === 5 && hours >= 19) || day === 6 || day === 0;
-      const isPastDailyDeadline = hours >= 19;
-      setIsExpired((isPastFridayDeadline || isPastDailyDeadline) && !isAdmin);
+      setIsExpired(hours >= 19 && !isAdmin);
     };
     check();
     const timer = setInterval(check, 30000);
@@ -135,7 +132,6 @@ function RouteManagementContent() {
   }, [allUsers, user]);
 
   const selectableRoutes = useMemo(() => {
-    const startOfCurrentWeek = startOfDay(startOfWeek(new Date(), { weekStartsOn: 1 }));
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     
     return allRoutes.filter(r => {
@@ -144,17 +140,13 @@ function RouteManagementContent() {
 
         if (!isOwnRoute && !isTeamRoute && !isAdmin) return false;
         
-        if (r.status === 'En Progreso') return true;
+        // Mostrar rutas que no estén completadas o rechazadas para permitir trabajo
+        const workStates = ['Planificada', 'En Progreso', 'Pendiente de Aprobación'];
+        if (!workStates.includes(r.status)) return false;
 
-        if (r.status === 'Planificada') {
-            const routeDate = startOfDay(ensureDate(r.date));
-            // Visible si es desde el lunes de esta semana o futura
-            if (routeDate.getTime() < startOfCurrentWeek.getTime()) return false;
-            if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
-            return true;
-        }
+        if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
-        return false;
+        return true;
     });
   }, [allRoutes, user, isAdmin, isManager, selectedAgentId, managedUsersForSelector]);
 
@@ -370,7 +362,7 @@ function RouteManagementContent() {
                 <AlertTriangle className="h-4 w-4 text-red-600" />
                 <AlertTitle className="text-red-800 font-black uppercase text-xs">Jornada Cerrada</AlertTitle>
                 <AlertDescription className="text-red-700 font-bold uppercase text-[9px]">
-                    HAS SUPERADO EL TIEMPO LÍMITE (19:00 O CIERRE SEMANAL VIERNES). EL REGISTRO DE GESTIÓN HA SIDO BLOQUEADO POR POLÍTICA DE SEGURIDAD.
+                    HAS SUPERADO EL TIEMPO LÍMITE (19:00). EL REGISTRO DE GESTIÓN HA SIDO BLOQUEADO POR POLÍTICA DE SEGURIDAD.
                 </AlertDescription>
             </Alert>
         )}
@@ -408,7 +400,7 @@ function RouteManagementContent() {
                                     </SelectItem>
                                 ))
                             ) : (
-                                <SelectItem value="none" disabled className="font-black text-slate-950">No hay rutas planificadas vigentes para esta semana.</SelectItem>
+                                <SelectItem value="none" disabled className="font-black text-slate-950">No hay rutas planificadas vigentes.</SelectItem>
                             )}
                         </SelectContent>
                     </Select>
@@ -416,9 +408,9 @@ function RouteManagementContent() {
                         <Button 
                             className="w-full font-black h-12 rounded-xl text-lg shadow-lg" 
                             onClick={() => updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => setIsRouteStarted(true))}
-                            disabled={isExpired}
+                            disabled={isExpired && !isAdmin}
                         >
-                            {isExpired ? 'JORNADA CERRADA' : 'INICIAR TRABAJO'}
+                            {isExpired && !isAdmin ? 'JORNADA CERRADA' : 'INICIAR GESTIÓN'}
                         </Button>
                     )}
                 </CardContent>
@@ -443,7 +435,7 @@ function RouteManagementContent() {
                                 variant="outline" 
                                 className="w-full h-12 border-dashed border-2 border-slate-300 bg-slate-50 hover:bg-slate-100 text-slate-950 font-black text-xs rounded-xl flex items-center justify-center gap-2 shrink-0" 
                                 onClick={() => setIsAddClientDialogOpen(true)}
-                                disabled={isExpired}
+                                disabled={isExpired && !isAdmin}
                             >
                                 <CirclePlus className="h-4 w-4 text-primary" /> 
                                 Añadir Cliente a Hoy
@@ -537,7 +529,7 @@ function RouteManagementContent() {
                                             </div>
                                         </div>
                                         {!activeClient.checkInTime && (
-                                            <Button onClick={handleCheckIn} className="font-black h-10 px-6 rounded-xl text-xs shadow-md transition-transform hover:scale-105" disabled={isExpired || isSaving}>
+                                            <Button onClick={handleCheckIn} className="font-black h-10 px-6 rounded-xl text-xs shadow-md transition-transform hover:scale-105" disabled={(isExpired && !isAdmin) || isSaving}>
                                                 {isSaving ? <LoaderCircle className="animate-spin h-4 w-4" /> : 'MARCAR ENTRADA'}
                                             </Button>
                                         )}

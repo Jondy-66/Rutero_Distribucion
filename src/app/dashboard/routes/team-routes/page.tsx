@@ -17,7 +17,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { getRoutes, deleteRoute, updateRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw, CheckCircle, PlayCircle, Users as UsersIcon } from 'lucide-react';
+import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw, CheckCircle, PlayCircle, Users as UsersIcon, Route as RouteIcon } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -327,7 +327,7 @@ export default function TeamRoutesPage() {
                             <TableRow>
                                 <TableCell colSpan={7} className="text-center h-32 font-black text-slate-950 uppercase text-xs">
                                     <div className="flex flex-col items-center gap-2 opacity-30">
-                                        <Route className="h-8 w-8" />
+                                        <RouteIcon className="h-8 w-8" />
                                         <span>No hay rutas de equipo para mostrar</span>
                                     </div>
                                 </TableCell>
