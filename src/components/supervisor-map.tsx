@@ -180,6 +180,7 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+            {/* NO USAMOS key dinámica para mantener la instancia de Leaflet estable */}
             <MapContainer 
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
@@ -188,6 +189,7 @@ export function SupervisorMap() {
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 
+                {/* El componente MapViewControl maneja el flyTo sin recrear el mapa */}
                 <MapViewControl center={mapCenter} />
 
                 {activeLocations.map(loc => (

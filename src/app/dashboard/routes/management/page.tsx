@@ -8,9 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users as UsersIcon, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, ThumbsUp } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
-import type { Client, ClientInRoute, User } from '@/lib/types';
+import type { Client, ClientInRoute, User, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, isSameDay, startOfDay } from 'date-fns';
+import { format, isSameDay, startOfWeek, isAfter, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -131,21 +131,22 @@ function RouteManagementContent() {
   }, [allUsers, user]);
 
   const selectableRoutes = useMemo(() => {
+    const monday = startOfWeek(new Date(), { weekStartsOn: 1 });
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     
     return allRoutes.filter(r => {
         const isOwnRoute = r.createdBy === user?.id;
         const isTeamRoute = managedUserIds.has(r.createdBy);
-
         if (!isOwnRoute && !isTeamRoute && !isAdmin) return false;
         
-        // VISIBILIDAD TOTAL: Mostrar rutas que no estén completadas o rechazadas
         const workStates = ['Planificada', 'En Progreso', 'Pendiente de Aprobación'];
         if (!workStates.includes(r.status)) return false;
 
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
-        return true;
+        // VISIBILIDAD ISO: Mostrar cualquier ruta del lunes actual en adelante
+        const rDate = ensureDate(r.date);
+        return rDate >= monday || r.status === 'En Progreso';
     });
   }, [allRoutes, user, isAdmin, isManager, selectedAgentId, managedUsersForSelector]);
 
