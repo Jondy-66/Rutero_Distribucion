@@ -1,14 +1,14 @@
-
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
-import type { ActiveLocation, Zone, Breadcrumb, User } from '@/lib/types';
+import type { ActiveLocation, Zone, Breadcrumb } from '@/lib/types';
 import { db } from '@/lib/firebase/config';
-import { collection, onSnapshot, query } from 'firebase/firestore';
-import { getRecentHistory, saveZone, deleteZone } from '@/lib/firebase/firestore';
+import { collection, onSnapshot } from 'firebase/firestore';
+import { getRecentHistory, saveZone } from '@/lib/firebase/firestore';
+import { Button } from '@/components/ui/button';
 
 // Iconos personalizados
 const blueIcon = new L.Icon({
@@ -30,6 +30,7 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
   const map = useMap();
 
   useEffect(() => {
+    if (!map) return;
     map.pm.addControls({
       position: 'topleft',
       drawCircle: false,
@@ -80,9 +81,9 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
     return (
         <Marker position={pos} icon={location.is_out_of_route ? redIcon : blueIcon}>
             <Popup>
-                <div className="font-black uppercase text-xs">
+                <div className="font-black uppercase text-xs text-slate-950">
                     {location.userName}
-                    {location.is_out_of_route && <p className="text-red-600 mt-1">¡FUERA DE RUTA!</p>}
+                    {location.is_out_of_route && <p className="text-red-600 mt-1 font-black">¡FUERA DE RUTA!</p>}
                 </div>
             </Popup>
         </Marker>
@@ -94,6 +95,7 @@ export function SupervisorMap() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [history, setHistory] = useState<Breadcrumb[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [mapKey, setMapKey] = useState(0);
 
   useEffect(() => {
     // Escuchar posiciones en vivo
@@ -136,7 +138,7 @@ export function SupervisorMap() {
                 <Button 
                     key={loc.userId} 
                     variant={selectedUserId === loc.userId ? "default" : "outline"}
-                    className="font-black uppercase text-[10px]"
+                    className="font-black uppercase text-[10px] h-10 border-2"
                     onClick={() => fetchUserHistory(loc.userId)}
                 >
                     {loc.userName}
@@ -144,8 +146,14 @@ export function SupervisorMap() {
             ))}
         </div>
 
-        <div className="flex-1 rounded-2xl overflow-hidden border-4 border-slate-100 shadow-2xl">
-            <MapContainer center={[-1.8312, -78.1834]} zoom={7} scrollWheelZoom={true}>
+        <div className="flex-1 rounded-2xl overflow-hidden border-4 border-slate-100 shadow-2xl relative">
+            <MapContainer 
+                key={mapKey}
+                center={[-1.8312, -78.1834]} 
+                zoom={7} 
+                scrollWheelZoom={true}
+                className="h-full w-full"
+            >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 
                 {activeLocations.map(loc => (

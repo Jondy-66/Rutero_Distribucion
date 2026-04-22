@@ -1,4 +1,3 @@
-
 import { db } from './config';
 import { 
     collection, 
@@ -133,8 +132,6 @@ export const deleteClient = (id: string) => {
 export const updateClientLocations = async (locations: any[]) => {
     const batch = writeBatch(db);
     const clientsRef = collection(db, 'clients');
-    
-    // Obtenemos todos los RUCs existentes para mapear
     const snapshot = await getDocs(clientsRef);
     const rucMap = new Map(snapshot.docs.map(d => [d.data().ruc, d.id]));
 

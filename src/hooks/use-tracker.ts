@@ -71,9 +71,8 @@ export function useTracker() {
           saveBreadcrumb(user.id, { lat, lng }).catch(() => {});
         }
       },
-      (error) => {
-          // Manejo silencioso de errores de geolocalización (ej: permisos denegados o señal perdida)
-          // No logueamos para evitar clutter en la consola del usuario
+      () => {
+          // Manejo silencioso para evitar log innecesario Error tracker: {}
       },
       {
         enableHighAccuracy: true,
