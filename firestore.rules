@@ -6,41 +6,38 @@ service cloud.firestore {
     function isAdmin() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Administrador'; }
     function isSupervisor() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Supervisor'; }
     function isAuditor() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Auditor'; }
-    function isAssignedAgent(data) { return request.auth.uid == data.agent_id; }
+    function isOwner(userId) { return request.auth.uid == userId; }
 
     match /users/{userId} {
       allow read: if isSignedIn(); 
       allow write: if isAdmin();
     }
 
+    match /active_locations/{userId} {
+      allow read: if isSignedIn() && (isSupervisor() || isAdmin() || isAuditor() || isOwner(userId));
+      allow write: if isSignedIn() && isOwner(userId);
+    }
+
+    match /route_history/{userId}/{document=**} {
+      allow read: if isSignedIn() && (isSupervisor() || isAdmin() || isAuditor() || isOwner(userId));
+      allow write: if isSignedIn() && isOwner(userId);
+    }
+
+    match /zones/{zoneId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isSupervisor() || isAdmin());
+    }
+
+    match /alerts/{alertId} {
+      allow read: if isSignedIn() && (isSupervisor() || isAdmin() || isAuditor());
+      allow write: if false; // Solo vía Cloud Functions
+    }
+
+    // Reglas previas heredadas
     match /customers/{customerId} {
-      allow read, update: if isSignedIn() && (isAssignedAgent(resource.data) || isAdmin() || isAuditor());
-      allow create: if isAdmin();
-      allow delete: if isAdmin();
+      allow read, update: if isSignedIn();
+      allow create, delete: if isAdmin();
     }
-
-    match /sales/{saleId} {
-      allow read: if isSignedIn() && (isAssignedAgent(resource.data) || isAdmin() || isAuditor());
-      allow create: if isSignedIn() && (isAssignedAgent(request.resource.data) || isAdmin());
-      allow delete: if isAdmin();
-    }
-
-    match /calls/{callId} {
-      allow read: if isSignedIn() && (isAssignedAgent(resource.data) || isAdmin() || isAuditor());
-      allow create: if isSignedIn() && (isAssignedAgent(request.resource.data) || isAdmin());
-      allow delete: if isAdmin();
-    }
-    
-    match /system_config/{docId} {
-      allow read: if isSignedIn() && (isAdmin() || isAuditor());
-      allow write: if isAdmin();
-    }
-
-    match /system_logs/{logId} {
-      allow read: if isSignedIn() && (isAdmin() || isAuditor());
-      allow write: if isAdmin();
-    }
-    
     match /clients/{clientId} { allow read, write: if isSignedIn(); }
     match /routes/{routeId} { allow read, write: if isSignedIn(); }
     match /notifications/{id} { allow read, write: if isSignedIn(); }

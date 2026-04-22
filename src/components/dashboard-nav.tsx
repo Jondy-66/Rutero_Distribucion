@@ -25,6 +25,7 @@ import {
   BarChart,
   Settings2,
   RefreshCw,
+  LocateFixed,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -44,10 +45,6 @@ import {
 } from '@/components/ui/collapsible';
 import { useState } from 'react';
 
-/**
- * Componente de navegación principal para el panel de control.
- * Muestra los enlaces de navegación en la barra lateral según el rol y permisos del usuario.
- */
 export function DashboardNav() {
   const pathname = usePathname();
   const { user } = useAuth();
@@ -59,31 +56,24 @@ export function DashboardNav() {
   const [isReportsOpen, setIsReportsOpen] = useState(pathname.startsWith('/dashboard/reports'));
   const [isDashboardOpen, setIsDashboardOpen] = useState(pathname.startsWith('/dashboard/admin-dashboard') || pathname === '/dashboard');
 
-  // Ayudante para verificar permisos granulares con soporte de fallback por rol
   const hasPerm = (id: string) => {
     if (!user) return false;
     if (user.role === 'Administrador') return true;
-    
-    // Si el usuario tiene un array de permisos definido, lo usamos como fuente de verdad
     if (user.permissions && user.permissions.length > 0) {
       return user.permissions.includes(id);
     }
-    
-    // Fallback a permisos por defecto si no hay array de permisos en el perfil
     const roleDefaults: Record<string, string[]> = {
-      'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'map', 'reports', 'seller-reports', 'routes'],
+      'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'map', 'reports', 'seller-reports', 'routes', 'tracking'],
       'Usuario': ['dashboard', 'clients', 'map', 'routes'],
       'Telemercaderista': ['dashboard', 'clients', 'map', 'routes'],
-      'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'seller-reports', 'routes'],
+      'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'seller-reports', 'routes', 'tracking'],
     };
-    
     return (roleDefaults[user.role] || []).includes(id);
   };
 
   return (
     <nav>
       <SidebarMenu>
-        {/* PANEL DE CONTROL / KPIs */}
         {hasPerm('admin-dashboard') && (
           <Collapsible open={isDashboardOpen} onOpenChange={setIsDashboardOpen}>
             <SidebarMenuItem>
@@ -117,13 +107,23 @@ export function DashboardNav() {
           </Collapsible>
         )}
 
-        {/* MODULOS BASICOS */}
         {hasPerm('clients') && (
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname.startsWith('/dashboard/clients')} tooltip="Clientes">
               <Link href="/dashboard/clients">
                 <Briefcase className="h-5 w-5" />
                 <span>Clientes</span>
+              </Link>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        )}
+
+        {(user?.role === 'Administrador' || user?.role === 'Supervisor' || user?.role === 'Auditor') && (
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild isActive={pathname === '/dashboard/system/tracking'} tooltip="Rastreo GPS">
+              <Link href="/dashboard/system/tracking">
+                <LocateFixed className="h-5 w-5 text-primary" />
+                <span className="font-black">Rastreo GPS</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
@@ -151,7 +151,6 @@ export function DashboardNav() {
           </SidebarMenuItem>
         )}
 
-        {/* REPORTES */}
         {hasPerm('reports') && (
           <Collapsible open={isReportsOpen} onOpenChange={setIsReportsOpen}>
             <SidebarMenuItem>
@@ -197,7 +196,6 @@ export function DashboardNav() {
           </Collapsible>
         )}
 
-        {/* RUTAS */}
         {hasPerm('routes') && (
           <Collapsible open={isRoutesOpen} onOpenChange={setIsRoutesOpen}>
             <SidebarMenuItem>
@@ -271,49 +269,6 @@ export function DashboardNav() {
           </Collapsible>
         )}
 
-        {/* CRM */}
-        {hasPerm('dashboard') && (user?.role === 'Administrador' || user?.role === 'Supervisor' || user?.role === 'Telemercaderista') && (
-           <Collapsible open={isCrmOpen} onOpenChange={setIsCrmOpen}>
-            <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton tooltip="CRM">
-                  <HeartHandshake className="h-5 w-5" />
-                  <span>CRM</span>
-                </SidebarMenuButton>
-              </CollapsibleTrigger>
-            </SidebarMenuItem>
-            <CollapsibleContent>
-              <SidebarMenuSub>
-                <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/prediction'}>
-                      <Link href="/dashboard/crm/prediction">
-                        <Wand2 />
-                        <span>Predicción Crm</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/phone-base'}>
-                      <Link href="/dashboard/crm/phone-base">
-                        <Database />
-                        <span>Base Telefónica</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                 <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/management'}>
-                      <Link href="/dashboard/crm/management">
-                        <Phone />
-                        <span>Gestión Crm</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-              </SidebarMenuSub>
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-
-        {/* ADMINISTRACION SISTEMA */}
         {hasPerm('users') && (
           <Collapsible open={isUsersOpen} onOpenChange={setIsUsersOpen}>
             <SidebarMenuItem>
@@ -355,14 +310,6 @@ export function DashboardNav() {
                       <Link href="/dashboard/system/usage">
                         <Settings2 />
                         <span>Uso del Sistema</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/system/cron'}>
-                      <Link href="/dashboard/system/cron">
-                        <RefreshCw />
-                        <span>Cron Jobs</span>
                       </Link>
                     </SidebarMenuSubButton>
                 </SidebarMenuSubItem>

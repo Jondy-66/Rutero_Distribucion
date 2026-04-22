@@ -1,74 +1,61 @@
 
 {
   "entities": {
+    "ActiveLocation": {
+      "title": "ActiveLocation",
+      "type": "object",
+      "description": "Ubicación en tiempo real del usuario.",
+      "properties": {
+        "userId": { "type": "string" },
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "heading": { "type": "number" },
+        "accuracy": { "type": "number" },
+        "address_text": { "type": "string" },
+        "is_out_of_route": { "type": "boolean" }
+      },
+      "required": ["userId", "lat", "lng", "timestamp"]
+    },
+    "RouteHistory": {
+      "title": "RouteHistory",
+      "type": "object",
+      "description": "Punto histórico en el rastro del usuario (breadcrumb).",
+      "properties": {
+        "lat": { "type": "number" },
+        "lng": { "type": "number" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      }
+    },
+    "Zone": {
+      "title": "Zone",
+      "type": "object",
+      "description": "Geocerca o zona permitida para el usuario.",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "geoJson": { "type": "object", "description": "Formato GeoJSON del polígono" }
+      }
+    },
+    "Alert": {
+      "title": "Alert",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["out_of_route"] },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "location": { "type": "object" },
+        "details": { "type": "string" }
+      }
+    },
     "Customer": {
       "title": "Customer",
       "type": "object",
-      "description": "Perfil del cliente para el CRM con métricas de valor y predicción.",
       "properties": {
         "id": { "type": "string" },
         "name": { "type": "string" },
-        "phone": { "type": "string" },
-        "email": { "type": "string" },
-        "agent_id": { "type": "string", "description": "UID del teleoperador asignado" },
-        "average_ticket": { "type": "number", "description": "AOV calculado" },
-        "last_purchase_date": { "type": "string", "format": "date-time" },
-        "next_call_date": { "type": "string", "format": "date-time" },
-        "purchase_frequency_days": { "type": "number", "description": "Intervalo promedio de compra" },
-        "status": { "type": "string", "enum": ["lead", "active", "churn"] },
-        "tier": { "type": "string", "enum": ["VIP", "Medio", "Bajo"] },
-        "priority_score": { "type": "number" }
-      },
-      "required": ["id", "name", "agent_id", "status"]
-    },
-    "Sale": {
-      "title": "Sale",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "customer_id": { "type": "string" },
-        "amount": { "type": "number" },
-        "date": { "type": "string", "format": "date-time" },
         "agent_id": { "type": "string" },
-        "category": { "type": "string" }
-      },
-      "required": ["id", "customer_id", "amount", "date", "agent_id"]
-    },
-    "Call": {
-      "title": "Call",
-      "type": "object",
-      "properties": {
-        "id": { "type": "string" },
-        "customer_id": { "type": "string" },
-        "agent_id": { "type": "string" },
-        "duration": { "type": "number" },
-        "outcome": { "type": "string", "enum": ["sold", "no_answer", "callback"] },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "notes": { "type": "string" }
-      },
-      "required": ["id", "customer_id", "agent_id", "outcome", "timestamp"]
-    },
-    "SystemLog": {
-      "title": "SystemLog",
-      "type": "object",
-      "description": "Registros de eventos del sistema, procesos cron y errores críticos.",
-      "properties": {
-        "id": { "type": "string" },
-        "type": { "type": "string", "enum": ["CRON_REFRESH", "IMPORT_ERROR", "AUTH_SECURITY"] },
-        "timestamp": { "type": "string", "format": "date-time" },
-        "processed": { "type": "number" },
-        "details": { "type": "array", "items": { "type": "object" } }
-      },
-      "required": ["type", "timestamp"]
-    },
-    "CronConfig": {
-      "title": "CronConfig",
-      "type": "object",
-      "properties": {
-        "enabled": { "type": "boolean" },
-        "active24h": { "type": "boolean" },
-        "scheduledDays": { "type": "array", "items": { "type": "number" } },
-        "lastRun": { "type": "string", "format": "date-time" }
+        "status": { "type": "string" }
       }
     }
   },
@@ -76,10 +63,9 @@
     "providers": ["password"]
   },
   "firestore": {
-    "/customers/{customerId}": { "schema": { "$ref": "#/entities/Customer" }, "description": "Clientes asignados a teleoperadores" },
-    "/sales/{saleId}": { "schema": { "$ref": "#/entities/Sale" }, "description": "Historial de ventas para predicción de ciclo" },
-    "/calls/{callId}": { "schema": { "$ref": "#/entities/Call" }, "description": "Bitácora de llamadas" },
-    "/system_logs/{logId}": { "schema": { "$ref": "#/entities/SystemLog" }, "description": "Auditoría de procesos de fondo y cron jobs" },
-    "/system_config/cron": { "schema": { "$ref": "#/entities/CronConfig" }, "description": "Configuración global de tareas programadas" }
+    "/active_locations/{userId}": { "schema": { "$ref": "#/entities/ActiveLocation" }, "description": "Posición en vivo" },
+    "/route_history/{userId}/points/{pointId}": { "schema": { "$ref": "#/entities/RouteHistory" }, "description": "Historial de trayecto" },
+    "/zones/{zoneId}": { "schema": { "$ref": "#/entities/Zone" }, "description": "Geocercas de supervisión" },
+    "/alerts/{alertId}": { "schema": { "$ref": "#/entities/Alert" }, "description": "Alertas de seguridad" }
   }
 }

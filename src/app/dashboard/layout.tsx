@@ -20,6 +20,7 @@ import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { handleSignOut } from '@/lib/firebase/auth';
 import { useToast } from '@/hooks/use-toast';
+import { LocationTracker } from '@/components/location-tracker';
 
 export default function DashboardLayout({
   children,
@@ -57,6 +58,7 @@ export default function DashboardLayout({
 
   return (
     <SidebarProvider>
+      <LocationTracker />
       <Sidebar>
         <div className="flex flex-col h-full">
           <SidebarHeader className="p-4">
