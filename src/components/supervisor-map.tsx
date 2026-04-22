@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -22,6 +23,19 @@ const redIcon = new L.Icon({
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
     iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
+
+/**
+ * Componente para manejar la actualización de la vista del mapa sin reinicializar el contenedor.
+ */
+function MapViewControl({ center }: { center: [number, number] | null }) {
+    const map = useMap();
+    useEffect(() => {
+        if (center) {
+            map.flyTo(center, 13, { duration: 1.5 });
+        }
+    }, [center, map]);
+    return null;
+}
 
 /**
  * Componente para activar Geoman en el mapa.
@@ -129,6 +143,14 @@ export function SupervisorMap() {
   };
 
   const historyPath = useMemo(() => history.map(p => [p.lat, p.lng] as [number, number]), [history]);
+  
+  const mapCenter = useMemo(() => {
+      if (selectedUserId) {
+          const loc = activeLocations.find(l => l.userId === selectedUserId);
+          if (loc) return [loc.lat, loc.lng] as [number, number];
+      }
+      return null;
+  }, [selectedUserId, activeLocations]);
 
   return (
     <div className="flex flex-col h-[70vh] gap-4">
@@ -146,9 +168,7 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-2xl overflow-hidden border-4 border-slate-100 shadow-2xl relative">
-            {/* Usamos una key dinámica para forzar el unmount/remount completo de Leaflet y evitar el error "Map container already initialized" */}
             <MapContainer 
-                key={selectedUserId || 'global-view'}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
@@ -156,6 +176,8 @@ export function SupervisorMap() {
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 
+                <MapViewControl center={mapCenter} />
+
                 {activeLocations.map(loc => (
                     <SmoothMarker key={loc.userId} location={loc} />
                 ))}
