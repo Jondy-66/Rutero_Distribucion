@@ -60,7 +60,11 @@ export const getRecentHistory = async (userId: string): Promise<Breadcrumb[]> =>
         orderBy('timestamp', 'asc')
     );
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Breadcrumb[];
+    return snapshot.docs.map(doc => ({ 
+        id: doc.id, 
+        ...doc.data(),
+        timestamp: doc.data().timestamp instanceof Timestamp ? doc.data().timestamp.toDate() : doc.data().timestamp 
+    })) as Breadcrumb[];
 };
 
 // --- GESTIÓN DE USUARIOS ---

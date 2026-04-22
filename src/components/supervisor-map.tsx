@@ -48,7 +48,9 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
       onZoneCreated(json);
     });
 
-    return () => { map.pm.removeControls(); };
+    return () => { 
+        if (map.pm) map.pm.removeControls(); 
+    };
   }, [map, onZoneCreated]);
 
   return null;
@@ -95,15 +97,12 @@ export function SupervisorMap() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [history, setHistory] = useState<Breadcrumb[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
-  const [mapKey, setMapKey] = useState(0);
 
   useEffect(() => {
-    // Escuchar posiciones en vivo
     const unsubscribeLocations = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
     });
 
-    // Escuchar zonas
     const unsubscribeZones = onSnapshot(collection(db, 'zones'), (snap) => {
         setZones(snap.docs.map(d => ({ id: d.id, ...d.data() } as Zone)));
     });
@@ -121,7 +120,7 @@ export function SupervisorMap() {
   };
 
   const handleZoneCreated = async (geoJson: any) => {
-      if (!selectedUserId) return alert("Selecciona un usuario primero");
+      if (!selectedUserId) return;
       await saveZone({
           userId: selectedUserId,
           name: `Zona para ${selectedUserId}`,
@@ -148,7 +147,8 @@ export function SupervisorMap() {
 
         <div className="flex-1 rounded-2xl overflow-hidden border-4 border-slate-100 shadow-2xl relative">
             <MapContainer 
-                key={mapKey}
+                id="supervisor-main-map"
+                key={selectedUserId || 'initial'}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
@@ -160,13 +160,18 @@ export function SupervisorMap() {
                     <SmoothMarker key={loc.userId} location={loc} />
                 ))}
 
-                {zones.map(zone => (
-                    <Polygon 
-                        key={zone.id} 
-                        positions={zone.geoJson.geometry.coordinates[0].map((c: any) => [c[1], c[0]])} 
-                        pathOptions={{ color: 'purple', fillOpacity: 0.2 }}
-                    />
-                ))}
+                {zones.map(zone => {
+                    try {
+                        const positions = zone.geoJson.geometry.coordinates[0].map((c: any) => [c[1], c[0]]);
+                        return (
+                            <Polygon 
+                                key={zone.id} 
+                                positions={positions} 
+                                pathOptions={{ color: 'purple', fillOpacity: 0.2 }}
+                            />
+                        );
+                    } catch(e) { return null; }
+                })}
 
                 {historyPath.length > 1 && (
                     <Polyline positions={historyPath} pathOptions={{ color: 'blue', weight: 3, dashArray: '5, 10' }} />

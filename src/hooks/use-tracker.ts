@@ -6,7 +6,7 @@ import { updateLiveLocation, saveBreadcrumb } from '@/lib/firebase/firestore';
 
 /**
  * Hook de Rastreo Profesional
- * Implementa filtros de eficiencia: Precisión < 20m y Movimiento > 30m.
+ * Implementa filtros de eficiencia: Precisión < 25m y Movimiento > 30m.
  */
 export function useTracker() {
   const { user } = useAuth();
@@ -40,7 +40,7 @@ export function useTracker() {
         const { latitude: lat, longitude: lng, accuracy, heading } = position.coords;
 
         // Filtro 1: Precisión mínima aceptable (ignorar puntos ruidosos)
-        if (accuracy > 25) return;
+        if (accuracy > 30) return;
 
         let distance = 0;
         if (lastPosition.current) {
@@ -72,7 +72,7 @@ export function useTracker() {
         }
       },
       () => {
-          // Manejo silencioso para evitar log innecesario Error tracker: {}
+          // Manejo silencioso de errores de geolocalización
       },
       {
         enableHighAccuracy: true,
