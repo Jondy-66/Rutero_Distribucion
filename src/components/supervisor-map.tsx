@@ -11,7 +11,7 @@ import { getRecentHistory, saveZone } from '@/lib/firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
 
-// Iconos personalizados
+// Iconos personalizados con colores de alta visibilidad
 const blueIcon = new L.Icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
@@ -25,9 +25,10 @@ const redIcon = new L.Icon({
 });
 
 /**
- * Componente para manejar la actualización de la vista del mapa sin reinicializar el contenedor.
+ * Componente interno para controlar la vista del mapa sin reinicializar el contenedor.
+ * Esto evita el error "Map container is already initialized".
  */
-function MapViewControl({ center }: { center: [number, number] | null }) {
+function MapViewController({ center }: { center: [number, number] | null }) {
     const map = useMap();
     useEffect(() => {
         if (center) {
@@ -38,7 +39,7 @@ function MapViewControl({ center }: { center: [number, number] | null }) {
 }
 
 /**
- * Componente para activar Geoman en el mapa.
+ * Componente para activar Geoman (herramientas de dibujo) en el mapa.
  */
 function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }) {
   const map = useMap();
@@ -71,7 +72,7 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
 }
 
 /**
- * Componente que maneja la Interpolación Suave (LERP) para un marcador.
+ * Componente que maneja la Interpolación Suave (LERP) para el movimiento de marcadores.
  */
 function SmoothMarker({ location }: { location: ActiveLocation }) {
     const [pos, setPos] = useState<[number, number]>([location.lat, location.lng]);
@@ -99,7 +100,7 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
             <Popup>
                 <div className="font-black uppercase text-xs text-slate-950">
                     {location.userName}
-                    {location.is_out_of_route && <p className="text-red-600 mt-1 font-black">¡FUERA DE RUTA!</p>}
+                    {location.is_out_of_route && <p className="text-red-600 mt-1 font-black">¡ALERTA: FUERA DE RUTA!</p>}
                 </div>
             </Popup>
         </Marker>
@@ -147,7 +148,7 @@ export function SupervisorMap() {
       if (!selectedUserId) return;
       await saveZone({
           userId: selectedUserId,
-          name: `Zona para ${selectedUserId}`,
+          name: `Zona Segura - ${selectedUserId}`,
           geoJson
       });
   };
@@ -167,19 +168,20 @@ export function SupervisorMap() {
   return (
     <div className="flex flex-col h-[75vh] gap-4">
         <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 scrollbar-hide">
-            {activeLocations.map(loc => (
-                <Button 
-                    key={loc.userId} 
-                    variant={selectedUserId === loc.userId ? "default" : "outline"}
-                    className="font-black uppercase text-[10px] h-10 border-2 shrink-0"
-                    onClick={() => fetchUserHistory(loc.userId)}
-                >
-                    {loc.userName}
-                    {isHistoryLoading && selectedUserId === loc.userId && <LoaderCircle className="ml-2 h-3 w-3 animate-spin" />}
-                </Button>
-            ))}
-            {activeLocations.length === 0 && (
-                <div className="text-[10px] font-black uppercase text-slate-400 p-2">No hay usuarios activos en el mapa</div>
+            {activeLocations.length > 0 ? (
+                activeLocations.map(loc => (
+                    <Button 
+                        key={loc.userId} 
+                        variant={selectedUserId === loc.userId ? "default" : "outline"}
+                        className="font-black uppercase text-[10px] h-10 border-2 shrink-0"
+                        onClick={() => fetchUserHistory(loc.userId)}
+                    >
+                        {loc.userName}
+                        {isHistoryLoading && selectedUserId === loc.userId && <LoaderCircle className="ml-2 h-3 w-3 animate-spin" />}
+                    </Button>
+                ))
+            ) : (
+                <div className="text-[10px] font-black uppercase text-slate-400 p-2 italic">Esperando señal GPS de agentes...</div>
             )}
         </div>
 
@@ -192,7 +194,7 @@ export function SupervisorMap() {
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 
-                <MapViewControl center={mapCenter} />
+                <MapViewController center={mapCenter} />
 
                 {activeLocations.map(loc => (
                     <SmoothMarker key={loc.userId} location={loc} />
