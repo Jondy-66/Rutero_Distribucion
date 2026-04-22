@@ -112,8 +112,10 @@ export function SupervisorMap() {
   const [history, setHistory] = useState<Breadcrumb[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     const unsubscribeLocations = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
     });
@@ -160,6 +162,8 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
+  if (!isMounted) return <div className="h-[75vh] bg-slate-50 rounded-[2rem] animate-pulse" />;
+
   return (
     <div className="flex flex-col h-[75vh] gap-4">
         <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 scrollbar-hide">
@@ -180,7 +184,6 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
-            {/* NO USAMOS key dinámica para mantener la instancia de Leaflet estable */}
             <MapContainer 
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
@@ -189,7 +192,6 @@ export function SupervisorMap() {
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 
-                {/* El componente MapViewControl maneja el flyTo sin recrear el mapa */}
                 <MapViewControl center={mapCenter} />
 
                 {activeLocations.map(loc => (

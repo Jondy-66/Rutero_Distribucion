@@ -10,7 +10,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, isSameDay, startOfWeek, isAfter, isBefore } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -131,7 +131,6 @@ function RouteManagementContent() {
   }, [allUsers, user]);
 
   const selectableRoutes = useMemo(() => {
-    const monday = startOfWeek(new Date(), { weekStartsOn: 1 });
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     
     return allRoutes.filter(r => {
@@ -144,9 +143,7 @@ function RouteManagementContent() {
 
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
-        // VISIBILIDAD ISO: Mostrar cualquier ruta del lunes actual en adelante
-        const rDate = ensureDate(r.date);
-        return rDate >= monday || r.status === 'En Progreso';
+        return true; 
     });
   }, [allRoutes, user, isAdmin, isManager, selectedAgentId, managedUsersForSelector]);
 
@@ -197,7 +194,7 @@ function RouteManagementContent() {
             errorEmitter.emit('permission-error', new FirestorePermissionError({
               path: `routes/${selectedRoute.id}`,
               operation: 'update',
-              requestResourceData: { clients: nextClients }
+              requestResourceData: { clients: sanitizeClients(nextClients) }
             }));
           });
     }
@@ -236,7 +233,7 @@ function RouteManagementContent() {
             errorEmitter.emit('permission-error', new FirestorePermissionError({
                 path: `routes/${selectedRoute.id}`,
                 operation: 'update',
-                requestResourceData: { clients: nextClients }
+                requestResourceData: { clients: sanitizeClients(nextClients) }
             }));
         })
         .finally(() => setIsSaving(false));
@@ -278,7 +275,7 @@ function RouteManagementContent() {
         errorEmitter.emit('permission-error', new FirestorePermissionError({
             path: `routes/${selectedRoute.id}`,
             operation: 'update',
-            requestResourceData: { clients: nextClients }
+            requestResourceData: { clients: sanitizeClients(nextClients) }
         }));
     })
     .finally(() => setIsSaving(false));
