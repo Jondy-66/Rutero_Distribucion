@@ -10,6 +10,7 @@ import { db } from '@/lib/firebase/config';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { getRecentHistory, saveZone } from '@/lib/firebase/firestore';
 import { Button } from '@/components/ui/button';
+import { LoaderCircle } from 'lucide-react';
 
 // Iconos personalizados
 const blueIcon = new L.Icon({
@@ -57,7 +58,7 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
       removalMode: true,
     });
 
-    map.on('pm:create', (e) => {
+    map.on('pm:create', (e: any) => {
       const json = e.layer.toGeoJSON();
       onZoneCreated(json);
     });
@@ -111,6 +112,7 @@ export function SupervisorMap() {
   const [zones, setZones] = useState<Zone[]>([]);
   const [history, setHistory] = useState<Breadcrumb[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
 
   useEffect(() => {
     const unsubscribeLocations = onSnapshot(collection(db, 'active_locations'), (snap) => {
@@ -129,8 +131,15 @@ export function SupervisorMap() {
 
   const fetchUserHistory = async (userId: string) => {
     setSelectedUserId(userId);
-    const data = await getRecentHistory(userId);
-    setHistory(data);
+    setIsHistoryLoading(true);
+    try {
+        const data = await getRecentHistory(userId);
+        setHistory(data);
+    } catch (e) {
+        console.error("Error fetching history:", e);
+    } finally {
+        setIsHistoryLoading(false);
+    }
   };
 
   const handleZoneCreated = async (geoJson: any) => {
@@ -153,23 +162,27 @@ export function SupervisorMap() {
   }, [selectedUserId, activeLocations]);
 
   return (
-    <div className="flex flex-col h-[70vh] gap-4">
-        <div className="flex gap-2 shrink-0 overflow-x-auto pb-2">
+    <div className="flex flex-col h-[75vh] gap-4">
+        <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 scrollbar-hide">
             {activeLocations.map(loc => (
                 <Button 
                     key={loc.userId} 
                     variant={selectedUserId === loc.userId ? "default" : "outline"}
-                    className="font-black uppercase text-[10px] h-10 border-2"
+                    className="font-black uppercase text-[10px] h-10 border-2 shrink-0"
                     onClick={() => fetchUserHistory(loc.userId)}
                 >
                     {loc.userName}
+                    {isHistoryLoading && selectedUserId === loc.userId && <LoaderCircle className="ml-2 h-3 w-3 animate-spin" />}
                 </Button>
             ))}
+            {activeLocations.length === 0 && (
+                <div className="text-[10px] font-black uppercase text-slate-400 p-2">No hay usuarios activos en el mapa</div>
+            )}
         </div>
 
-        <div className="flex-1 rounded-2xl overflow-hidden border-4 border-slate-100 shadow-2xl relative">
+        <div className="flex-1 rounded-[2rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
             <MapContainer 
-                key={selectedUserId || 'initial'}
+                key={selectedUserId || 'global-view'}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
@@ -190,14 +203,17 @@ export function SupervisorMap() {
                             <Polygon 
                                 key={zone.id} 
                                 positions={positions} 
-                                pathOptions={{ color: 'purple', fillOpacity: 0.2 }}
+                                pathOptions={{ color: 'purple', fillOpacity: 0.2, weight: 2 }}
                             />
                         );
                     } catch(e) { return null; }
                 })}
 
                 {historyPath.length > 1 && (
-                    <Polyline positions={historyPath} pathOptions={{ color: 'blue', weight: 3, dashArray: '5, 10' }} />
+                    <Polyline 
+                        positions={historyPath} 
+                        pathOptions={{ color: 'blue', weight: 4, dashArray: '8, 12', opacity: 0.7 }} 
+                    />
                 )}
 
                 <GeomanControl onZoneCreated={handleZoneCreated} />

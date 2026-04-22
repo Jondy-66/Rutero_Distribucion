@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, ThumbsUp } from 'lucide-react';
+import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users as UsersIcon, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, ThumbsUp } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -173,8 +173,9 @@ function RouteManagementContent() {
         })
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            const cDate = startOfDay(ensureDate(c.date));
-            return isSameDay(cDate, today);
+            // Para gestión, mostramos todos los clientes del plan actual, pero priorizamos los de hoy si es necesario.
+            // Por requerimiento del usuario, mostramos el plan completo cargado en la ruta.
+            return true;
         });
   }, [currentRouteClientsFull, availableClients]);
 
@@ -348,7 +349,7 @@ function RouteManagementContent() {
       return (
         <div className="p-20 text-center">
             <LoaderCircle className="animate-spin mx-auto h-12 w-12 text-primary" />
-            <p className="mt-4 font-black uppercase text-xs text-slate-950">Sincronizando jornada semanal...</p>
+            <p className="mt-4 font-black uppercase text-xs text-slate-950">Sincronizando jornada...</p>
         </div>
       );
   }
@@ -374,7 +375,7 @@ function RouteManagementContent() {
                     {isManager && (
                         <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
                             <SelectTrigger className="h-12 border-2 border-slate-200 font-black text-slate-950 bg-white">
-                                <Users className="mr-2 h-4 w-4 text-primary" />
+                                <UsersIcon className="mr-2 h-4 w-4 text-primary" />
                                 <SelectValue placeholder="Filtrar por agente..." />
                             </SelectTrigger>
                             <SelectContent>
@@ -407,7 +408,13 @@ function RouteManagementContent() {
                     {selectedRoute && (
                         <Button 
                             className="w-full font-black h-12 rounded-xl text-lg shadow-lg" 
-                            onClick={() => updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => setIsRouteStarted(true))}
+                            onClick={() => {
+                                if (selectedRoute.status === 'Planificada' || selectedRoute.status === 'Pendiente de Aprobación') {
+                                    updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => setIsRouteStarted(true));
+                                } else {
+                                    setIsRouteStarted(true);
+                                }
+                            }}
                             disabled={isExpired && !isAdmin}
                         >
                             {isExpired && !isAdmin ? 'JORNADA CERRADA' : 'INICIAR GESTIÓN'}
@@ -477,7 +484,7 @@ function RouteManagementContent() {
                                     ) : (
                                         <div className="text-center py-12 px-4 rounded-[2rem] bg-slate-50 border-2 border-dashed border-slate-200">
                                             <CalendarIcon className="h-8 w-8 mx-auto text-slate-300 mb-3" />
-                                            <p className="text-[10px] font-black text-slate-950 uppercase">No hay visitas para hoy.</p>
+                                            <p className="text-[10px] font-black text-slate-950 uppercase">No hay paradas en esta ruta.</p>
                                         </div>
                                     )}
                                 </div>
@@ -589,7 +596,7 @@ function RouteManagementContent() {
                                 </>
                             ) : (
                                 <div className="flex-1 flex items-center justify-center text-slate-950 font-black uppercase text-center text-lg tracking-widest">
-                                    Selecciona un cliente de hoy para empezar
+                                    Selecciona un cliente para empezar
                                 </div>
                             )}
                         </CardContent>
