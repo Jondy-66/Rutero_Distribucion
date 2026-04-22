@@ -44,7 +44,7 @@ import {
 import { Timestamp } from 'firebase/firestore';
 
 export default function TeamRoutesPage() {
-  const { user, users, loading: authLoading, refetchData } = useAuth();
+  const { user, users, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const router = useRouter();
   const [allRoutes, setAllRoutes] = useState<RoutePlan[]>([]);
@@ -239,12 +239,12 @@ export default function TeamRoutesPage() {
                             ))
                         ) : filteredRoutes.length > 0 ? (
                             filteredRoutes.map((route, index) => {
-                                const isAdmin = user?.role === 'Administrador';
-                                const canReview = (user?.role === 'Supervisor' || isAdmin) && route.status === 'Pendiente de Aprobación';
-                                const canDelete = isAdmin;
-                                const canReactivate = isAdmin && (route.status === 'Completada' || route.status === 'Rechazada');
-                                const canManageLive = isAdmin && (route.status === 'En Progreso' || route.status === 'Planificada');
-                                const canFinalize = isAdmin && (route.status === 'En Progreso' || route.status === 'Planificada');
+                                const isAdminRole = user?.role === 'Administrador';
+                                const canReview = (user?.role === 'Supervisor' || isAdminRole) && route.status === 'Pendiente de Aprobación';
+                                const canDelete = isAdminRole;
+                                const canReactivate = isAdminRole && (route.status === 'Completada' || route.status === 'Rechazada');
+                                const canManageLive = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
+                                const canFinalize = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
                                
                                 return (
                                 <TableRow key={route.id} className="hover:bg-slate-50/50">

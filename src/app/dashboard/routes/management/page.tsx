@@ -134,6 +134,7 @@ function RouteManagementContent() {
   }, [allUsers, user]);
 
   const selectableRoutes = useMemo(() => {
+    // Calculamos el inicio de la semana actual (Lunes) para filtrar rutas antiguas
     const startOfCurrentWeek = startOfDay(startOfWeek(new Date(), { weekStartsOn: 1 }));
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     
@@ -147,6 +148,7 @@ function RouteManagementContent() {
 
         if (r.status === 'Planificada') {
             const routeDate = startOfDay(ensureDate(r.date));
+            // Permitimos rutas desde el inicio de esta semana o futuras
             if (routeDate.getTime() < startOfCurrentWeek.getTime()) return false;
             if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
             return true;

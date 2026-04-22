@@ -146,9 +146,9 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-2xl overflow-hidden border-4 border-slate-100 shadow-2xl relative">
+            {/* Usamos una key dinámica para forzar el unmount/remount completo de Leaflet y evitar el error "Map container already initialized" */}
             <MapContainer 
-                id="supervisor-main-map"
-                key={selectedUserId || 'initial'}
+                key={selectedUserId || 'global-view'}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
