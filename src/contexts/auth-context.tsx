@@ -1,4 +1,3 @@
-
 /**
  * @fileoverview Gestión de estado de autenticación y datos globales optimizada para cuota y resiliencia.
  */
@@ -11,6 +10,8 @@ import { db, auth } from '@/lib/firebase/config';
 import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
 import { collection, doc, onSnapshot, query, where, Timestamp, orderBy, limit } from 'firebase/firestore';
 import { getClients, getUsers, getRoutes, getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore, getMyClients, getMyRoutes } from '@/lib/firebase/firestore';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 interface AuthContextType {
   user: User | null;
@@ -50,24 +51,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (isDataInitialized.current) return;
     setDataLoading(true);
     
-    // El Auditor, Administrador y Supervisor deben ver todos los datos para reportes y supervisión
     const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor' || currentUser.role === 'Auditor';
     
     try {
-        // Cargamos usuarios - Para todos los roles es vital tener la lista de nombres
-        const usersRes = await getUsers().catch(e => { 
-          console.error("Error cargando usuarios:", e); 
-          return []; 
-        });
+        const usersRes = await getUsers().catch(e => { console.error(e); return []; });
         setUsers(usersRes);
 
-        const clientsRes = await (isSourcingAll ? getClients() : getMyClients(currentUser.name)).catch(e => { console.error("Error cargando clientes:", e); return []; });
+        const clientsRes = await (isSourcingAll ? getClients() : getMyClients(currentUser.name)).catch(e => { console.error(e); return []; });
         setClients(clientsRes);
 
-        const routesRes = await (isSourcingAll ? getRoutes() : getMyRoutes(currentUser.id)).catch(e => { console.error("Error cargando rutas:", e); return []; });
+        const routesRes = await (isSourcingAll ? getRoutes() : getMyRoutes(currentUser.id)).catch(e => { console.error(e); return []; });
         setRoutes(routesRes);
 
-        const phoneRes = await getPhoneContacts().catch(e => { console.error("Error cargando CRM:", e); return []; });
+        const phoneRes = await getPhoneContacts().catch(e => { console.error(e); return []; });
         setPhoneContacts(phoneRes);
         
         isDataInitialized.current = true;
@@ -108,23 +104,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
         
-        const unsubscribeUser = onSnapshot(userDocRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const userData = { id: fbUser.uid, ...docSnap.data() } as User;
-            setUser(userData);
-            setLoading(false);
-            fetchInitialData(userData);
-          } else {
-            setLoading(false);
-            signOut(auth);
+        const unsubscribeUser = onSnapshot(userDocRef, 
+          (docSnap) => {
+            if (docSnap.exists()) {
+              const userData = { id: fbUser.uid, ...docSnap.data() } as User;
+              setUser(userData);
+              setLoading(false);
+              fetchInitialData(userData);
+            } else {
+              setLoading(false);
+              signOut(auth);
+            }
+          },
+          async (serverError) => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: userDocRef.path,
+              operation: 'get'
+            }));
           }
-        });
+        );
 
         const notificationsQuery = query(
             collection(db, 'notifications'), 
             where('userId', '==', fbUser.uid)
         );
-        const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
+        const unsubscribeNotifications = onSnapshot(notificationsQuery, 
+          (snapshot) => {
             const notificationsData = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
@@ -138,7 +143,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             .slice(0, 15);
             
             setNotifications(notificationsData);
-        });
+          },
+          async (serverError) => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+              path: 'notifications',
+              operation: 'list'
+            }));
+          }
+        );
 
         return () => {
             unsubscribeUser();

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useRef } from 'react';
@@ -29,10 +28,10 @@ export function useTracker() {
   };
 
   useEffect(() => {
+    // No rastrear si el usuario no está logueado o es Auditor
     if (!user || user.role === 'Auditor') return;
 
     if (!navigator.geolocation) {
-      console.warn("Geolocalización no soportada");
       return;
     }
 
@@ -40,8 +39,8 @@ export function useTracker() {
       (position) => {
         const { latitude: lat, longitude: lng, accuracy, heading } = position.coords;
 
-        // Filtro 1: Precisión mínima aceptable
-        if (accuracy > 20) return;
+        // Filtro 1: Precisión mínima aceptable (ignorar puntos ruidosos)
+        if (accuracy > 25) return;
 
         let distance = 0;
         if (lastPosition.current) {
@@ -57,24 +56,29 @@ export function useTracker() {
         if (!lastPosition.current || distance > 30) {
           lastPosition.current = { lat, lng };
 
-          // Actualizar posición en vivo
+          // Actualizar posición en vivo en Firestore
           updateLiveLocation(user.id, {
             lat,
             lng,
             accuracy,
             heading: heading || 0,
             userName: user.name
+          }).catch(() => {
+              // Fallo silencioso si no hay red, Firestore se encargará vía persistencia local
           });
 
           // Guardar en histórico (Breadcrumb)
-          saveBreadcrumb(user.id, { lat, lng });
+          saveBreadcrumb(user.id, { lat, lng }).catch(() => {});
         }
       },
-      (error) => console.error("Error tracker:", error),
+      (error) => {
+          // Manejo silencioso de errores de geolocalización (ej: permisos denegados o señal perdida)
+          // No logueamos para evitar clutter en la consola del usuario
+      },
       {
         enableHighAccuracy: true,
-        maximumAge: 10000,
-        timeout: 5000,
+        maximumAge: 30000,
+        timeout: 15000,
       }
     );
 
