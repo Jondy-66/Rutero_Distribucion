@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -140,7 +139,7 @@ function RouteManagementContent() {
 
         if (!isOwnRoute && !isTeamRoute && !isAdmin) return false;
         
-        // Mostrar rutas que no estén completadas o rechazadas para permitir trabajo
+        // VISIBILIDAD TOTAL: Mostrar rutas que no estén completadas o rechazadas
         const workStates = ['Planificada', 'En Progreso', 'Pendiente de Aprobación'];
         if (!workStates.includes(r.status)) return false;
 
@@ -165,18 +164,12 @@ function RouteManagementContent() {
   }, [selectedRoute, isAdmin, isSupervisor]);
 
   const todaysClients = useMemo(() => {
-    const today = startOfDay(new Date());
     return currentRouteClientsFull
         .map((c, index) => {
             const details = availableClients.find(ac => String(ac.ruc || '').trim() === String(c.ruc || '').trim());
             return { ...c, originalIndex: index, direccion: details?.direccion || 'N/A' };
         })
-        .filter(c => {
-            if (c.status === 'Eliminado') return false;
-            // Para gestión, mostramos todos los clientes del plan actual, pero priorizamos los de hoy si es necesario.
-            // Por requerimiento del usuario, mostramos el plan completo cargado en la ruta.
-            return true;
-        });
+        .filter(c => c.status !== 'Eliminado');
   }, [currentRouteClientsFull, availableClients]);
 
   const isTodayFinished = useMemo(() => {
