@@ -8,10 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, ThumbsUp } from 'lucide-react';
-import { updateRoute, addNotification } from '@/lib/firebase/firestore';
+import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, startOfWeek, isWithinInterval, isSameDay } from 'date-fns';
+import { format, startOfWeek, isWithinInterval, isSameDay, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -35,9 +35,6 @@ const ensureDate = (d: any): Date => {
   return isNaN(date.getTime()) ? new Date() : date;
 };
 
-/**
- * Sanitiza la lista de clientes para asegurar que Firestore acepte los datos.
- */
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
         const cleaned: any = { 
@@ -138,9 +135,7 @@ function RouteManagementContent() {
   }, [allUsers, user]);
 
   const selectableRoutes = useMemo(() => {
-    const now = new Date();
-    // Lunes de la semana actual a las 00:00:00
-    const currentWeekStart = startOfWeek(now, { weekStartsOn: 1 });
+    const startOfCurrentWeek = startOfDay(startOfWeek(new Date(), { weekStartsOn: 1 }));
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     
     return allRoutes.filter(r => {
@@ -149,17 +144,12 @@ function RouteManagementContent() {
 
         if (!isOwnRoute && !isTeamRoute && !isAdmin) return false;
         
-        // Rutas iniciadas siempre visibles
         if (r.status === 'En Progreso') return true;
 
-        // Rutas planificadas: Mostramos la de esta semana y cualquier semana futura
         if (r.status === 'Planificada') {
-            if (r.date) {
-                const routeDate = ensureDate(r.date);
-                const routeWeekStart = startOfWeek(routeDate, { weekStartsOn: 1 });
-                // Si la semana de la ruta es anterior a la actual, se oculta
-                if (routeWeekStart < currentWeekStart) return false;
-            }
+            const routeDate = startOfDay(ensureDate(r.date));
+            // Visible si es de esta semana o futura
+            if (routeDate.getTime() < startOfCurrentWeek.getTime()) return false;
             
             if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
             return true;
@@ -170,7 +160,8 @@ function RouteManagementContent() {
   }, [allRoutes, user, isAdmin, isManager, selectedAgentId, managedUsersForSelector]);
 
   const selectedRoute = useMemo(() => {
-    const routeId = selectedRouteId || searchParams.get('routeId');
+    const routeIdFromParams = searchParams.get('routeId');
+    const routeId = selectedRouteId || routeIdFromParams;
     if (!routeId) return undefined;
     return allRoutes.find(r => r.id === routeId);
   }, [selectedRouteId, allRoutes, searchParams]);
@@ -178,13 +169,12 @@ function RouteManagementContent() {
   useEffect(() => {
     if (!selectedRoute) return;
     setCurrentRouteClientsFull(selectedRoute.clients || []);
-    // Para administradores, habilitamos el panel directamente si quieren gestionar
     setIsRouteStarted(selectedRoute.status === 'En Progreso' || isAdmin || isSupervisor);
     setActiveOriginalIndex(null); 
   }, [selectedRoute, isAdmin, isSupervisor]);
 
   const todaysClients = useMemo(() => {
-    const today = new Date();
+    const today = startOfDay(new Date());
     return currentRouteClientsFull
         .map((c, index) => {
             const details = availableClients.find(ac => String(ac.ruc || '').trim() === String(c.ruc || '').trim());
@@ -192,7 +182,7 @@ function RouteManagementContent() {
         })
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            const cDate = ensureDate(c.date);
+            const cDate = startOfDay(ensureDate(c.date));
             return isSameDay(cDate, today);
         });
   }, [currentRouteClientsFull, availableClients]);
@@ -387,12 +377,12 @@ function RouteManagementContent() {
         )}
 
         {!isRouteStarted ? (
-            <Card className="max-w-md mx-auto shadow-xl border-t-4 border-t-primary">
-                <CardHeader><CardTitle className="text-slate-950 font-black uppercase text-center">Seleccionar Ruta Semanal</CardTitle></CardHeader>
+            <Card className="max-w-md mx-auto shadow-xl border-t-4 border-t-primary bg-white">
+                <CardHeader><CardTitle className="text-slate-950 font-black uppercase text-center">Seleccionar Ruta de Trabajo</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                     {isManager && (
                         <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-                            <SelectTrigger className="h-12 border-2 border-slate-200 font-black text-slate-950">
+                            <SelectTrigger className="h-12 border-2 border-slate-200 font-black text-slate-950 bg-white">
                                 <Users className="mr-2 h-4 w-4 text-primary" />
                                 <SelectValue placeholder="Filtrar por agente..." />
                             </SelectTrigger>
@@ -407,7 +397,7 @@ function RouteManagementContent() {
                         </Select>
                     )}
                     <Select value={selectedRouteId} onValueChange={setSelectedRouteId}>
-                        <SelectTrigger className="h-12 border-2 border-slate-200 font-black text-slate-950">
+                        <SelectTrigger className="h-12 border-2 border-slate-200 font-black text-slate-950 bg-white">
                             <Route className="mr-2 h-4 w-4 text-primary" />
                             <SelectValue placeholder="Selecciona una ruta..." />
                         </SelectTrigger>
@@ -419,7 +409,7 @@ function RouteManagementContent() {
                                     </SelectItem>
                                 ))
                             ) : (
-                                <SelectItem value="none" disabled className="font-black text-slate-950">No hay rutas planificadas para esta semana.</SelectItem>
+                                <SelectItem value="none" disabled className="font-black text-slate-950">No hay rutas planificadas vigentes para esta semana.</SelectItem>
                             )}
                         </SelectContent>
                     </Select>
@@ -429,7 +419,7 @@ function RouteManagementContent() {
                             onClick={() => updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => setIsRouteStarted(true))}
                             disabled={isExpired}
                         >
-                            {isExpired ? 'JORNADA CERRADA' : 'INICIAR GESTIÓN SEMANAL'}
+                            {isExpired ? 'JORNADA CERRADA' : 'INICIAR TRABAJO'}
                         </Button>
                     )}
                 </CardContent>
@@ -496,7 +486,7 @@ function RouteManagementContent() {
                                     ) : (
                                         <div className="text-center py-12 px-4 rounded-[2rem] bg-slate-50 border-2 border-dashed border-slate-200">
                                             <CalendarIcon className="h-8 w-8 mx-auto text-slate-300 mb-3" />
-                                            <p className="text-[10px] font-black text-slate-950 uppercase">No hay visitas programadas para hoy.</p>
+                                            <p className="text-[10px] font-black text-slate-950 uppercase">No hay visitas para hoy.</p>
                                         </div>
                                     )}
                                 </div>
@@ -518,7 +508,7 @@ function RouteManagementContent() {
                                     <ThumbsUp className="h-6 w-6" /> JORNADA COMPLETADA
                                 </div>
                             ) : (
-                                <div className="text-center text-slate-950 uppercase font-black tracking-widest text-lg">Selecciona un cliente de hoy</div>
+                                <div className="text-center text-slate-950 font-black uppercase tracking-widest text-lg">Selecciona un cliente para gestionar</div>
                             )}
                         </CardHeader>
                         <CardContent className="p-10 space-y-8 flex-1 overflow-y-auto flex flex-col">
