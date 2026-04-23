@@ -78,18 +78,20 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
 }
 
 export function SupervisorMap() {
-  const [isMounted, setIsMounted] = useState(false);
   const [activeLocations, setActiveLocations] = useState<ActiveLocation[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
   const [history, setHistory] = useState<Breadcrumb[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
-
-  // Clave de instancia única que solo se genera al montar en el cliente
-  const [mapKey] = useState(() => `map-${Math.random().toString(36).substr(2, 9)}`);
+  
+  // SOLUCIÓN DEFINITIVA AL ERROR DE INICIALIZACIÓN:
+  // Solo generamos el mapKey después de que el componente se ha montado en el cliente.
+  const [mapKey, setMapKey] = useState<string | null>(null);
 
   useEffect(() => {
-    setIsMounted(true);
+    // Forzamos un contenedor nuevo mediante una clave aleatoria al montar
+    setMapKey(`map-instance-${Math.random().toString(36).substring(7)}`);
+
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
     });
@@ -134,9 +136,13 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!isMounted) return (
+  // Pantalla de carga mientras se estabiliza el entorno Leaflet
+  if (!mapKey) return (
     <div className="h-[78vh] w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100">
-        <LoaderCircle className="animate-spin text-primary" />
+        <div className="flex flex-col items-center gap-2">
+            <LoaderCircle className="animate-spin text-primary h-10 w-10" />
+            <p className="text-[10px] font-black uppercase text-slate-400">Iniciando Motor de Mapas...</p>
+        </div>
     </div>
   );
 
@@ -161,12 +167,14 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+            {/* MapContainer con key dinámica generada por montaje garantiza un contenedor limpio */}
             <MapContainer 
                 key={mapKey}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
                 className="h-full w-full"
+                id="supervisor-map-root"
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapViewController center={mapCenter} />
