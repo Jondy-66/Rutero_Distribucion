@@ -111,7 +111,8 @@ export const getClients = async (): Promise<Client[]> => {
 };
 
 export const getMyClients = async (ejecutivo: string): Promise<Client[]> => {
-    const q = query(collection(db, 'clients'), where('ejecutivo', '==', ejecutivo));
+    // Normalizamos el ejecutivo eliminando espacios al inicio/final para mayor resiliencia
+    const q = query(collection(db, 'clients'), where('ejecutivo', '==', ejecutivo.trim()));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Client[];
 };
@@ -157,13 +158,13 @@ export const updateClientLocations = async (locations: any[]) => {
 // --- GESTIÓN DE RUTAS ---
 
 export const getRoutes = async (): Promise<RoutePlan[]> => {
-    const q = query(collection(db, 'routes'), orderBy('date', 'desc'), limit(150));
+    // Eliminamos el orderBy para evitar errores de consulta si falta el índice compuesto
+    const q = query(collection(db, 'routes'), limit(150));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(d => ({id: d.id, ...d.data()})) as any;
 };
 
 export const getMyRoutes = async (userId: string): Promise<RoutePlan[]> => {
-    // Simplificamos la consulta eliminando el orderBy para evitar requerir índices compuestos inmediatos
     const q = query(collection(db, 'routes'), where('createdBy', '==', userId));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(d => ({id: d.id, ...d.data()})) as any;

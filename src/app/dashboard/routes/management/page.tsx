@@ -109,14 +109,16 @@ function RouteManagementContent() {
 
   const selectableRoutes = useMemo(() => {
     if (!user) return [];
-    // Restauramos visibilidad completa para asegurar que el usuario vea sus rutas
+    
+    // Restauramos visibilidad completa: el usuario debe ver sus rutas registradas siempre.
+    // Incluimos 'Completada' para que el usuario no piense que sus rutas se perdieron tras finalizarlas.
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
         
         if (!isOwn && !isManaged && !isAdmin) return false;
         
-        const isValidStatus = ['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status);
+        const isValidStatus = ['Planificada', 'En Progreso', 'Pendiente de Aprobación', 'Completada'].includes(r.status);
         if (!isValidStatus) return false;
         
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
@@ -133,7 +135,7 @@ function RouteManagementContent() {
   useEffect(() => {
     if (!selectedRoute) return;
     setCurrentRouteClientsFull(selectedRoute.clients || []);
-    setIsRouteStarted(selectedRoute.status === 'En Progreso' || isManager);
+    setIsRouteStarted(selectedRoute.status === 'En Progreso' || selectedRoute.status === 'Completada' || isManager);
     setActiveOriginalIndex(null); 
   }, [selectedRoute, isManager]);
 
@@ -148,7 +150,7 @@ function RouteManagementContent() {
 
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
   const activeClient = activeOriginalIndex !== null && currentRouteClientsFull[activeOriginalIndex] ? currentRouteClientsFull[activeOriginalIndex] : null;
-  const isEditingDisabled = (activeClient?.visitStatus === 'Completado' || isExpired) && !isAdmin;
+  const isEditingDisabled = (selectedRoute?.status === 'Completada' || activeClient?.visitStatus === 'Completado' || isExpired) && !isAdmin;
 
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (activeOriginalIndex === null || isEditingDisabled || isSaving) return;
@@ -313,7 +315,7 @@ function RouteManagementContent() {
                         <p className="text-[10px] font-black text-slate-950 uppercase">HOY: {format(new Date(), 'EEEE dd MMMM', { locale: es })}</p>
                     </CardHeader>
                     <CardContent className="p-6 flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
-                        <Button variant="outline" className="w-full h-12 border-dashed border-2 font-black text-xs rounded-xl flex items-center justify-center gap-2" onClick={() => setIsAddClientDialogOpen(true)} disabled={isExpired && !isAdmin}><CirclePlus className="h-4 w-4 text-primary" /> AGREGAR EXTRA</Button>
+                        <Button variant="outline" className="w-full h-12 border-dashed border-2 font-black text-xs rounded-xl flex items-center justify-center gap-2" onClick={() => setIsAddClientDialogOpen(true)} disabled={isEditingDisabled}><CirclePlus className="h-4 w-4 text-primary" /> AGREGAR EXTRA</Button>
                         <ScrollArea className="flex-1">
                             <div className="space-y-3">
                                 {todaysClients.map((c) => (
@@ -359,7 +361,7 @@ function RouteManagementContent() {
                                             <p className="text-[10px] font-black text-slate-950 uppercase opacity-60">{activeClient.checkInTime || 'Esperando...'}</p>
                                         </div>
                                     </div>
-                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="font-black h-12 px-8 uppercase" disabled={isExpired && !isAdmin}>MARCAR LLEGADA</Button>}
+                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="font-black h-12 px-8 uppercase" disabled={isEditingDisabled}>MARCAR LLEGADA</Button>}
                                 </div>
                                 <div className={cn("space-y-8 transition-all", !activeClient.checkInTime && !isManager && "opacity-20 pointer-events-none")}>
                                     <div className="space-y-4">

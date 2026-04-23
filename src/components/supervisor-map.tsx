@@ -112,8 +112,9 @@ export function SupervisorMap() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   
-  // Clave de instancia única para forzar a react-leaflet a limpiar el contenedor DOM
-  const [instanceKey] = useState(() => `map-${Math.random().toString(36).substr(2, 9)}`);
+  // Clave de instancia única para forzar a react-leaflet a limpiar el contenedor DOM.
+  // La clave se genera al montar para asegurar que cada carga sea fresca.
+  const [instanceKey] = useState(() => `map-inst-${Math.random().toString(36).substr(2, 9)}`);
 
   useEffect(() => {
     setIsMounted(true);
@@ -185,10 +186,9 @@ export function SupervisorMap() {
             )}
         </div>
 
-        <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
-            {/* Clave de instancia garantiza que react-leaflet inicialice un contenedor limpio */}
+        {/* El uso de instanceKey en el div contenedor asegura que Leaflet limpie el contenedor antes de re-inicializar */}
+        <div key={instanceKey} className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
             <MapContainer 
-                key={instanceKey}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
