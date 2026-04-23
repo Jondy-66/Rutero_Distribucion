@@ -26,7 +26,7 @@ const redIcon = new L.Icon({
 
 /**
  * Componente interno para controlar la vista del mapa sin reinicializar el contenedor.
- * Evita el error "Map container is already initialized".
+ * Esto evita el error "Map container is already initialized".
  */
 function MapViewController({ center }: { center: [number, number] | null }) {
     const map = useMap();
@@ -175,6 +175,7 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+            {/* NO USAMOS key dinámica para mantener la instancia de Leaflet estable */}
             <MapContainer 
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 

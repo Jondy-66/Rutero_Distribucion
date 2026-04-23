@@ -106,17 +106,21 @@ function RouteManagementContent() {
   }, [allUsers, user]);
 
   const selectableRoutes = useMemo(() => {
-    const startOfWeekDate = startOfWeek(new Date(), { weekStartsOn: 1 });
-    startOfWeekDate.setHours(0, 0, 0, 0);
+    const startOfCurrentWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
+    startOfCurrentWeek.setHours(0, 0, 0, 0);
 
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user?.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
         if (!isOwn && !isManaged && !isAdmin) return false;
+        
+        // Incluimos estados válidos para gestión
         if (!['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status)) return false;
         
+        // Filtro de Fecha: Ver rutas de esta semana en adelante para resolver planes de fin de semana
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
-        if (rDate < startOfWeekDate && r.status !== 'En Progreso') return false;
+        if (rDate < startOfCurrentWeek && r.status !== 'En Progreso') return false;
+        
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
         return true; 
@@ -202,7 +206,8 @@ function RouteManagementContent() {
 
   return (
     <div className="flex flex-col gap-6">
-        <PageHeader title="Gestión de Ruta" description="Control diario y registros de gestión operativa." />
+        <PageHeader title="Gestión de Ruta" description="Control diario de visitas y registros de gestión." />
+        
         {isExpired && !isAdmin && (
             <Alert variant="destructive" className="mb-6 border-red-600 bg-red-50">
                 <AlertTriangle className="h-5 w-5 text-red-600" />
@@ -210,6 +215,7 @@ function RouteManagementContent() {
                 <AlertDescription className="text-red-700 font-bold uppercase text-[10px]">EL REGISTRO HA SIDO CERRADO POR POLÍTICA DE SEGURIDAD. SOLO ADMINISTRADORES PUEDEN EDITAR.</AlertDescription>
             </Alert>
         )}
+
         {!isRouteStarted ? (
             <Card className="max-w-md mx-auto shadow-2xl border-t-4 border-t-primary rounded-3xl overflow-hidden">
                 <CardHeader className="bg-slate-50 border-b"><CardTitle className="text-slate-950 font-black uppercase text-center text-lg">Activar Jornada</CardTitle></CardHeader>
@@ -230,7 +236,15 @@ function RouteManagementContent() {
                             <SelectContent>{selectableRoutes.map(r => <SelectItem key={r.id} value={r.id} className="font-black text-slate-950 uppercase text-[10px]">{r.routeName} [{r.status}]</SelectItem>)}</SelectContent>
                         </Select>
                     </div>
-                    {selectedRoute && <Button className="w-full font-black h-14 rounded-2xl text-lg shadow-xl uppercase" onClick={() => updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => setIsRouteStarted(true))} disabled={isExpired && !isAdmin}>INICIAR GESTIÓN</Button>}
+                    {selectedRoute && (
+                        <Button 
+                            className="w-full font-black h-14 rounded-2xl text-lg shadow-xl uppercase" 
+                            onClick={() => updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => setIsRouteStarted(true))} 
+                            disabled={isExpired && !isAdmin}
+                        >
+                            INICIAR GESTIÓN
+                        </Button>
+                    )}
                 </CardContent>
             </Card>
         ) : (
@@ -324,6 +338,7 @@ function RouteManagementContent() {
                 </Card>
             </div>
         )}
+        
         <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
             <DialogContent className="max-w-2xl rounded-[2.5rem] flex flex-col h-[85vh] bg-white">
                 <DialogHeader className="p-8 pb-6"><DialogTitle className="text-2xl font-black uppercase text-primary">Adición Manual</DialogTitle></DialogHeader>

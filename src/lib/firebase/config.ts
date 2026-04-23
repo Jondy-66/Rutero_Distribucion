@@ -24,12 +24,14 @@ export const deleteSecondaryApp = (appInstance: any) => deleteApp(appInstance);
 let db: any;
 if (typeof window !== 'undefined') {
     try {
+        // Configuramos Firestore para manejar el arrendamiento de caché en múltiples pestañas
         db = initializeFirestore(app, {
             localCache: persistentLocalCache({ 
                 tabManager: persistentMultipleTabManager() 
             })
         });
     } catch (e) {
+        // Fallback si la inicialización avanzada falla (ej. ambiente no compatible)
         db = getFirestore(app);
     }
 } else {
