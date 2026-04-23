@@ -1,6 +1,7 @@
+
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
@@ -74,21 +75,9 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
  */
 function SmoothMarker({ location }: { location: ActiveLocation }) {
     const [pos, setPos] = useState<[number, number]>([location.lat, location.lng]);
-    const target = useRef<[number, number]>([location.lat, location.lng]);
-    const animationFrame = useRef<number>(0);
-
+    
     useEffect(() => {
-        target.current = [location.lat, location.lng];
-        const animate = () => {
-            setPos(prev => {
-                const nextLat = prev[0] + (target.current[0] - prev[0]) * 0.1;
-                const nextLng = prev[1] + (target.current[1] - prev[1]) * 0.1;
-                return [nextLat, nextLng];
-            });
-            animationFrame.current = requestAnimationFrame(animate);
-        };
-        animationFrame.current = requestAnimationFrame(animate);
-        return () => cancelAnimationFrame(animationFrame.current);
+        setPos([location.lat, location.lng]);
     }, [location.lat, location.lng]);
 
     return (
@@ -112,9 +101,8 @@ export function SupervisorMap() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   
-  // Clave de instancia única para forzar a react-leaflet a limpiar el contenedor DOM.
-  // La clave se genera al montar para asegurar que cada carga sea fresca.
-  const [instanceKey] = useState(() => `map-inst-${Math.random().toString(36).substr(2, 9)}`);
+  // Generamos una clave única una sola vez al montar para asegurar que react-leaflet inicialice limpio
+  const mapInstanceKey = useMemo(() => `map-${Math.random().toString(36).substr(2, 9)}`, []);
 
   useEffect(() => {
     setIsMounted(true);
@@ -162,12 +150,10 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!isMounted) {
-      return <div className="h-[75vh] bg-slate-50 rounded-[2.5rem] animate-pulse border-4 border-slate-100" />;
-  }
+  if (!isMounted) return null;
 
   return (
-    <div className="flex flex-col h-[75vh] gap-4">
+    <div className="flex flex-col h-[78vh] gap-4">
         <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 scrollbar-hide">
             {activeLocations.length > 0 ? (
                 activeLocations.map(loc => (
@@ -186,9 +172,10 @@ export function SupervisorMap() {
             )}
         </div>
 
-        {/* El uso de instanceKey en el div contenedor asegura que Leaflet limpie el contenedor antes de re-inicializar */}
-        <div key={instanceKey} className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+        <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+            {/* MapContainer con key estable para evitar error de inicialización duplicada */}
             <MapContainer 
+                key={mapInstanceKey}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
