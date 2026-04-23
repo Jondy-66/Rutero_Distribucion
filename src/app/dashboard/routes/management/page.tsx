@@ -10,7 +10,7 @@ import { Route, Search, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone,
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, User, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
@@ -131,6 +131,11 @@ function RouteManagementContent() {
   }, [allUsers, user]);
 
   const selectableRoutes = useMemo(() => {
+    // Calculamos el inicio de la semana actual (Lunes)
+    const today = new Date();
+    const startOfCurrentWeek = startOfWeek(today, { weekStartsOn: 1 });
+    startOfCurrentWeek.setHours(0, 0, 0, 0);
+
     const managedUserIds = new Set(managedUsersForSelector.map(u => u.id));
     
     return allRoutes.filter(r => {
@@ -140,6 +145,10 @@ function RouteManagementContent() {
         
         const workStates = ['Planificada', 'En Progreso', 'Pendiente de Aprobación'];
         if (!workStates.includes(r.status)) return false;
+
+        // Validamos que la ruta sea de esta semana o futura
+        const routeDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
+        if (routeDate < startOfCurrentWeek && r.status !== 'En Progreso') return false;
 
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
@@ -347,7 +356,7 @@ function RouteManagementContent() {
 
   return (
     <div className="flex flex-col gap-6">
-        <PageHeader title="Gestión de Ruta" description="Control diario de visitas y registros de gestión activa." />
+        <PageHeader title="Gestión de Ruta" description="Control diario de visitas y registros de gestión operativa." />
         
         {isExpired && !isAdmin && (
             <Alert variant="destructive" className="mb-6 border-red-600 bg-red-50 shadow-lg">
@@ -360,7 +369,7 @@ function RouteManagementContent() {
         )}
 
         {!isRouteStarted ? (
-            <Card className="max-w-md mx-auto shadow-2xl border-t-4 border-t-primary bg-white rounded-2xl overflow-hidden">
+            <Card className="max-w-md mx-auto shadow-2xl border-t-4 border-t-primary bg-white rounded-3xl overflow-hidden">
                 <CardHeader className="bg-slate-50 border-b">
                     <CardTitle className="text-slate-950 font-black uppercase text-center text-lg">Activar Jornada Diaria</CardTitle>
                 </CardHeader>
@@ -406,7 +415,7 @@ function RouteManagementContent() {
                     </div>
                     {selectedRoute && (
                         <Button 
-                            className="w-full font-black h-14 rounded-xl text-lg shadow-xl uppercase tracking-tighter" 
+                            className="w-full font-black h-14 rounded-2xl text-lg shadow-xl uppercase tracking-tighter" 
                             onClick={() => {
                                 if (selectedRoute.status === 'Planificada' || selectedRoute.status === 'Pendiente de Aprobación') {
                                     updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => setIsRouteStarted(true));
@@ -455,7 +464,7 @@ function RouteManagementContent() {
                                                 key={`${c.ruc}-${c.originalIndex}`} 
                                                 onClick={() => (!activeClient?.checkInTime || activeClient.checkOutTime || isManager) && setActiveOriginalIndex(c.originalIndex)} 
                                                 className={cn(
-                                                    "flex items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all duration-200 bg-white", 
+                                                    "flex items-center gap-3 p-4 border-2 rounded-2xl cursor-pointer transition-all duration-200 bg-white", 
                                                     activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-slate-100 hover:border-slate-300"
                                                 )}
                                             >
@@ -586,7 +595,7 @@ function RouteManagementContent() {
 
                                     <Button 
                                         onClick={handleConfirmCheckOut} 
-                                        className="w-full h-18 text-xl font-black rounded-[1.5rem] shadow-2xl transition-all hover:scale-[1.02] mt-4 uppercase tracking-tighter" 
+                                        className="w-full h-18 text-xl font-black rounded-3xl shadow-2xl transition-all hover:scale-[1.02] mt-4 uppercase tracking-tighter" 
                                         disabled={isSaving || isEditingDisabled || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim())}
                                     >
                                         {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : <><LogOut className="mr-3 h-6 w-6" /> {activeClient.visitStatus === 'Completado' ? 'GESTIÓN FINALIZADA' : 'CERRAR VISITA (CHECK-OUT)'}</>}

@@ -26,7 +26,7 @@ const redIcon = new L.Icon({
 
 /**
  * Componente interno para controlar la vista del mapa sin reinicializar el contenedor.
- * Esto evita el error "Map container is already initialized".
+ * Esto evita de forma definitiva el error "Map container is already initialized".
  */
 function MapViewController({ center }: { center: [number, number] | null }) {
     const map = useMap();
@@ -98,9 +98,10 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
     return (
         <Marker position={pos} icon={location.is_out_of_route ? redIcon : blueIcon}>
             <Popup>
-                <div className="font-black uppercase text-xs text-slate-950">
+                <div className="font-black uppercase text-[10px] text-slate-950">
                     {location.userName}
-                    {location.is_out_of_route && <p className="text-red-600 mt-1 font-black">¡ALERTA: FUERA DE RUTA!</p>}
+                    {location.is_out_of_route && <p className="text-red-600 mt-1 font-black">ALERTA: FUERA DE RUTA</p>}
+                    <p className="text-slate-500 mt-0.5">Precisión: {location.accuracy?.toFixed(1)}m</p>
                 </div>
             </Popup>
         </Marker>
@@ -173,7 +174,7 @@ export function SupervisorMap() {
                     <Button 
                         key={loc.userId} 
                         variant={selectedUserId === loc.userId ? "default" : "outline"}
-                        className="font-black uppercase text-[10px] h-10 border-2 shrink-0"
+                        className="font-black uppercase text-[10px] h-10 border-2 shrink-0 rounded-xl"
                         onClick={() => fetchUserHistory(loc.userId)}
                     >
                         {loc.userName}
@@ -185,7 +186,8 @@ export function SupervisorMap() {
             )}
         </div>
 
-        <div className="flex-1 rounded-[2rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+        <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+            {/* NO USAMOS key dinámica aquí para mantener la instancia de Leaflet estable */}
             <MapContainer 
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 

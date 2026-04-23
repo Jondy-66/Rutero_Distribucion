@@ -1,7 +1,6 @@
 /**
  * @fileoverview Este archivo inicializa y configura la conexión con Firebase.
- * Exporta instancias de la aplicación, la base de datos Firestore y el servicio de autenticación
- * para ser utilizadas en toda la aplicación.
+ * Implementa persistencia offline con soporte multi-pestaña para máxima resiliencia.
  */
 
 import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
@@ -21,16 +20,13 @@ const firebaseConfig = {
   measurementId: "G-T0NYMCV1HR"
 };
 
-
 /**
- * Inicializa Firebase.
- * Comprueba si ya existe una aplicación de Firebase para evitar la reinicialización.
+ * Inicializa la aplicación de Firebase de forma segura.
  */
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 /**
  * Crea una instancia secundaria de la app de Firebase.
- * Útil para tareas administrativas sin afectar la sesión principal.
  */
 export const createSecondaryApp = (appName: string) => {
     return initializeApp(firebaseConfig, appName);
@@ -44,21 +40,19 @@ export const deleteSecondaryApp = (appInstance: any) => {
 }
 
 /**
- * Instancia del servicio Firestore con PERSISTENCIA OFFLINE habilitada.
- * Se utiliza un patrón de inicialización único para evitar errores de lease en múltiples pestañas.
+ * Instancia del servicio Firestore con soporte multi-pestaña.
+ * Este patrón evita el error "Failed to obtain primary lease" al manejar fallos de inicialización.
  */
 let db;
 if (typeof window !== 'undefined') {
-    const apps = getApps();
     try {
-        // Intentamos inicializar con cache persistente y soporte multi-pestaña
         db = initializeFirestore(app, {
             localCache: persistentLocalCache({ 
                 tabManager: persistentMultipleTabManager() 
             })
         });
     } catch (e) {
-        // Si ya está inicializado, obtenemos la instancia existente
+        // Si ya está inicializado o falla el lease, obtenemos la instancia estable existente
         db = getFirestore(app);
     }
 } else {
