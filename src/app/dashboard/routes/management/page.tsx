@@ -6,14 +6,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, MapPin, LoaderCircle, LogIn, LogOut, CheckCircle, Phone, Trash2, Users as UsersIcon, CirclePlus, X, AlertTriangle, Calendar as CalendarIcon, ThumbsUp } from 'lucide-react';
+import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTriangle, ThumbsUp, Users as UsersIcon } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
-import type { Client, ClientInRoute, User, RoutePlan } from '@/lib/types';
+import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format, startOfWeek } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/use-auth';
 import { PageHeader } from '@/components/page-header';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -73,7 +73,6 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
 function RouteManagementContent() {
   const { user, clients: availableClients, routes: allRoutes, users: allUsers, loading: authLoading, dataLoading, refetchData } = useAuth();
   const { toast } = useToast();
-  const router = useRouter();
   const searchParams = useSearchParams();
   
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
@@ -114,10 +113,8 @@ function RouteManagementContent() {
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
         if (!isOwn && !isManaged && !isAdmin) return false;
         
-        // Incluimos estados válidos para gestión
         if (!['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status)) return false;
         
-        // Filtro de Fecha: Ver rutas de esta semana en adelante para resolver planes de fin de semana
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
         if (rDate < startOfCurrentWeek && r.status !== 'En Progreso') return false;
         
@@ -202,7 +199,9 @@ function RouteManagementContent() {
     }).finally(() => setIsSaving(false));
   };
 
-  if (authLoading || (dataLoading && allRoutes.length === 0)) return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-12 w-12 mx-auto text-primary" /></div>;
+  if (authLoading || (dataLoading && allRoutes.length === 0)) {
+    return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-12 w-12 mx-auto text-primary" /></div>;
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -324,7 +323,7 @@ function RouteManagementContent() {
                                         {[{k:'valorVenta', l:'VENTA ($)'}, {k:'valorCobro', l:'COBRO ($)'}, {k:'devoluciones', l:'DEVOL ($)'}].map(f => (
                                             <div key={f.k} className="space-y-2">
                                                 <Label className="text-[10px] font-black uppercase text-slate-950">{f.l}</Label>
-                                                <Input type="text" className="h-14 text-xl font-black text-primary border-2 rounded-2xl text-center text-slate-950" value={activeClient[f.k as keyof ClientInRoute] ?? ''} onChange={e => handleFieldChange(f.k as any, e.target.value)} disabled={isEditingDisabled} />
+                                                <Input type="text" className="h-14 text-xl font-black text-primary border-2 rounded-2xl text-center text-slate-950" value={(activeClient as any)[f.k] ?? ''} onChange={e => handleFieldChange(f.k as any, e.target.value)} disabled={isEditingDisabled} />
                                             </div>
                                         ))}
                                     </div>
@@ -341,22 +340,39 @@ function RouteManagementContent() {
         
         <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
             <DialogContent className="max-w-2xl rounded-[2.5rem] flex flex-col h-[85vh] bg-white">
-                <DialogHeader className="p-8 pb-6"><DialogTitle className="text-2xl font-black uppercase text-primary">Adición Manual</DialogTitle></DialogHeader>
-                <div className="px-8 py-4 border-b"><Input placeholder="Buscar por RUC o Nombre..." value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)} className="h-12 font-black rounded-2xl border-2 text-slate-950" /></div>
+                <DialogHeader className="p-8 pb-6">
+                    <DialogTitle className="text-2xl font-black uppercase text-primary">Adición Manual</DialogTitle>
+                </DialogHeader>
+                <div className="px-8 py-4 border-b">
+                    <Input placeholder="Buscar por RUC o Nombre..." value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)} className="h-12 font-black rounded-2xl border-2 text-slate-950" />
+                </div>
                 <ScrollArea className="flex-1 px-8 py-4">
                     <div className="space-y-3">
                         {availableClients.filter(c => (isAdmin || c.ejecutivo === user?.name) && (String(c.nombre_cliente).toLowerCase().includes(addClientSearchTerm.toLowerCase()) || String(c.ruc).includes(addClientSearchTerm))).map(c => (
                             <div key={c.id} onClick={() => setMultiSelectedClients(p => p.some(s => s.ruc === c.ruc) ? p.filter(s => s.ruc !== c.ruc) : [...p, c])} className={cn("p-4 rounded-2xl flex items-center gap-4 cursor-pointer transition-all border-2", multiSelectedClients.some(s => s.ruc === c.ruc) ? "bg-primary/10 border-primary" : "bg-white border-slate-100")}>
-                                <Checkbox checked={multiSelectedClients.some(s => s.ruc === c.ruc)} className="h-5 w-5 border-primary" /><div className="flex-1"><p className="text-sm font-black uppercase text-slate-950">{c.nombre_comercial}</p><p className="text-[10px] font-black text-slate-400 font-mono">{c.ruc}</p></div>
+                                <Checkbox checked={multiSelectedClients.some(s => s.ruc === c.ruc)} className="h-5 w-5 border-primary" />
+                                <div className="flex-1">
+                                    <p className="text-sm font-black uppercase text-slate-950">{c.nombre_comercial}</p>
+                                    <p className="text-[10px] font-black text-slate-400 font-mono">{c.ruc}</p>
+                                </div>
                             </div>
                         ))}
                     </div>
                 </ScrollArea>
-                <div className="p-8 border-t space-y-4"><Textarea className="h-20 font-black border-2 rounded-2xl text-slate-950" placeholder="Motivo de re-adición..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} /><Button onClick={handleAddClients} disabled={multiSelectedClients.length === 0 || isSaving} className="w-full h-14 font-black rounded-2xl text-lg">AÑADIR {multiSelectedClients.length} CLIENTES</Button></div>
+                <div className="p-8 border-t space-y-4">
+                    <Textarea className="h-20 font-black border-2 rounded-2xl text-slate-950" placeholder="Motivo de re-adición..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
+                    <Button onClick={handleAddClients} disabled={multiSelectedClients.length === 0 || isSaving} className="w-full h-14 font-black rounded-2xl text-lg">AÑADIR {multiSelectedClients.length} CLIENTES</Button>
+                </div>
             </DialogContent>
         </Dialog>
     </div>
   );
 }
 
-export default function RouteManagementPage() { return <Suspense fallback={<div className="p-20 text-center"><LoaderCircle className="animate-spin mx-auto h-12 w-12 text-primary" /></div>}><RouteManagementContent /></Suspense>; }
+export default function RouteManagementPage() { 
+  return (
+    <Suspense fallback={<div className="p-20 text-center"><LoaderCircle className="animate-spin mx-auto h-12 w-12 text-primary" /></div>}>
+      <RouteManagementContent />
+    </Suspense>
+  ); 
+}

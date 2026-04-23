@@ -26,7 +26,6 @@ const redIcon = new L.Icon({
 
 /**
  * Componente interno para controlar la vista del mapa sin reinicializar el contenedor.
- * Esto evita el error "Map container is already initialized".
  */
 function MapViewController({ center }: { center: [number, number] | null }) {
     const map = useMap();
@@ -44,7 +43,7 @@ function MapViewController({ center }: { center: [number, number] | null }) {
 function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }) {
   const map = useMap();
   useEffect(() => {
-    if (!map) return;
+    if (!map || !map.pm) return;
     map.pm.addControls({
       position: 'topleft',
       drawCircle: false,
@@ -68,7 +67,7 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
 }
 
 /**
- * Maneja el movimiento suave (LERP) de los marcadores.
+ * Maneja el movimiento suave de los marcadores.
  */
 function SmoothMarker({ location }: { location: ActiveLocation }) {
     const [pos, setPos] = useState<[number, number]>([location.lat, location.lng]);
@@ -109,9 +108,14 @@ export function SupervisorMap() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  // Clave única para forzar una sola inicialización limpia de Leaflet
+  const [mapKey, setMapKey] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
+    // Generar una clave única al montar para evitar "Map container already initialized"
+    setMapKey("supervisor-map-" + Math.random().toString(36).substr(2, 9));
+
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
     });
@@ -152,7 +156,7 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!isMounted) return <div className="h-[75vh] bg-slate-50 rounded-[2.5rem] animate-pulse" />;
+  if (!isMounted || !mapKey) return <div className="h-[75vh] bg-slate-50 rounded-[2.5rem] animate-pulse" />;
 
   return (
     <div className="flex flex-col h-[75vh] gap-4">
@@ -175,8 +179,8 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
-            {/* NO USAMOS key dinámica para mantener la instancia de Leaflet estable */}
             <MapContainer 
+                key={mapKey}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}

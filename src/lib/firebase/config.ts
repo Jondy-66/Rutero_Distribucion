@@ -25,13 +25,14 @@ let db: any;
 if (typeof window !== 'undefined') {
     try {
         // Configuramos Firestore para manejar el arrendamiento de caché en múltiples pestañas
+        // Si ya está inicializado por otra instancia o falla el lease, capturamos y usamos fallback
         db = initializeFirestore(app, {
             localCache: persistentLocalCache({ 
                 tabManager: persistentMultipleTabManager() 
             })
         });
     } catch (e) {
-        // Fallback si la inicialización avanzada falla (ej. ambiente no compatible)
+        // Fallback si la inicialización avanzada falla (ej. ambiente no compatible o ya inicializado)
         db = getFirestore(app);
     }
 } else {
