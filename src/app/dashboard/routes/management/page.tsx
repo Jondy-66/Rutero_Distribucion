@@ -52,7 +52,8 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
         };
         cleaned.date = Timestamp.fromDate(ensureDate(c.date));
         const parseV = (v: any) => {
-            const num = parseFloat(String(v || 0).replace(',', '.'));
+            const strValue = String(v || 0).replace(',', '.');
+            const num = parseFloat(strValue);
             return isNaN(num) ? 0 : Math.round(num * 100) / 100;
         };
         cleaned.valorVenta = parseV(c.valorVenta);
@@ -118,6 +119,7 @@ function RouteManagementContent() {
         if (!['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status)) return false;
         
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
+        // Garantizamos visibilidad de planes hechos el fin de semana (posteriores al lunes actual)
         if (rDate < startOfCurrentWeek && r.status !== 'En Progreso') return false;
         
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
@@ -192,7 +194,8 @@ function RouteManagementContent() {
   const handleCheckOut = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled) return;
     if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
-        return toast({title: "Observación requerida", variant: "destructive"});
+        toast({title: "Observación requerida", variant: "destructive"});
+        return;
     }
     setIsSaving(true);
     const loc = await new Promise<any>(r => navigator.geolocation.getCurrentPosition(p => r({latitude: p.coords.latitude, longitude: p.coords.longitude}), () => r(null), {timeout: 3000}));
@@ -210,6 +213,7 @@ function RouteManagementContent() {
     .then(() => {
         if (!isAdmin && !isManager) setActiveOriginalIndex(null);
         refetchData('routes');
+        toast({ title: "Gestión Cerrada", description: "La visita se ha registrado exitosamente." });
     })
     .catch(async () => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ 
@@ -242,6 +246,7 @@ function RouteManagementContent() {
             setIsAddClientDialogOpen(false); 
             setMultiSelectedClients([]); 
             setReAdditionObservation('');
+            toast({ title: "Clientes añadidos", description: "Se han agregado nuevas paradas a la ruta activa." });
         })
         .catch(async () => {
             errorEmitter.emit('permission-error', new FirestorePermissionError({ 
@@ -291,13 +296,22 @@ function RouteManagementContent() {
                         <Label className="font-black uppercase text-[10px] text-slate-500">Seleccionar Plan</Label>
                         <Select value={selectedRouteId} onValueChange={setSelectedRouteId}>
                             <SelectTrigger className="h-12 border-2 font-black text-slate-950"><Route className="mr-2 h-4 w-4 text-primary" /><SelectValue placeholder="Busca tu ruta..." /></SelectTrigger>
-                            <SelectContent>{selectableRoutes.map(r => <SelectItem key={r.id} value={r.id} className="font-black text-slate-950 uppercase text-[10px]">{r.routeName} [{r.status}]</SelectItem>)}</SelectContent>
+                            <SelectContent>
+                                {selectableRoutes.length > 0 ? (
+                                    selectableRoutes.map(r => <SelectItem key={r.id} value={r.id} className="font-black text-slate-950 uppercase text-[10px]">{r.routeName} [{r.status}]</SelectItem>)
+                                ) : (
+                                    <SelectItem value="none" disabled>No hay planes vigentes disponibles</SelectItem>
+                                )}
+                            </SelectContent>
                         </Select>
                     </div>
                     {selectedRoute && (
                         <Button 
                             className="w-full font-black h-14 rounded-2xl text-lg shadow-xl uppercase" 
-                            onClick={() => updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => setIsRouteStarted(true))} 
+                            onClick={() => updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => {
+                                setIsRouteStarted(true);
+                                refetchData('routes');
+                            })} 
                             disabled={isExpired && !isAdmin}
                         >
                             INICIAR GESTIÓN

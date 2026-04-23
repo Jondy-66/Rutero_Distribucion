@@ -31,7 +31,8 @@ if (typeof window !== 'undefined') {
             })
         });
     } catch (e) {
-        // Fallback si la inicialización avanzada falla
+        // Fallback si la inicialización avanzada falla (ej. por error de Primary Lease)
+        console.warn("Firestore: Persistencia multi-pestaña no disponible, conmutando a modo estándar.", e);
         db = getFirestore(app);
     }
 } else {
