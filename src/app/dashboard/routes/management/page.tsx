@@ -77,7 +77,6 @@ function RouteManagementContent() {
   const { user, clients: availableClients, routes: allRoutes, users: allUsers, loading: authLoading, dataLoading, refetchData } = useAuth();
   const { toast } = useToast();
   const searchParams = useSearchParams();
-  const router = useRouter();
   
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>(searchParams.get('routeId') || undefined);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('all');

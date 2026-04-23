@@ -100,14 +100,11 @@ export function SupervisorMap() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   
-  // SOLUCIÓN AL ERROR "Map container already initialized":
-  // Usamos una key de estado que solo se genera después del montaje en el cliente.
+  // SOLUCIÓN DEFINITIVA: MapKey se genera solo una vez al montar para garantizar contenedor limpio
   const [mapKey, setMapKey] = useState<string | null>(null);
 
   useEffect(() => {
-    // Generar la key al montar en el cliente garantiza que react-leaflet 
-    // inicialice el contenedor una sola vez sobre un div limpio.
-    setMapKey(`map-${Math.random().toString(36).substr(2, 9)}`);
+    setMapKey(`map-instance-${Math.random().toString(36).substr(2, 9)}`);
 
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
