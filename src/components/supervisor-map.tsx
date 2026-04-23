@@ -112,9 +112,6 @@ export function SupervisorMap() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   
-  // Garantizamos una clave única por montaje para evitar "Map container is already initialized"
-  const [instanceKey] = useState(() => `map-${Math.random().toString(36).substr(2, 9)}`);
-
   useEffect(() => {
     setIsMounted(true);
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
@@ -184,8 +181,9 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+            {/* ID estático y MapViewController eliminan el error de reinicialización */}
             <MapContainer 
-                key={instanceKey}
+                id="supervisor-map-container"
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}

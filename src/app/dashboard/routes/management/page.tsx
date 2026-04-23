@@ -107,14 +107,18 @@ function RouteManagementContent() {
     return [];
   }, [allUsers, user]);
 
+  // VISIBILIDAD DE RUTAS: Filtro corregido para que el usuario siempre vea sus rutas vigentes
   const selectableRoutes = useMemo(() => {
+    if (!user) return [];
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user?.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
+        
         if (!isOwn && !isManaged && !isAdmin) return false;
         
-        // Mostramos cualquier ruta vigente (Planificada, En Progreso o Pendiente) asignada al usuario
-        if (!['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status)) return false;
+        // Filtro por estado: Solo rutas que no estén completadas o rechazadas
+        const isValidStatus = ['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status);
+        if (!isValidStatus) return false;
         
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
@@ -227,7 +231,7 @@ function RouteManagementContent() {
         nombre_comercial: c.nombre_comercial, 
         date: new Date(), 
         visitStatus: 'Pendiente', 
-        status: 'Activo', 
+        status: 'Active', 
         isReadded: true, 
         reAdditionObservation: reAdditionObservation || ''
     } as any));
@@ -427,7 +431,7 @@ function RouteManagementContent() {
                                 <Checkbox checked={multiSelectedClients.some(s => s.ruc === c.ruc)} className="h-5 w-5 border-primary" />
                                 <div className="flex-1">
                                     <p className="text-sm font-black uppercase text-slate-950">{c.nombre_comercial}</p>
-                                    <p className="text-[10px] font-black text-slate-400 font-mono">{c.ruc}</p>
+                                    <p className="text-[9px] font-black text-slate-400 font-mono">{c.ruc}</p>
                                 </div>
                             </div>
                         ))}
