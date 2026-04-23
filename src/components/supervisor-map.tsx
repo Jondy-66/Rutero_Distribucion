@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
@@ -100,12 +99,12 @@ export function SupervisorMap() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   
-  // SOLUCIÓN DEFINITIVA: MapKey se genera solo una vez al montar para garantizar contenedor limpio
-  const [mapKey, setMapKey] = useState<string | null>(null);
+  // SOLUCIÓN DEFINITIVA: Generar la clave de instancia solo una vez por montaje
+  const instanceKey = useRef(`map-${Math.random().toString(36).substr(2, 9)}`);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    setMapKey(`map-instance-${Math.random().toString(36).substr(2, 9)}`);
-
+    setReady(true);
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
     });
@@ -150,7 +149,7 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!mapKey) return <div className="h-[78vh] w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100 shadow-inner"><LoaderCircle className="animate-spin text-primary" /></div>;
+  if (!ready) return <div className="h-[78vh] w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100 shadow-inner"><LoaderCircle className="animate-spin text-primary" /></div>;
 
   return (
     <div className="flex flex-col h-[78vh] gap-4">
@@ -174,7 +173,7 @@ export function SupervisorMap() {
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
             <MapContainer 
-                key={mapKey}
+                key={instanceKey.current}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}

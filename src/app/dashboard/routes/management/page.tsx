@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -111,14 +110,13 @@ function RouteManagementContent() {
     if (!user) return [];
     
     // FILTRADO OPERATIVO: Solo rutas que el usuario puede ejecutar ahora (Planificadas o En Progreso)
-    // Se elimina el historial de rutas pasadas para no saturar al vendedor.
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
         
         if (!isOwn && !isManaged && !isAdmin) return false;
         
-        // Solo mostramos rutas que se pueden gestionar (No completadas ni rechazadas)
+        // REQUERIMIENTO: Solo mostramos rutas que se pueden gestionar (No completadas ni rechazadas)
         const isValidStatus = ['Planificada', 'En Progreso'].includes(r.status);
         if (!isValidStatus) return false;
         
