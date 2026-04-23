@@ -131,7 +131,6 @@ function RouteManagementContent() {
   }, [allUsers, user]);
 
   const selectableRoutes = useMemo(() => {
-    // Calculamos el inicio de la semana actual (Lunes)
     const today = new Date();
     const startOfCurrentWeek = startOfWeek(today, { weekStartsOn: 1 });
     startOfCurrentWeek.setHours(0, 0, 0, 0);
@@ -146,7 +145,6 @@ function RouteManagementContent() {
         const workStates = ['Planificada', 'En Progreso', 'Pendiente de Aprobación'];
         if (!workStates.includes(r.status)) return false;
 
-        // Validamos que la ruta sea de esta semana o futura
         const routeDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
         if (routeDate < startOfCurrentWeek && r.status !== 'En Progreso') return false;
 
@@ -174,7 +172,7 @@ function RouteManagementContent() {
     return currentRouteClientsFull
         .map((c, index) => {
             const details = availableClients.find(ac => String(ac.ruc || '').trim() === String(c.ruc || '').trim());
-            return { ...c, originalIndex: index, direccion: details?.direccion || 'NIVELES NO DEFINIDOS' };
+            return { ...c, originalIndex: index, direccion: details?.direccion || 'SIN DIRECCIÓN DEFINIDA' };
         })
         .filter(c => c.status !== 'Eliminado');
   }, [currentRouteClientsFull, availableClients]);
@@ -544,7 +542,7 @@ function RouteManagementContent() {
                                             </div>
                                         </div>
                                         {!activeClient.checkInTime && (
-                                            <Button onClick={handleCheckIn} className="font-black h-12 px-8 rounded-xl text-xs shadow-lg transition-transform hover:scale-105 uppercase" disabled={(isExpired && !isAdmin) || isSaving}>
+                                            <Button onClick={handleCheckIn} className="font-black h-12 px-8 rounded-xl text-xs shadow-lg transition-transform hover:scale-105 uppercase text-white" disabled={(isExpired && !isAdmin) || isSaving}>
                                                 {isSaving ? <LoaderCircle className="animate-spin h-5 w-5" /> : 'MARCAR LLEGADA'}
                                             </Button>
                                         )}
@@ -595,7 +593,7 @@ function RouteManagementContent() {
 
                                     <Button 
                                         onClick={handleConfirmCheckOut} 
-                                        className="w-full h-18 text-xl font-black rounded-3xl shadow-2xl transition-all hover:scale-[1.02] mt-4 uppercase tracking-tighter" 
+                                        className="w-full h-18 text-xl font-black rounded-3xl shadow-2xl transition-all hover:scale-[1.02] mt-4 uppercase tracking-tighter text-white" 
                                         disabled={isSaving || isEditingDisabled || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim())}
                                     >
                                         {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : <><LogOut className="mr-3 h-6 w-6" /> {activeClient.visitStatus === 'Completado' ? 'GESTIÓN FINALIZADA' : 'CERRAR VISITA (CHECK-OUT)'}</>}
@@ -655,7 +653,7 @@ function RouteManagementContent() {
                     )}
                     <div className="flex items-center gap-4">
                         <DialogClose asChild><Button variant="ghost" className="h-14 font-black flex-1 text-slate-950 border-2 border-slate-100 rounded-2xl uppercase text-xs">Descartar</Button></DialogClose>
-                        <Button onClick={handleAddClients} disabled={multiSelectedClients.length === 0 || isSaving || (needsReadditionObservation && !reAdditionObservation.trim())} className="h-14 font-black flex-[2] rounded-2xl text-lg shadow-xl uppercase tracking-tighter">{isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : `AÑADIR ${multiSelectedClients.length} CLIENTES`}</Button>
+                        <Button onClick={handleAddClients} disabled={multiSelectedClients.length === 0 || isSaving || (needsReadditionObservation && !reAdditionObservation.trim())} className="h-14 font-black flex-[2] rounded-2xl text-lg shadow-xl uppercase tracking-tighter text-white">{isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : `AÑADIR ${multiSelectedClients.length} CLIENTES`}</Button>
                     </div>
                 </div>
             </DialogContent>

@@ -174,7 +174,7 @@ export function SupervisorMap() {
                     <Button 
                         key={loc.userId} 
                         variant={selectedUserId === loc.userId ? "default" : "outline"}
-                        className="font-black uppercase text-[10px] h-10 border-2 shrink-0 rounded-xl"
+                        className="font-black uppercase text-[10px] h-10 border-2 shrink-0 rounded-xl text-slate-950"
                         onClick={() => fetchUserHistory(loc.userId)}
                     >
                         {loc.userName}
@@ -187,7 +187,6 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
-            {/* NO USAMOS key dinámica aquí para mantener la instancia de Leaflet estable */}
             <MapContainer 
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
