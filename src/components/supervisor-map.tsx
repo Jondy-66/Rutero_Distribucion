@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
@@ -84,13 +84,13 @@ export function SupervisorMap() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   
-  // SOLUCIÓN DEFINITIVA AL ERROR DE INICIALIZACIÓN:
-  // Solo generamos el mapKey después de que el componente se ha montado en el cliente.
+  // SOLUCIÓN DEFINITIVA: Clave de instancia dinámica que se establece solo en el cliente
   const [mapKey, setMapKey] = useState<string | null>(null);
+  const mapInstance = useRef<L.Map | null>(null);
 
   useEffect(() => {
-    // Forzamos un contenedor nuevo mediante una clave aleatoria al montar
-    setMapKey(`map-instance-${Math.random().toString(36).substring(7)}`);
+    // Establecemos una clave única al montar para asegurar un contenedor DOM virgen
+    setMapKey(`map-v${Math.random().toString(36).substring(7)}`);
 
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
@@ -102,6 +102,10 @@ export function SupervisorMap() {
     return () => { 
         unsubLocs(); 
         unsubZones();
+        if (mapInstance.current) {
+            mapInstance.current.remove();
+            mapInstance.current = null;
+        }
     };
   }, []);
 
@@ -136,25 +140,21 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  // Pantalla de carga mientras se estabiliza el entorno Leaflet
   if (!mapKey) return (
     <div className="h-[78vh] w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100">
-        <div className="flex flex-col items-center gap-2">
-            <LoaderCircle className="animate-spin text-primary h-10 w-10" />
-            <p className="text-[10px] font-black uppercase text-slate-400">Iniciando Motor de Mapas...</p>
-        </div>
+        <LoaderCircle className="animate-spin text-primary h-10 w-10" />
     </div>
   );
 
   return (
     <div className="flex flex-col h-[78vh] gap-4">
-        <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex gap-2 shrink-0 overflow-x-auto pb-2">
             {activeLocations.length > 0 ? (
                 activeLocations.map(loc => (
                     <Button 
                         key={loc.userId} 
                         variant={selectedUserId === loc.userId ? "default" : "outline"}
-                        className="font-black uppercase text-[10px] h-10 border-2 shrink-0 rounded-xl text-slate-950 shadow-sm"
+                        className="font-black uppercase text-[10px] h-10 border-2 shrink-0 rounded-xl text-slate-950"
                         onClick={() => fetchUserHistory(loc.userId)}
                     >
                         {loc.userName}
@@ -162,19 +162,18 @@ export function SupervisorMap() {
                     </Button>
                 ))
             ) : (
-                <div className="text-[10px] font-black uppercase text-slate-400 p-2 italic">Esperando señal GPS activa...</div>
+                <div className="text-[10px] font-black uppercase text-slate-400 p-2 italic">Sin señal GPS activa...</div>
             )}
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
-            {/* MapContainer con key dinámica generada por montaje garantiza un contenedor limpio */}
             <MapContainer 
                 key={mapKey}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
                 className="h-full w-full"
-                id="supervisor-map-root"
+                ref={(map) => { if (map) mapInstance.current = map; }}
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapViewController center={mapCenter} />
@@ -191,7 +190,7 @@ export function SupervisorMap() {
                 })}
 
                 {historyPath.length > 1 && (
-                    <Polyline positions={historyPath} pathOptions={{ color: '#011688', weight: 4, dashArray: '1, 10', lineCap: 'round', opacity: 0.8 }} />
+                    <Polyline positions={historyPath} pathOptions={{ color: '#011688', weight: 4, opacity: 0.8 }} />
                 )}
 
                 <GeomanControl onZoneCreated={handleZoneCreated} />

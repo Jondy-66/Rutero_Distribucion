@@ -15,6 +15,9 @@ import { AuthProvider } from '@/contexts/auth-context';
 export const metadata: Metadata = {
   title: 'Rutero',
   description: 'Planificación y Gestión Avanzada de Rutas',
+  icons: {
+    icon: 'https://i.ibb.co/bMC7XpjC/logo-distribucion1.png',
+  },
 };
 
 /**
