@@ -109,17 +109,14 @@ function RouteManagementContent() {
   const selectableRoutes = useMemo(() => {
     if (!user) return [];
     
-    // FILTRADO OPERATIVO: Solo rutas que el usuario puede ejecutar ahora (Planificadas o En Progreso)
+    // REQUERIMIENTO: Solo rutas actuales (Planificada o En Progreso). Se excluye el historial de completadas.
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
-        
-        if (!isOwn && !isManaged && !isAdmin) return false;
-        
-        // REQUERIMIENTO: Solo mostramos rutas que se pueden gestionar (No completadas ni rechazadas)
         const isValidStatus = ['Planificada', 'En Progreso'].includes(r.status);
-        if (!isValidStatus) return false;
         
+        if (!isValidStatus) return false;
+        if (!isOwn && !isManaged && !isAdmin) return false;
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
         return true; 
@@ -318,6 +315,7 @@ function RouteManagementContent() {
             </Card>
         ) : (
             <div className="grid lg:grid-cols-3 gap-8">
+                {/* Lado Izquierdo: Lista de Clientes - Recuadro Ampliado */}
                 <Card className="lg:col-span-1 shadow-2xl border-t-4 border-t-primary h-[88vh] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
                     <CardHeader className="bg-muted/5 px-8 py-6 border-b">
                         <h2 className="text-xl font-black text-primary uppercase truncate" title={selectedRoute?.routeName}>{selectedRoute?.routeName || "Plan Activo"}</h2>
@@ -341,6 +339,7 @@ function RouteManagementContent() {
                     </CardContent>
                 </Card>
                 
+                {/* Lado Derecho: Panel de Detalle - Recuadro Ampliado */}
                 <Card className="lg:col-span-2 shadow-2xl border-t-4 border-t-primary h-[88vh] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
                     <CardHeader className="bg-muted/5 h-32 flex flex-col justify-center px-10 border-b">
                         {activeClient ? (
@@ -428,7 +427,7 @@ function RouteManagementContent() {
         )}
         
         <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
-            <DialogContent className="max-w-2xl rounded-[2.5rem] flex flex-col h-[85vh] bg-white">
+            <DialogContent className="max-w-2xl rounded-[2.5rem] flex flex-col h-[85vh] bg-white border-none shadow-2xl">
                 <DialogHeader className="p-8 pb-6">
                     <DialogTitle className="text-2xl font-black uppercase text-primary">Adición Manual Extra</DialogTitle>
                 </DialogHeader>
@@ -448,7 +447,7 @@ function RouteManagementContent() {
                         ))}
                     </div>
                 </ScrollArea>
-                <div className="p-8 border-t space-y-4">
+                <div className="p-8 border-t space-y-4 bg-slate-50">
                     <Textarea className="h-20 font-black border-2 rounded-2xl text-slate-950" placeholder="Motivo de la visita no planificada..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
                     <Button onClick={handleAddClients} disabled={multiSelectedClients.length === 0 || isSaving} className="w-full h-14 font-black rounded-2xl text-lg shadow-lg">AÑADIR {multiSelectedClients.length} PUNTOS A LA RUTA</Button>
                 </div>

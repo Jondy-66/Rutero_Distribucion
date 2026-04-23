@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
@@ -98,13 +98,12 @@ export function SupervisorMap() {
   const [history, setHistory] = useState<Breadcrumb[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
-  
-  // SOLUCIÓN DEFINITIVA: Generar la clave de instancia solo una vez por montaje
-  const instanceKey = useRef(`map-${Math.random().toString(36).substr(2, 9)}`);
-  const [ready, setReady] = useState(false);
+  const [mapKey, setMapKey] = useState<string | null>(null);
 
   useEffect(() => {
-    setReady(true);
+    // Generar clave única al montar en el cliente para evitar error "Map container already initialized"
+    setMapKey(`map-${Math.random().toString(36).substr(2, 9)}`);
+
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
     });
@@ -149,7 +148,7 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!ready) return <div className="h-[78vh] w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100 shadow-inner"><LoaderCircle className="animate-spin text-primary" /></div>;
+  if (!mapKey) return <div className="h-[78vh] w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100"><LoaderCircle className="animate-spin text-primary" /></div>;
 
   return (
     <div className="flex flex-col h-[78vh] gap-4">
@@ -159,7 +158,7 @@ export function SupervisorMap() {
                     <Button 
                         key={loc.userId} 
                         variant={selectedUserId === loc.userId ? "default" : "outline"}
-                        className="font-black uppercase text-[10px] h-10 border-2 shrink-0 rounded-xl text-slate-950"
+                        className="font-black uppercase text-[10px] h-10 border-2 shrink-0 rounded-xl text-slate-950 shadow-sm"
                         onClick={() => fetchUserHistory(loc.userId)}
                     >
                         {loc.userName}
@@ -173,7 +172,7 @@ export function SupervisorMap() {
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
             <MapContainer 
-                key={instanceKey.current}
+                key={mapKey}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
