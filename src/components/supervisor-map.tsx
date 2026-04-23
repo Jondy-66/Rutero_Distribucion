@@ -24,9 +24,6 @@ const redIcon = new L.Icon({
     iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
 });
 
-/**
- * Controla el movimiento de la cámara de forma segura mediante el hook useMap.
- */
 function MapViewController({ center }: { center: [number, number] | null }) {
     const map = useMap();
     useEffect(() => {
@@ -37,9 +34,6 @@ function MapViewController({ center }: { center: [number, number] | null }) {
     return null;
 }
 
-/**
- * Capa de herramientas de dibujo Geoman.
- */
 function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }) {
   const map = useMap();
   useEffect(() => {
@@ -69,18 +63,9 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
   return null;
 }
 
-/**
- * Marcador con interpolación de movimiento para suavidad.
- */
 function SmoothMarker({ location }: { location: ActiveLocation }) {
-    const [pos, setPos] = useState<[number, number]>([location.lat, location.lng]);
-    
-    useEffect(() => {
-        setPos([location.lat, location.lng]);
-    }, [location.lat, location.lng]);
-
     return (
-        <Marker position={pos} icon={location.is_out_of_route ? redIcon : blueIcon}>
+        <Marker position={[location.lat, location.lng]} icon={location.is_out_of_route ? redIcon : blueIcon}>
             <Popup>
                 <div className="font-black uppercase text-[10px] text-slate-950">
                     <p className="font-black text-xs text-primary">{location.userName}</p>
@@ -93,17 +78,18 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
 }
 
 export function SupervisorMap() {
+  const [isMounted, setIsMounted] = useState(false);
   const [activeLocations, setActiveLocations] = useState<ActiveLocation[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
   const [history, setHistory] = useState<Breadcrumb[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
-  const [mapKey, setMapKey] = useState<string | null>(null);
+
+  // Clave de instancia única que solo se genera al montar en el cliente
+  const [mapKey] = useState(() => `map-${Math.random().toString(36).substr(2, 9)}`);
 
   useEffect(() => {
-    // Generar clave única al montar en el cliente para evitar error "Map container already initialized"
-    setMapKey(`map-${Math.random().toString(36).substr(2, 9)}`);
-
+    setIsMounted(true);
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
     });
@@ -148,7 +134,11 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!mapKey) return <div className="h-[78vh] w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100"><LoaderCircle className="animate-spin text-primary" /></div>;
+  if (!isMounted) return (
+    <div className="h-[78vh] w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100">
+        <LoaderCircle className="animate-spin text-primary" />
+    </div>
+  );
 
   return (
     <div className="flex flex-col h-[78vh] gap-4">
