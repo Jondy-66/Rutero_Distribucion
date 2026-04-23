@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -110,7 +109,7 @@ function RouteManagementContent() {
 
   const selectableRoutes = useMemo(() => {
     if (!user) return [];
-    // Restauramos visibilidad completa: Rutas propias o gestionadas que no estén finalizadas
+    // Restauramos visibilidad completa: Rutas propias o gestionadas que no estén finalizadas sin filtro de fecha semanal restrictivo
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);

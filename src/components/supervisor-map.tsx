@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -114,13 +113,16 @@ export function SupervisorMap() {
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    // Patrón de montaje estricto para evitar errores de inicialización de Leaflet
     setIsMounted(true);
+    
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
     });
     const unsubZones = onSnapshot(collection(db, 'zones'), (snap) => {
         setZones(snap.docs.map(d => ({ id: d.id, ...d.data() } as Zone)));
     });
+    
     return () => { 
         unsubLocs(); 
         unsubZones();
@@ -159,7 +161,9 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!isMounted) return <div className="h-[75vh] bg-slate-50 rounded-[2.5rem] animate-pulse border-4 border-slate-100" />;
+  if (!isMounted) {
+      return <div className="h-[75vh] bg-slate-50 rounded-[2.5rem] animate-pulse border-4 border-slate-100" />;
+  }
 
   return (
     <div className="flex flex-col h-[75vh] gap-4">
@@ -182,11 +186,13 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+            {/* NO USAMOS ID estático ni keys que cambien en el MapContainer principal para asegurar estabilidad absoluta */}
             <MapContainer 
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
                 className="h-full w-full"
+                key="supervisor-root-map"
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapViewController center={mapCenter} />
