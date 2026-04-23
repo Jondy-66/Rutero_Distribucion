@@ -84,7 +84,7 @@ export function SupervisorMap() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   
-  // SOLUCIÓN DEFINITIVA: Clave de instancia dinámica que se establece solo en el cliente
+  // SOLUCIÓN: Clave de instancia garantiza que react-leaflet inicialice un contenedor limpio
   const [mapKey, setMapKey] = useState<string | null>(null);
   const mapInstance = useRef<L.Map | null>(null);
 
@@ -102,6 +102,7 @@ export function SupervisorMap() {
     return () => { 
         unsubLocs(); 
         unsubZones();
+        // Limpieza explícita de la instancia de Leaflet para evitar el error de inicialización doble
         if (mapInstance.current) {
             mapInstance.current.remove();
             mapInstance.current = null;
@@ -167,6 +168,7 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+            {/* Clave de instancia garantiza que react-leaflet inicialice un contenedor limpio */}
             <MapContainer 
                 key={mapKey}
                 center={[-1.8312, -78.1834]} 

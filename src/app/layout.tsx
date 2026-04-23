@@ -17,6 +17,8 @@ export const metadata: Metadata = {
   description: 'Planificación y Gestión Avanzada de Rutas',
   icons: {
     icon: 'https://i.ibb.co/bMC7XpjC/logo-distribucion1.png',
+    shortcut: 'https://i.ibb.co/bMC7XpjC/logo-distribucion1.png',
+    apple: 'https://i.ibb.co/bMC7XpjC/logo-distribucion1.png',
   },
 };
 
