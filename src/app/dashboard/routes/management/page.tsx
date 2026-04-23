@@ -1,4 +1,5 @@
 'use client';
+
 import { useState, useEffect, useMemo, Suspense } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
@@ -74,6 +75,7 @@ function RouteManagementContent() {
   const { user, clients: availableClients, routes: allRoutes, users: allUsers, loading: authLoading, dataLoading, refetchData } = useAuth();
   const { toast } = useToast();
   const searchParams = useSearchParams();
+  const router = useRouter();
   
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
   const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
@@ -116,6 +118,7 @@ function RouteManagementContent() {
         if (!['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status)) return false;
         
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
+        // Filtro de semana ISO para garantizar visibilidad de planes hechos en fin de semana
         if (rDate < startOfCurrentWeek && r.status !== 'En Progreso') return false;
         
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
@@ -154,9 +157,15 @@ function RouteManagementContent() {
     const next = [...currentRouteClientsFull];
     next[activeOriginalIndex] = { ...next[activeOriginalIndex], [field]: value };
     setCurrentRouteClientsFull(next);
+    
     if (selectedRoute) {
-        updateRoute(selectedRoute.id, { clients: sanitizeClients(next) }).catch(e => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `routes/${selectedRoute.id}`, operation: 'update', requestResourceData: { clients: sanitizeClients(next) } }));
+        const sanitized = sanitizeClients(next);
+        updateRoute(selectedRoute.id, { clients: sanitized }).catch(async (e) => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                path: `routes/${selectedRoute.id}`, 
+                operation: 'update', 
+                requestResourceData: { clients: sanitized } 
+            }));
         });
     }
   };
@@ -168,39 +177,90 @@ function RouteManagementContent() {
     const next = [...currentRouteClientsFull];
     next[activeOriginalIndex] = { ...next[activeOriginalIndex], checkInTime: format(new Date(), 'HH:mm:ss'), checkInLocation: loc };
     setCurrentRouteClientsFull(next);
-    updateRoute(selectedRoute.id, { clients: sanitizeClients(next) }).finally(() => setIsSaving(false));
+    
+    const sanitized = sanitizeClients(next);
+    updateRoute(selectedRoute.id, { clients: sanitized })
+        .catch(async (e) => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                path: `routes/${selectedRoute.id}`, 
+                operation: 'update', 
+                requestResourceData: { clients: sanitized } 
+            }));
+        })
+        .finally(() => setIsSaving(false));
   };
 
   const handleCheckOut = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled) return;
-    if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) return toast({title: "Observación requerida", variant: "destructive"});
+    if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
+        return toast({title: "Observación requerida", variant: "destructive"});
+    }
     setIsSaving(true);
     const loc = await new Promise<any>(r => navigator.geolocation.getCurrentPosition(p => r({latitude: p.coords.latitude, longitude: p.coords.longitude}), () => r(null), {timeout: 3000}));
     const next = [...currentRouteClientsFull];
     next[activeOriginalIndex] = { ...next[activeOriginalIndex], checkOutTime: format(new Date(), 'HH:mm:ss'), checkOutLocation: loc, visitStatus: 'Completado' };
     setCurrentRouteClientsFull(next);
+    
     const allDone = next.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
-    updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: allDone ? 'Completada' : 'En Progreso' }).then(() => {
+    const sanitized = sanitizeClients(next);
+    
+    updateRoute(selectedRoute.id, { 
+        clients: sanitized, 
+        status: allDone ? 'Completada' : 'En Progreso' 
+    })
+    .then(() => {
         if (!isAdmin && !isManager) setActiveOriginalIndex(null);
         refetchData('routes');
-    }).finally(() => setIsSaving(false));
+    })
+    .catch(async (e) => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+            path: `routes/${selectedRoute.id}`, 
+            operation: 'update', 
+            requestResourceData: { clients: sanitized } 
+        }));
+    })
+    .finally(() => setIsSaving(false));
   };
 
   const handleAddClients = async () => {
     if (!selectedRoute || multiSelectedClients.length === 0 || isSaving) return;
     setIsSaving(true);
     const newVisits: ClientInRoute[] = multiSelectedClients.map(c => ({
-        ruc: c.ruc, nombre_comercial: c.nombre_comercial, date: new Date(), visitStatus: 'Pendiente', status: 'Activo', isReadded: true, reAdditionObservation: reAdditionObservation || ''
+        ruc: c.ruc, 
+        nombre_comercial: c.nombre_comercial, 
+        date: new Date(), 
+        visitStatus: 'Pendiente', 
+        status: 'Activo', 
+        isReadded: true, 
+        reAdditionObservation: reAdditionObservation || ''
     } as any));
     const next = [...currentRouteClientsFull, ...newVisits];
     setCurrentRouteClientsFull(next);
-    updateRoute(selectedRoute.id, { clients: sanitizeClients(next) }).then(() => {
-        setIsAddClientDialogOpen(false); setMultiSelectedClients([]); setReAdditionObservation('');
-    }).finally(() => setIsSaving(false));
+    
+    const sanitized = sanitizeClients(next);
+    updateRoute(selectedRoute.id, { clients: sanitized })
+        .then(() => {
+            setIsAddClientDialogOpen(false); 
+            setMultiSelectedClients([]); 
+            setReAdditionObservation('');
+        })
+        .catch(async (e) => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                path: `routes/${selectedRoute.id}`, 
+                operation: 'update', 
+                requestResourceData: { clients: sanitized } 
+            }));
+        })
+        .finally(() => setIsSaving(false));
   };
 
   if (authLoading || (dataLoading && allRoutes.length === 0)) {
-    return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-12 w-12 mx-auto text-primary" /></div>;
+    return (
+        <div className="p-20 text-center flex flex-col items-center gap-4">
+            <LoaderCircle className="animate-spin h-12 w-12 text-primary" />
+            <p className="font-black text-slate-950 uppercase text-xs">Cargando Módulo de Gestión...</p>
+        </div>
+    );
   }
 
   return (
@@ -270,6 +330,7 @@ function RouteManagementContent() {
                         </ScrollArea>
                     </CardContent>
                 </Card>
+                
                 <Card className="lg:col-span-2 shadow-2xl border-t-4 border-t-primary h-[82vh] rounded-[2.5rem] overflow-hidden flex flex-col">
                     <CardHeader className="bg-muted/10 h-32 flex flex-col justify-center px-10 border-b">
                         {activeClient ? (
