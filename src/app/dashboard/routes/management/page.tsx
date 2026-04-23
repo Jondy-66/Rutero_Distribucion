@@ -111,14 +111,15 @@ function RouteManagementContent() {
   const selectableRoutes = useMemo(() => {
     if (!user) return [];
     
-    // FILTRADO DE HISTORIAL: Solo rutas pendientes o en progreso
+    // FILTRADO OPERATIVO: Solo rutas que el usuario puede ejecutar ahora (Planificadas o En Progreso)
+    // Se elimina el historial de rutas pasadas para no saturar al vendedor.
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
         
         if (!isOwn && !isManaged && !isAdmin) return false;
         
-        // Solo mostramos rutas que se pueden gestionar hoy
+        // Solo mostramos rutas que se pueden gestionar (No completadas ni rechazadas)
         const isValidStatus = ['Planificada', 'En Progreso'].includes(r.status);
         if (!isValidStatus) return false;
         
@@ -133,7 +134,7 @@ function RouteManagementContent() {
     return allRoutes.find(r => r.id === rid);
   }, [selectedRouteId, allRoutes, searchParams]);
 
-  // Auto-selección de ruta activa
+  // Auto-selección de ruta activa si ya hay una iniciada
   useEffect(() => {
     if (!selectedRouteId && selectableRoutes.length > 0) {
         const activeOne = selectableRoutes.find(r => r.status === 'En Progreso');
@@ -305,10 +306,12 @@ function RouteManagementContent() {
                     {selectedRoute && (
                         <Button 
                             className="w-full font-black h-14 rounded-2xl text-lg shadow-xl uppercase" 
-                            onClick={() => updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => {
-                                setIsRouteStarted(true);
-                                refetchData('routes');
-                            })} 
+                            onClick={() => {
+                                updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => {
+                                    setIsRouteStarted(true);
+                                    refetchData('routes');
+                                });
+                            }} 
                             disabled={isExpired && !isAdmin}
                         >
                             INICIAR GESTIÓN
