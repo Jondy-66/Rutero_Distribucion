@@ -119,9 +119,7 @@ function RouteManagementContent() {
         if (!['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status)) return false;
         
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
-        // Garantizamos visibilidad de planes hechos el fin de semana (posteriores al lunes actual)
         if (rDate < startOfCurrentWeek && r.status !== 'En Progreso') return false;
-        
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
         return true; 

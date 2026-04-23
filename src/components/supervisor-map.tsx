@@ -11,7 +11,7 @@ import { getRecentHistory, saveZone } from '@/lib/firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
 
-// Iconos personalizados de alta visibilidad
+// Iconos de alta visibilidad para supervisión
 const blueIcon = new L.Icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
@@ -25,21 +25,20 @@ const redIcon = new L.Icon({
 });
 
 /**
- * Componente interno para controlar la vista del mapa sin reinicializar el contenedor.
- * Esto evita el error "Map container is already initialized".
+ * Controla el movimiento de la cámara sin reinicializar el MapContainer.
  */
 function MapViewController({ center }: { center: [number, number] | null }) {
     const map = useMap();
     useEffect(() => {
         if (center) {
-            map.flyTo(center, 13, { duration: 1.5 });
+            map.flyTo(center, 13, { animate: true, duration: 1.5 });
         }
     }, [center, map]);
     return null;
 }
 
 /**
- * Activa las herramientas de dibujo Geoman.
+ * Capa de herramientas de dibujo Geoman.
  */
 function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }) {
   const map = useMap();
@@ -71,12 +70,12 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
 }
 
 /**
- * Maneja el movimiento suave de los marcadores.
+ * Marcador con interpolación de movimiento para suavidad.
  */
 function SmoothMarker({ location }: { location: ActiveLocation }) {
     const [pos, setPos] = useState<[number, number]>([location.lat, location.lng]);
     const target = useRef<[number, number]>([location.lat, location.lng]);
-    const animationFrame = useRef<number>(undefined);
+    const animationFrame = useRef<number>(0);
 
     useEffect(() => {
         target.current = [location.lat, location.lng];
@@ -89,7 +88,7 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
             animationFrame.current = requestAnimationFrame(animate);
         };
         animationFrame.current = requestAnimationFrame(animate);
-        return () => { if(animationFrame.current) cancelAnimationFrame(animationFrame.current); };
+        return () => cancelAnimationFrame(animationFrame.current);
     }, [location.lat, location.lng]);
 
     return (
@@ -98,7 +97,7 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
                 <div className="font-black uppercase text-[10px] text-slate-950">
                     <p className="font-black text-xs text-primary">{location.userName}</p>
                     {location.is_out_of_route && <p className="text-red-600 mt-1 font-black">ALERTA: FUERA DE RUTA</p>}
-                    <p className="text-slate-500 mt-0.5">Precisión: {location.accuracy?.toFixed(1)}m</p>
+                    <p className="text-slate-500 mt-0.5 font-bold">Precisión: {location.accuracy?.toFixed(1)}m</p>
                 </div>
             </Popup>
         </Marker>
@@ -112,11 +111,9 @@ export function SupervisorMap() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const [mapKey, setMapKey] = useState<string | null>(null);
 
   useEffect(() => {
     setIsMounted(true);
-    setMapKey(Math.random().toString(36).substring(7));
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
     });
@@ -157,11 +154,12 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!isMounted || !mapKey) return <div className="h-[75vh] bg-slate-50 rounded-[2.5rem] animate-pulse" />;
+  // Si no está montado, evitamos que Leaflet se inicialice en el servidor
+  if (!isMounted) return <div className="h-[75vh] bg-slate-50 rounded-[2.5rem] animate-pulse border-4 border-slate-100" />;
 
   return (
     <div className="flex flex-col h-[75vh] gap-4">
-        <div className="flex gap-2 shrink-0 overflow-x-auto pb-2">
+        <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 scrollbar-hide">
             {activeLocations.length > 0 ? (
                 activeLocations.map(loc => (
                     <Button 
@@ -175,13 +173,12 @@ export function SupervisorMap() {
                     </Button>
                 ))
             ) : (
-                <div className="text-[10px] font-black uppercase text-slate-400 p-2 italic">Esperando señal GPS...</div>
+                <div className="text-[10px] font-black uppercase text-slate-400 p-2 italic">Esperando señal GPS activa...</div>
             )}
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
             <MapContainer 
-                key={mapKey}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
@@ -189,14 +186,22 @@ export function SupervisorMap() {
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapViewController center={mapCenter} />
-                {activeLocations.map(loc => <SmoothMarker key={loc.userId} location={loc} />)}
+                
+                {activeLocations.map(loc => (
+                    <SmoothMarker key={loc.userId} location={loc} />
+                ))}
+
                 {zones.map(zone => {
                     try {
                         const positions = zone.geoJson.geometry.coordinates[0].map((c: any) => [c[1], c[0]]);
-                        return <Polygon key={zone.id} positions={positions} pathOptions={{ color: 'purple', fillOpacity: 0.2, weight: 2 }} />;
+                        return <Polygon key={zone.id} positions={positions} pathOptions={{ color: 'purple', fillOpacity: 0.1, weight: 2, dashArray: '5, 5' }} />;
                     } catch(e) { return null; }
                 })}
-                {historyPath.length > 1 && <Polyline positions={historyPath} pathOptions={{ color: 'blue', weight: 4, dashArray: '8, 12', opacity: 0.7 }} />}
+
+                {historyPath.length > 1 && (
+                    <Polyline positions={historyPath} pathOptions={{ color: '#011688', weight: 4, dashArray: '1, 10', lineCap: 'round', opacity: 0.8 }} />
+                )}
+
                 <GeomanControl onZoneCreated={handleZoneCreated} />
             </MapContainer>
         </div>
