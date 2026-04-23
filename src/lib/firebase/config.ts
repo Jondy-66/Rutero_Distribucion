@@ -1,15 +1,11 @@
 /**
- * @fileoverview Este archivo inicializa y configura la conexión con Firebase.
- * Implementa persistencia offline con soporte multi-pestaña para máxima resiliencia.
+ * @fileoverview Configuración de Firebase con soporte multi-pestaña y persistencia resiliente.
  */
 
 import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
-/**
- * Objeto de configuración de Firebase para esta aplicación web.
- */
 const firebaseConfig = {
   apiKey: "AIzaSyBf28yfROnTCqwgLpXY-GJqIhwC7zIbQMo",
   authDomain: "rutero-fed.firebaseapp.com",
@@ -20,30 +16,12 @@ const firebaseConfig = {
   measurementId: "G-T0NYMCV1HR"
 };
 
-/**
- * Inicializa la aplicación de Firebase de forma segura.
- */
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
-/**
- * Crea una instancia secundaria de la app de Firebase.
- */
-export const createSecondaryApp = (appName: string) => {
-    return initializeApp(firebaseConfig, appName);
-};
+export const createSecondaryApp = (appName: string) => initializeApp(firebaseConfig, appName);
+export const deleteSecondaryApp = (appInstance: any) => deleteApp(appInstance);
 
-/**
- * Elimina una instancia secundaria de la app de Firebase.
- */
-export const deleteSecondaryApp = (appInstance: any) => {
-    return deleteApp(appInstance);
-}
-
-/**
- * Instancia del servicio Firestore con soporte multi-pestaña.
- * Este patrón evita el error "Failed to obtain primary lease" al manejar fallos de inicialización.
- */
-let db;
+let db: any;
 if (typeof window !== 'undefined') {
     try {
         db = initializeFirestore(app, {
@@ -52,16 +30,11 @@ if (typeof window !== 'undefined') {
             })
         });
     } catch (e) {
-        // Si ya está inicializado o falla el lease, obtenemos la instancia estable existente
         db = getFirestore(app);
     }
 } else {
     db = getFirestore(app);
 }
 
-/**
- * Instancia del servicio de autenticación de Firebase.
- */
 const auth = getAuth(app);
-
 export { app, db, auth };

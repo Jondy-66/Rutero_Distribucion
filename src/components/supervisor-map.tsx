@@ -11,7 +11,7 @@ import { getRecentHistory, saveZone } from '@/lib/firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
 
-// Iconos personalizados con colores de alta visibilidad
+// Iconos personalizados de alta visibilidad
 const blueIcon = new L.Icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
@@ -26,7 +26,7 @@ const redIcon = new L.Icon({
 
 /**
  * Componente interno para controlar la vista del mapa sin reinicializar el contenedor.
- * Esto evita de forma definitiva el error "Map container is already initialized".
+ * Evita el error "Map container is already initialized".
  */
 function MapViewController({ center }: { center: [number, number] | null }) {
     const map = useMap();
@@ -39,11 +39,10 @@ function MapViewController({ center }: { center: [number, number] | null }) {
 }
 
 /**
- * Componente para activar Geoman (herramientas de dibujo) en el mapa.
+ * Activa las herramientas de dibujo Geoman.
  */
 function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }) {
   const map = useMap();
-
   useEffect(() => {
     if (!map) return;
     map.pm.addControls({
@@ -57,28 +56,19 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
       dragMode: true,
       removalMode: true,
     });
-
     map.on('pm:create', (e: any) => {
       const json = e.layer.toGeoJSON();
       onZoneCreated(json);
     });
-
     return () => { 
-        if (map.pm) {
-          try {
-            map.pm.removeControls();
-          } catch (e) {
-            // Manejo silencioso en el desmontaje
-          }
-        }
+        if (map.pm) map.pm.removeControls();
     };
   }, [map, onZoneCreated]);
-
   return null;
 }
 
 /**
- * Componente que maneja la Interpolación Suave (LERP) para el movimiento de marcadores.
+ * Maneja el movimiento suave (LERP) de los marcadores.
  */
 function SmoothMarker({ location }: { location: ActiveLocation }) {
     const [pos, setPos] = useState<[number, number]>([location.lat, location.lng]);
@@ -87,7 +77,6 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
 
     useEffect(() => {
         target.current = [location.lat, location.lng];
-        
         const animate = () => {
             setPos(prev => {
                 const nextLat = prev[0] + (target.current[0] - prev[0]) * 0.1;
@@ -96,7 +85,6 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
             });
             animationFrame.current = requestAnimationFrame(animate);
         };
-        
         animationFrame.current = requestAnimationFrame(animate);
         return () => { if(animationFrame.current) cancelAnimationFrame(animationFrame.current); };
     }, [location.lat, location.lng]);
@@ -108,7 +96,6 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
                     <p className="font-black text-xs text-primary">{location.userName}</p>
                     {location.is_out_of_route && <p className="text-red-600 mt-1 font-black">ALERTA: FUERA DE RUTA</p>}
                     <p className="text-slate-500 mt-0.5">Precisión: {location.accuracy?.toFixed(1)}m</p>
-                    <p className="text-[8px] text-slate-400 mt-1 uppercase font-mono">{location.timestamp?.toLocaleString()}</p>
                 </div>
             </Popup>
         </Marker>
@@ -125,18 +112,13 @@ export function SupervisorMap() {
 
   useEffect(() => {
     setIsMounted(true);
-    const unsubscribeLocations = onSnapshot(collection(db, 'active_locations'), (snap) => {
+    const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
     });
-
-    const unsubscribeZones = onSnapshot(collection(db, 'zones'), (snap) => {
+    const unsubZones = onSnapshot(collection(db, 'zones'), (snap) => {
         setZones(snap.docs.map(d => ({ id: d.id, ...d.data() } as Zone)));
     });
-
-    return () => {
-        unsubscribeLocations();
-        unsubscribeZones();
-    };
+    return () => { unsubLocs(); unsubZones(); };
   }, []);
 
   const fetchUserHistory = async (userId: string) => {
@@ -146,7 +128,7 @@ export function SupervisorMap() {
         const data = await getRecentHistory(userId);
         setHistory(data);
     } catch (e) {
-        console.error("Error fetching history:", e);
+        console.error(e);
     } finally {
         setIsHistoryLoading(false);
     }
@@ -162,7 +144,6 @@ export function SupervisorMap() {
   };
 
   const historyPath = useMemo(() => history.map(p => [p.lat, p.lng] as [number, number]), [history]);
-  
   const mapCenter = useMemo(() => {
       if (selectedUserId) {
           const loc = activeLocations.find(l => l.userId === selectedUserId);
@@ -175,7 +156,7 @@ export function SupervisorMap() {
 
   return (
     <div className="flex flex-col h-[75vh] gap-4">
-        <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 scrollbar-hide">
+        <div className="flex gap-2 shrink-0 overflow-x-auto pb-2">
             {activeLocations.length > 0 ? (
                 activeLocations.map(loc => (
                     <Button 
@@ -189,7 +170,7 @@ export function SupervisorMap() {
                     </Button>
                 ))
             ) : (
-                <div className="text-[10px] font-black uppercase text-slate-400 p-2 italic">Esperando señal GPS de agentes...</div>
+                <div className="text-[10px] font-black uppercase text-slate-400 p-2 italic">Esperando señal GPS...</div>
             )}
         </div>
 
@@ -201,33 +182,15 @@ export function SupervisorMap() {
                 className="h-full w-full"
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                
                 <MapViewController center={mapCenter} />
-
-                {activeLocations.map(loc => (
-                    <SmoothMarker key={loc.userId} location={loc} />
-                ))}
-
+                {activeLocations.map(loc => <SmoothMarker key={loc.userId} location={loc} />)}
                 {zones.map(zone => {
                     try {
                         const positions = zone.geoJson.geometry.coordinates[0].map((c: any) => [c[1], c[0]]);
-                        return (
-                            <Polygon 
-                                key={zone.id} 
-                                positions={positions} 
-                                pathOptions={{ color: 'purple', fillOpacity: 0.2, weight: 2 }}
-                            />
-                        );
+                        return <Polygon key={zone.id} positions={positions} pathOptions={{ color: 'purple', fillOpacity: 0.2, weight: 2 }} />;
                     } catch(e) { return null; }
                 })}
-
-                {historyPath.length > 1 && (
-                    <Polyline 
-                        positions={historyPath} 
-                        pathOptions={{ color: 'blue', weight: 4, dashArray: '8, 12', opacity: 0.7 }} 
-                    />
-                )}
-
+                {historyPath.length > 1 && <Polyline positions={historyPath} pathOptions={{ color: 'blue', weight: 4, dashArray: '8, 12', opacity: 0.7 }} />}
                 <GeomanControl onZoneCreated={handleZoneCreated} />
             </MapContainer>
         </div>
