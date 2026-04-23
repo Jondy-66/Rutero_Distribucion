@@ -77,7 +77,7 @@ function RouteManagementContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   
-  const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
+  const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>(searchParams.get('routeId') || undefined);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
   const [isRouteStarted, setIsRouteStarted] = useState(false);
   const [currentRouteClientsFull, setCurrentRouteClientsFull] = useState<ClientInRoute[]>([]);
@@ -118,7 +118,6 @@ function RouteManagementContent() {
         if (!['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status)) return false;
         
         const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
-        // Filtro de semana ISO para garantizar visibilidad de planes hechos en fin de semana
         if (rDate < startOfCurrentWeek && r.status !== 'En Progreso') return false;
         
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
@@ -160,7 +159,7 @@ function RouteManagementContent() {
     
     if (selectedRoute) {
         const sanitized = sanitizeClients(next);
-        updateRoute(selectedRoute.id, { clients: sanitized }).catch(async (e) => {
+        updateRoute(selectedRoute.id, { clients: sanitized }).catch(async () => {
             errorEmitter.emit('permission-error', new FirestorePermissionError({ 
                 path: `routes/${selectedRoute.id}`, 
                 operation: 'update', 
@@ -180,7 +179,7 @@ function RouteManagementContent() {
     
     const sanitized = sanitizeClients(next);
     updateRoute(selectedRoute.id, { clients: sanitized })
-        .catch(async (e) => {
+        .catch(async () => {
             errorEmitter.emit('permission-error', new FirestorePermissionError({ 
                 path: `routes/${selectedRoute.id}`, 
                 operation: 'update', 
@@ -212,7 +211,7 @@ function RouteManagementContent() {
         if (!isAdmin && !isManager) setActiveOriginalIndex(null);
         refetchData('routes');
     })
-    .catch(async (e) => {
+    .catch(async () => {
         errorEmitter.emit('permission-error', new FirestorePermissionError({ 
             path: `routes/${selectedRoute.id}`, 
             operation: 'update', 
@@ -244,7 +243,7 @@ function RouteManagementContent() {
             setMultiSelectedClients([]); 
             setReAdditionObservation('');
         })
-        .catch(async (e) => {
+        .catch(async () => {
             errorEmitter.emit('permission-error', new FirestorePermissionError({ 
                 path: `routes/${selectedRoute.id}`, 
                 operation: 'update', 
@@ -381,12 +380,18 @@ function RouteManagementContent() {
                                         </div>
                                     )}
                                     <div className="grid grid-cols-3 gap-6">
-                                        {[{k:'valorVenta', l:'VENTA ($)'}, {k:'valorCobro', l:'COBRO ($)'}, {k:'devoluciones', l:'DEVOL ($)'}].map(f => (
-                                            <div key={f.k} className="space-y-2">
-                                                <Label className="text-[10px] font-black uppercase text-slate-950">{f.l}</Label>
-                                                <Input type="text" className="h-14 text-xl font-black text-primary border-2 rounded-2xl text-center text-slate-950" value={(activeClient as any)[f.k] ?? ''} onChange={e => handleFieldChange(f.k as any, e.target.value)} disabled={isEditingDisabled} />
-                                            </div>
-                                        ))}
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase text-slate-950">VENTA ($)</Label>
+                                            <Input type="text" className="h-14 text-xl font-black text-primary border-2 rounded-2xl text-center text-slate-950" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={isEditingDisabled} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase text-slate-950">COBRO ($)</Label>
+                                            <Input type="text" className="h-14 text-xl font-black text-primary border-2 rounded-2xl text-center text-slate-950" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={isEditingDisabled} />
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] font-black uppercase text-slate-950">DEVOL ($)</Label>
+                                            <Input type="text" className="h-14 text-xl font-black text-primary border-2 rounded-2xl text-center text-slate-950" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={isEditingDisabled} />
+                                        </div>
                                     </div>
                                     <Button onClick={handleCheckOut} className="w-full h-18 text-xl font-black rounded-3xl shadow-2xl uppercase" disabled={isSaving || isEditingDisabled || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim())}>
                                         {isSaving ? <LoaderCircle className="animate-spin" /> : <><LogOut className="mr-3 h-6 w-6" /> CERRAR VISITA</>}

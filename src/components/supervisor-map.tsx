@@ -76,7 +76,7 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
 function SmoothMarker({ location }: { location: ActiveLocation }) {
     const [pos, setPos] = useState<[number, number]>([location.lat, location.lng]);
     const target = useRef<[number, number]>([location.lat, location.lng]);
-    const animationFrame = useRef<number>();
+    const animationFrame = useRef<number>(undefined);
 
     useEffect(() => {
         target.current = [location.lat, location.lng];
@@ -178,7 +178,6 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
-            {/* NO USAMOS key dinámica para mantener la instancia de Leaflet estable y evitar errores de inicialización */}
             <MapContainer 
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
