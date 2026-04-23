@@ -109,7 +109,7 @@ function RouteManagementContent() {
 
   const selectableRoutes = useMemo(() => {
     if (!user) return [];
-    // Restauramos visibilidad completa: Rutas propias o gestionadas que no estén finalizadas sin filtro de fecha semanal restrictivo
+    // Restauramos visibilidad completa para asegurar que el usuario vea sus rutas
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
