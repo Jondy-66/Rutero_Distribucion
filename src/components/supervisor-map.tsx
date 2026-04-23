@@ -182,7 +182,6 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
-            {/* MapContainer sin ID estático ni keys dinámicas para asegurar estabilidad absoluta */}
             <MapContainer 
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 

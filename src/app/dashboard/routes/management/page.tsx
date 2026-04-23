@@ -156,17 +156,6 @@ function RouteManagementContent() {
     const next = [...currentRouteClientsFull];
     next[activeOriginalIndex] = { ...next[activeOriginalIndex], [field]: value };
     setCurrentRouteClientsFull(next);
-    
-    if (selectedRoute) {
-        const sanitized = sanitizeClients(next);
-        updateRoute(selectedRoute.id, { clients: sanitized }).catch(async () => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-                path: `routes/${selectedRoute.id}`, 
-                operation: 'update', 
-                requestResourceData: { clients: sanitized } 
-            }));
-        });
-    }
   };
 
   const handleCheckIn = async () => {
