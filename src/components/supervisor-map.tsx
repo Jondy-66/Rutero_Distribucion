@@ -64,7 +64,13 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
     });
 
     return () => { 
-        if (map.pm) map.pm.removeControls(); 
+        if (map.pm) {
+          try {
+            map.pm.removeControls();
+          } catch (e) {
+            // Manejo silencioso en el desmontaje
+          }
+        }
     };
   }, [map, onZoneCreated]);
 
@@ -99,9 +105,10 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
         <Marker position={pos} icon={location.is_out_of_route ? redIcon : blueIcon}>
             <Popup>
                 <div className="font-black uppercase text-[10px] text-slate-950">
-                    {location.userName}
+                    <p className="font-black text-xs text-primary">{location.userName}</p>
                     {location.is_out_of_route && <p className="text-red-600 mt-1 font-black">ALERTA: FUERA DE RUTA</p>}
                     <p className="text-slate-500 mt-0.5">Precisión: {location.accuracy?.toFixed(1)}m</p>
+                    <p className="text-[8px] text-slate-400 mt-1 uppercase font-mono">{location.timestamp?.toLocaleString()}</p>
                 </div>
             </Popup>
         </Marker>
@@ -164,7 +171,7 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!isMounted) return <div className="h-[75vh] bg-slate-50 rounded-[2rem] animate-pulse" />;
+  if (!isMounted) return <div className="h-[75vh] bg-slate-50 rounded-[2.5rem] animate-pulse" />;
 
   return (
     <div className="flex flex-col h-[75vh] gap-4">
