@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -109,14 +110,13 @@ function RouteManagementContent() {
 
   const selectableRoutes = useMemo(() => {
     if (!user) return [];
+    // Restauramos visibilidad completa: Rutas propias o gestionadas que no estén finalizadas
     return allRoutes.filter(r => {
-        const isOwn = r.createdBy === user?.id;
+        const isOwn = r.createdBy === user.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
         
-        // El selector debe mostrar cualquier ruta que pertenezca al usuario o que gestione
         if (!isOwn && !isManaged && !isAdmin) return false;
         
-        // Filtro por estado: Solo rutas que no estén completadas o rechazadas para iniciar gestión
         const isValidStatus = ['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status);
         if (!isValidStatus) return false;
         
