@@ -11,7 +11,7 @@ import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTri
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, startOfWeek } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -108,18 +108,14 @@ function RouteManagementContent() {
   }, [allUsers, user]);
 
   const selectableRoutes = useMemo(() => {
-    const startOfCurrentWeek = startOfWeek(new Date(), { weekStartsOn: 1 });
-    startOfCurrentWeek.setHours(0, 0, 0, 0);
-
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user?.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
         if (!isOwn && !isManaged && !isAdmin) return false;
         
+        // Mostramos cualquier ruta vigente (Planificada, En Progreso o Pendiente) asignada al usuario
         if (!['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status)) return false;
         
-        const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
-        if (rDate < startOfCurrentWeek && r.status !== 'En Progreso') return false;
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
         
         return true; 
@@ -148,7 +144,7 @@ function RouteManagementContent() {
   }, [currentRouteClientsFull, availableClients]);
 
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
-  const activeClient = activeOriginalIndex !== null ? currentRouteClientsFull[activeOriginalIndex] : null;
+  const activeClient = activeOriginalIndex !== null && currentRouteClientsFull[activeOriginalIndex] ? currentRouteClientsFull[activeOriginalIndex] : null;
   const isEditingDisabled = (activeClient?.visitStatus === 'Completado' || isExpired) && !isAdmin;
 
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {

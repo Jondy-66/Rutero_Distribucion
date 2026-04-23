@@ -8,7 +8,7 @@ import React, { createContext, useState, useEffect, ReactNode, useCallback, useR
 import { User as FirebaseAuthUser, onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase/config';
 import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
-import { collection, doc, onSnapshot, query, where, Timestamp, orderBy, limit } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
 import { getClients, getUsers, getRoutes, getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore, getMyClients, getMyRoutes } from '@/lib/firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -42,31 +42,32 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
   const [dataLoading, setDataLoading] = useState(false);
   
-  const isDataInitialized = useRef(false);
+  const isDataInitialized = useRef<string | null>(null);
 
   /**
    * Carga inicial de datos globales con filtros por rol y manejo individual de errores.
    */
   const fetchInitialData = useCallback(async (currentUser: User) => {
-    if (isDataInitialized.current) return;
-    setDataLoading(true);
+    // Si los datos ya se cargaron para este usuario, no repetir
+    if (isDataInitialized.current === currentUser.id) return;
     
+    setDataLoading(true);
     const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor' || currentUser.role === 'Auditor';
     
     try {
-        const usersRes = await getUsers().catch(e => { console.error(e); return []; });
+        const [usersRes, clientsRes, routesRes, phoneRes] = await Promise.all([
+            getUsers().catch(e => { console.error("Error cargando usuarios:", e); return []; }),
+            (isSourcingAll ? getClients() : getMyClients(currentUser.name)).catch(e => { console.error("Error cargando clientes:", e); return []; }),
+            (isSourcingAll ? getRoutes() : getMyRoutes(currentUser.id)).catch(e => { console.error("Error cargando rutas:", e); return []; }),
+            getPhoneContacts().catch(e => { console.error("Error cargando contactos:", e); return []; })
+        ]);
+
         setUsers(usersRes);
-
-        const clientsRes = await (isSourcingAll ? getClients() : getMyClients(currentUser.name)).catch(e => { console.error(e); return []; });
         setClients(clientsRes);
-
-        const routesRes = await (isSourcingAll ? getRoutes() : getMyRoutes(currentUser.id)).catch(e => { console.error(e); return []; });
         setRoutes(routesRes);
-
-        const phoneRes = await getPhoneContacts().catch(e => { console.error(e); return []; });
         setPhoneContacts(phoneRes);
         
-        isDataInitialized.current = true;
+        isDataInitialized.current = currentUser.id;
     } catch(error) {
         console.error("Error crítico cargando datos iniciales:", error);
     } finally {
@@ -163,7 +164,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setRoutes([]);
         setPhoneContacts([]);
         setNotifications([]);
-        isDataInitialized.current = false;
+        isDataInitialized.current = null;
         setLoading(false);
       }
     });

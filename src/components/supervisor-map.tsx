@@ -60,7 +60,7 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
       onZoneCreated(json);
     });
     return () => { 
-        if (map.pm) {
+        if (map?.pm) {
             map.pm.removeControls();
             map.off('pm:create');
         }
@@ -111,6 +111,9 @@ export function SupervisorMap() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
+  
+  // Garantizamos una clave única por montaje para evitar "Map container is already initialized"
+  const [instanceKey] = useState(() => `map-${Math.random().toString(36).substr(2, 9)}`);
 
   useEffect(() => {
     setIsMounted(true);
@@ -120,7 +123,11 @@ export function SupervisorMap() {
     const unsubZones = onSnapshot(collection(db, 'zones'), (snap) => {
         setZones(snap.docs.map(d => ({ id: d.id, ...d.data() } as Zone)));
     });
-    return () => { unsubLocs(); unsubZones(); };
+    return () => { 
+        unsubLocs(); 
+        unsubZones();
+        setIsMounted(false);
+    };
   }, []);
 
   const fetchUserHistory = async (userId: string) => {
@@ -154,7 +161,6 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  // Si no está montado, evitamos que Leaflet se inicialice en el servidor
   if (!isMounted) return <div className="h-[75vh] bg-slate-50 rounded-[2.5rem] animate-pulse border-4 border-slate-100" />;
 
   return (
@@ -179,6 +185,7 @@ export function SupervisorMap() {
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
             <MapContainer 
+                key={instanceKey}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
