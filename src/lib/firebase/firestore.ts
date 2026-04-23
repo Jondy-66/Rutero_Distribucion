@@ -163,7 +163,8 @@ export const getRoutes = async (): Promise<RoutePlan[]> => {
 };
 
 export const getMyRoutes = async (userId: string): Promise<RoutePlan[]> => {
-    const q = query(collection(db, 'routes'), where('createdBy', '==', userId), orderBy('date', 'desc'));
+    // Simplificamos la consulta eliminando el orderBy para evitar requerir índices compuestos inmediatos
+    const q = query(collection(db, 'routes'), where('createdBy', '==', userId));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(d => ({id: d.id, ...d.data()})) as any;
 };

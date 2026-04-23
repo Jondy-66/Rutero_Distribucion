@@ -107,16 +107,16 @@ function RouteManagementContent() {
     return [];
   }, [allUsers, user]);
 
-  // VISIBILIDAD DE RUTAS: Filtro corregido para que el usuario siempre vea sus rutas vigentes
   const selectableRoutes = useMemo(() => {
     if (!user) return [];
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user?.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
         
+        // El selector debe mostrar cualquier ruta que pertenezca al usuario o que gestione
         if (!isOwn && !isManaged && !isAdmin) return false;
         
-        // Filtro por estado: Solo rutas que no estén completadas o rechazadas
+        // Filtro por estado: Solo rutas que no estén completadas o rechazadas para iniciar gestión
         const isValidStatus = ['Planificada', 'En Progreso', 'Pendiente de Aprobación'].includes(r.status);
         if (!isValidStatus) return false;
         
