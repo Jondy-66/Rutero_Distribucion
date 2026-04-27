@@ -1,5 +1,6 @@
+
 'use client';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
-import { getRoutes, deleteRoute, updateRoute } from '@/lib/firebase/firestore';
+import { deleteRoute, updateRoute } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
 import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw, CheckCircle, PlayCircle, Users as UsersIcon, Route as RouteIcon } from 'lucide-react';
@@ -44,37 +45,10 @@ import {
 import { Timestamp } from 'firebase/firestore';
 
 export default function TeamRoutesPage() {
-  const { user, users, loading: authLoading } = useAuth();
-  const { toast } = useToast();
+  const { user, users, routes: globalRoutes, loading: authLoading, dataLoading, refetchData } = useAuth();
   const router = useRouter();
-  const [allRoutes, setAllRoutes] = useState<RoutePlan[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
   const [selectedUser, setSelectedUser] = useState<string>('all');
-  
-   const fetchRoutesData = async () => {
-      setLoading(true);
-      try {
-        const routesData = await getRoutes();
-        setAllRoutes(routesData);
-      } catch (error: any) {
-        console.error("Failed to fetch routes:", error);
-        toast({
-          title: "Error al Cargar Rutas",
-          description: "No se pudieron cargar las rutas planificadas.",
-          variant: "destructive"
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-  useEffect(() => {
-    if (user && (user.role === 'Administrador' || user.role === 'Supervisor')) {
-      fetchRoutesData();
-    } else if(!authLoading) {
-      setLoading(false);
-    }
-  }, [user, authLoading]);
 
   const managedUsers = useMemo(() => {
     if (!user) return [];
@@ -88,14 +62,21 @@ export default function TeamRoutesPage() {
   }, [users, user]);
 
   const filteredRoutes = useMemo(() => {
-    if (!user) return [];
+    if (!user || !globalRoutes) return [];
+    
     let routesToFilter: RoutePlan[] = [];
+    
     if (user.role === 'Administrador') {
-        routesToFilter = allRoutes.filter(route => route.createdBy !== user.id);
+        // El administrador ve todas las rutas excepto las propias en esta vista de equipo
+        routesToFilter = globalRoutes.filter(route => route.createdBy !== user.id);
     } else if (user.role === 'Supervisor') {
+        // El supervisor ve rutas donde es el supervisor asignado O rutas creadas por su equipo
         const managedUserIds = managedUsers.map(u => u.id);
-        routesToFilter = allRoutes.filter(route => managedUserIds.includes(route.createdBy));
+        routesToFilter = globalRoutes.filter(route => 
+            route.supervisorId === user.id || managedUserIds.includes(route.createdBy)
+        );
     }
+
     if (selectedUser !== 'all') {
         routesToFilter = routesToFilter.filter(route => route.createdBy === selectedUser);
     }
@@ -112,7 +93,7 @@ export default function TeamRoutesPage() {
         };
         return getPriority(a.status) - getPriority(b.status);
     });
-  }, [allRoutes, user, managedUsers, selectedUser]);
+  }, [globalRoutes, user, managedUsers, selectedUser]);
   
   const getCreatorName = (creatorId: string) => {
       const creator = users.find(u => u.id === creatorId);
@@ -131,7 +112,7 @@ export default function TeamRoutesPage() {
     try {
         await deleteRoute(routeId);
         toast({ title: "Éxito", description: "Ruta eliminada correctamente." });
-        fetchRoutesData(); 
+        await refetchData('routes');
     } catch (error: any) {
         console.error('Failed to delete route:', error);
         toast({ title: 'Error', description: 'No se pudo eliminar la ruta.', variant: 'destructive' });
@@ -142,7 +123,7 @@ export default function TeamRoutesPage() {
     try {
       await updateRoute(routeId, { status: 'Completada' });
       toast({ title: "Ruta Finalizada", description: "La ruta ha sido marcada como completada manualmente." });
-      fetchRoutesData();
+      await refetchData('routes');
     } catch (error: any) {
       console.error("Failed to finalize route:", error);
       toast({ title: "Error", description: "No se pudo finalizar la ruta.", variant: "destructive" });
@@ -153,7 +134,7 @@ export default function TeamRoutesPage() {
     try {
       await updateRoute(routeId, { status: 'En Progreso' });
       toast({ title: "Éxito", description: "La ruta ha sido reactivada a En Progreso." });
-      fetchRoutesData();
+      await refetchData('routes');
     } catch (error: any) {
       console.error("Failed to reactivate route:", error);
       toast({ title: "Error", description: "No se pudo reactivar la ruta.", variant: "destructive" });
@@ -180,9 +161,16 @@ export default function TeamRoutesPage() {
       if (date instanceof Date && !isNaN(date.getTime())) {
           return format(date, 'PPP', { locale: es });
       }
+      try {
+          return format(new Date(date as any), 'PPP', { locale: es });
+      } catch (e) {
+          return 'N/A';
+      }
     }
     return 'N/A';
   };
+
+  const isLoading = authLoading || (dataLoading && globalRoutes.length === 0);
 
   if (authLoading) {
       return <PageHeader title="Rutas de Equipo" description="Cargando..." />
@@ -237,7 +225,7 @@ export default function TeamRoutesPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {loading ? (
+                        {isLoading ? (
                             Array.from({ length: 5 }).map((_, i) => (
                                 <TableRow key={i}>
                                     <TableCell><Skeleton className="h-5 w-8" /></TableCell>
