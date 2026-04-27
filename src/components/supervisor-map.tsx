@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
@@ -84,12 +85,12 @@ export function SupervisorMap() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   
-  // SOLUCIÓN: Clave de instancia garantiza que react-leaflet inicialice un contenedor limpio
+  // SOLUCIÓN DEFINITIVA: Clave de instancia garantiza que react-leaflet inicialice un contenedor limpio
   const [mapKey, setMapKey] = useState<string | null>(null);
   const mapInstance = useRef<L.Map | null>(null);
 
   useEffect(() => {
-    // Establecemos una clave única al montar para asegurar un contenedor DOM virgen
+    // Generar identificador único de instancia al montar en el cliente
     setMapKey(`map-v${Math.random().toString(36).substring(7)}`);
 
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
@@ -102,9 +103,14 @@ export function SupervisorMap() {
     return () => { 
         unsubLocs(); 
         unsubZones();
-        // Limpieza explícita de la instancia de Leaflet para evitar el error de inicialización doble
+        // Limpieza agresiva de la instancia de Leaflet
         if (mapInstance.current) {
-            mapInstance.current.remove();
+            try {
+                mapInstance.current.off();
+                mapInstance.current.remove();
+            } catch(e) {
+                console.warn("Leaflet cleanup error:", e);
+            }
             mapInstance.current = null;
         }
     };
@@ -168,7 +174,6 @@ export function SupervisorMap() {
         </div>
 
         <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
-            {/* Clave de instancia garantiza que react-leaflet inicialice un contenedor limpio */}
             <MapContainer 
                 key={mapKey}
                 center={[-1.8312, -78.1834]} 

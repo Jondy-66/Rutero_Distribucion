@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -7,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTriangle, ThumbsUp, Users as UsersIcon } from 'lucide-react';
+import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTriangle, ThumbsUp, Users as UsersIcon, CalendarDays } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -109,8 +110,6 @@ function RouteManagementContent() {
 
   const selectableRoutes = useMemo(() => {
     if (!user) return [];
-    
-    // REQUERIMIENTO: Solo rutas actuales (Planificada o En Progreso). Se excluye el historial de completadas.
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
@@ -129,7 +128,6 @@ function RouteManagementContent() {
     return allRoutes.find(r => r.id === rid);
   }, [selectedRouteId, allRoutes, searchParams]);
 
-  // Auto-selección de ruta activa si ya hay una iniciada
   useEffect(() => {
     if (!selectedRouteId && selectableRoutes.length > 0) {
         const activeOne = selectableRoutes.find(r => r.status === 'En Progreso');
@@ -145,12 +143,23 @@ function RouteManagementContent() {
   }, [selectedRoute, isManager]);
 
   const todaysClients = useMemo(() => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+
     return currentRouteClientsFull
         .map((c, index) => {
             const d = availableClients.find(ac => String(ac.ruc).trim() === String(c.ruc).trim());
             return { ...c, originalIndex: index, direccion: d?.direccion || 'SIN DIRECCIÓN' };
         })
-        .filter(c => c.status !== 'Eliminado');
+        .filter(c => {
+            if (c.status === 'Eliminado') return false;
+            if (!c.date) return false;
+            
+            const clientDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date as any));
+            const clientDateStr = format(clientDate, 'yyyy-MM-dd');
+            
+            // FILTRO ESTRICTO DE HOY (Comparación Robusta por String)
+            return clientDateStr === todayStr;
+        });
   }, [currentRouteClientsFull, availableClients]);
 
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
@@ -326,7 +335,12 @@ function RouteManagementContent() {
                         <Button variant="outline" className="w-full h-12 border-dashed border-2 font-black text-xs rounded-xl flex items-center justify-center gap-2" onClick={() => setIsAddClientDialogOpen(true)} disabled={isEditingDisabled}><CirclePlus className="h-4 w-4 text-primary" /> AGREGAR EXTRA</Button>
                         <ScrollArea className="flex-1">
                             <div className="space-y-3 pr-4">
-                                {todaysClients.map((c) => (
+                                {todaysClients.length === 0 ? (
+                                    <div className="flex flex-col items-center justify-center py-20 text-center opacity-30 gap-4">
+                                        <CalendarDays className="h-12 w-12 text-slate-400" />
+                                        <p className="font-black uppercase text-[10px] text-slate-950">No hay clientes programados para hoy en esta ruta.</p>
+                                    </div>
+                                ) : todaysClients.map((c) => (
                                     <div key={`${c.ruc}-${c.originalIndex}`} onClick={() => setActiveOriginalIndex(c.originalIndex)} className={cn("p-4 border-2 rounded-2xl cursor-pointer transition-all bg-white", activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-slate-100 hover:border-slate-300")}>
                                         <p className={cn("font-black text-xs truncate uppercase text-slate-950", activeOriginalIndex === c.originalIndex && "text-primary")}>{c.nombre_comercial}</p>
                                         <div className="flex items-center gap-2 mt-1">
@@ -348,7 +362,7 @@ function RouteManagementContent() {
                                 <h3 className="text-2xl font-black text-primary uppercase leading-tight tracking-tighter">{activeClient.nombre_comercial}</h3>
                                 <p className="text-[10px] font-black text-slate-950 uppercase opacity-70 truncate">{activeClient.direccion}</p>
                             </div>
-                        ) : isTodayFinished ? (
+                        ) : isTodayFinished && todaysClients.length > 0 ? (
                             <div className="flex items-center justify-center gap-3">
                                 <ThumbsUp className="h-6 w-6 text-green-600" />
                                 <div className="text-xl text-green-600 uppercase font-black">OBJETIVOS CUMPLIDOS</div>
@@ -358,7 +372,7 @@ function RouteManagementContent() {
                         )}
                     </CardHeader>
                     <CardContent className="p-10 space-y-8 flex-1 overflow-y-auto">
-                        {!activeClient && isTodayFinished ? (
+                        {!activeClient && isTodayFinished && todaysClients.length > 0 ? (
                             <div className="flex flex-col items-center justify-center p-10 h-full space-y-6">
                                 <div className="bg-green-100 p-8 rounded-full">
                                     <ThumbsUp className="h-24 w-24 text-green-600" />
