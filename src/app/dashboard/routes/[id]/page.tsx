@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter, notFound } from 'next/navigation';
@@ -70,6 +69,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
      if (!currentUser || !route) return false;
      const isPending = route.status === 'Pendiente de Aprobación';
      const isAuthAdmin = currentUser.role === 'Administrador';
+     // El supervisor puede aprobar si la ruta le fue asignada explícitamente
      const isMyRouteAsSupervisor = currentUser.id === route.supervisorId;
      return isPending && (isAuthAdmin || isMyRouteAsSupervisor);
   }, [currentUser, route]);
@@ -101,7 +101,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   }, [routeId, toast]);
   
   useEffect(() => {
-      if (users) setSupervisors(users.filter(u => u.role === 'Supervisor'));
+      if (users) setSupervisors(users.filter(u => u.role === 'Supervisor' || u.role === 'Administrador'));
   }, [users]);
 
   const handleInputChange = <K extends keyof RoutePlan>(field: K, value: RoutePlan[K]) => {
@@ -282,15 +282,25 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   return (
     <div className="flex flex-col space-y-6">
       <PageHeader 
-        title={canApprove ? "Revisar Ruta" : "Detalles de la Ruta"} 
+        title={canApprove ? "Revisión de Plan de Ruta" : "Detalles de la Ruta"} 
         description="Gestión de paradas y cronograma semanal."
       >
-        <Link href="/dashboard/routes">
-          <Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" /> Volver</Button>
+        <Link href="/dashboard/routes/team-routes">
+          <Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" /> Volver al Listado</Button>
         </Link>
       </PageHeader>
 
       <div className="space-y-6">
+        {canApprove && (
+            <Alert className="border-amber-500 bg-amber-50 shadow-md">
+                <ShieldCheck className="h-5 w-5 text-amber-600" />
+                <AlertTitle className="text-amber-800 font-black uppercase">Ruta en Espera de Aprobación</AlertTitle>
+                <AlertDescription className="text-amber-700 font-bold text-xs">
+                    ESTE PLAN HA SIDO ENVIADO PARA TU REVISIÓN. PUEDES EDITAR LAS PARADAS O VALORES ANTES DE APROBAR.
+                </AlertDescription>
+            </Alert>
+        )}
+
         {route.status === 'Rechazada' && (
           <Alert variant="destructive" className="mb-6">
             <ThumbsDown className="h-4 w-4" />
@@ -323,28 +333,28 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         )}
 
         <Card>
-          <CardHeader><CardTitle>Información General</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="font-black uppercase text-slate-950">Información General</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2 sm:col-span-2">
-              <Label>Nombre de la Ruta</Label>
-              <Input value={route.routeName} onChange={(e) => handleInputChange('routeName', e.target.value)} disabled={isFormDisabled} />
+              <Label className="font-bold uppercase text-[10px]">Nombre de la Ruta</Label>
+              <Input value={route.routeName} onChange={(e) => handleInputChange('routeName', e.target.value)} disabled={isFormDisabled} className="font-black text-slate-950" />
             </div>
             <div className="space-y-2">
-              <Label>Supervisor</Label>
+              <Label className="font-bold uppercase text-[10px]">Supervisor Asignado</Label>
               <Select value={route.supervisorId} onValueChange={(v) => handleInputChange('supervisorId', v)} disabled={isFormDisabled}>
-                <SelectTrigger><Users className="mr-2 h-4 w-4" /><SelectValue placeholder="Asignar supervisor" /></SelectTrigger>
-                <SelectContent>{supervisors.map(s => (<SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>))}</SelectContent>
+                <SelectTrigger className="font-black"><Users className="mr-2 h-4 w-4" /><SelectValue placeholder="Asignar supervisor" /></SelectTrigger>
+                <SelectContent>{supervisors.map(s => (<SelectItem key={s.id} value={s.id} className="font-black">{s.name}</SelectItem>))}</SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Estado</Label>
-              <Badge variant="outline" className="h-10 w-full flex items-center justify-center font-black uppercase">{route.status}</Badge>
+              <Label className="font-bold uppercase text-[10px]">Estado del Plan</Label>
+              <Badge variant="outline" className="h-10 w-full flex items-center justify-center font-black uppercase border-2 border-primary/20 text-primary bg-primary/5">{route.status}</Badge>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Visitas por Día</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="font-black uppercase text-slate-950">Cronograma de Visitas</CardTitle></CardHeader>
           <CardContent>
             <div className="space-y-4">
               {groupedClients.length > 0 ? (
@@ -363,11 +373,11 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                     </CollapsibleTrigger>
                     <CollapsibleContent className="space-y-4 p-2 mt-2">
                       {clientsInGroup.map((client) => (
-                        <Card key={client.ruc} className="p-4 relative hover:shadow-md border-l-2 border-l-primary/10">
+                        <Card key={client.ruc} className="p-4 relative hover:shadow-md border-l-2 border-l-primary/10 bg-white">
                           <div className="flex justify-between items-start">
                             <div className="space-y-1">
-                              <p className="font-bold text-sm text-primary uppercase">{client.globalIndex + 1}. {client.nombre_comercial}</p>
-                              <p className="text-[10px] font-mono text-muted-foreground uppercase">{client.ruc}</p>
+                              <p className="font-black text-sm text-primary uppercase leading-tight">{client.globalIndex + 1}. {client.nombre_comercial}</p>
+                              <p className="text-[10px] font-mono font-bold text-slate-400 uppercase">{client.ruc}</p>
                             </div>
                             <Button type="button" variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.ruc)} disabled={isFormDisabled}>
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -376,10 +386,10 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                           <Separator className="my-3" />
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="space-y-1">
-                              <Label className="text-[10px] uppercase font-black">Fecha de Visita</Label>
+                              <Label className="text-[9px] uppercase font-black text-slate-500">Fecha de Visita</Label>
                               <Popover open={calendarOpen[client.ruc]} onOpenChange={(o) => setCalendarOpen(p => ({ ...p, [client.ruc]: o }))}>
                                 <PopoverTrigger asChild>
-                                  <Button variant="outline" className="w-full justify-start h-9 text-xs font-bold" disabled={isFormDisabled}>
+                                  <Button variant="outline" className="w-full justify-start h-9 text-xs font-black uppercase" disabled={isFormDisabled}>
                                     <CalendarIcon className="mr-2 h-3 w-3" />
                                     {client.date ? format(ensureDate(client.date), 'dd/MM/yyyy') : 'Sin Fecha'}
                                   </Button>
@@ -390,12 +400,12 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                               </Popover>
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[10px] uppercase font-black">Venta ($)</Label>
-                              <Input type="number" className="h-9 text-xs font-bold" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
+                              <Label className="text-[9px] uppercase font-black text-slate-500">Venta Proyectada ($)</Label>
+                              <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
                             </div>
                             <div className="space-y-1">
-                              <Label className="text-[10px] uppercase font-black">Cobro ($)</Label>
-                              <Input type="number" className="h-9 text-xs font-bold" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
+                              <Label className="text-[9px] uppercase font-black text-slate-500">Cobro Proyectado ($)</Label>
+                              <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
                             </div>
                           </div>
                         </Card>
@@ -410,28 +420,28 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
           </CardContent>
         </Card>
 
-        <div className="flex justify-end p-4 bg-background sticky bottom-0 border-t z-10 shadow-lg gap-2">
+        <div className="flex flex-col sm:flex-row justify-end p-4 bg-background sticky bottom-0 border-t z-10 shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.1)] gap-3">
           {canEdit && (
-            <Button type="button" onClick={handleUpdateRoute} disabled={isFormDisabled} className="font-black px-8"> 
+            <Button type="button" onClick={handleUpdateRoute} disabled={isFormDisabled} className="font-black px-10 h-12 shadow-lg"> 
               {isSaving && <LoaderCircle className="animate-spin mr-2" />} GUARDAR CAMBIOS
             </Button>
           )}
           {canApprove && (
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-3">
               <Button 
                 variant="destructive" 
                 onClick={() => setIsRejectDialogOpen(true)}
                 disabled={isSaving}
-                className="font-black"
+                className="font-black h-12 px-8 shadow-lg uppercase"
               >
-                <XCircle className="mr-2 h-4 w-4" /> RECHAZAR RUTA
+                <XCircle className="mr-2 h-5 w-5" /> RECHAZAR PLAN
               </Button>
               <Button 
                 onClick={handleApprove}
                 disabled={isSaving}
-                className="bg-green-600 hover:bg-green-700 font-black text-white"
+                className="bg-green-600 hover:bg-green-700 font-black text-white h-12 px-12 shadow-lg uppercase"
               >
-                <CheckCircle className="mr-2 h-4 w-4" /> APROBAR RUTA
+                <CheckCircle className="mr-2 h-5 w-5" /> APROBAR PLAN DE RUTA
               </Button>
             </div>
           )}
@@ -439,58 +449,58 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       </div>
 
       <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
-        <DialogContent>
+        <DialogContent className="rounded-2xl border-none shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="font-black uppercase text-red-600">Rechazar Plan de Ruta</DialogTitle>
-            <DialogDescription className="text-xs font-bold uppercase">Por favor, indica el motivo para que el usuario pueda corregir su planificación.</DialogDescription>
+            <DialogTitle className="font-black uppercase text-red-600 text-xl">Rechazar Plan de Ruta</DialogTitle>
+            <DialogDescription className="text-xs font-bold uppercase text-slate-500 leading-relaxed">Indica el motivo del rechazo para que el ejecutivo pueda realizar las correcciones necesarias.</DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label className="font-bold uppercase text-[10px]">Observación del Supervisor</Label>
+          <div className="py-6">
+            <Label className="font-black uppercase text-[10px] text-slate-950">Observación del Supervisor</Label>
             <Textarea 
               value={rejectionReason} 
               onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="Ej: Motivo del rechazo..."
-              className="mt-2 font-bold text-sm h-32"
+              placeholder="Ej: Ruta con clientes fuera de zona, valores incorrectos..."
+              className="mt-2 font-black text-sm h-32 border-2 focus:ring-4 focus:ring-destructive/10"
             />
           </div>
-          <DialogFooter>
-            <DialogClose asChild><Button variant="ghost" className="font-bold">CANCELAR</Button></DialogClose>
+          <DialogFooter className="gap-2">
+            <DialogClose asChild><Button variant="ghost" className="font-black uppercase">Cancelar</Button></DialogClose>
             <Button 
               variant="destructive" 
               onClick={handleReject} 
               disabled={isSaving || !rejectionReason.trim()}
-              className="font-black"
+              className="font-black uppercase h-11 shadow-lg"
             >
-              {isSaving && <LoaderCircle className="animate-spin mr-2 h-4 w-4" />} CONFIRMAR RECHAZO
+              {isSaving ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : 'CONFIRMAR RECHAZO'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       <Dialog open={isRemovalDialogOpen} onOpenChange={setIsRemovalDialogOpen}>
-        <DialogContent>
+        <DialogContent className="rounded-2xl border-none shadow-2xl">
           <DialogHeader>
-            <DialogTitle className="font-black uppercase text-destructive flex items-center gap-2">
-                <Trash2 className="h-5 w-5" /> Eliminar Cliente de Ruta
+            <DialogTitle className="font-black uppercase text-destructive flex items-center gap-2 text-xl">
+                <Trash2 className="h-6 w-6" /> Eliminar Parada
             </DialogTitle>
-            <DialogDescription className="text-xs font-bold uppercase">Es obligatorio indicar el motivo por el cual este cliente no será visitado.</DialogDescription>
+            <DialogDescription className="text-xs font-bold uppercase text-slate-500 leading-relaxed">Debes indicar el motivo por el cual este cliente no será visitado en este plan.</DialogDescription>
           </DialogHeader>
-          <div className="py-4">
-            <Label className="font-bold uppercase text-[10px]">Motivo de la Eliminación</Label>
+          <div className="py-6">
+            <Label className="font-black uppercase text-[10px] text-slate-950">Motivo de la Eliminación</Label>
             <Textarea 
               value={removalReason} 
               onChange={(e) => setRemovalReason(e.target.value)}
-              placeholder="Ej: Cliente solicitó cambio de fecha, local cerrado permanentemente, etc."
-              className="mt-2 font-bold text-sm h-32"
+              placeholder="Ej: Local cerrado permanentemente, cliente canceló cita..."
+              className="mt-2 font-black text-sm h-32 border-2 focus:ring-4 focus:ring-destructive/10"
             />
           </div>
-          <DialogFooter>
-            <DialogClose asChild><Button variant="ghost" className="font-bold">CANCELAR</Button></DialogClose>
+          <DialogFooter className="gap-2">
+            <DialogClose asChild><Button variant="ghost" className="font-black uppercase">Cancelar</Button></DialogClose>
             <Button 
               variant="destructive" 
               onClick={confirmRemoval} 
               disabled={!removalReason.trim()}
-              className="font-black"
+              className="font-black uppercase h-11 shadow-lg"
             >
               ELIMINAR CLIENTE
             </Button>
@@ -500,3 +510,5 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     </div>
   );
 }
+
+import { ShieldCheck } from 'lucide-react';

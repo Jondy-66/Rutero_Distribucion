@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -50,11 +49,13 @@ export default function TeamRoutesPage() {
   const { toast } = useToast();
   const [selectedUser, setSelectedUser] = useState<string>('all');
 
-  const managedUsers = useMemo(() => {
+  const managedUsersForSelect = useMemo(() => {
     if (!user) return [];
+    // Administrador ve a todos para filtrar
     if (user.role === 'Administrador') {
-      return users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
+      return users.filter(u => u.id !== user.id);
     }
+    // Supervisor ve a su equipo
     if (user.role === 'Supervisor') {
       return users.filter(u => u.supervisorId === user.id);
     }
@@ -67,11 +68,11 @@ export default function TeamRoutesPage() {
     let routesToFilter: RoutePlan[] = [];
     
     if (user.role === 'Administrador') {
-        // El administrador ve todas las rutas excepto las propias en esta vista de equipo
-        routesToFilter = globalRoutes.filter(route => route.createdBy !== user.id);
+        // El administrador ve ABSOLUTAMENTE TODO en el sistema
+        routesToFilter = [...globalRoutes];
     } else if (user.role === 'Supervisor') {
-        // El supervisor ve rutas donde es el supervisor asignado O rutas creadas por su equipo
-        const managedUserIds = managedUsers.map(u => u.id);
+        // El supervisor ve rutas donde es el responsable O rutas creadas por su equipo
+        const managedUserIds = managedUsersForSelect.map(u => u.id);
         routesToFilter = globalRoutes.filter(route => 
             route.supervisorId === user.id || managedUserIds.includes(route.createdBy)
         );
@@ -81,19 +82,19 @@ export default function TeamRoutesPage() {
         routesToFilter = routesToFilter.filter(route => route.createdBy === selectedUser);
     }
 
-    // ORDEN ESPECÍFICO: 'En Progreso' primero, luego 'Completada', luego el resto
+    // ORDEN ESTRATÉGICO: 'En Progreso' primero, luego 'Pendiente de Aprobación', luego 'Completada', luego el resto
     return [...routesToFilter].sort((a, b) => {
         const getPriority = (status: string) => {
             if (status === 'En Progreso') return 1;
-            if (status === 'Completada') return 2;
+            if (status === 'Pendiente de Aprobación') return 2;
             if (status === 'Planificada') return 3;
-            if (status === 'Pendiente de Aprobación') return 4;
+            if (status === 'Completada') return 4;
             if (status === 'Rechazada') return 5;
             return 6;
         };
         return getPriority(a.status) - getPriority(b.status);
     });
-  }, [globalRoutes, user, managedUsers, selectedUser]);
+  }, [globalRoutes, user, managedUsersForSelect, selectedUser]);
   
   const getCreatorName = (creatorId: string) => {
       const creator = users.find(u => u.id === creatorId);
@@ -191,9 +192,9 @@ export default function TeamRoutesPage() {
       
       <Card className="border-t-4 border-t-primary shadow-xl">
         <CardHeader>
-            <CardTitle className="font-black text-slate-950 uppercase">Rutas Enviadas para Aprobación</CardTitle>
+            <CardTitle className="font-black text-slate-950 uppercase">Panel de Control de Equipo</CardTitle>
             <CardDescription className="font-bold text-[10px] text-slate-500 uppercase">
-                Un listado de todas las rutas enviadas por los usuarios que gestionas.
+                Viendo {filteredRoutes.length} rutas registradas en el sistema.
             </CardDescription>
         </CardHeader>
         <CardContent>
@@ -205,8 +206,8 @@ export default function TeamRoutesPage() {
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all" className="font-black">Todos los Usuarios</SelectItem>
-                        {managedUsers.map(u => (
-                            <SelectItem key={u.id} value={u.id} className="font-black">{u.name}</SelectItem>
+                        {managedUsersForSelect.map(u => (
+                            <SelectItem key={u.id} value={u.id} className="font-black">{u.name} ({u.role})</SelectItem>
                         ))}
                     </SelectContent>
                 </Select>
@@ -267,8 +268,8 @@ export default function TeamRoutesPage() {
                                                 </DropdownMenuTrigger>
                                                 <DropdownMenuContent align="end" className="w-60 rounded-xl shadow-2xl border-none">
                                                     <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500">Acciones Directas</DropdownMenuLabel>
-                                                    <DropdownMenuItem onClick={() => handleAction(route.id)} className="font-black text-xs uppercase py-2.5">
-                                                        {canReview ? "Revisar y Aprobar" : "Ver Detalles"}
+                                                    <DropdownMenuItem onClick={() => handleAction(route.id)} className={cn("font-black text-xs uppercase py-2.5", canReview && "bg-amber-50 text-amber-700")}>
+                                                        {canReview ? "REVISAR PARA APROBACIÓN" : "Ver Detalles"}
                                                     </DropdownMenuItem>
                                                     
                                                     {canManageLive && (
@@ -327,7 +328,7 @@ export default function TeamRoutesPage() {
                                 <TableCell colSpan={7} className="text-center h-32 font-black text-slate-950 uppercase text-xs">
                                     <div className="flex flex-col items-center gap-2 opacity-30">
                                         <RouteIcon className="h-8 w-8" />
-                                        <span>No hay rutas de equipo para mostrar</span>
+                                        <span>No hay rutas de equipo registradas</span>
                                     </div>
                                 </TableCell>
                             </TableRow>

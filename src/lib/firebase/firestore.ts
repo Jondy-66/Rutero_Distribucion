@@ -158,14 +158,14 @@ export const updateClientLocations = async (locations: any[]) => {
 // --- GESTIÓN DE RUTAS ---
 
 export const getRoutes = async (): Promise<RoutePlan[]> => {
-    // Eliminamos el orderBy para evitar errores de consulta si falta el índice compuesto
-    const q = query(collection(db, 'routes'), limit(150));
+    // Ordenamos por creación para que las nuevas salgan primero de base
+    const q = query(collection(db, 'routes'), orderBy('createdAt', 'desc'), limit(150));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(d => ({id: d.id, ...d.data()})) as any;
 };
 
 export const getMyRoutes = async (userId: string): Promise<RoutePlan[]> => {
-    const q = query(collection(db, 'routes'), where('createdBy', '==', userId));
+    const q = query(collection(db, 'routes'), where('createdBy', '==', userId), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(d => ({id: d.id, ...d.data()})) as any;
 };
