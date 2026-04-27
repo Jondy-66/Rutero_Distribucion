@@ -99,7 +99,19 @@ export default function TeamRoutesPage() {
     if (selectedUser !== 'all') {
         routesToFilter = routesToFilter.filter(route => route.createdBy === selectedUser);
     }
-    return routesToFilter;
+
+    // ORDEN ESPECÍFICO: 'En Progreso' primero, luego 'Completada', luego el resto
+    return [...routesToFilter].sort((a, b) => {
+        const getPriority = (status: string) => {
+            if (status === 'En Progreso') return 1;
+            if (status === 'Completada') return 2;
+            if (status === 'Planificada') return 3;
+            if (status === 'Pendiente de Aprobación') return 4;
+            if (status === 'Rechazada') return 5;
+            return 6;
+        };
+        return getPriority(a.status) - getPriority(b.status);
+    });
   }, [allRoutes, user, managedUsers, selectedUser]);
   
   const getCreatorName = (creatorId: string) => {
