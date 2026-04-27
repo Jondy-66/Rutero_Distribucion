@@ -12,7 +12,7 @@ import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTri
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -143,7 +143,7 @@ function RouteManagementContent() {
   }, [selectedRoute, isManager]);
 
   const todaysClients = useMemo(() => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const today = new Date();
 
     return currentRouteClientsFull
         .map((c, index) => {
@@ -154,11 +154,10 @@ function RouteManagementContent() {
             if (c.status === 'Eliminado') return false;
             if (!c.date) return false;
             
-            const clientDate = c.date instanceof Timestamp ? c.date.toDate() : (c.date instanceof Date ? c.date : new Date(c.date as any));
-            const clientDateStr = format(clientDate, 'yyyy-MM-dd');
+            const clientDate = ensureDate(c.date);
             
-            // FILTRO ESTRICTO DE HOY (Comparación Robusta por String)
-            return clientDateStr === todayStr;
+            // FILTRO ESTRICTO DE HOY USANDO IS SAME DAY (ZONA HORARIA ROBUSTA)
+            return isSameDay(clientDate, today);
         });
   }, [currentRouteClientsFull, availableClients]);
 

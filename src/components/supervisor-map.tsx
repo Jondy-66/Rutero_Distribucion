@@ -84,14 +84,15 @@ export function SupervisorMap() {
   const [history, setHistory] = useState<Breadcrumb[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
+  const [mapKey, setMapKey] = useState<string>('');
   
-  // SOLUCIÓN DEFINITIVA: Clave de instancia garantiza que react-leaflet inicialice un contenedor limpio
-  const [mapKey, setMapKey] = useState<string | null>(null);
   const mapInstance = useRef<L.Map | null>(null);
 
   useEffect(() => {
-    // Generar identificador único de instancia al montar en el cliente
+    // Generar clave única al montar para asegurar contenedor virgen
     setMapKey(`map-v${Math.random().toString(36).substring(7)}`);
+    setIsMounted(true);
 
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
@@ -103,14 +104,13 @@ export function SupervisorMap() {
     return () => { 
         unsubLocs(); 
         unsubZones();
-        // Limpieza agresiva de la instancia de Leaflet
+        setIsMounted(false);
+        // Limpieza de instancia Leaflet
         if (mapInstance.current) {
             try {
                 mapInstance.current.off();
                 mapInstance.current.remove();
-            } catch(e) {
-                console.warn("Leaflet cleanup error:", e);
-            }
+            } catch(e) {}
             mapInstance.current = null;
         }
     };
@@ -147,7 +147,7 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!mapKey) return (
+  if (!isMounted || !mapKey) return (
     <div className="h-[78vh] w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100">
         <LoaderCircle className="animate-spin text-primary h-10 w-10" />
     </div>
