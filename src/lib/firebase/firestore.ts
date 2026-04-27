@@ -164,10 +164,26 @@ export const getRoutes = async (): Promise<RoutePlan[]> => {
     return snapshot.docs.map(d => ({id: d.id, ...d.data()})) as any;
 };
 
+/**
+ * Obtiene las rutas creadas por un usuario específico.
+ * Se eliminó el orderBy de la consulta para evitar el requisito de índices compuestos
+ * que bloquean la visualización si no se crean manualmente en Firebase.
+ */
 export const getMyRoutes = async (userId: string): Promise<RoutePlan[]> => {
-    const q = query(collection(db, 'routes'), where('createdBy', '==', userId), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'routes'), where('createdBy', '==', userId));
     const snapshot = await getDocs(q);
-    return snapshot.docs.map(d => ({id: d.id, ...d.data()})) as any;
+    const routes = snapshot.docs.map(d => ({id: d.id, ...d.data()})) as any[];
+    
+    // Ordenar en memoria para asegurar visibilidad inmediata sin errores de índice
+    return routes.sort((a, b) => {
+        const getMillis = (ts: any) => {
+            if (ts instanceof Timestamp) return ts.toMillis();
+            if (ts?.seconds) return ts.seconds * 1000 + (ts.nanoseconds / 1000000 || 0);
+            if (ts instanceof Date) return ts.getTime();
+            return 0;
+        };
+        return getMillis(b.createdAt) - getMillis(a.createdAt);
+    });
 };
 
 export const getRoute = async (id: string): Promise<RoutePlan | null> => {
