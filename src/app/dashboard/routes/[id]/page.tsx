@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle, MessageSquare, Info, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle, MessageSquare, Info, ChevronDown, ShieldCheck } from 'lucide-react';
 import { getRoute, updateRoute, addNotification } from '@/lib/firebase/firestore';
 import { getPredicciones } from '@/services/api';
 import type { User, RoutePlan, ClientInRoute } from '@/lib/types';
@@ -336,7 +336,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
               <Alert className="bg-primary/5 border-primary/20 py-2 mt-2">
                 <Info className="h-4 w-4 text-primary" />
                 <AlertDescription className="text-[10px] font-bold text-primary uppercase">
-                    Haz clic en los bloques de fecha para expandir o contraer el detalle de clientes.
+                    Haz clic en los encabezados de cada día para expandir o contraer la lista de clientes.
                 </AlertDescription>
               </Alert>
           </CardHeader>
@@ -353,7 +353,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                             <h4 className="font-black text-sm uppercase tracking-tighter">
                                 {date === 'Sin Fecha' ? 'Sin Fecha' : format(new Date(date + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: es })}
                             </h4>
-                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=open]:hidden">Ver paradas</span>
+                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=open]:hidden">Ver clientes</span>
                             <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=closed]:hidden">Contraer lista</span>
                           </div>
                           <Badge variant="secondary" className="font-black">{clientsInGroup.length}</Badge>
@@ -500,5 +500,3 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     </div>
   );
 }
-
-import { ShieldCheck } from 'lucide-react';

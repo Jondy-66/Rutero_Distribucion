@@ -284,7 +284,7 @@ export default function NewUserPage() {
                 <Alert className="bg-primary/5 border-primary/20 py-2">
                     <Info className="h-4 w-4 text-primary" />
                     <AlertDescription className="text-[10px] font-bold text-primary uppercase">
-                        Haz clic en los encabezados de cada día para expandir o contraer la lista de paradas.
+                        Haz clic en los encabezados de cada día para expandir o contraer la lista de clientes.
                     </AlertDescription>
                 </Alert>
 
@@ -298,7 +298,7 @@ export default function NewUserPage() {
                                         <CalendarIcon className="h-4 w-4 text-primary" />
                                         <div className="flex flex-col">
                                             <h4 className="font-black text-xs uppercase text-slate-950">{format(day, 'EEEE dd', { locale: es })}</h4>
-                                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=open]:hidden">Ver paradas</span>
+                                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=open]:hidden">Ver clientes</span>
                                             <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=closed]:hidden">Contraer</span>
                                         </div>
                                         <Badge variant="secondary" className="font-black h-5">{dayClients.length}</Badge>
