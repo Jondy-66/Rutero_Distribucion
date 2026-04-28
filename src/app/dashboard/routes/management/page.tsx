@@ -155,8 +155,6 @@ function RouteManagementContent() {
             if (!c.date) return false;
             
             const clientDate = ensureDate(c.date);
-            
-            // FILTRO ESTRICTO DE HOY USANDO IS SAME DAY (ZONA HORARIA ROBUSTA)
             return isSameDay(clientDate, today);
         });
   }, [currentRouteClientsFull, availableClients]);
@@ -195,7 +193,7 @@ function RouteManagementContent() {
   const handleCheckOut = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled) return;
     if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
-        toast({title: "Observación requerida", variant: "destructive"});
+        toast({title: "Observación de llamada requerida", variant: "destructive"});
         return;
     }
     setIsSaving(true);
@@ -324,7 +322,7 @@ function RouteManagementContent() {
             </Card>
         ) : (
             <div className="grid lg:grid-cols-3 gap-8">
-                {/* Lado Izquierdo: Lista de Clientes - Recuadro Ampliado */}
+                {/* Lado Izquierdo: Lista de Clientes */}
                 <Card className="lg:col-span-1 shadow-2xl border-t-4 border-t-primary h-[88vh] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
                     <CardHeader className="bg-muted/5 px-8 py-6 border-b">
                         <h2 className="text-xl font-black text-primary uppercase truncate" title={selectedRoute?.routeName}>{selectedRoute?.routeName || "Plan Activo"}</h2>
@@ -353,7 +351,7 @@ function RouteManagementContent() {
                     </CardContent>
                 </Card>
                 
-                {/* Lado Derecho: Panel de Detalle - Recuadro Ampliado */}
+                {/* Lado Derecho: Panel de Detalle */}
                 <Card className="lg:col-span-2 shadow-2xl border-t-4 border-t-primary h-[88vh] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
                     <CardHeader className="bg-muted/5 h-32 flex flex-col justify-center px-10 border-b">
                         {activeClient ? (
@@ -407,12 +405,32 @@ function RouteManagementContent() {
                                         </RadioGroup>
                                     </div>
 
-                                    {activeClient.visitType === 'telefonica' && (
+                                    <div className="space-y-6">
+                                        {/* Campo de Observaciones Generales - RESTAURADO */}
                                         <div className="space-y-3">
-                                            <Label className="text-xs font-black uppercase text-primary tracking-widest">Observación Llamada (Obligatorio)</Label>
-                                            <Textarea className="font-black text-base border-2 rounded-2xl text-slate-950 h-32 focus:ring-4 focus:ring-primary/10" value={activeClient.callObservation || ''} onChange={e => handleFieldChange('callObservation', e.target.value)} disabled={isEditingDisabled} placeholder="Resume la llamada aquí..." />
+                                            <Label className="text-xs font-black uppercase text-slate-500 tracking-widest">Observaciones de la Visita</Label>
+                                            <Textarea 
+                                                className="font-black text-base border-2 rounded-2xl text-slate-950 h-32 focus:ring-4 focus:ring-primary/10" 
+                                                value={activeClient.visitObservation || ''} 
+                                                onChange={e => handleFieldChange('visitObservation', e.target.value)} 
+                                                disabled={isEditingDisabled} 
+                                                placeholder="Escribe aquí cualquier novedad o detalle de la gestión..." 
+                                            />
                                         </div>
-                                    )}
+
+                                        {activeClient.visitType === 'telefonica' && (
+                                            <div className="space-y-3">
+                                                <Label className="text-xs font-black uppercase text-primary tracking-widest">Observación Específica Llamada (Obligatorio)</Label>
+                                                <Textarea 
+                                                    className="font-black text-base border-2 rounded-2xl text-slate-950 h-24 focus:ring-4 focus:ring-primary/10" 
+                                                    value={activeClient.callObservation || ''} 
+                                                    onChange={e => handleFieldChange('callObservation', e.target.value)} 
+                                                    disabled={isEditingDisabled} 
+                                                    placeholder="Resume la llamada aquí..." 
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
 
                                     <div className="grid grid-cols-3 gap-8">
                                         <div className="space-y-2">
