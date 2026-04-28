@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTriangle, ThumbsUp, Users as UsersIcon, CalendarDays } from 'lucide-react';
+import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTriangle, ThumbsUp, Users as UsersIcon, CalendarDays, Sparkles, MessageSquare } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -343,6 +343,7 @@ function RouteManagementContent() {
                                         <div className="flex items-center gap-2 mt-1">
                                             <p className="text-[9px] font-black text-slate-400 uppercase font-mono">{c.ruc}</p>
                                             {c.visitStatus === 'Completado' && <Badge variant="success" className="font-black text-[8px] uppercase bg-green-500 text-white h-4">OK</Badge>}
+                                            {c.isReadded && <Badge variant="outline" className="font-black text-[8px] uppercase border-primary text-primary h-4 bg-primary/5">EXTRA</Badge>}
                                         </div>
                                     </div>
                                 ))}
@@ -379,6 +380,17 @@ function RouteManagementContent() {
                             </div>
                         ) : activeClient ? (
                             <div className="space-y-10">
+                                {activeClient.isReadded && (
+                                    <Alert className="bg-primary/5 border-primary/20 rounded-[1.5rem]">
+                                        <Sparkles className="h-5 w-5 text-primary" />
+                                        <AlertTitle className="text-primary font-black uppercase text-xs">Visita Extra no Planificada</AlertTitle>
+                                        <AlertDescription className="text-slate-600 font-bold text-[11px] mt-1 italic">
+                                            <MessageSquare className="inline h-3 w-3 mr-1" />
+                                            "{activeClient.reAdditionObservation || 'Sin comentario de adición.'}"
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+
                                 <div className={cn("p-8 rounded-[2rem] border-2 flex items-center justify-between", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-slate-50 border-dashed")}>
                                     <div className="flex items-center gap-6">
                                         <div className={cn("p-4 rounded-full bg-white shadow-sm", activeClient.checkInTime ? "text-green-600" : "text-slate-950")}>
@@ -406,7 +418,6 @@ function RouteManagementContent() {
                                     </div>
 
                                     <div className="space-y-6">
-                                        {/* Campo de Observaciones Generales - RESTAURADO */}
                                         <div className="space-y-3">
                                             <Label className="text-xs font-black uppercase text-slate-500 tracking-widest">Observaciones de la Visita</Label>
                                             <Textarea 
