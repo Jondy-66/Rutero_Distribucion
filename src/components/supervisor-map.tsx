@@ -86,12 +86,10 @@ export function SupervisorMap() {
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
   const [mapKey, setMapKey] = useState<string>('');
-  
-  const mapInstance = useRef<L.Map | null>(null);
 
   useEffect(() => {
-    // Generar clave única al montar para asegurar contenedor virgen
-    setMapKey(`map-v${Math.random().toString(36).substring(7)}`);
+    // Generar clave única al montar para asegurar contenedor virgen en el primer render útil
+    setMapKey(`map-v${Date.now()}-${Math.random().toString(36).substring(7)}`);
     setIsMounted(true);
 
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
@@ -105,14 +103,6 @@ export function SupervisorMap() {
         unsubLocs(); 
         unsubZones();
         setIsMounted(false);
-        // Limpieza de instancia Leaflet
-        if (mapInstance.current) {
-            try {
-                mapInstance.current.off();
-                mapInstance.current.remove();
-            } catch(e) {}
-            mapInstance.current = null;
-        }
     };
   }, []);
 
@@ -173,14 +163,16 @@ export function SupervisorMap() {
             )}
         </div>
 
-        <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+        {/* Usamos el mapKey en el div contenedor para forzar la recreación total del nodo DOM al remontar */}
+        <div 
+            key={mapKey}
+            className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50"
+        >
             <MapContainer 
-                key={mapKey}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
                 className="h-full w-full"
-                ref={(map) => { if (map) mapInstance.current = map; }}
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapViewController center={mapCenter} />
