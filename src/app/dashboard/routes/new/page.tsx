@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, AlertCircle, ShieldCheck, ChevronDown } from 'lucide-react';
+import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, AlertCircle, ShieldCheck, ChevronDown, Info } from 'lucide-react';
 import { addRoutesBatch, getUser, addNotification } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -25,6 +25,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const ensureDate = (d: any): Date => {
   if (!d) return new Date();
@@ -280,24 +281,35 @@ export default function NewUserPage() {
             )}
 
             <div className="space-y-4">
+                <Alert className="bg-primary/5 border-primary/20 py-2">
+                    <Info className="h-4 w-4 text-primary" />
+                    <AlertDescription className="text-[10px] font-bold text-primary uppercase">
+                        Haz clic en los encabezados de cada día para expandir o contraer la lista de paradas.
+                    </AlertDescription>
+                </Alert>
+
                 {displayedDays.map((day) => {
                     const dayClients = activeClientsWithIndex.filter(c => isSameDay(ensureDate(c.date), day));
                     return (
                         <Collapsible key={day.toISOString()} defaultOpen={dayClients.length > 0} className="border-l-4 pl-4 py-2 border-primary/20 bg-slate-50/50 rounded-r-lg group">
                             <div className="flex w-full items-center justify-between p-2">
                                 <CollapsibleTrigger asChild>
-                                    <div className="flex items-center gap-3 cursor-pointer flex-1">
+                                    <div className="flex items-center gap-3 cursor-pointer flex-1 select-none">
                                         <CalendarIcon className="h-4 w-4 text-primary" />
-                                        <h4 className="font-black text-xs uppercase text-slate-950">{format(day, 'EEEE dd', { locale: es })}</h4>
+                                        <div className="flex flex-col">
+                                            <h4 className="font-black text-xs uppercase text-slate-950">{format(day, 'EEEE dd', { locale: es })}</h4>
+                                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=open]:hidden">Ver paradas</span>
+                                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=closed]:hidden">Contraer</span>
+                                        </div>
                                         <Badge variant="secondary" className="font-black h-5">{dayClients.length}</Badge>
-                                        <ChevronDown className="h-3 w-3 text-slate-400 transition-transform group-data-[state=open]:rotate-180" />
+                                        <ChevronDown className="h-4 w-4 text-slate-400 transition-transform duration-300 group-data-[state=open]:rotate-180" />
                                     </div>
                                 </CollapsibleTrigger>
                                 <Button variant="ghost" size="sm" className="font-black text-primary hover:bg-primary/10 h-7" onClick={() => handleOpenAddDialog(day)} disabled={isFormLocked}>
                                     <PlusCircle className="mr-1 h-3.5 w-3.5" /> AÑADIR
                                 </Button>
                             </div>
-                            <CollapsibleContent className="space-y-2 mt-2">
+                            <CollapsibleContent className="space-y-2 mt-2 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
                                 {dayClients.length > 0 ? (
                                     dayClients.map((client) => (
                                         <div key={client.ruc} className="p-3 bg-white border-2 rounded-xl flex justify-between items-center shadow-sm">

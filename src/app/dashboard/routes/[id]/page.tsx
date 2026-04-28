@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle, MessageSquare, Info } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle, MessageSquare, Info, ChevronDown } from 'lucide-react';
 import { getRoute, updateRoute, addNotification } from '@/lib/firebase/firestore';
 import { getPredicciones } from '@/services/api';
 import type { User, RoutePlan, ClientInRoute } from '@/lib/types';
@@ -309,29 +309,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
           </Alert>
         )}
 
-        {route.status === 'Incompleta' && (
-          <Alert className="mb-6 border-orange-500 bg-orange-50">
-            <Info className="h-4 w-4 text-orange-600" />
-            <AlertTitle className="text-orange-800 font-bold uppercase">Información de Ruta Incompleta</AlertTitle>
-            <AlertDescription className="text-orange-700 font-medium">
-              {route.statusReason || "Esta ruta fue finalizada sin completar todas las visitas programadas."}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {activeClientsWithIndex.length === 0 && canRecoverClients && (
-          <Alert className="mb-6 border-blue-500 bg-blue-50">
-            <AlertTriangle className="h-4 w-4 text-blue-600" />
-            <AlertTitle className="text-blue-800 font-bold">Ruta sin Clientes</AlertTitle>
-            <AlertDescription className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mt-2">
-              <span className="text-blue-700">Parece que esta ruta perdió su información. Puedes intentar restaurar los clientes de la predicción original aquí.</span>
-              <Button onClick={handleRecoverClients} disabled={isRecovering} className="bg-blue-600 hover:bg-blue-700 shrink-0 font-bold">
-                {isRecovering ? <LoaderCircle className="animate-spin mr-2" /> : <LifeBuoy className="mr-2" />} RECUPERAR DATOS
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-
         <Card>
           <CardHeader><CardTitle className="font-black uppercase text-slate-950">Información General</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -354,24 +331,37 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         </Card>
 
         <Card>
-          <CardHeader><CardTitle className="font-black uppercase text-slate-950">Cronograma de Visitas</CardTitle></CardHeader>
+          <CardHeader>
+              <CardTitle className="font-black uppercase text-slate-950">Cronograma de Visitas</CardTitle>
+              <Alert className="bg-primary/5 border-primary/20 py-2 mt-2">
+                <Info className="h-4 w-4 text-primary" />
+                <AlertDescription className="text-[10px] font-bold text-primary uppercase">
+                    Haz clic en los bloques de fecha para expandir o contraer el detalle de clientes.
+                </AlertDescription>
+              </Alert>
+          </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {groupedClients.length > 0 ? (
                 groupedClients.map(([date, clientsInGroup]) => (
-                  <Collapsible key={date} defaultOpen className="border-l-4 pl-4 py-2 border-primary/20 bg-muted/5 rounded-r-lg">
+                  <Collapsible key={date} defaultOpen={true} className="border-l-4 pl-4 py-2 border-primary/20 bg-muted/5 rounded-r-lg group">
                     <CollapsibleTrigger asChild>
-                      <div className="flex w-full items-center justify-between p-2 cursor-pointer hover:bg-muted/50 transition-all">
+                      <div className="flex w-full items-center justify-between p-2 cursor-pointer hover:bg-muted/50 transition-all rounded-lg select-none">
                         <div className="flex items-center gap-3">
                           <CalendarIcon className="h-5 w-5 text-primary" />
-                          <h4 className="font-black text-sm uppercase tracking-tighter">
-                            {date === 'Sin Fecha' ? 'Sin Fecha' : format(new Date(date + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: es })}
-                          </h4>
+                          <div className="flex flex-col">
+                            <h4 className="font-black text-sm uppercase tracking-tighter">
+                                {date === 'Sin Fecha' ? 'Sin Fecha' : format(new Date(date + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: es })}
+                            </h4>
+                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=open]:hidden">Ver paradas</span>
+                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=closed]:hidden">Contraer lista</span>
+                          </div>
                           <Badge variant="secondary" className="font-black">{clientsInGroup.length}</Badge>
                         </div>
+                        <ChevronDown className="h-5 w-5 text-slate-400 transition-transform duration-300 group-data-[state=open]:rotate-180" />
                       </div>
                     </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-4 p-2 mt-2">
+                    <CollapsibleContent className="space-y-4 p-2 mt-2 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
                       {clientsInGroup.map((client) => (
                         <Card key={client.ruc} className="p-4 relative hover:shadow-md border-l-2 border-l-primary/10 bg-white">
                           <div className="flex justify-between items-start">
