@@ -271,6 +271,11 @@ function RouteManagementContent() {
   const handleAddClients = async () => {
     if (!selectedRoute || multiSelectedClients.length === 0 || isSaving) return;
     
+    if (isTodayFinished && !isAdmin) {
+        toast({ title: "Jornada Completa", description: "No puedes añadir más clientes tras finalizar tu jornada.", variant: "destructive" });
+        return;
+    }
+
     if (!reAdditionObservation.trim()) {
         toast({ title: "Motivo Requerido", description: "Indica por qué estás agregando este cliente extra.", variant: "destructive" });
         return;
@@ -392,7 +397,7 @@ function RouteManagementContent() {
                             variant="outline" 
                             className="w-full h-12 border-dashed border-2 font-black text-xs rounded-xl flex items-center justify-center gap-2" 
                             onClick={() => setIsAddClientDialogOpen(true)} 
-                            disabled={isJornadaBloqueada}
+                            disabled={isJornadaBloqueada || (isTodayFinished && !isAdmin)}
                         >
                             <CirclePlus className="h-4 w-4 text-primary" /> AGREGAR EXTRA
                         </Button>
