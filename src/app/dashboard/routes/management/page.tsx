@@ -12,7 +12,7 @@ import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTri
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, isSameDay } from 'date-fns';
+import { format, isSameDay, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -53,7 +53,7 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
             ruc: c.ruc || '',
             nombre_comercial: c.nombre_comercial || 'Sin Nombre',
             visitStatus: c.visitStatus || 'Pendiente',
-            status: c.status || 'Activo',
+            status: c.status || 'active',
             visitType: c.visitType || null,
             isReadded: !!c.isReadded,
             reAdditionObservation: c.reAdditionObservation || '',
@@ -74,11 +74,17 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
         cleaned.promociones = parseV(c.promociones);
         cleaned.medicacionFrecuente = parseV(c.medicacionFrecuente);
         
-        if (c.checkInLocation && (c.checkInLocation as any).latitude) {
-            cleaned.checkInLocation = new GeoPoint((c.checkInLocation as any).latitude, (c.checkInLocation as any).longitude);
+        if (c.checkInLocation) {
+            const loc = c.checkInLocation as any;
+            if (loc.latitude !== undefined && loc.longitude !== undefined) {
+                cleaned.checkInLocation = new GeoPoint(loc.latitude, loc.longitude);
+            }
         }
-        if (c.checkOutLocation && (c.checkOutLocation as any).latitude) {
-            cleaned.checkOutLocation = new GeoPoint((c.checkOutLocation as any).latitude, (c.checkOutLocation as any).longitude);
+        if (c.checkOutLocation) {
+            const loc = c.checkOutLocation as any;
+            if (loc.latitude !== undefined && loc.longitude !== undefined) {
+                cleaned.checkOutLocation = new GeoPoint(loc.latitude, loc.longitude);
+            }
         }
         return cleaned;
     });
@@ -154,7 +160,7 @@ function RouteManagementContent() {
   }, [selectedRoute, isManager]);
 
   const todaysClients = useMemo(() => {
-    const today = new Date();
+    const today = startOfDay(new Date());
 
     return currentRouteClientsFull
         .map((c, index) => {
@@ -165,7 +171,7 @@ function RouteManagementContent() {
             if (c.status === 'Eliminado') return false;
             if (!c.date) return false;
             
-            const clientDate = ensureDate(c.date);
+            const clientDate = startOfDay(ensureDate(c.date));
             return isSameDay(clientDate, today);
         });
   }, [currentRouteClientsFull, availableClients]);
@@ -173,10 +179,7 @@ function RouteManagementContent() {
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
   const activeClient = activeOriginalIndex !== null && currentRouteClientsFull[activeOriginalIndex] ? currentRouteClientsFull[activeOriginalIndex] : null;
 
-  // REGLA: Bloqueo de jornada si pasó la hora límite
   const isJornadaBloqueada = isExpired && !isAdmin;
-  
-  // REGLA: Bloqueo de edición del cliente activo si ya se completó
   const isEditingActiveClientDisabled = (activeClient?.visitStatus === 'Completado' || isJornadaBloqueada) && !isAdmin;
 
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
@@ -274,20 +277,27 @@ function RouteManagementContent() {
     }
 
     setIsSaving(true);
+    const now = new Date();
     const newVisits: ClientInRoute[] = multiSelectedClients.map(c => ({
         ruc: c.ruc, 
         nombre_comercial: c.nombre_comercial, 
-        date: new Date(), 
+        date: now, 
         visitStatus: 'Pendiente', 
-        status: 'Active', 
+        status: 'active', 
         isReadded: true, 
-        reAdditionObservation: reAdditionObservation || ''
+        reAdditionObservation: reAdditionObservation || '',
+        visitObservation: '',
+        callObservation: '',
+        valorVenta: 0,
+        valorCobro: 0,
+        devoluciones: 0,
+        promociones: 0,
+        medicacionFrecuente: 0
     } as any));
     const next = [...currentRouteClientsFull, ...newVisits];
     setCurrentRouteClientsFull(next);
     
     const sanitized = sanitizeClients(next);
-    // Al agregar extra, la ruta vuelve a estar "En Progreso" si estaba completada
     updateRoute(selectedRoute.id, { clients: sanitized, status: 'En Progreso' })
         .then(() => {
             setIsAddClientDialogOpen(false); 
@@ -391,7 +401,7 @@ function RouteManagementContent() {
                                 {todaysClients.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-20 text-center opacity-30 gap-4">
                                         <CalendarDays className="h-12 w-12 text-slate-400" />
-                                        <p className="font-black uppercase text-[10px] text-slate-950">No hay clientes programados para hoy en esta ruta.</p>
+                                        <p className="font-black uppercase text-[10px] text-slate-950">No hay clientes programados para hoy.</p>
                                     </div>
                                 ) : todaysClients.map((c) => (
                                     <div key={`${c.ruc}-${c.originalIndex}`} className={cn("p-4 border-2 rounded-2xl cursor-pointer transition-all bg-white relative group", activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-slate-100 hover:border-slate-300")}>
@@ -406,7 +416,6 @@ function RouteManagementContent() {
                                             </div>
                                         </div>
                                         
-                                        {/* Botón de Borrar solo para Administrador */}
                                         {isAdmin && (
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
@@ -576,7 +585,15 @@ function RouteManagementContent() {
                 </div>
                 <ScrollArea className="flex-1 px-8 py-4">
                     <div className="space-y-3">
-                        {availableClients.filter(c => (isAdmin || c.ejecutivo === user?.name) && (String(c.nombre_cliente).toLowerCase().includes(addClientSearchTerm.toLowerCase()) || String(c.ruc).includes(addClientSearchTerm))).map(c => (
+                        {availableClients.filter(c => {
+                            const matchesSearch = String(c.nombre_cliente).toLowerCase().includes(addClientSearchTerm.toLowerCase()) || 
+                                                String(c.ruc).includes(addClientSearchTerm) ||
+                                                String(c.nombre_comercial).toLowerCase().includes(addClientSearchTerm.toLowerCase());
+                            
+                            const matchesExecutive = isAdmin || (c.ejecutivo?.trim().toLowerCase() === user?.name?.trim().toLowerCase());
+                            
+                            return matchesSearch && matchesExecutive;
+                        }).map(c => (
                             <div key={c.id} onClick={() => setMultiSelectedClients(p => p.some(s => s.ruc === c.ruc) ? p.filter(s => s.ruc !== c.ruc) : [...p, c])} className={cn("p-4 rounded-2xl flex items-center gap-4 cursor-pointer transition-all border-2", multiSelectedClients.some(s => s.ruc === c.ruc) ? "bg-primary/10 border-primary" : "bg-white border-slate-100")}>
                                 <Checkbox checked={multiSelectedClients.some(s => s.ruc === c.ruc)} className="h-5 w-5 border-primary" />
                                 <div className="flex-1">
