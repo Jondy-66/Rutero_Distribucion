@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTriangle, ThumbsUp, Users as UsersIcon, CalendarDays, Sparkles, MessageSquare } from 'lucide-react';
+import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTriangle, ThumbsUp, Users as UsersIcon, CalendarDays, Sparkles, MessageSquare, Trash2 } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -27,6 +27,17 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 const ensureDate = (d: any): Date => {
   if (!d) return new Date();
@@ -168,6 +179,31 @@ function RouteManagementContent() {
     const next = [...currentRouteClientsFull];
     next[activeOriginalIndex] = { ...next[activeOriginalIndex], [field]: value };
     setCurrentRouteClientsFull(next);
+  };
+
+  const handleRemoveClient = async (originalIndex: number) => {
+    if (!selectedRoute || !isAdmin || isSaving) return;
+    
+    setIsSaving(true);
+    const next = [...currentRouteClientsFull];
+    next[originalIndex] = { ...next[originalIndex], status: 'Eliminado' };
+    setCurrentRouteClientsFull(next);
+
+    const sanitized = sanitizeClients(next);
+    updateRoute(selectedRoute.id, { clients: sanitized })
+        .then(() => {
+            if (activeOriginalIndex === originalIndex) setActiveOriginalIndex(null);
+            refetchData('routes');
+            toast({ title: "Cliente eliminado", description: "La parada ha sido removida de la ruta." });
+        })
+        .catch(async () => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                path: `routes/${selectedRoute.id}`, 
+                operation: 'update', 
+                requestResourceData: { clients: sanitized } 
+            }));
+        })
+        .finally(() => setIsSaving(false));
   };
 
   const handleCheckIn = async () => {
@@ -338,13 +374,50 @@ function RouteManagementContent() {
                                         <p className="font-black uppercase text-[10px] text-slate-950">No hay clientes programados para hoy en esta ruta.</p>
                                     </div>
                                 ) : todaysClients.map((c) => (
-                                    <div key={`${c.ruc}-${c.originalIndex}`} onClick={() => setActiveOriginalIndex(c.originalIndex)} className={cn("p-4 border-2 rounded-2xl cursor-pointer transition-all bg-white", activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-slate-100 hover:border-slate-300")}>
-                                        <p className={cn("font-black text-xs truncate uppercase text-slate-950", activeOriginalIndex === c.originalIndex && "text-primary")}>{c.nombre_comercial}</p>
-                                        <div className="flex items-center gap-2 mt-1">
-                                            <p className="text-[9px] font-black text-slate-400 uppercase font-mono">{c.ruc}</p>
-                                            {c.visitStatus === 'Completado' && <Badge variant="success" className="font-black text-[8px] uppercase bg-green-500 text-white h-4">OK</Badge>}
-                                            {c.isReadded && <Badge variant="outline" className="font-black text-[8px] uppercase border-primary text-primary h-4 bg-primary/5">EXTRA</Badge>}
+                                    <div key={`${c.ruc}-${c.originalIndex}`} className={cn("p-4 border-2 rounded-2xl cursor-pointer transition-all bg-white relative group", activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-slate-100 hover:border-slate-300")}>
+                                        <div className="flex justify-between items-start" onClick={() => setActiveOriginalIndex(c.originalIndex)}>
+                                            <div className="flex-1 min-w-0 pr-6">
+                                                <p className={cn("font-black text-xs truncate uppercase text-slate-950", activeOriginalIndex === c.originalIndex && "text-primary")}>{c.nombre_comercial}</p>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    <p className="text-[9px] font-black text-slate-400 uppercase font-mono">{c.ruc}</p>
+                                                    {c.visitStatus === 'Completado' && <Badge variant="success" className="font-black text-[8px] uppercase bg-green-500 text-white h-4">OK</Badge>}
+                                                    {c.isReadded && <Badge variant="outline" className="font-black text-[8px] uppercase border-primary text-primary h-4 bg-primary/5">EXTRA</Badge>}
+                                                </div>
+                                            </div>
                                         </div>
+                                        
+                                        {/* Botón de Borrar solo para Administrador */}
+                                        {isAdmin && (
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button 
+                                                        variant="ghost" 
+                                                        size="icon" 
+                                                        className="absolute top-2 right-2 h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        onClick={(e) => e.stopPropagation()}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent className="rounded-[2rem] border-none shadow-2xl">
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle className="font-black uppercase text-slate-950">¿Eliminar parada?</AlertDialogTitle>
+                                                        <AlertDialogDescription className="font-bold text-xs uppercase text-slate-500">
+                                                            Como administrador, estás por remover a {c.nombre_comercial} de esta ruta definitivamente.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter className="gap-2">
+                                                        <AlertDialogCancel className="font-black uppercase rounded-xl">Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction 
+                                                            className="bg-destructive hover:bg-destructive/90 font-black uppercase rounded-xl shadow-lg"
+                                                            onClick={() => handleRemoveClient(c.originalIndex)}
+                                                        >
+                                                            Confirmar Eliminación
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        )}
                                     </div>
                                 ))}
                             </div>
