@@ -124,7 +124,7 @@ function RouteManagementContent() {
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
-        const isValidStatus = ['Planificada', 'En Progreso'].includes(r.status);
+        const isValidStatus = ['Planificada', 'En Progreso', 'Completada'].includes(r.status);
         
         if (!isValidStatus) return false;
         if (!isOwn && !isManaged && !isAdmin) return false;
@@ -149,7 +149,7 @@ function RouteManagementContent() {
   useEffect(() => {
     if (!selectedRoute) return;
     setCurrentRouteClientsFull(selectedRoute.clients || []);
-    setIsRouteStarted(selectedRoute.status === 'En Progreso' || isManager);
+    setIsRouteStarted(selectedRoute.status === 'En Progreso' || selectedRoute.status === 'Completada' || isManager);
     setActiveOriginalIndex(null); 
   }, [selectedRoute, isManager]);
 
@@ -172,10 +172,15 @@ function RouteManagementContent() {
 
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
   const activeClient = activeOriginalIndex !== null && currentRouteClientsFull[activeOriginalIndex] ? currentRouteClientsFull[activeOriginalIndex] : null;
-  const isEditingDisabled = (selectedRoute?.status === 'Completada' || activeClient?.visitStatus === 'Completado' || isExpired) && !isAdmin;
+
+  // REGLA: Bloqueo de jornada si pasó la hora límite
+  const isJornadaBloqueada = isExpired && !isAdmin;
+  
+  // REGLA: Bloqueo de edición del cliente activo si ya se completó
+  const isEditingActiveClientDisabled = (activeClient?.visitStatus === 'Completado' || isJornadaBloqueada) && !isAdmin;
 
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
-    if (activeOriginalIndex === null || isEditingDisabled || isSaving) return;
+    if (activeOriginalIndex === null || isEditingActiveClientDisabled || isSaving) return;
     const next = [...currentRouteClientsFull];
     next[activeOriginalIndex] = { ...next[activeOriginalIndex], [field]: value };
     setCurrentRouteClientsFull(next);
@@ -207,7 +212,7 @@ function RouteManagementContent() {
   };
 
   const handleCheckIn = async () => {
-    if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled) return;
+    if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
     setIsSaving(true);
     const loc = await new Promise<any>(r => navigator.geolocation.getCurrentPosition(p => r({latitude: p.coords.latitude, longitude: p.coords.longitude}), () => r(null), {timeout: 3000}));
     const next = [...currentRouteClientsFull];
@@ -227,7 +232,7 @@ function RouteManagementContent() {
   };
 
   const handleCheckOut = async () => {
-    if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingDisabled) return;
+    if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
     if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
         toast({title: "Observación de llamada requerida", variant: "destructive"});
         return;
@@ -262,6 +267,12 @@ function RouteManagementContent() {
 
   const handleAddClients = async () => {
     if (!selectedRoute || multiSelectedClients.length === 0 || isSaving) return;
+    
+    if (!reAdditionObservation.trim()) {
+        toast({ title: "Motivo Requerido", description: "Indica por qué estás agregando este cliente extra.", variant: "destructive" });
+        return;
+    }
+
     setIsSaving(true);
     const newVisits: ClientInRoute[] = multiSelectedClients.map(c => ({
         ruc: c.ruc, 
@@ -276,12 +287,14 @@ function RouteManagementContent() {
     setCurrentRouteClientsFull(next);
     
     const sanitized = sanitizeClients(next);
-    updateRoute(selectedRoute.id, { clients: sanitized })
+    // Al agregar extra, la ruta vuelve a estar "En Progreso" si estaba completada
+    updateRoute(selectedRoute.id, { clients: sanitized, status: 'En Progreso' })
         .then(() => {
             setIsAddClientDialogOpen(false); 
             setMultiSelectedClients([]); 
             setReAdditionObservation('');
-            toast({ title: "Clientes añadidos", description: "Se han agregado nuevas paradas a la ruta activa." });
+            refetchData('routes');
+            toast({ title: "Clientes añadidos", description: "Se han agregado nuevas paradas a la jornada activa." });
         })
         .catch(async () => {
             errorEmitter.emit('permission-error', new FirestorePermissionError({ 
@@ -349,7 +362,7 @@ function RouteManagementContent() {
                                     refetchData('routes');
                                 });
                             }} 
-                            disabled={isExpired && !isAdmin}
+                            disabled={isJornadaBloqueada}
                         >
                             INICIAR GESTIÓN
                         </Button>
@@ -365,7 +378,14 @@ function RouteManagementContent() {
                         <p className="text-[10px] font-black text-slate-950 uppercase">HOY: {format(new Date(), 'EEEE dd MMMM', { locale: es })}</p>
                     </CardHeader>
                     <CardContent className="p-6 flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
-                        <Button variant="outline" className="w-full h-12 border-dashed border-2 font-black text-xs rounded-xl flex items-center justify-center gap-2" onClick={() => setIsAddClientDialogOpen(true)} disabled={isEditingDisabled}><CirclePlus className="h-4 w-4 text-primary" /> AGREGAR EXTRA</Button>
+                        <Button 
+                            variant="outline" 
+                            className="w-full h-12 border-dashed border-2 font-black text-xs rounded-xl flex items-center justify-center gap-2" 
+                            onClick={() => setIsAddClientDialogOpen(true)} 
+                            disabled={isJornadaBloqueada}
+                        >
+                            <CirclePlus className="h-4 w-4 text-primary" /> AGREGAR EXTRA
+                        </Button>
                         <ScrollArea className="flex-1">
                             <div className="space-y-3 pr-4">
                                 {todaysClients.length === 0 ? (
@@ -474,13 +494,13 @@ function RouteManagementContent() {
                                             <p className="text-lg font-black text-slate-950 uppercase opacity-60">{activeClient.checkInTime || 'Esperando registro...'}</p>
                                         </div>
                                     </div>
-                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="font-black h-14 px-10 text-lg uppercase rounded-2xl shadow-lg" disabled={isEditingDisabled}>MARCAR LLEGADA</Button>}
+                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="font-black h-14 px-10 text-lg uppercase rounded-2xl shadow-lg" disabled={isJornadaBloqueada}>MARCAR LLEGADA</Button>}
                                 </div>
 
                                 <div className={cn("space-y-10 transition-all duration-500", !activeClient.checkInTime && !isManager && "opacity-20 pointer-events-none blur-[2px]")}>
                                     <div className="space-y-4">
                                         <Label className="text-xs font-black uppercase text-slate-500 tracking-widest">Tipo de Gestión</Label>
-                                        <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-6" disabled={isEditingDisabled}>
+                                        <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-6" disabled={isEditingActiveClientDisabled}>
                                             <Label className={cn("flex flex-col items-center gap-4 border-2 p-8 rounded-[2.5rem] cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "bg-slate-50 hover:bg-slate-100")}>
                                                 <RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-10 w-10 text-primary" /><span className="text-sm font-black uppercase">Presencial</span>
                                             </Label>
@@ -497,7 +517,7 @@ function RouteManagementContent() {
                                                 className="font-black text-base border-2 rounded-2xl text-slate-950 h-32 focus:ring-4 focus:ring-primary/10" 
                                                 value={activeClient.visitObservation || ''} 
                                                 onChange={e => handleFieldChange('visitObservation', e.target.value)} 
-                                                disabled={isEditingDisabled} 
+                                                disabled={isEditingActiveClientDisabled} 
                                                 placeholder="Escribe aquí cualquier novedad o detalle de la gestión..." 
                                             />
                                         </div>
@@ -509,7 +529,7 @@ function RouteManagementContent() {
                                                     className="font-black text-base border-2 rounded-2xl text-slate-950 h-24 focus:ring-4 focus:ring-primary/10" 
                                                     value={activeClient.callObservation || ''} 
                                                     onChange={e => handleFieldChange('callObservation', e.target.value)} 
-                                                    disabled={isEditingDisabled} 
+                                                    disabled={isEditingActiveClientDisabled} 
                                                     placeholder="Resume la llamada aquí..." 
                                                 />
                                             </div>
@@ -519,19 +539,23 @@ function RouteManagementContent() {
                                     <div className="grid grid-cols-3 gap-8">
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">VENTA ($)</Label>
-                                            <Input type="text" className="h-16 text-2xl font-black text-primary border-2 rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={isEditingDisabled} />
+                                            <Input type="text" className="h-16 text-2xl font-black text-primary border-2 rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={isEditingActiveClientDisabled} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">COBRO ($)</Label>
-                                            <Input type="text" className="h-16 text-2xl font-black text-primary border-2 rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={isEditingDisabled} />
+                                            <Input type="text" className="h-16 text-2xl font-black text-primary border-2 rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={isEditingActiveClientDisabled} />
                                         </div>
                                         <div className="space-y-2">
                                             <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">DEVOL ($)</Label>
-                                            <Input type="text" className="h-16 text-2xl font-black text-primary border-2 rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={isEditingDisabled} />
+                                            <Input type="text" className="h-16 text-2xl font-black text-primary border-2 rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={isEditingActiveClientDisabled} />
                                         </div>
                                     </div>
 
-                                    <Button onClick={handleCheckOut} className="w-full h-20 text-2xl font-black rounded-3xl shadow-2xl uppercase transition-transform hover:scale-[1.01]" disabled={isSaving || isEditingDisabled || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim())}>
+                                    <Button 
+                                        onClick={handleCheckOut} 
+                                        className="w-full h-20 text-2xl font-black rounded-3xl shadow-2xl uppercase transition-transform hover:scale-[1.01]" 
+                                        disabled={isSaving || isEditingActiveClientDisabled || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim())}
+                                    >
                                         {isSaving ? <LoaderCircle className="animate-spin h-8 w-8" /> : <><LogOut className="mr-4 h-8 w-8" /> FINALIZAR VISITA</>}
                                     </Button>
                                 </div>
@@ -565,7 +589,13 @@ function RouteManagementContent() {
                 </ScrollArea>
                 <div className="p-8 border-t space-y-4 bg-slate-50">
                     <Textarea className="h-20 font-black border-2 rounded-2xl text-slate-950" placeholder="Motivo de la visita no planificada..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
-                    <Button onClick={handleAddClients} disabled={multiSelectedClients.length === 0 || isSaving} className="w-full h-14 font-black rounded-2xl text-lg shadow-lg">AÑADIR {multiSelectedClients.length} PUNTOS A LA RUTA</Button>
+                    <Button 
+                        onClick={handleAddClients} 
+                        disabled={multiSelectedClients.length === 0 || isSaving || !reAdditionObservation.trim()} 
+                        className="w-full h-14 font-black rounded-2xl text-lg shadow-lg"
+                    >
+                        AÑADIR {multiSelectedClients.length} PUNTOS A LA RUTA
+                    </Button>
                 </div>
             </DialogContent>
         </Dialog>
