@@ -83,7 +83,8 @@ export default function TeamRoutesPage() {
         routesToFilter = routesToFilter.filter(route => route.createdBy === selectedUser);
     }
 
-    // ORDEN ESTRATÉGICO: 'En Progreso' primero, luego 'Pendiente de Aprobación', luego 'Completada', luego el resto
+    // ORDEN ESTRATÉGICO: 'En Progreso' primero, luego 'Pendiente de Aprobación', luego 'Planificada', luego 'Completada'
+    // Dentro de cada estado, ordenamos por fecha descendente para no perder el historial.
     return [...routesToFilter].sort((a, b) => {
         const getPriority = (status: string) => {
             if (status === 'En Progreso') return 1;
@@ -93,7 +94,23 @@ export default function TeamRoutesPage() {
             if (status === 'Rechazada') return 5;
             return 6;
         };
-        return getPriority(a.status) - getPriority(b.status);
+
+        const priorityDiff = getPriority(a.status) - getPriority(b.status);
+        if (priorityDiff !== 0) return priorityDiff;
+
+        // Misma prioridad: ordenar por fecha descendente
+        const getMillis = (ts: any) => {
+            if (ts instanceof Timestamp) return ts.toMillis();
+            if (ts?.seconds) return ts.seconds * 1000 + (ts.nanoseconds / 1000000 || 0);
+            if (ts instanceof Date) return ts.getTime();
+            if (typeof ts === 'string') return new Date(ts).getTime();
+            return 0;
+        };
+
+        const dateA = getMillis(a.date || a.createdAt);
+        const dateB = getMillis(b.date || b.createdAt);
+
+        return dateB - dateA;
     });
   }, [globalRoutes, user, managedUsersForSelect, selectedUser]);
   

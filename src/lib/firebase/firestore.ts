@@ -158,8 +158,8 @@ export const updateClientLocations = async (locations: any[]) => {
 // --- GESTIÓN DE RUTAS ---
 
 export const getRoutes = async (): Promise<RoutePlan[]> => {
-    // Ordenamos por creación para que las nuevas salgan primero de base
-    const q = query(collection(db, 'routes'), orderBy('createdAt', 'desc'), limit(150));
+    // Se elimina el límite de 150 para permitir que el Admin vea el historial completo solicitado.
+    const q = query(collection(db, 'routes'), orderBy('createdAt', 'desc'));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(d => ({id: d.id, ...d.data()})) as any;
 };
