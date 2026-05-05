@@ -10,7 +10,7 @@ import { ShieldCheck, MapPin, Activity } from 'lucide-react';
 
 const SupervisorMap = dynamic(() => import('@/components/supervisor-map').then(m => m.SupervisorMap), {
     ssr: false,
-    loading: () => <Skeleton className="h-[70vh] w-full rounded-2xl" />
+    loading: () => <Skeleton className="h-[50vh] lg:h-[70vh] w-full rounded-2xl" />
 });
 
 export default function TrackingPage() {
@@ -21,14 +21,14 @@ export default function TrackingPage() {
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 max-w-full overflow-hidden">
             <PageHeader 
                 title="Supervisión en Tiempo Real" 
                 description="Monitoreo GPS, Geocercas e Histórico de Rutas."
             />
 
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                <Card className="lg:col-span-1 shadow-lg border-t-4 border-t-primary">
+                <Card className="lg:col-span-1 shadow-lg border-t-4 border-t-primary order-2 lg:order-1">
                     <CardHeader>
                         <CardTitle className="text-sm font-black uppercase flex items-center gap-2">
                             <ShieldCheck className="h-4 w-4 text-primary" />
@@ -45,20 +45,22 @@ export default function TrackingPage() {
                                 <Activity className="h-3 w-3 text-blue-600" />
                                 <span className="text-[10px] font-black uppercase text-blue-800">Precisión Activa</span>
                             </div>
-                            <p className="text-[9px] text-blue-600 font-bold uppercase mt-1">Filtro de eficiencia: Solo puntos con precisión menor a 20m son procesados.</p>
+                            <p className="text-[9px] text-blue-600 font-bold uppercase mt-1">Filtro de eficiencia: Solo puntos con precisión menor a 30m son procesados.</p>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card className="lg:col-span-3 shadow-2xl overflow-hidden">
-                    <CardHeader className="bg-slate-50 border-b">
+                <Card className="lg:col-span-3 shadow-2xl overflow-hidden order-1 lg:order-2">
+                    <CardHeader className="bg-slate-50 border-b p-4">
                         <CardTitle className="text-xs font-black uppercase flex items-center gap-2 text-slate-950">
                             <MapPin className="h-4 w-4 text-primary" />
-                            Mapa de Operaciones
+                            Mapa de Operaciones Nacional
                         </CardTitle>
                     </CardHeader>
-                    <CardContent className="p-4 bg-white">
-                        <SupervisorMap />
+                    <CardContent className="p-2 lg:p-4 bg-white">
+                        <div className="h-[60vh] lg:h-[75vh]">
+                            <SupervisorMap />
+                        </div>
                     </CardContent>
                 </Card>
             </div>

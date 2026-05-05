@@ -39,8 +39,8 @@ const CircularProgress = ({ value, label, subLabel, colorClass = 'text-primary' 
   const offset = circumference - (value / 100) * circumference;
 
   return (
-    <div className="flex flex-col items-center gap-2 text-center">
-      <div className="relative h-32 w-32">
+    <div className="flex flex-col items-center gap-2 text-center w-full">
+      <div className="relative h-24 w-24 sm:h-32 sm:w-32">
         <svg className="h-full w-full" viewBox="0 0 100 100">
           <circle
             className="stroke-current text-gray-200"
@@ -64,12 +64,12 @@ const CircularProgress = ({ value, label, subLabel, colorClass = 'text-primary' 
           />
         </svg>
         <div className="absolute inset-0 flex items-center justify-center">
-          <span className={`text-3xl font-bold ${colorClass}`}>{value.toFixed(0)}%</span>
+          <span className={`text-xl sm:text-3xl font-bold ${colorClass}`}>{value.toFixed(0)}%</span>
         </div>
       </div>
-      <div className="mt-2">
-        <p className="font-semibold text-card-foreground">{label}</p>
-        <p className="text-sm text-muted-foreground">{subLabel}</p>
+      <div className="mt-2 px-1">
+        <p className="text-[9px] sm:text-[11px] font-black uppercase text-card-foreground leading-tight">{label}</p>
+        <p className="text-[8px] sm:text-[10px] font-bold text-muted-foreground mt-0.5">{subLabel}</p>
       </div>
     </div>
   );
@@ -217,8 +217,8 @@ export default function AdminDashboardPage() {
 
 
   return (
-    <>
-      <div className="relative w-full rounded-xl bg-card p-6 overflow-hidden mb-6 shadow-lg">
+    <div className="space-y-6">
+      <div className="relative w-full rounded-xl bg-card p-6 overflow-hidden shadow-lg min-h-[160px] flex flex-col justify-center">
           <Image 
             src="https://i.ibb.co/gLWLM13M/rut-img1.png"
             data-ai-hint="business people celebrating"
@@ -228,133 +228,145 @@ export default function AdminDashboardPage() {
           />
           <div className="absolute inset-0 bg-gradient-to-r from-primary/90 to-primary/60" />
           <div className="relative text-primary-foreground">
-              <h1 className="text-4xl font-bold">FUERZA DE VENTAS & COBRANZA</h1>
-              <p className="text-lg">KPIS SEMANALES</p>
+              <h1 className="text-2xl sm:text-4xl font-bold uppercase tracking-tighter">FUERZA DE VENTAS & COBRANZA</h1>
+              <p className="text-sm sm:text-lg font-bold">KPIS SEMANALES</p>
           </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <Card className="col-span-1 lg:col-span-2">
+      <div className="grid grid-cols-1 gap-6">
+        <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target />
-              Métricas Clave
+            <CardTitle className="flex items-center gap-2 font-black text-slate-950 uppercase text-lg">
+              <Target className="h-5 w-5 text-primary" />
+              Métricas Clave de Operación
             </CardTitle>
           </CardHeader>
-          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-4 justify-items-center">
-            <CircularProgress value={salesGoalPercentage} label="META DE VENTAS" subLabel={salesSublabel} colorClass="text-blue-500" />
-            <CircularProgress value={collectionEffectiveness} label="EFECTIVIDAD DE COBRO" subLabel={collectionSublabel} colorClass="text-orange-500" />
-            <CircularProgress value={routeCompliance} label="RUTAS" subLabel={routeSublabel} colorClass="text-purple-500" />
-            <CircularProgress value={routeCompliance} label="CUMPLIMIENTO" subLabel={routeSublabel} colorClass="text-indigo-500" />
+          <CardContent className="grid grid-cols-2 md:grid-cols-4 gap-6 lg:gap-8 justify-items-center">
+            <CircularProgress value={salesGoalPercentage} label="META DE VENTAS" subLabel={salesSublabel} colorClass="text-blue-600" />
+            <CircularProgress value={collectionEffectiveness} label="EFECTIVIDAD COBRO" subLabel={collectionSublabel} colorClass="text-orange-600" />
+            <CircularProgress value={routeCompliance} label="CUMPLIMIENTO RUTAS" subLabel={routeSublabel} colorClass="text-purple-600" />
+            <CircularProgress value={routeCompliance} label="VISITAS EXITOSAS" subLabel={routeSublabel} colorClass="text-indigo-600" />
           </CardContent>
         </Card>
       </div>
       
-       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-6">
+       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-1">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2"><Users />Top 5 Ejecutivos - Cumplimiento</CardTitle>
-            <CardDescription>Meta: 80%</CardDescription>
+            <CardTitle className="flex items-center gap-2 font-black uppercase text-slate-950"><Users className="h-5 w-5 text-primary" />Top 5 Ejecutivos</CardTitle>
+            <CardDescription className="font-bold text-[10px] uppercase">Cumplimiento - Meta: 80%</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={executiveData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
-                <XAxis dataKey="shortName" tick={{ fontSize: 10 }} interval={0} />
-                <YAxis />
-                <Tooltip 
-                  contentStyle={{
-                    backgroundColor: 'hsl(var(--background))', 
-                    border: '1px solid hsl(var(--border))'
-                  }}
-                  itemStyle={{ color: 'hsl(var(--foreground))' }}
-                  formatter={(value, name, props) => [`${props.payload.name}: ${Number(value).toFixed(2)}%`, 'Cumplimiento']}
-                />
-                <Bar dataKey="value">
-                  {executiveData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="h-[250px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={executiveData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+                  <XAxis dataKey="shortName" tick={{ fontSize: 10, fontWeight: 'bold' }} interval={0} />
+                  <YAxis tick={{ fontSize: 10 }} />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--background))', 
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '12px'
+                    }}
+                    itemStyle={{ color: 'hsl(var(--foreground))', fontWeight: 'bold' }}
+                    formatter={(value, name, props) => [`${props.payload.name}: ${Number(value).toFixed(2)}%`, 'Cumplimiento']}
+                  />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                    {executiveData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.fill} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
         <div className="lg:col-span-2 flex flex-col gap-6">
             <Card>
                 <CardHeader>
-                    <CardTitle className="flex items-center gap-2"><TrendingUp />Histórico Semanal - Ventas</CardTitle>
+                    <CardTitle className="flex items-center gap-2 font-black uppercase text-slate-950"><TrendingUp className="h-5 w-5 text-primary" />Histórico Semanal - Ventas</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={weeklySalesData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                        <XAxis dataKey="name" />
-                        <YAxis tickFormatter={(value) => `$${value/1000}k`}/>
-                        <Tooltip 
-                         contentStyle={{
-                            backgroundColor: 'hsl(var(--background))', 
-                            border: '1px solid hsl(var(--border))'
-                          }}
-                          itemStyle={{ color: 'hsl(var(--foreground))' }}
-                          formatter={(value: number) => [new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value), 'Ventas']}
-                        />
-                        <Line type="monotone" dataKey="value" name="Ventas" stroke="hsl(var(--primary))" strokeWidth={2} activeDot={{ r: 8 }} />
-                    </LineChart>
-                    </ResponsiveContainer>
+                    <div className="h-[200px] w-full">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={weeklySalesData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 'bold' }} />
+                            <YAxis tickFormatter={(value) => `$${value/1000}k`} tick={{ fontSize: 10 }}/>
+                            <Tooltip 
+                            contentStyle={{
+                                backgroundColor: 'hsl(var(--background))', 
+                                border: '1px solid hsl(var(--border))',
+                                borderRadius: '12px'
+                              }}
+                              itemStyle={{ color: 'hsl(var(--foreground))', fontWeight: 'bold' }}
+                              formatter={(value: number) => [new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value), 'Ventas']}
+                            />
+                            <Line type="monotone" dataKey="value" name="Ventas" stroke="hsl(var(--primary))" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
                 </CardContent>
             </Card>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <Card>
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-sm uppercase font-black"><Wallet />Cartera</CardTitle>
+                    <CardHeader className="pb-2">
+                        <CardTitle className="flex items-center gap-2 text-xs uppercase font-black text-slate-950"><Wallet className="h-4 w-4 text-primary" />Composición Cartera</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <ResponsiveContainer width="100%" height={150}>
-                        <PieChart>
-                            <Pie
-                            data={portfolioData}
-                            cx="50%"
-                            cy="50%"
-                            labelLine={false}
-                            outerRadius={60}
-                            fill="#8884d8"
-                            dataKey="value"
-                            >
-                            {portfolioData.map((entry, index) => (
-                                <Cell key={`cell-${index}`} fill={entry.fill} />
-                            ))}
-                            </Pie>
-                            <Tooltip 
-                            contentStyle={{
-                                backgroundColor: 'hsl(var(--background))', 
-                                border: '1px solid hsl(var(--border))'
-                            }}
-                            />
-                        </PieChart>
-                        </ResponsiveContainer>
+                        <div className="h-[150px] w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                                <Pie
+                                data={portfolioData}
+                                cx="50%"
+                                cy="50%"
+                                labelLine={false}
+                                outerRadius={60}
+                                fill="#8884d8"
+                                dataKey="value"
+                                >
+                                {portfolioData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.fill} />
+                                ))}
+                                </Pie>
+                                <Tooltip 
+                                contentStyle={{
+                                    backgroundColor: 'hsl(var(--background))', 
+                                    border: '1px solid hsl(var(--border))',
+                                    borderRadius: '12px'
+                                }}
+                                />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        </div>
                     </CardContent>
                 </Card>
 
-                <Card className="bg-slate-950 text-white border-none">
+                <Card className="bg-slate-950 text-white border-none shadow-xl">
                     <CardHeader className="pb-2">
                         <CardTitle className="text-xs font-black uppercase flex items-center gap-2">
                             <Activity className="h-4 w-4 text-orange-400" />
-                            Status de Cuota
+                            Status del Sistema
                         </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-1">
-                            <div className="flex justify-between text-[9px] font-black uppercase">
-                                <span>Base de Datos</span>
+                            <div className="flex justify-between text-[9px] font-black uppercase text-slate-400">
+                                <span>Capacidad Base de Datos</span>
                                 <span>{((clients.length / 10000) * 100).toFixed(1)}%</span>
                             </div>
                             <Progress value={(clients.length / 10000) * 100} className="h-1.5 bg-slate-800" />
                         </div>
                         <div className="pt-2 border-t border-slate-800">
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Salud del Sistema</p>
-                            <div className="flex items-center gap-2 mt-1">
-                                <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-                                <span className="text-[11px] font-black uppercase">Operativo</span>
+                            <p className="text-[10px] font-bold text-slate-500 uppercase">Salud de Servidores</p>
+                            <div className="flex items-center justify-between mt-1">
+                                <div className="flex items-center gap-2">
+                                    <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                                    <span className="text-[11px] font-black uppercase">Operativo</span>
+                                </div>
+                                <span className="text-[9px] font-mono text-slate-600">RT-78.4</span>
                             </div>
                         </div>
                     </CardContent>
@@ -363,35 +375,35 @@ export default function AdminDashboardPage() {
         </div>
       </div>
       
-      <div className="mt-6">
-          <Card>
-              <CardHeader>
-                  <CardTitle>Resumen Operativo</CardTitle>
-              </CardHeader>
-              <CardContent>
+      <Card className="shadow-lg border-t-2">
+          <CardHeader>
+              <CardTitle className="font-black text-slate-950 uppercase text-lg">Resumen Operativo por Ejecutivo</CardTitle>
+          </CardHeader>
+          <CardContent>
+              <div className="overflow-x-auto rounded-xl border-2 border-slate-50">
                   <Table>
-                      <TableHeader>
+                      <TableHeader className="bg-slate-50">
                           <TableRow>
-                              <TableHead>Ejecutivo</TableHead>
-                              <TableHead>Ticket Prom.</TableHead>
-                              <TableHead>Efectividad de Visita</TableHead>
-                              <TableHead>Clientes Visitados</TableHead>
+                              <TableHead className="font-black uppercase text-[10px] text-slate-950">Ejecutivo</TableHead>
+                              <TableHead className="font-black uppercase text-[10px] text-slate-950">Ticket Prom.</TableHead>
+                              <TableHead className="font-black uppercase text-[10px] text-slate-950">Efectividad Visita</TableHead>
+                              <TableHead className="font-black uppercase text-[10px] text-slate-950">Visitas OK</TableHead>
                           </TableRow>
                       </TableHeader>
                       <TableBody>
                           {operativeSummaryData.map((row, i) => (
-                            <TableRow key={i}>
-                                <TableCell>{row.executive}</TableCell>
-                                <TableCell>{row.ticketProm.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
-                                <TableCell>{row.visitEffectiveness.toFixed(2)}%</TableCell>
-                                <TableCell>{row.visitedClients}</TableCell>
+                            <TableRow key={i} className="hover:bg-slate-50/50">
+                                <TableCell className="font-bold text-xs uppercase">{row.executive}</TableCell>
+                                <TableCell className="font-black text-primary text-xs">{row.ticketProm.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</TableCell>
+                                <TableCell className="font-black text-xs">{row.visitEffectiveness.toFixed(1)}%</TableCell>
+                                <TableCell className="font-bold text-xs">{row.visitedClients}</TableCell>
                             </TableRow>
                           ))}
                       </TableBody>
                   </Table>
-              </CardContent>
-          </Card>
-      </div>
-    </>
+              </div>
+          </CardContent>
+      </Card>
+    </div>
   );
 }

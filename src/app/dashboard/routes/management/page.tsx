@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTriangle, ThumbsUp, Users as UsersIcon, CalendarDays, Sparkles, MessageSquare, Trash2 } from 'lucide-react';
+import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTriangle, ThumbsUp, Users as UsersIcon, CalendarDays, Sparkles, MessageSquare, Trash2, ArrowLeft } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -129,7 +129,6 @@ function RouteManagementContent() {
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
-        // El usuario solicitó SOLO rutas "Planificada" o "En Progreso". Se quita "Completada".
         const isValidStatus = ['Planificada', 'En Progreso'].includes(r.status);
         
         if (!isValidStatus) return false;
@@ -331,7 +330,7 @@ function RouteManagementContent() {
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 max-w-full overflow-hidden">
         <PageHeader title="Gestión de Ruta" description="Control diario de visitas y registros de gestión." />
         
         {isExpired && !isAdmin && (
@@ -343,9 +342,9 @@ function RouteManagementContent() {
         )}
 
         {!isRouteStarted ? (
-            <Card className="max-w-md mx-auto shadow-2xl border-t-4 border-t-primary rounded-3xl overflow-hidden mt-10">
+            <Card className="max-w-md mx-auto shadow-2xl border-t-4 border-t-primary rounded-3xl overflow-hidden mt-4 lg:mt-10 w-full">
                 <CardHeader className="bg-slate-50 border-b"><CardTitle className="text-slate-950 font-black uppercase text-center text-lg">Activar Jornada</CardTitle></CardHeader>
-                <CardContent className="space-y-6 p-8">
+                <CardContent className="space-y-6 p-6 lg:p-8">
                     {isManager && (
                         <div className="space-y-2">
                             <Label className="font-black uppercase text-[10px] text-slate-500">Filtrar por Agente</Label>
@@ -385,14 +384,18 @@ function RouteManagementContent() {
                 </CardContent>
             </Card>
         ) : (
-            <div className="grid lg:grid-cols-3 gap-8">
-                {/* Lado Izquierdo: Lista de Clientes */}
-                <Card className="lg:col-span-1 shadow-2xl border-t-4 border-t-primary h-[88vh] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
-                    <CardHeader className="bg-muted/5 px-8 py-6 border-b">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+                {/* Lado Izquierdo: Lista de Clientes - Oculto en móvil si hay uno activo */}
+                <Card className={cn(
+                    "shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden flex flex-col bg-white transition-all",
+                    "h-[80vh] lg:h-[88vh]",
+                    activeOriginalIndex !== null ? "hidden lg:flex" : "flex"
+                )}>
+                    <CardHeader className="bg-muted/5 px-6 lg:px-8 py-6 border-b">
                         <h2 className="text-xl font-black text-primary uppercase truncate" title={selectedRoute?.routeName}>{selectedRoute?.routeName || "Plan Activo"}</h2>
                         <p className="text-[10px] font-black text-slate-950 uppercase">HOY: {format(new Date(), 'EEEE dd MMMM', { locale: es })}</p>
                     </CardHeader>
-                    <CardContent className="p-6 flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
+                    <CardContent className="p-4 lg:p-6 flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
                         <Button 
                             variant="outline" 
                             className="w-full h-12 border-dashed border-2 font-black text-xs rounded-xl flex items-center justify-center gap-2" 
@@ -402,7 +405,7 @@ function RouteManagementContent() {
                             <CirclePlus className="h-4 w-4 text-primary" /> AGREGAR EXTRA
                         </Button>
                         <ScrollArea className="flex-1">
-                            <div className="space-y-3 pr-4">
+                            <div className="space-y-3 pr-2 lg:pr-4">
                                 {todaysClients.length === 0 ? (
                                     <div className="flex flex-col items-center justify-center py-20 text-center opacity-30 gap-4">
                                         <CalendarDays className="h-12 w-12 text-slate-400" />
@@ -427,13 +430,13 @@ function RouteManagementContent() {
                                                     <Button 
                                                         variant="ghost" 
                                                         size="icon" 
-                                                        className="absolute top-2 right-2 h-8 w-8 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        className="absolute top-2 right-2 h-8 w-8 text-destructive lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
                                                         onClick={(e) => e.stopPropagation()}
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </AlertDialogTrigger>
-                                                <AlertDialogContent className="rounded-[2rem] border-none shadow-2xl">
+                                                <AlertDialogContent className="rounded-[2rem] border-none shadow-2xl w-[90vw] max-w-md">
                                                     <AlertDialogHeader>
                                                         <AlertDialogTitle className="font-black uppercase text-slate-950">¿Eliminar parada?</AlertDialogTitle>
                                                         <AlertDialogDescription className="font-bold text-xs uppercase text-slate-500">
@@ -459,118 +462,131 @@ function RouteManagementContent() {
                     </CardContent>
                 </Card>
                 
-                {/* Lado Derecho: Panel de Detalle */}
-                <Card className="lg:col-span-2 shadow-2xl border-t-4 border-t-primary h-[88vh] rounded-[2.5rem] overflow-hidden flex flex-col bg-white">
-                    <CardHeader className="bg-muted/5 h-32 flex flex-col justify-center px-10 border-b">
-                        {activeClient ? (
-                            <div className="space-y-1">
-                                <h3 className="text-2xl font-black text-primary uppercase leading-tight tracking-tighter">{activeClient.nombre_comercial}</h3>
-                                <p className="text-[10px] font-black text-slate-950 uppercase opacity-70 truncate">{activeClient.direccion}</p>
+                {/* Lado Derecho: Panel de Detalle - Oculto en móvil si no hay uno activo */}
+                <Card className={cn(
+                    "lg:col-span-2 shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden flex flex-col bg-white transition-all",
+                    "h-auto min-h-[70vh] lg:h-[88vh]",
+                    activeOriginalIndex === null && !isTodayFinished ? "hidden lg:flex" : "flex"
+                )}>
+                    <CardHeader className="bg-muted/5 min-h-[8rem] lg:h-32 flex flex-col justify-center px-6 lg:px-10 border-b">
+                        <div className="flex items-center gap-4">
+                            {activeClient && (
+                                <Button variant="ghost" size="icon" className="lg:hidden shrink-0" onClick={() => setActiveOriginalIndex(null)}>
+                                    <ArrowLeft className="h-6 w-6" />
+                                </Button>
+                            )}
+                            <div className="flex-1 min-w-0">
+                                {activeClient ? (
+                                    <div className="space-y-1">
+                                        <h3 className="text-xl lg:text-2xl font-black text-primary uppercase leading-tight tracking-tighter truncate">{activeClient.nombre_comercial}</h3>
+                                        <p className="text-[10px] font-black text-slate-950 uppercase opacity-70 truncate">{activeClient.direccion}</p>
+                                    </div>
+                                ) : isTodayFinished && todaysClients.length > 0 ? (
+                                    <div className="flex items-center justify-center lg:justify-start gap-3">
+                                        <ThumbsUp className="h-6 w-6 text-green-600" />
+                                        <div className="text-lg lg:text-xl text-green-600 uppercase font-black">OBJETIVOS CUMPLIDOS</div>
+                                    </div>
+                                ) : (
+                                    <div className="text-center text-slate-950 font-black uppercase text-lg opacity-20">Selecciona un punto para iniciar</div>
+                                )}
                             </div>
-                        ) : isTodayFinished && todaysClients.length > 0 ? (
-                            <div className="flex items-center justify-center gap-3">
-                                <ThumbsUp className="h-6 w-6 text-green-600" />
-                                <div className="text-xl text-green-600 uppercase font-black">OBJETIVOS CUMPLIDOS</div>
-                            </div>
-                        ) : (
-                            <div className="text-center text-slate-950 font-black uppercase text-lg opacity-20">Selecciona un punto para iniciar</div>
-                        )}
+                        </div>
                     </CardHeader>
-                    <CardContent className="p-10 space-y-8 flex-1 overflow-y-auto">
+                    <CardContent className="p-6 lg:p-10 space-y-6 lg:space-y-8 flex-1 overflow-y-auto">
                         {!activeClient && isTodayFinished && todaysClients.length > 0 ? (
-                            <div className="flex flex-col items-center justify-center p-10 h-full space-y-6">
-                                <div className="bg-green-100 p-8 rounded-full">
-                                    <ThumbsUp className="h-24 w-24 text-green-600" />
+                            <div className="flex flex-col items-center justify-center p-4 lg:p-10 h-full space-y-6">
+                                <div className="bg-green-100 p-6 lg:p-8 rounded-full">
+                                    <ThumbsUp className="h-16 w-16 lg:h-24 lg:w-24 text-green-600" />
                                 </div>
-                                <h2 className="text-5xl font-black text-slate-950 uppercase text-center tracking-tighter">¡LO LOGRASTE!</h2>
-                                <p className="text-slate-500 font-bold uppercase text-sm">Has finalizado todas tus visitas del día.</p>
+                                <h2 className="text-3xl lg:text-5xl font-black text-slate-950 uppercase text-center tracking-tighter">¡LO LOGRASTE!</h2>
+                                <p className="text-slate-500 font-bold uppercase text-xs lg:text-sm text-center">Has finalizado todas tus visitas del día.</p>
                             </div>
                         ) : activeClient ? (
-                            <div className="space-y-10">
+                            <div className="space-y-6 lg:space-y-10">
                                 {activeClient.isReadded && (
                                     <Alert className="bg-primary/5 border-primary/20 rounded-[1.5rem]">
                                         <Sparkles className="h-5 w-5 text-primary" />
-                                        <AlertTitle className="text-primary font-black uppercase text-xs">Visita Extra no Planificada</AlertTitle>
-                                        <AlertDescription className="text-slate-600 font-bold text-[11px] mt-1 italic">
+                                        <AlertTitle className="text-primary font-black uppercase text-[10px] lg:text-xs">Visita Extra no Planificada</AlertTitle>
+                                        <AlertDescription className="text-slate-600 font-bold text-[9px] lg:text-[11px] mt-1 italic">
                                             <MessageSquare className="inline h-3 w-3 mr-1" />
                                             "{activeClient.reAdditionObservation || 'Sin comentario de adición.'}"
                                         </AlertDescription>
                                     </Alert>
                                 )}
 
-                                <div className={cn("p-8 rounded-[2rem] border-2 flex items-center justify-between", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-slate-50 border-dashed")}>
-                                    <div className="flex items-center gap-6">
-                                        <div className={cn("p-4 rounded-full bg-white shadow-sm", activeClient.checkInTime ? "text-green-600" : "text-slate-950")}>
-                                            <LogIn className="h-8 w-8" />
+                                <div className={cn("p-6 lg:p-8 rounded-[2rem] border-2 flex flex-col sm:flex-row items-center justify-between gap-4", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-slate-50 border-dashed")}>
+                                    <div className="flex items-center gap-4 lg:gap-6">
+                                        <div className={cn("p-3 lg:p-4 rounded-full bg-white shadow-sm", activeClient.checkInTime ? "text-green-600" : "text-slate-950")}>
+                                            <LogIn className="h-6 w-6 lg:h-8 lg:w-8" />
                                         </div>
                                         <div>
-                                            <h4 className="font-black text-sm uppercase text-slate-950 tracking-widest">Entrada (GPS)</h4>
-                                            <p className="text-lg font-black text-slate-950 uppercase opacity-60">{activeClient.checkInTime || 'Esperando registro...'}</p>
+                                            <h4 className="font-black text-[10px] lg:text-sm uppercase text-slate-950 tracking-widest">Entrada (GPS)</h4>
+                                            <p className="text-base lg:text-lg font-black text-slate-950 uppercase opacity-60">{activeClient.checkInTime || 'Esperando registro...'}</p>
                                         </div>
                                     </div>
-                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="font-black h-14 px-10 text-lg uppercase rounded-2xl shadow-lg" disabled={isJornadaBloqueada}>MARCAR LLEGADA</Button>}
+                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="w-full sm:w-auto font-black h-12 lg:h-14 px-8 lg:px-10 text-base lg:text-lg uppercase rounded-2xl shadow-lg" disabled={isJornadaBloqueada}>MARCAR LLEGADA</Button>}
                                 </div>
 
-                                <div className={cn("space-y-10 transition-all duration-500", !activeClient.checkInTime && !isManager && "opacity-20 pointer-events-none blur-[2px]")}>
+                                <div className={cn("space-y-6 lg:space-y-10 transition-all duration-500", !activeClient.checkInTime && !isManager && "opacity-20 pointer-events-none blur-[2px]")}>
                                     <div className="space-y-4">
-                                        <Label className="text-xs font-black uppercase text-slate-500 tracking-widest">Tipo de Gestión</Label>
-                                        <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-6" disabled={isEditingActiveClientDisabled}>
-                                            <Label className={cn("flex flex-col items-center gap-4 border-2 p-8 rounded-[2.5rem] cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "bg-slate-50 hover:bg-slate-100")}>
-                                                <RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-10 w-10 text-primary" /><span className="text-sm font-black uppercase">Presencial</span>
+                                        <Label className="text-[10px] lg:text-xs font-black uppercase text-slate-500 tracking-widest">Tipo de Gestión</Label>
+                                        <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4 lg:gap-6" disabled={isEditingActiveClientDisabled}>
+                                            <Label className={cn("flex flex-col items-center gap-3 lg:gap-4 border-2 p-4 lg:p-8 rounded-[2rem] lg:rounded-[2.5rem] cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "bg-slate-50 hover:bg-slate-100")}>
+                                                <RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-8 w-8 lg:h-10 lg:w-10 text-primary" /><span className="text-[10px] lg:text-sm font-black uppercase">Presencial</span>
                                             </Label>
-                                            <Label className={cn("flex flex-col items-center gap-4 border-2 p-8 rounded-[2.5rem] cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "bg-slate-50 hover:bg-slate-100")}>
-                                                <RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-10 w-10 text-primary" /><span className="text-sm font-black uppercase">Telefónica</span>
+                                            <Label className={cn("flex flex-col items-center gap-3 lg:gap-4 border-2 p-4 lg:p-8 rounded-[2rem] lg:rounded-[2.5rem] cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "bg-slate-50 hover:bg-slate-100")}>
+                                                <RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-8 w-8 lg:h-10 lg:w-10 text-primary" /><span className="text-[10px] lg:text-sm font-black uppercase">Telefónica</span>
                                             </Label>
                                         </RadioGroup>
                                     </div>
 
                                     <div className="space-y-6">
-                                        <div className="space-y-3">
-                                            <Label className="text-xs font-black uppercase text-slate-500 tracking-widest">Observaciones de la Visita</Label>
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] lg:text-xs font-black uppercase text-slate-500 tracking-widest">Observaciones de la Visita</Label>
                                             <Textarea 
-                                                className="font-black text-base border-2 rounded-2xl text-slate-950 h-32 focus:ring-4 focus:ring-primary/10" 
+                                                className="font-black text-sm lg:text-base border-2 rounded-2xl text-slate-950 h-24 lg:h-32 focus:ring-4 focus:ring-primary/10" 
                                                 value={activeClient.visitObservation || ''} 
                                                 onChange={e => handleFieldChange('visitObservation', e.target.value)} 
                                                 disabled={isEditingActiveClientDisabled} 
-                                                placeholder="Escribe aquí cualquier novedad o detalle de la gestión..." 
+                                                placeholder="Detalles de la gestión..." 
                                             />
                                         </div>
 
                                         {activeClient.visitType === 'telefonica' && (
-                                            <div className="space-y-3">
-                                                <Label className="text-xs font-black uppercase text-primary tracking-widest">Observación Específica Llamada (Obligatorio)</Label>
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] lg:text-xs font-black uppercase text-primary tracking-widest">Obs. Llamada (Obligatorio)</Label>
                                                 <Textarea 
-                                                    className="font-black text-base border-2 rounded-2xl text-slate-950 h-24 focus:ring-4 focus:ring-primary/10" 
+                                                    className="font-black text-sm lg:text-base border-2 rounded-2xl text-slate-950 h-20 lg:h-24 focus:ring-4 focus:ring-primary/10" 
                                                     value={activeClient.callObservation || ''} 
                                                     onChange={e => handleFieldChange('callObservation', e.target.value)} 
                                                     disabled={isEditingActiveClientDisabled} 
-                                                    placeholder="Resume la llamada aquí..." 
+                                                    placeholder="Resumen obligatorio de la llamada..." 
                                                 />
                                             </div>
                                         )}
                                     </div>
 
-                                    <div className="grid grid-cols-3 gap-8">
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">VENTA ($)</Label>
-                                            <Input type="text" className="h-16 text-2xl font-black text-primary border-2 rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={isEditingActiveClientDisabled} />
+                                    <div className="grid grid-cols-3 gap-4 lg:gap-8">
+                                        <div className="space-y-1">
+                                            <Label className="text-[8px] lg:text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">VENTA ($)</Label>
+                                            <Input type="text" className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={isEditingActiveClientDisabled} />
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">COBRO ($)</Label>
-                                            <Input type="text" className="h-16 text-2xl font-black text-primary border-2 rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={isEditingActiveClientDisabled} />
+                                        <div className="space-y-1">
+                                            <Label className="text-[8px] lg:text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">COBRO ($)</Label>
+                                            <Input type="text" className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={isEditingActiveClientDisabled} />
                                         </div>
-                                        <div className="space-y-2">
-                                            <Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">DEVOL ($)</Label>
-                                            <Input type="text" className="h-16 text-2xl font-black text-primary border-2 rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={isEditingActiveClientDisabled} />
+                                        <div className="space-y-1">
+                                            <Label className="text-[8px] lg:text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">DEVOL ($)</Label>
+                                            <Input type="text" className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={isEditingActiveClientDisabled} />
                                         </div>
                                     </div>
 
                                     <Button 
                                         onClick={handleCheckOut} 
-                                        className="w-full h-20 text-2xl font-black rounded-3xl shadow-2xl uppercase transition-transform hover:scale-[1.01]" 
+                                        className="w-full h-16 lg:h-20 text-xl lg:text-2xl font-black rounded-2xl lg:rounded-3xl shadow-2xl uppercase transition-transform hover:scale-[1.01]" 
                                         disabled={isSaving || isEditingActiveClientDisabled || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim())}
                                     >
-                                        {isSaving ? <LoaderCircle className="animate-spin h-8 w-8" /> : <><LogOut className="mr-4 h-8 w-8" /> FINALIZAR VISITA</>}
+                                        {isSaving ? <LoaderCircle className="animate-spin h-6 w-6 lg:h-8 lg:w-8" /> : <><LogOut className="mr-2 lg:mr-4 h-6 w-6 lg:h-8 lg:w-8" /> FINALIZAR VISITA</>}
                                     </Button>
                                 </div>
                             </div>
@@ -581,14 +597,14 @@ function RouteManagementContent() {
         )}
         
         <Dialog open={isAddClientDialogOpen} onOpenChange={setIsAddClientDialogOpen}>
-            <DialogContent className="max-w-2xl rounded-[2.5rem] flex flex-col h-[85vh] bg-white border-none shadow-2xl">
-                <DialogHeader className="p-8 pb-6">
-                    <DialogTitle className="text-2xl font-black uppercase text-primary">Adición Manual Extra</DialogTitle>
+            <DialogContent className="w-[95vw] max-w-2xl rounded-[2rem] lg:rounded-[2.5rem] flex flex-col h-[85vh] bg-white border-none shadow-2xl p-0">
+                <DialogHeader className="p-6 lg:p-8 pb-4">
+                    <DialogTitle className="text-xl lg:text-2xl font-black uppercase text-primary">Adición Manual Extra</DialogTitle>
                 </DialogHeader>
-                <div className="px-8 py-4 border-b">
+                <div className="px-6 lg:px-8 py-4 border-b">
                     <Input placeholder="Buscar por RUC o Nombre..." value={addClientSearchTerm} onChange={e => setAddClientSearchTerm(e.target.value)} className="h-12 font-black rounded-2xl border-2 text-slate-950" />
                 </div>
-                <ScrollArea className="flex-1 px-8 py-4">
+                <ScrollArea className="flex-1 px-6 lg:px-8 py-4">
                     <div className="space-y-3">
                         {availableClients.filter(c => {
                             const matchesSearch = String(c.nombre_cliente).toLowerCase().includes(addClientSearchTerm.toLowerCase()) || 
@@ -601,22 +617,22 @@ function RouteManagementContent() {
                         }).map(c => (
                             <div key={c.id} onClick={() => setMultiSelectedClients(p => p.some(s => s.ruc === c.ruc) ? p.filter(s => s.ruc !== c.ruc) : [...p, c])} className={cn("p-4 rounded-2xl flex items-center gap-4 cursor-pointer transition-all border-2", multiSelectedClients.some(s => s.ruc === c.ruc) ? "bg-primary/10 border-primary" : "bg-white border-slate-100")}>
                                 <Checkbox checked={multiSelectedClients.some(s => s.ruc === c.ruc)} className="h-5 w-5 border-primary" />
-                                <div className="flex-1">
-                                    <p className="text-sm font-black uppercase text-slate-950">{c.nombre_comercial}</p>
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-black uppercase text-slate-950 truncate">{c.nombre_comercial}</p>
                                     <p className="text-[9px] font-black text-slate-400 font-mono">{c.ruc}</p>
                                 </div>
                             </div>
                         ))}
                     </div>
                 </ScrollArea>
-                <div className="p-8 border-t space-y-4 bg-slate-50">
-                    <Textarea className="h-20 font-black border-2 rounded-2xl text-slate-950" placeholder="Motivo de la visita no planificada..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
+                <div className="p-6 lg:p-8 border-t space-y-4 bg-slate-50 rounded-b-[2rem]">
+                    <Textarea className="h-20 font-black border-2 rounded-2xl text-slate-950 text-xs" placeholder="Motivo de la visita no planificada..." value={reAdditionObservation} onChange={e => setReAdditionObservation(e.target.value)} />
                     <Button 
                         onClick={handleAddClients} 
                         disabled={multiSelectedClients.length === 0 || isSaving || !reAdditionObservation.trim()} 
                         className="w-full h-14 font-black rounded-2xl text-lg shadow-lg"
                     >
-                        AÑADIR {multiSelectedClients.length} PUNTOS A LA RUTA
+                        AÑADIR {multiSelectedClients.length} PUNTOS
                     </Button>
                 </div>
             </DialogContent>

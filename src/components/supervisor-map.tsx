@@ -11,6 +11,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { getRecentHistory, saveZone } from '@/lib/firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 // Iconos de alta visibilidad para supervisión
 const blueIcon = new L.Icon({
@@ -88,7 +89,6 @@ export function SupervisorMap() {
   const [mapKey, setMapKey] = useState<string>('');
 
   useEffect(() => {
-    // Generar clave única al montar para asegurar contenedor virgen en el primer render útil
     setMapKey(`map-v${Date.now()}-${Math.random().toString(36).substring(7)}`);
     setIsMounted(true);
 
@@ -138,20 +138,23 @@ export function SupervisorMap() {
   }, [selectedUserId, activeLocations]);
 
   if (!isMounted || !mapKey) return (
-    <div className="h-[78vh] w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100">
+    <div className="h-full w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100">
         <LoaderCircle className="animate-spin text-primary h-10 w-10" />
     </div>
   );
 
   return (
-    <div className="flex flex-col h-[78vh] gap-4">
-        <div className="flex gap-2 shrink-0 overflow-x-auto pb-2">
+    <div className="flex flex-col h-full gap-4">
+        <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 scrollbar-hide">
             {activeLocations.length > 0 ? (
                 activeLocations.map(loc => (
                     <Button 
                         key={loc.userId} 
                         variant={selectedUserId === loc.userId ? "default" : "outline"}
-                        className="font-black uppercase text-[10px] h-10 border-2 shrink-0 rounded-xl text-slate-950"
+                        className={cn(
+                            "font-black uppercase text-[9px] h-9 border-2 shrink-0 rounded-xl text-slate-950 px-4",
+                            selectedUserId === loc.userId ? "bg-primary text-white" : "bg-white"
+                        )}
                         onClick={() => fetchUserHistory(loc.userId)}
                     >
                         {loc.userName}
@@ -163,10 +166,9 @@ export function SupervisorMap() {
             )}
         </div>
 
-        {/* Usamos el mapKey en el div contenedor para forzar la recreación total del nodo DOM al remontar */}
         <div 
             key={mapKey}
-            className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50"
+            className="flex-1 rounded-[1.5rem] lg:rounded-[2.5rem] overflow-hidden border-2 lg:border-4 border-slate-100 shadow-2xl relative bg-slate-50"
         >
             <MapContainer 
                 center={[-1.8312, -78.1834]} 
