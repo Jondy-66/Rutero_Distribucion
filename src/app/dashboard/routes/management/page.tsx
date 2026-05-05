@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -32,6 +31,7 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
   AlertDialogContent,
+  AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
@@ -524,7 +524,7 @@ function RouteManagementContent() {
                                             <p className="text-base lg:text-lg font-black text-slate-950 uppercase opacity-60">{activeClient.checkInTime || 'Esperando registro...'}</p>
                                         </div>
                                     </div>
-                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="w-full sm:w-auto font-black h-12 lg:h-14 px-8 lg:px-10 text-base lg:text-lg uppercase rounded-2xl shadow-lg" disabled={isJornadaBloqueada}>MARCAR LLEGADA</Button>}
+                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="w-full sm:auto font-black h-12 lg:h-14 px-8 lg:px-10 text-base lg:text-lg uppercase rounded-2xl shadow-lg" disabled={isJornadaBloqueada}>MARCAR LLEGADA</Button>}
                                 </div>
 
                                 <div className={cn("space-y-6 lg:space-y-10 transition-all duration-500", !activeClient.checkInTime && !isManager && "opacity-20 pointer-events-none blur-[2px]")}>
