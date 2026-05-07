@@ -77,12 +77,16 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
             const loc = c.checkInLocation as any;
             if (loc.latitude !== undefined && loc.longitude !== undefined) {
                 cleaned.checkInLocation = new GeoPoint(loc.latitude, loc.longitude);
+            } else if (loc instanceof GeoPoint) {
+                cleaned.checkInLocation = loc;
             }
         }
         if (c.checkOutLocation) {
             const loc = c.checkOutLocation as any;
             if (loc.latitude !== undefined && loc.longitude !== undefined) {
                 cleaned.checkOutLocation = new GeoPoint(loc.latitude, loc.longitude);
+            } else if (loc instanceof GeoPoint) {
+                cleaned.checkOutLocation = loc;
             }
         }
         return cleaned;
@@ -90,15 +94,13 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
 };
 
 function RouteManagementContent() {
-  const { user, clients: availableClients, routes: allRoutes, users: allUsers, loading: authLoading, dataLoading, refetchData } = useAuth();
+  const { user, clients: availableClients, routes: allRoutes, users: allUsers, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const searchParams = useSearchParams();
   const router = useRouter();
   
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>(searchParams.get('routeId') || undefined);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
-  const [isRouteStarted, setIsRouteStarted] = useState(false);
-  const [currentRouteClientsFull, setCurrentRouteClientsFull] = useState<ClientInRoute[]>([]);
   const [activeOriginalIndex, setActiveOriginalIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isAddClientDialogOpen, setIsAddClientDialogOpen] = useState(false);
@@ -151,17 +153,11 @@ function RouteManagementContent() {
     }
   }, [selectableRoutes, selectedRouteId]);
 
-  useEffect(() => {
-    if (!selectedRoute) return;
-    setCurrentRouteClientsFull(selectedRoute.clients || []);
-    setIsRouteStarted(selectedRoute.status === 'En Progreso' || selectedRoute.status === 'Completada' || isManager);
-    setActiveOriginalIndex(null); 
-  }, [selectedRoute, isManager]);
-
   const todaysClients = useMemo(() => {
+    if (!selectedRoute) return [];
     const today = startOfDay(new Date());
 
-    return currentRouteClientsFull
+    return (selectedRoute.clients || [])
         .map((c, index) => {
             const d = availableClients.find(ac => String(ac.ruc).trim() === String(c.ruc).trim());
             return { ...c, originalIndex: index, direccion: d?.direccion || 'SIN DIRECCIÓN' };
@@ -173,34 +169,42 @@ function RouteManagementContent() {
             const clientDate = startOfDay(ensureDate(c.date));
             return isSameDay(clientDate, today);
         });
-  }, [currentRouteClientsFull, availableClients]);
+  }, [selectedRoute, availableClients]);
 
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
-  const activeClient = activeOriginalIndex !== null && currentRouteClientsFull[activeOriginalIndex] ? currentRouteClientsFull[activeOriginalIndex] : null;
+  const activeClient = activeOriginalIndex !== null && selectedRoute?.clients[activeOriginalIndex] ? selectedRoute.clients[activeOriginalIndex] : null;
 
   const isJornadaBloqueada = isExpired && !isAdmin;
   const isEditingActiveClientDisabled = (activeClient?.visitStatus === 'Completado' || isJornadaBloqueada) && !isAdmin;
 
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
-    if (activeOriginalIndex === null || isEditingActiveClientDisabled || isSaving) return;
-    const next = [...currentRouteClientsFull];
-    next[activeOriginalIndex] = { ...next[activeOriginalIndex], [field]: value };
-    setCurrentRouteClientsFull(next);
+    if (!selectedRoute || activeOriginalIndex === null || isEditingActiveClientDisabled || isSaving) return;
+    
+    const nextClients = [...selectedRoute.clients];
+    nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], [field]: value };
+    
+    const sanitized = sanitizeClients(nextClients);
+    updateRoute(selectedRoute.id, { clients: sanitized })
+        .catch(async () => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                path: `routes/${selectedRoute.id}`, 
+                operation: 'update', 
+                requestResourceData: { clients: sanitized } 
+            }));
+        });
   };
 
   const handleRemoveClient = async (originalIndex: number) => {
     if (!selectedRoute || !isAdmin || isSaving) return;
     
     setIsSaving(true);
-    const next = [...currentRouteClientsFull];
-    next[originalIndex] = { ...next[originalIndex], status: 'Eliminado' };
-    setCurrentRouteClientsFull(next);
+    const nextClients = [...selectedRoute.clients];
+    nextClients[originalIndex] = { ...nextClients[originalIndex], status: 'Eliminado' };
 
-    const sanitized = sanitizeClients(next);
+    const sanitized = sanitizeClients(nextClients);
     updateRoute(selectedRoute.id, { clients: sanitized })
         .then(() => {
             if (activeOriginalIndex === originalIndex) setActiveOriginalIndex(null);
-            refetchData('routes');
             toast({ title: "Cliente eliminado", description: "La parada ha sido removida de la ruta." });
         })
         .catch(async () => {
@@ -216,12 +220,21 @@ function RouteManagementContent() {
   const handleCheckIn = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
     setIsSaving(true);
-    const loc = await new Promise<any>(r => navigator.geolocation.getCurrentPosition(p => r({latitude: p.coords.latitude, longitude: p.coords.longitude}), () => r(null), {timeout: 3000}));
-    const next = [...currentRouteClientsFull];
-    next[activeOriginalIndex] = { ...next[activeOriginalIndex], checkInTime: format(new Date(), 'HH:mm:ss'), checkInLocation: loc };
-    setCurrentRouteClientsFull(next);
     
-    const sanitized = sanitizeClients(next);
+    const loc = await new Promise<any>(r => navigator.geolocation.getCurrentPosition(
+        p => r({latitude: p.coords.latitude, longitude: p.coords.longitude}), 
+        () => r(null), 
+        {timeout: 5000}
+    ));
+    
+    const nextClients = [...selectedRoute.clients];
+    nextClients[activeOriginalIndex] = { 
+        ...nextClients[activeOriginalIndex], 
+        checkInTime: format(new Date(), 'HH:mm:ss'), 
+        checkInLocation: loc 
+    };
+    
+    const sanitized = sanitizeClients(nextClients);
     updateRoute(selectedRoute.id, { clients: sanitized })
         .catch(async () => {
             errorEmitter.emit('permission-error', new FirestorePermissionError({ 
@@ -235,18 +248,29 @@ function RouteManagementContent() {
 
   const handleCheckOut = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
+    
     if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
         toast({title: "Observación de llamada requerida", variant: "destructive"});
         return;
     }
-    setIsSaving(true);
-    const loc = await new Promise<any>(r => navigator.geolocation.getCurrentPosition(p => r({latitude: p.coords.latitude, longitude: p.coords.longitude}), () => r(null), {timeout: 3000}));
-    const next = [...currentRouteClientsFull];
-    next[activeOriginalIndex] = { ...next[activeOriginalIndex], checkOutTime: format(new Date(), 'HH:mm:ss'), checkOutLocation: loc, visitStatus: 'Completado' };
-    setCurrentRouteClientsFull(next);
     
-    const allDone = next.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
-    const sanitized = sanitizeClients(next);
+    setIsSaving(true);
+    const loc = await new Promise<any>(r => navigator.geolocation.getCurrentPosition(
+        p => r({latitude: p.coords.latitude, longitude: p.coords.longitude}), 
+        () => r(null), 
+        {timeout: 5000}
+    ));
+    
+    const nextClients = [...selectedRoute.clients];
+    nextClients[activeOriginalIndex] = { 
+        ...nextClients[activeOriginalIndex], 
+        checkOutTime: format(new Date(), 'HH:mm:ss'), 
+        checkOutLocation: loc, 
+        visitStatus: 'Completado' 
+    };
+    
+    const allDone = nextClients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
+    const sanitized = sanitizeClients(nextClients);
     
     updateRoute(selectedRoute.id, { 
         clients: sanitized, 
@@ -254,7 +278,6 @@ function RouteManagementContent() {
     })
     .then(() => {
         if (!isAdmin && !isManager) setActiveOriginalIndex(null);
-        refetchData('routes');
         toast({ title: "Gestión Cerrada", description: "La visita se ha registrado exitosamente." });
     })
     .catch(async () => {
@@ -298,16 +321,15 @@ function RouteManagementContent() {
         promociones: 0,
         medicacionFrecuente: 0
     } as any));
-    const next = [...currentRouteClientsFull, ...newVisits];
-    setCurrentRouteClientsFull(next);
     
-    const sanitized = sanitizeClients(next);
+    const nextClients = [...selectedRoute.clients, ...newVisits];
+    const sanitized = sanitizeClients(nextClients);
+    
     updateRoute(selectedRoute.id, { clients: sanitized, status: 'En Progreso' })
         .then(() => {
             setIsAddClientDialogOpen(false); 
             setMultiSelectedClients([]); 
             setReAdditionObservation('');
-            refetchData('routes');
             toast({ title: "Clientes añadidos", description: "Se han agregado nuevas paradas a la jornada activa." });
         })
         .catch(async () => {
@@ -320,7 +342,7 @@ function RouteManagementContent() {
         .finally(() => setIsSaving(false));
   };
 
-  if (authLoading || (dataLoading && allRoutes.length === 0)) {
+  if (authLoading) {
     return (
         <div className="p-20 text-center flex flex-col items-center gap-4">
             <LoaderCircle className="animate-spin h-12 w-12 text-primary" />
@@ -341,7 +363,7 @@ function RouteManagementContent() {
             </Alert>
         )}
 
-        {!isRouteStarted ? (
+        {!selectedRoute || (selectedRoute.status !== 'En Progreso' && !isManager) ? (
             <Card className="max-w-md mx-auto shadow-2xl border-t-4 border-t-primary rounded-3xl overflow-hidden mt-4 lg:mt-10 w-full">
                 <CardHeader className="bg-slate-50 border-b"><CardTitle className="text-slate-950 font-black uppercase text-center text-lg">Activar Jornada</CardTitle></CardHeader>
                 <CardContent className="space-y-6 p-6 lg:p-8">
@@ -371,10 +393,7 @@ function RouteManagementContent() {
                         <Button 
                             className="w-full font-black h-14 rounded-2xl text-lg shadow-xl uppercase" 
                             onClick={() => {
-                                updateRoute(selectedRoute.id, { status: 'En Progreso' }).then(() => {
-                                    setIsRouteStarted(true);
-                                    refetchData('routes');
-                                });
+                                updateRoute(selectedRoute.id, { status: 'En Progreso' });
                             }} 
                             disabled={isJornadaBloqueada}
                         >
@@ -385,7 +404,7 @@ function RouteManagementContent() {
             </Card>
         ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                {/* Lado Izquierdo: Lista de Clientes - Oculto en móvil si hay uno activo */}
+                {/* Lado Izquierdo: Lista de Clientes */}
                 <Card className={cn(
                     "shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden flex flex-col bg-white transition-all",
                     "h-[80vh] lg:h-[88vh]",
@@ -462,7 +481,7 @@ function RouteManagementContent() {
                     </CardContent>
                 </Card>
                 
-                {/* Lado Derecho: Panel de Detalle - Oculto en móvil si no hay uno activo */}
+                {/* Lado Derecho: Panel de Detalle */}
                 <Card className={cn(
                     "lg:col-span-2 shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden flex flex-col bg-white transition-all",
                     "h-auto min-h-[70vh] lg:h-[88vh]",
@@ -479,7 +498,7 @@ function RouteManagementContent() {
                                 {activeClient ? (
                                     <div className="space-y-1">
                                         <h3 className="text-xl lg:text-2xl font-black text-primary uppercase leading-tight tracking-tighter truncate">{activeClient.nombre_comercial}</h3>
-                                        <p className="text-[10px] font-black text-slate-950 uppercase opacity-70 truncate">{activeClient.direccion}</p>
+                                        <p className="text-[10px] font-black text-slate-950 uppercase opacity-70 truncate">{todaysClients.find(tc => tc.originalIndex === activeOriginalIndex)?.direccion || "SIN DIRECCIÓN"}</p>
                                     </div>
                                 ) : isTodayFinished && todaysClients.length > 0 ? (
                                     <div className="flex items-center justify-center lg:justify-start gap-3">

@@ -1,5 +1,5 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales optimizada para cuota y resiliencia.
+ * @fileoverview Gestión de estado de autenticación y datos globales optimizada para cuota y resiliencia con sincronización en tiempo real.
  */
 
 'use client';
@@ -8,8 +8,8 @@ import React, { createContext, useState, useEffect, ReactNode, useCallback, useR
 import { User as FirebaseAuthUser, onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase/config';
 import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
-import { collection, doc, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
-import { getClients, getUsers, getRoutes, getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore, getMyClients, getMyRoutes } from '@/lib/firebase/firestore';
+import { collection, doc, onSnapshot, query, where, Timestamp, orderBy } from 'firebase/firestore';
+import { getUsers, getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore, getMyClients, getClients } from '@/lib/firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -24,7 +24,7 @@ interface AuthContextType {
   phoneContacts: PhoneContact[];
   notifications: Notification[];
   unreadCount: number;
-  refetchData: (dataType: 'clients' | 'users' | 'routes' | 'phoneContacts') => Promise<void>;
+  refetchData: (dataType: 'clients' | 'users' | 'phoneContacts') => Promise<void>;
   markNotificationAsRead: (notificationId: string) => Promise<void>;
   markAllNotificationsAsRead: () => Promise<void>;
 }
@@ -45,26 +45,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isDataInitialized = useRef<string | null>(null);
 
   /**
-   * Carga inicial de datos globales con filtros por rol y manejo individual de errores.
+   * Carga inicial de datos globales estáticos.
    */
   const fetchInitialData = useCallback(async (currentUser: User) => {
-    // Si los datos ya se cargaron para este usuario, no repetir
     if (isDataInitialized.current === currentUser.id) return;
     
     setDataLoading(true);
     const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor' || currentUser.role === 'Auditor';
     
     try {
-        const [usersRes, clientsRes, routesRes, phoneRes] = await Promise.all([
+        const [usersRes, clientsRes, phoneRes] = await Promise.all([
             getUsers().catch(e => { console.error("Error cargando usuarios:", e); return []; }),
             (isSourcingAll ? getClients() : getMyClients(currentUser.name)).catch(e => { console.error("Error cargando clientes:", e); return []; }),
-            (isSourcingAll ? getRoutes() : getMyRoutes(currentUser.id)).catch(e => { console.error("Error cargando rutas:", e); return []; }),
             getPhoneContacts().catch(e => { console.error("Error cargando contactos:", e); return []; })
         ]);
 
         setUsers(usersRes);
         setClients(clientsRes);
-        setRoutes(routesRes);
         setPhoneContacts(phoneRes);
         
         isDataInitialized.current = currentUser.id;
@@ -75,14 +72,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   }, []);
   
-  const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'routes' | 'phoneContacts') => {
+  const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'phoneContacts') => {
       if (!user) return;
       const isSourcingAll = user.role === 'Administrador' || user.role === 'Supervisor' || user.role === 'Auditor';
       
       try {
           if (dataType === 'clients') setClients(isSourcingAll ? await getClients() : await getMyClients(user.name));
           if (dataType === 'users') setUsers(await getUsers());
-          if (dataType === 'routes') setRoutes(isSourcingAll ? await getRoutes() : await getMyRoutes(user.id));
           if (dataType === 'phoneContacts') setPhoneContacts(await getPhoneContacts());
       } catch (error) {
           console.error(`Error al refrescar ${dataType}:`, error);
@@ -125,6 +121,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         );
 
+        // --- SINCRONIZACIÓN DE RUTAS EN TIEMPO REAL ---
+        const routesQuery = query(collection(db, 'routes'), orderBy('createdAt', 'desc'));
+        const unsubscribeRoutes = onSnapshot(routesQuery, (snapshot) => {
+            const routesData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as any)) as RoutePlan[];
+            setRoutes(routesData);
+        }, (error) => {
+            console.error("Error en tiempo real de rutas:", error);
+        });
+
         const notificationsQuery = query(
             collection(db, 'notifications'), 
             where('userId', '==', fbUser.uid)
@@ -155,6 +163,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
         return () => {
             unsubscribeUser();
+            unsubscribeRoutes();
             unsubscribeNotifications();
         };
       } else {
