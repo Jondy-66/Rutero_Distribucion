@@ -42,13 +42,16 @@ const ensureDate = (d: any): Date => {
   if (!d) return new Date();
   if (d instanceof Date) return d;
   if (d && typeof d.toDate === 'function') return d.toDate();
+  if (d && typeof d.seconds === 'number') return new Date(d.seconds * 1000);
   const date = new Date(d);
   return isNaN(date.getTime()) ? new Date() : date;
 };
 
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
+        // PREVENCIÓN DE PÉRDIDA DE DATOS: Mantenemos el objeto original y solo sobreescribimos campos clave
         const cleaned: any = { 
+            ...c, // Spread para preservar campos no mapeados explícitamente
             ruc: c.ruc || '',
             nombre_comercial: c.nombre_comercial || 'Sin Nombre',
             visitStatus: c.visitStatus || 'Pendiente',
@@ -58,15 +61,19 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
             reAdditionObservation: c.reAdditionObservation || '',
             visitObservation: c.visitObservation || '',
             callObservation: c.callObservation || '',
+            removalObservation: c.removalObservation || '',
             checkInTime: c.checkInTime || null,
             checkOutTime: c.checkOutTime || null
         };
+        
         cleaned.date = Timestamp.fromDate(ensureDate(c.date));
+        
         const parseV = (v: any) => {
             const strValue = String(v || 0).replace(',', '.');
             const num = parseFloat(strValue);
             return isNaN(num) ? 0 : Math.round(num * 100) / 100;
         };
+        
         cleaned.valorVenta = parseV(c.valorVenta);
         cleaned.valorCobro = parseV(c.valorCobro);
         cleaned.devoluciones = parseV(c.devoluciones);
@@ -180,7 +187,8 @@ function RouteManagementContent() {
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (!selectedRoute || activeOriginalIndex === null || isEditingActiveClientDisabled || isSaving) return;
     
-    const nextClients = [...selectedRoute.clients];
+    // Obtenemos una copia PROFUNDA del listado de clientes para evitar mutaciones de estado directo
+    const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
     nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], [field]: value };
     
     const sanitized = sanitizeClients(nextClients);
@@ -198,7 +206,7 @@ function RouteManagementContent() {
     if (!selectedRoute || !isAdmin || isSaving) return;
     
     setIsSaving(true);
-    const nextClients = [...selectedRoute.clients];
+    const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
     nextClients[originalIndex] = { ...nextClients[originalIndex], status: 'Eliminado' };
 
     const sanitized = sanitizeClients(nextClients);
@@ -227,7 +235,7 @@ function RouteManagementContent() {
         {timeout: 5000}
     ));
     
-    const nextClients = [...selectedRoute.clients];
+    const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
     nextClients[activeOriginalIndex] = { 
         ...nextClients[activeOriginalIndex], 
         checkInTime: format(new Date(), 'HH:mm:ss'), 
@@ -261,7 +269,7 @@ function RouteManagementContent() {
         {timeout: 5000}
     ));
     
-    const nextClients = [...selectedRoute.clients];
+    const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
     nextClients[activeOriginalIndex] = { 
         ...nextClients[activeOriginalIndex], 
         checkOutTime: format(new Date(), 'HH:mm:ss'), 

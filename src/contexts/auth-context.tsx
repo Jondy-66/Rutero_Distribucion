@@ -122,13 +122,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         );
 
         // --- SINCRONIZACIÓN DE RUTAS EN TIEMPO REAL ---
-        const routesQuery = query(collection(db, 'routes'), orderBy('createdAt', 'desc'));
+        // Eliminamos el orderBy por si causa problemas de índices faltantes en algunos clientes
+        const routesQuery = query(collection(db, 'routes')); 
         const unsubscribeRoutes = onSnapshot(routesQuery, (snapshot) => {
             const routesData = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             } as any)) as RoutePlan[];
-            setRoutes(routesData);
+            // Ordenar en memoria para evitar errores de Firebase Index
+            setRoutes(routesData.sort((a, b) => {
+                const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : 0;
+                const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : 0;
+                return dateB - dateA;
+            }));
         }, (error) => {
             console.error("Error en tiempo real de rutas:", error);
         });
