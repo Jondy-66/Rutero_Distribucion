@@ -22,7 +22,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { isToday, startOfWeek, endOfWeek, eachDayOfInterval, format, getDay, isWithinInterval } from 'date-fns';
+import { isToday, startOfWeek, endOfWeek, eachDayOfInterval, format, getDay, isWithinInterval, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
 import { useMemo, useState, useEffect } from 'react';
@@ -120,30 +120,32 @@ export default function DashboardPage() {
         name: format(day, 'E', { locale: es }).charAt(0).toUpperCase() + format(day, 'E', { locale: es }).slice(1,3),
         routes: 0,
         sales: 0,
+        fullDate: format(day, 'yyyy-MM-dd')
     }));
 
-    const relevantRoutes = routes.filter(route => {
-        const routeDate = route.date;
-        const isOwnerOrAdmin = user?.role === 'Administrador' || route.createdBy === user?.id;
-        const isTerminalStatus = route.status === 'Completada';
-        return (
-            isOwnerOrAdmin &&
-            isTerminalStatus &&
-            routeDate &&
-            isWithinInterval(routeDate instanceof Timestamp ? routeDate.toDate() : routeDate, { start, end })
-        );
-    });
+    routes.forEach(route => {
+        const isAuthorized = 
+            user?.role === 'Administrador' || 
+            user?.role === 'Auditor' || 
+            route.createdBy === user?.id ||
+            (user?.role === 'Supervisor' && route.supervisorId === user.id);
 
-    relevantRoutes.forEach(route => {
-        const routeDate = route.date instanceof Timestamp ? route.date.toDate() : route.date;
-        if (routeDate) {
-            const dayIndex = getDay(routeDate) === 0 ? 6 : getDay(routeDate) - 1; // Lunes = 0, Domingo = 6
-            if (dayIndex >= 0 && dayIndex < 7) {
-                weekData[dayIndex].routes += 1;
-                const totalSales = route.clients
-                    .filter(c => c.visitStatus === 'Completado' && c.valorVenta)
-                    .reduce((sum, c) => sum + (c.valorVenta || 0), 0);
-                weekData[dayIndex].sales += totalSales;
+        const isValidStatus = ['En Progreso', 'Completada'].includes(route.status);
+        
+        if (isAuthorized && isValidStatus && route.date) {
+            const rDate = route.date instanceof Timestamp ? route.date.toDate() : (route.date instanceof Date ? route.date : new Date(route.date));
+            
+            if (isWithinInterval(rDate, { start: startOfDay(start), end: endOfDay(end) })) {
+                const rDateStr = format(rDate, 'yyyy-MM-dd');
+                const dayData = weekData.find(d => d.fullDate === rDateStr);
+                
+                if (dayData) {
+                    dayData.routes += 1;
+                    const daySales = route.clients
+                        .filter(c => c.visitStatus === 'Completado' && c.valorVenta)
+                        .reduce((sum, c) => sum + (parseFloat(String(c.valorVenta)) || 0), 0);
+                    dayData.sales += daySales;
+                }
             }
         }
     });
