@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import '@geoman-io/leaflet-geoman-free';
@@ -86,15 +86,18 @@ export function SupervisorMap() {
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
-  const [mapKey, setMapKey] = useState<string>('');
 
   useEffect(() => {
-    setMapKey(`map-v${Date.now()}-${Math.random().toString(36).substring(7)}`);
     setIsMounted(true);
 
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
-        setActiveLocations(snap.docs.map(d => d.data() as ActiveLocation));
+        const locs = snap.docs.map(d => ({
+            ...d.data(),
+            userId: d.id
+        } as ActiveLocation));
+        setActiveLocations(locs);
     });
+
     const unsubZones = onSnapshot(collection(db, 'zones'), (snap) => {
         setZones(snap.docs.map(d => ({ id: d.id, ...d.data() } as Zone)));
     });
@@ -102,7 +105,6 @@ export function SupervisorMap() {
     return () => { 
         unsubLocs(); 
         unsubZones();
-        setIsMounted(false);
     };
   }, []);
 
@@ -137,11 +139,13 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!isMounted || !mapKey) return (
-    <div className="h-full w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100">
-        <LoaderCircle className="animate-spin text-primary h-10 w-10" />
-    </div>
-  );
+  if (!isMounted) {
+    return (
+        <div className="h-full w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100">
+            <LoaderCircle className="animate-spin text-primary h-10 w-10" />
+        </div>
+    );
+  }
 
   return (
     <div className="flex flex-col h-full gap-4">
@@ -157,7 +161,7 @@ export function SupervisorMap() {
                         )}
                         onClick={() => fetchUserHistory(loc.userId)}
                     >
-                        {loc.userName}
+                        {loc.userName || 'Usuario'}
                         {isHistoryLoading && selectedUserId === loc.userId && <LoaderCircle className="ml-2 h-3 w-3 animate-spin" />}
                     </Button>
                 ))
@@ -166,15 +170,13 @@ export function SupervisorMap() {
             )}
         </div>
 
-        <div 
-            key={mapKey}
-            className="flex-1 rounded-[1.5rem] lg:rounded-[2.5rem] overflow-hidden border-2 lg:border-4 border-slate-100 shadow-2xl relative bg-slate-50"
-        >
+        <div className="flex-1 rounded-[1.5rem] lg:rounded-[2.5rem] overflow-hidden border-2 lg:border-4 border-slate-100 shadow-2xl relative bg-slate-50">
             <MapContainer 
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
                 className="h-full w-full"
+                style={{ height: '100%', width: '100%' }}
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapViewController center={mapCenter} />
