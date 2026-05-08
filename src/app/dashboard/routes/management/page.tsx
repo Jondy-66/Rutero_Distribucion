@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, Suspense } from 'react';
+import { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -26,6 +26,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
+import { debounce } from 'lodash';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,9 +50,8 @@ const ensureDate = (d: any): Date => {
 
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
-        // PREVENCIÓN DE PÉRDIDA DE DATOS: Mantenemos el objeto original y solo sobreescribimos campos clave
         const cleaned: any = { 
-            ...c, // Spread para preservar campos no mapeados explícitamente
+            ...c, 
             ruc: c.ruc || '',
             nombre_comercial: c.nombre_comercial || 'Sin Nombre',
             visitStatus: c.visitStatus || 'Pendiente',
@@ -116,6 +116,10 @@ function RouteManagementContent() {
   const [reAdditionObservation, setReAdditionObservation] = useState('');
   const [isExpired, setIsExpired] = useState(false);
 
+  // Estados locales para evitar flicker al escribir en campos de texto
+  const [localVisitObs, setLocalVisitObs] = useState('');
+  const [localCallObs, setLocalCallObs] = useState('');
+
   const isAdmin = user?.role === 'Administrador';
   const isManager = isAdmin || user?.role === 'Supervisor';
 
@@ -153,6 +157,23 @@ function RouteManagementContent() {
     return allRoutes.find(r => r.id === rid);
   }, [selectedRouteId, allRoutes, searchParams]);
 
+  const activeClient = useMemo(() => {
+    return activeOriginalIndex !== null && selectedRoute?.clients[activeOriginalIndex] 
+        ? selectedRoute.clients[activeOriginalIndex] 
+        : null;
+  }, [activeOriginalIndex, selectedRoute]);
+
+  // Sincronizar estados locales cuando cambia el cliente activo
+  useEffect(() => {
+      if (activeClient) {
+          setLocalVisitObs(activeClient.visitObservation || '');
+          setLocalCallObs(activeClient.callObservation || '');
+      } else {
+          setLocalVisitObs('');
+          setLocalCallObs('');
+      }
+  }, [activeOriginalIndex, activeClient?.ruc]);
+
   useEffect(() => {
     if (!selectedRouteId && selectableRoutes.length > 0) {
         const activeOne = selectableRoutes.find(r => r.status === 'En Progreso');
@@ -172,44 +193,65 @@ function RouteManagementContent() {
         .filter(c => {
             if (c.status === 'Eliminado') return false;
             if (!c.date) return false;
-            
             const clientDate = startOfDay(ensureDate(c.date));
             return isSameDay(clientDate, today);
         });
   }, [selectedRoute, availableClients]);
 
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
-  const activeClient = activeOriginalIndex !== null && selectedRoute?.clients[activeOriginalIndex] ? selectedRoute.clients[activeOriginalIndex] : null;
-
   const isJornadaBloqueada = isExpired && !isAdmin;
   const isEditingActiveClientDisabled = (activeClient?.visitStatus === 'Completado' || isJornadaBloqueada) && !isAdmin;
+
+  // Función de guardado con Debounce para evitar pérdida de caracteres al escribir
+  const debouncedSave = useCallback(
+    debounce((field: keyof ClientInRoute, value: any, routeId: string, currentClients: ClientInRoute[], index: number) => {
+      const nextClients = [...currentClients];
+      nextClients[index] = { ...nextClients[index], [field]: value };
+      const sanitized = sanitizeClients(nextClients);
+      
+      updateRoute(routeId, { clients: sanitized }).catch(async () => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+            path: `routes/${routeId}`, 
+            operation: 'update', 
+            requestResourceData: { clients: sanitized } 
+        }));
+      });
+    }, 500),
+    []
+  );
 
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (!selectedRoute || activeOriginalIndex === null || isEditingActiveClientDisabled || isSaving) return;
     
-    // Obtenemos una copia PROFUNDA del listado de clientes para evitar mutaciones de estado directo
-    const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
-    nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], [field]: value };
-    
-    const sanitized = sanitizeClients(nextClients);
-    updateRoute(selectedRoute.id, { clients: sanitized })
-        .catch(async () => {
+    // Si es una observación, actualizamos primero el estado local para fluidez visual
+    if (field === 'visitObservation') setLocalVisitObs(value);
+    if (field === 'callObservation') setLocalCallObs(value);
+
+    // Si es un campo de texto largo, usamos debounce. Si es un valor inmediato (check, tipo, etc), guardamos ya.
+    if (field === 'visitObservation' || field === 'callObservation') {
+        debouncedSave(field, value, selectedRoute.id, selectedRoute.clients, activeOriginalIndex);
+    } else {
+        const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
+        nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], [field]: value };
+        const sanitized = sanitizeClients(nextClients);
+        
+        updateRoute(selectedRoute.id, { clients: sanitized }).catch(async () => {
             errorEmitter.emit('permission-error', new FirestorePermissionError({ 
                 path: `routes/${selectedRoute.id}`, 
                 operation: 'update', 
                 requestResourceData: { clients: sanitized } 
             }));
         });
+    }
   };
 
   const handleRemoveClient = async (originalIndex: number) => {
     if (!selectedRoute || !isAdmin || isSaving) return;
-    
     setIsSaving(true);
     const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
     nextClients[originalIndex] = { ...nextClients[originalIndex], status: 'Eliminado' };
-
     const sanitized = sanitizeClients(nextClients);
+
     updateRoute(selectedRoute.id, { clients: sanitized })
         .then(() => {
             if (activeOriginalIndex === originalIndex) setActiveOriginalIndex(null);
@@ -257,7 +299,7 @@ function RouteManagementContent() {
   const handleCheckOut = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
     
-    if (activeClient?.visitType === 'telefonica' && !activeClient.callObservation?.trim()) {
+    if (activeClient?.visitType === 'telefonica' && !localCallObs.trim()) {
         toast({title: "Observación de llamada requerida", variant: "destructive"});
         return;
     }
@@ -272,6 +314,8 @@ function RouteManagementContent() {
     const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
     nextClients[activeOriginalIndex] = { 
         ...nextClients[activeOriginalIndex], 
+        visitObservation: localVisitObs,
+        callObservation: localCallObs,
         checkOutTime: format(new Date(), 'HH:mm:ss'), 
         checkOutLocation: loc, 
         visitStatus: 'Completado' 
@@ -572,7 +616,7 @@ function RouteManagementContent() {
                                             <Label className="text-[10px] lg:text-xs font-black uppercase text-slate-500 tracking-widest">Observaciones de la Visita</Label>
                                             <Textarea 
                                                 className="font-black text-sm lg:text-base border-2 rounded-2xl text-slate-950 h-24 lg:h-32 focus:ring-4 focus:ring-primary/10" 
-                                                value={activeClient.visitObservation || ''} 
+                                                value={localVisitObs} 
                                                 onChange={e => handleFieldChange('visitObservation', e.target.value)} 
                                                 disabled={isEditingActiveClientDisabled} 
                                                 placeholder="Detalles de la gestión..." 
@@ -584,7 +628,7 @@ function RouteManagementContent() {
                                                 <Label className="text-[10px] lg:text-xs font-black uppercase text-primary tracking-widest">Obs. Llamada (Obligatorio)</Label>
                                                 <Textarea 
                                                     className="font-black text-sm lg:text-base border-2 rounded-2xl text-slate-950 h-20 lg:h-24 focus:ring-4 focus:ring-primary/10" 
-                                                    value={activeClient.callObservation || ''} 
+                                                    value={localCallObs} 
                                                     onChange={e => handleFieldChange('callObservation', e.target.value)} 
                                                     disabled={isEditingActiveClientDisabled} 
                                                     placeholder="Resumen obligatorio de la llamada..." 
@@ -611,7 +655,7 @@ function RouteManagementContent() {
                                     <Button 
                                         onClick={handleCheckOut} 
                                         className="w-full h-16 lg:h-20 text-xl lg:text-2xl font-black rounded-2xl lg:rounded-3xl shadow-2xl uppercase transition-transform hover:scale-[1.01]" 
-                                        disabled={isSaving || isEditingActiveClientDisabled || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !activeClient.callObservation?.trim())}
+                                        disabled={isSaving || isEditingActiveClientDisabled || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !localCallObs.trim())}
                                     >
                                         {isSaving ? <LoaderCircle className="animate-spin h-6 w-6 lg:h-8 lg:w-8" /> : <><LogOut className="mr-2 lg:mr-4 h-6 w-6 lg:h-8 lg:w-8" /> FINALIZAR VISITA</>}
                                     </Button>
@@ -637,9 +681,7 @@ function RouteManagementContent() {
                             const matchesSearch = String(c.nombre_cliente).toLowerCase().includes(addClientSearchTerm.toLowerCase()) || 
                                                 String(c.ruc).includes(addClientSearchTerm) ||
                                                 String(c.nombre_comercial).toLowerCase().includes(addClientSearchTerm.toLowerCase());
-                            
                             const matchesExecutive = isAdmin || (c.ejecutivo?.trim().toLowerCase() === user?.name?.trim().toLowerCase());
-                            
                             return matchesSearch && matchesExecutive;
                         }).map(c => (
                             <div key={c.id} onClick={() => setMultiSelectedClients(p => p.some(s => s.ruc === c.ruc) ? p.filter(s => s.ruc !== c.ruc) : [...p, c])} className={cn("p-4 rounded-2xl flex items-center gap-4 cursor-pointer transition-all border-2", multiSelectedClients.some(s => s.ruc === c.ruc) ? "bg-primary/10 border-primary" : "bg-white border-slate-100")}>
