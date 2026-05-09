@@ -12,11 +12,12 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
 import { getCronConfig, updateCronConfig, getSystemLogs } from '@/lib/firebase/firestore';
 import type { CronConfig, SystemLog } from '@/lib/types';
-import { Clock, Calendar, Power, Save, LoaderCircle, History, ShieldCheck, AlertCircle, Timer } from 'lucide-react';
+import { Clock, Calendar, Power, Save, LoaderCircle, History, ShieldCheck, AlertCircle, Timer, Activity, Zap } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const DAYS = [
   { id: 1, label: 'Lunes' },
@@ -118,80 +119,91 @@ export default function CronJobsPage() {
       <PageHeader title="Gestión de Cron Jobs" description="Controla los procesos automáticos de sincronización de IA." />
 
       <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-2 shadow-xl border-t-4 border-t-primary">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 font-black uppercase text-slate-950">
-              <Power className={config?.enabled ? "text-green-600" : "text-destructive"} />
-              Configuración de Ejecución
-            </CardTitle>
-            <CardDescription className="font-black text-[10px] uppercase text-slate-950">Define cuándo y cómo debe activarse el refresco de datos.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-8">
-            <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border-2 border-slate-100">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-black uppercase text-slate-950">Estado Maestro</Label>
-                <p className="text-[10px] font-black text-muted-foreground uppercase">Habilita o deshabilita todos los procesos automáticos.</p>
+        <div className="lg:col-span-2 space-y-6">
+          <Alert className="bg-primary/5 border-primary/20 rounded-2xl shadow-sm">
+            <Zap className="h-5 w-5 text-primary" />
+            <AlertTitle className="font-black uppercase text-xs">Objetivo: Anti-Hibernación de API</AlertTitle>
+            <AlertDescription className="text-[10px] font-bold uppercase text-slate-600 leading-tight">
+              Para evitar que la API de Render entre en modo de suspensión (hibernación), se recomienda un intervalo de <span className="text-primary font-black">14 MINUTOS</span>. Esto mantendrá el servidor activo 24/7.
+            </AlertDescription>
+          </Alert>
+
+          <Card className="shadow-xl border-t-4 border-t-primary rounded-2xl overflow-hidden">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 font-black uppercase text-slate-950">
+                <Power className={config?.enabled ? "text-green-600" : "text-destructive"} />
+                Configuración de Ejecución
+              </CardTitle>
+              <CardDescription className="font-black text-[10px] uppercase text-slate-950">Define cuándo y cómo debe activarse el refresco de datos.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-8">
+              <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border-2 border-slate-100">
+                <div className="space-y-0.5">
+                  <Label className="text-sm font-black uppercase text-slate-950">Estado Maestro</Label>
+                  <p className="text-[10px] font-black text-muted-foreground uppercase">Habilita o deshabilita todos los procesos automáticos.</p>
+                </div>
+                <Switch checked={config?.enabled} onCheckedChange={(val) => setCronConfig(prev => prev ? { ...prev, enabled: val } : null)} />
               </div>
-              <Switch checked={config?.enabled} onCheckedChange={(val) => setCronConfig(prev => prev ? { ...prev, enabled: val } : null)} />
-            </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4 bg-muted/20 rounded-2xl border-2 border-slate-100 space-y-3">
-                    <div className="flex items-center gap-2">
-                        <Timer className="h-4 w-4 text-primary" />
-                        <Label className="text-sm font-black uppercase text-slate-950">Intervalo de Refresco</Label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <Input 
-                            type="number" 
-                            min="5" 
-                            value={config?.refreshIntervalMinutes || 60} 
-                            onChange={(e) => setCronConfig(prev => prev ? { ...prev, refreshIntervalMinutes: parseInt(e.target.value) || 60 } : null)}
-                            className="font-black text-center h-10 border-2"
-                        />
-                        <span className="text-[10px] font-black uppercase text-slate-500">Minutos</span>
-                    </div>
-                    <p className="text-[9px] font-bold text-muted-foreground uppercase italic">Mínimo sugerido: 15 minutos.</p>
-                </div>
-
-                <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border-2 border-slate-100">
-                    <div className="space-y-0.5">
-                        <Label className="text-sm font-black uppercase text-slate-950">Modo 24 Horas</Label>
-                        <p className="text-[10px] font-black text-muted-foreground uppercase">Mantiene el servicio activo sin importar el horario laboral.</p>
-                    </div>
-                    <Switch checked={config?.active24h} onCheckedChange={(val) => setCronConfig(prev => prev ? { ...prev, active24h: val } : null)} />
-                </div>
-            </div>
-
-            <div className="space-y-4">
-              <Label className="text-xs font-black uppercase text-slate-950 tracking-widest flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-primary" />
-                Días de Operación
-              </Label>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {DAYS.map((day) => (
-                  <div key={day.id} className="flex items-center space-x-2 p-3 rounded-xl border-2 border-slate-100 hover:border-primary/20 transition-colors bg-white">
-                    <Checkbox 
-                      id={`day-${day.id}`} 
-                      checked={config?.scheduledDays?.includes(day.id)} 
-                      onCheckedChange={() => handleToggleDay(day.id)}
-                    />
-                    <Label htmlFor={`day-${day.id}`} className="text-[11px] font-black uppercase cursor-pointer flex-1 text-slate-950">{day.label}</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="p-4 bg-muted/20 rounded-2xl border-2 border-slate-100 space-y-3">
+                      <div className="flex items-center gap-2">
+                          <Timer className="h-4 w-4 text-primary" />
+                          <Label className="text-sm font-black uppercase text-slate-950">Intervalo de Refresco</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                          <Input 
+                              type="number" 
+                              min="5" 
+                              value={config?.refreshIntervalMinutes || 60} 
+                              onChange={(e) => setCronConfig(prev => prev ? { ...prev, refreshIntervalMinutes: parseInt(e.target.value) || 60 } : null)}
+                              className="font-black text-center h-10 border-2"
+                          />
+                          <span className="text-[10px] font-black uppercase text-slate-500">Minutos</span>
+                      </div>
+                      <p className="text-[9px] font-bold text-muted-foreground uppercase italic">Ideal Keep-Alive: 14 min.</p>
                   </div>
-                ))}
+
+                  <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border-2 border-slate-100">
+                      <div className="space-y-0.5">
+                          <Label className="text-sm font-black uppercase text-slate-950">Modo 24 Horas</Label>
+                          <p className="text-[10px] font-black text-muted-foreground uppercase">Mantiene el servicio activo sin importar el horario laboral.</p>
+                      </div>
+                      <Switch checked={config?.active24h} onCheckedChange={(val) => setCronConfig(prev => prev ? { ...prev, active24h: val } : null)} />
+                  </div>
               </div>
-            </div>
-          </CardContent>
-          <CardFooter className="bg-slate-50 p-6 rounded-b-xl flex justify-end">
-            <Button onClick={handleSave} disabled={isSaving || !config} className="font-black px-10 h-12 shadow-lg">
-              {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <Save className="mr-2" />}
-              GUARDAR PROGRAMACIÓN
-            </Button>
-          </CardFooter>
-        </Card>
+
+              <div className="space-y-4">
+                <Label className="text-xs font-black uppercase text-slate-950 tracking-widest flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-primary" />
+                  Días de Operación
+                </Label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {DAYS.map((day) => (
+                    <div key={day.id} className="flex items-center space-x-2 p-3 rounded-xl border-2 border-slate-100 hover:border-primary/20 transition-colors bg-white">
+                      <Checkbox 
+                        id={`day-${day.id}`} 
+                        checked={config?.scheduledDays?.includes(day.id)} 
+                        onSelect={() => handleToggleDay(day.id)}
+                        onCheckedChange={() => handleToggleDay(day.id)}
+                      />
+                      <Label htmlFor={`day-${day.id}`} className="text-[11px] font-black uppercase cursor-pointer flex-1 text-slate-950">{day.label}</Label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+            <CardFooter className="bg-slate-50 p-6 rounded-b-xl flex justify-end">
+              <Button onClick={handleSave} disabled={isSaving || !config} className="font-black px-10 h-12 shadow-lg">
+                {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : <Save className="mr-2" />}
+                GUARDAR PROGRAMACIÓN
+              </Button>
+            </CardFooter>
+          </Card>
+        </div>
 
         <div className="space-y-6">
-          <Card className="shadow-lg border-none bg-slate-950 text-white">
+          <Card className="shadow-lg border-none bg-slate-950 text-white rounded-2xl">
             <CardHeader>
               <CardTitle className="text-xs font-black uppercase flex items-center gap-2">
                 <ShieldCheck className="h-4 w-4 text-primary" />
@@ -203,7 +215,7 @@ export default function CronJobsPage() {
             </CardContent>
           </Card>
 
-          <Card className="shadow-lg border-t-4 border-t-primary">
+          <Card className="shadow-lg border-t-4 border-t-primary rounded-2xl">
             <CardHeader>
               <CardTitle className="text-xs font-black uppercase flex items-center gap-2 text-slate-950">
                 <History className="h-4 w-4 text-primary" />
@@ -215,7 +227,10 @@ export default function CronJobsPage() {
                 {logs.slice(0, 5).map((log) => (
                   <div key={log.id} className="p-3 border-b border-slate-100 last:border-0">
                     <div className="flex justify-between items-center mb-1">
-                      <Badge variant="success" className="text-[8px] font-black uppercase border-none bg-green-100 text-green-700">Exitoso</Badge>
+                      <div className="flex gap-1">
+                        <Badge variant="success" className="text-[8px] font-black uppercase border-none bg-green-100 text-green-700">OK</Badge>
+                        {(log as any).keepAlive && <Badge className="text-[8px] font-black uppercase bg-blue-600">KeepAlive</Badge>}
+                      </div>
                       <span className="text-[9px] font-mono text-slate-950 font-black">
                         {log.timestamp ? format(log.timestamp as Date, 'dd/MM HH:mm') : '--/-- --:--'}
                       </span>

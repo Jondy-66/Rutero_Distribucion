@@ -7,7 +7,7 @@ const adminApp = initializeAdminApp();
 
 /**
  * @fileoverview Endpoint de sincronización forzada para Cron Jobs.
- * Implementa validación de intervalo y días programados.
+ * OBJETIVO PRINCIPAL: Evitar hibernación de la API de Render (Keep-Alive).
  */
 export async function GET(request: Request) {
   // 1. Verificación de Seguridad
@@ -61,45 +61,52 @@ export async function GET(request: Request) {
     const token = process.env.API_PREDICCION_TOKEN;
     if (!token) throw new Error("Token de API externa no configurado.");
 
-    // 4. Obtener ejecutivos activos
+    // 4. ACCIÓN KEEP-ALIVE: Ping a la API para evitar hibernación
+    const baseUrl = "https://api-distribucion-rutas.onrender.com";
+    let apiAwake = false;
+    try {
+        const pingRes = await fetch(baseUrl, { method: 'GET', cache: 'no-store' });
+        apiAwake = pingRes.ok || pingRes.status === 404; // Si responde, está despierta
+    } catch (e) {
+        console.warn("Fallo al despertar API (Keep-Alive):", e);
+    }
+
+    // 5. Obtener ejecutivos activos para sincronización de datos
     const usersSnapshot = await db.collection('users')
       .where('role', 'in', ['Usuario', 'Telemercaderista'])
       .where('status', '==', 'active')
       .get();
 
     const ejecutivos = usersSnapshot.docs.map(doc => doc.data().name);
-    
-    if (ejecutivos.length === 0) {
-      return NextResponse.json({ message: 'Sin ejecutivos para sincronizar' });
-    }
-
     const report = [];
 
-    // 5. Ejecutar sincronización con Backoff de 1s
-    for (const ejecutivo of ejecutivos) {
-      const url = new URL("https://api-distribucion-rutas.onrender.com/predecir_ejecutivo");
-      url.searchParams.append("ejecutivo", ejecutivo);
-      url.searchParams.append("dias", "7");
+    if (ejecutivos.length > 0) {
+        // Ejecutar sincronización con Backoff de 1s
+        for (const ejecutivo of ejecutivos) {
+          const url = new URL(`${baseUrl}/predecir_ejecutivo`);
+          url.searchParams.append("ejecutivo", ejecutivo);
+          url.searchParams.append("dias", "7");
 
-      try {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        const response = await fetch(url.toString(), {
-          method: 'GET',
-          headers: {
-            'Accept': 'application/json',
-            'X-API-Key': token
-          },
-          cache: 'no-store' 
-        });
+          try {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            const response = await fetch(url.toString(), {
+              method: 'GET',
+              headers: {
+                'Accept': 'application/json',
+                'X-API-Key': token
+              },
+              cache: 'no-store' 
+            });
 
-        report.push({
-          ejecutivo,
-          success: response.ok,
-          status: response.status
-        });
-      } catch (err: any) {
-        report.push({ ejecutivo, error: err.message });
-      }
+            report.push({
+              ejecutivo,
+              success: response.ok,
+              status: response.status
+            });
+          } catch (err: any) {
+            report.push({ ejecutivo, error: err.message });
+          }
+        }
     }
 
     // 6. Registrar log y actualizar última ejecución
@@ -107,6 +114,7 @@ export async function GET(request: Request) {
       type: 'CRON_REFRESH',
       timestamp: now,
       processed: ejecutivos.length,
+      keepAlive: apiAwake,
       details: report
     });
 
@@ -114,7 +122,12 @@ export async function GET(request: Request) {
       lastRun: now
     }, { merge: true });
 
-    return NextResponse.json({ success: true, report });
+    return NextResponse.json({ 
+        success: true, 
+        apiStatus: apiAwake ? 'Awake' : 'Unknown',
+        processed: ejecutivos.length,
+        report 
+    });
 
   } catch (error: any) {
     console.error("Error en Cron:", error);
