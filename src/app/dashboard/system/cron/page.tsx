@@ -8,14 +8,14 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
 import { getCronConfig, updateCronConfig, getSystemLogs } from '@/lib/firebase/firestore';
 import type { CronConfig, SystemLog } from '@/lib/types';
-import { Clock, Calendar, Power, Save, LoaderCircle, History, ShieldCheck, AlertCircle } from 'lucide-react';
+import { Clock, Calendar, Power, Save, LoaderCircle, History, ShieldCheck, AlertCircle, Timer } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 
 const DAYS = [
@@ -135,12 +135,32 @@ export default function CronJobsPage() {
               <Switch checked={config?.enabled} onCheckedChange={(val) => setCronConfig(prev => prev ? { ...prev, enabled: val } : null)} />
             </div>
 
-            <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border-2 border-slate-100">
-              <div className="space-y-0.5">
-                <Label className="text-sm font-black uppercase text-slate-950">Modo 24 Horas</Label>
-                <p className="text-[10px] font-black text-muted-foreground uppercase">Mantiene el servicio activo de forma continua sin importar el horario.</p>
-              </div>
-              <Switch checked={config?.active24h} onCheckedChange={(val) => setCronConfig(prev => prev ? { ...prev, active24h: val } : null)} />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 bg-muted/20 rounded-2xl border-2 border-slate-100 space-y-3">
+                    <div className="flex items-center gap-2">
+                        <Timer className="h-4 w-4 text-primary" />
+                        <Label className="text-sm font-black uppercase text-slate-950">Intervalo de Refresco</Label>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Input 
+                            type="number" 
+                            min="5" 
+                            value={config?.refreshIntervalMinutes || 60} 
+                            onChange={(e) => setCronConfig(prev => prev ? { ...prev, refreshIntervalMinutes: parseInt(e.target.value) || 60 } : null)}
+                            className="font-black text-center h-10 border-2"
+                        />
+                        <span className="text-[10px] font-black uppercase text-slate-500">Minutos</span>
+                    </div>
+                    <p className="text-[9px] font-bold text-muted-foreground uppercase italic">Mínimo sugerido: 15 minutos.</p>
+                </div>
+
+                <div className="flex items-center justify-between p-4 bg-muted/20 rounded-2xl border-2 border-slate-100">
+                    <div className="space-y-0.5">
+                        <Label className="text-sm font-black uppercase text-slate-950">Modo 24 Horas</Label>
+                        <p className="text-[10px] font-black text-muted-foreground uppercase">Mantiene el servicio activo sin importar el horario laboral.</p>
+                    </div>
+                    <Switch checked={config?.active24h} onCheckedChange={(val) => setCronConfig(prev => prev ? { ...prev, active24h: val } : null)} />
+                </div>
             </div>
 
             <div className="space-y-4">
@@ -179,7 +199,7 @@ export default function CronJobsPage() {
               </CardTitle>
             </CardHeader>
             <CardContent className="text-[10px] font-black text-slate-300 uppercase leading-relaxed">
-              EL SISTEMA VALIDA ESTA CONFIGURACIÓN ANTES DE CADA LLAMADA A LA API DE RENDER. SI EL CRON NO ESTÁ PROGRAMADO PARA EL DÍA DE HOY, LA SOLICITUD SERÁ RECHAZADA POR EL SERVIDOR BFF.
+              EL SISTEMA VALIDA ESTA CONFIGURACIÓN ANTES DE CADA LLAMADA A LA API DE RENDER. SI EL CRON NO ESTÁ PROGRAMADO PARA EL DÍA DE HOY O SI EL INTERVALO DE TIEMPO NO SE HA CUMPLIDO, LA SOLICITUD SERÁ RECHAZADA.
             </CardContent>
           </Card>
 

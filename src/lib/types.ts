@@ -156,6 +156,7 @@ export type CronConfig = {
     enabled: boolean;
     active24h: boolean;
     scheduledDays: number[];
+    refreshIntervalMinutes: number;
     lastRun?: Date | Timestamp;
 };
 

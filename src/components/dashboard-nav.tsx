@@ -26,6 +26,7 @@ import {
   Settings2,
   RefreshCw,
   LocateFixed,
+  Clock,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -305,6 +306,16 @@ export function DashboardNav() {
                       </Link>
                     </SidebarMenuSubButton>
                 </SidebarMenuSubItem>
+                {user?.role === 'Administrador' && (
+                  <SidebarMenuSubItem>
+                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/system/cron'}>
+                        <Link href="/dashboard/system/cron">
+                          <Clock />
+                          <span>Cron Jobs</span>
+                        </Link>
+                      </SidebarMenuSubButton>
+                  </SidebarMenuSubItem>
+                )}
                 <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/system/usage'}>
                       <Link href="/dashboard/system/usage">

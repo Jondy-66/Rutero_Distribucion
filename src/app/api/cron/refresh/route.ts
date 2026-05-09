@@ -7,9 +7,7 @@ const adminApp = initializeAdminApp();
 
 /**
  * @fileoverview Endpoint de sincronización forzada para Cron Jobs.
- * 
- * Este endpoint realiza un "barrido" de todos los ejecutivos activos y llama 
- * a la API de Render para asegurar que el servicio no entre en modo suspensión.
+ * Implementa validación de intervalo y días programados.
  */
 export async function GET(request: Request) {
   // 1. Verificación de Seguridad
@@ -30,18 +28,34 @@ export async function GET(request: Request) {
     
     // 2. Cargar configuración de Cron desde Firestore
     const configSnap = await db.collection('system_config').doc('cron').get();
-    const config = configSnap.exists ? configSnap.data() : { enabled: true, active24h: true, scheduledDays: [1,2,3,4,5] };
+    const config = configSnap.exists ? configSnap.data() : { enabled: true, active24h: true, scheduledDays: [1,2,3,4,5], refreshIntervalMinutes: 60 };
 
-    // 3. Validar si el Cron debe ejecutarse hoy
+    // 3. Validaciones de Ejecución
     if (!config?.enabled) {
       return NextResponse.json({ message: 'Cron Job está desactivado globalmente.' });
     }
 
-    const today = new Date().getDay(); // 0 = Domingo, 1 = Lunes...
+    const now = new Date();
+    const today = now.getDay(); // 0 = Domingo, 1 = Lunes...
     const isScheduledToday = config?.scheduledDays?.includes(today);
 
     if (!isScheduledToday && !config?.active24h) {
       return NextResponse.json({ message: 'Hoy no es un día programado para ejecución y modo 24h está desactivado.' });
+    }
+
+    // Validación de Intervalo
+    if (config.lastRun) {
+        const lastRun = config.lastRun.toDate();
+        const diffMinutes = Math.floor((now.getTime() - lastRun.getTime()) / 60000);
+        const minInterval = config.refreshIntervalMinutes || 60;
+
+        if (diffMinutes < minInterval) {
+            return NextResponse.json({ 
+                message: `Saltando ejecución. Faltan ${minInterval - diffMinutes} minutos para el próximo refresco.`,
+                lastRun: lastRun,
+                intervalSet: minInterval
+            });
+        }
     }
 
     const token = process.env.API_PREDICCION_TOKEN;
@@ -61,16 +75,14 @@ export async function GET(request: Request) {
 
     const report = [];
 
-    // 5. Despertar API de Render y refrescar datos con Backoff para evitar Error 429
+    // 5. Ejecutar sincronización con Backoff de 1s
     for (const ejecutivo of ejecutivos) {
       const url = new URL("https://api-distribucion-rutas.onrender.com/predecir_ejecutivo");
       url.searchParams.append("ejecutivo", ejecutivo);
       url.searchParams.append("dias", "7");
 
       try {
-        // Pausa de seguridad de 1 segundo para evitar Error 429
         await new Promise(resolve => setTimeout(resolve, 1000));
-
         const response = await fetch(url.toString(), {
           method: 'GET',
           headers: {
@@ -90,8 +102,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // 6. Registrar log en Firestore y actualizar última ejecución
-    const now = new Date();
+    // 6. Registrar log y actualizar última ejecución
     await db.collection('system_logs').add({
       type: 'CRON_REFRESH',
       timestamp: now,
