@@ -33,6 +33,16 @@ service cloud.firestore {
       allow write: if false; // Solo vía Cloud Functions
     }
 
+    // Reglas para configuración del sistema y logs
+    match /system_config/{configId} {
+      allow read, write: if isSignedIn() && isAdmin();
+    }
+
+    match /system_logs/{logId} {
+      allow read: if isSignedIn() && (isAdmin() || isAuditor());
+      allow write: if false; // Solo vía Admin SDK / Server side
+    }
+
     // Reglas previas heredadas
     match /customers/{customerId} {
       allow read, update: if isSignedIn();
@@ -42,5 +52,7 @@ service cloud.firestore {
     match /routes/{routeId} { allow read, write: if isSignedIn(); }
     match /notifications/{id} { allow read, write: if isSignedIn(); }
     match /phoneContacts/{id} { allow read, write: if isSignedIn(); }
+    match /crm_customers/{id} { allow read, write: if isSignedIn(); }
+    match /crm_calls/{id} { allow read, write: if isSignedIn(); }
   }
 }
