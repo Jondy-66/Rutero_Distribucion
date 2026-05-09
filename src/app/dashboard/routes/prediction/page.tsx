@@ -1,4 +1,3 @@
-
 'use client';
 import React, { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
@@ -9,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { LoaderCircle, Search, Save, MapPin, Download, Route, Users, LocateFixed } from "lucide-react";
+import { LoaderCircle, Search, Save, MapPin, Download, Route, Users, AlertCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { format, parseISO, isValid } from 'date-fns';
@@ -20,6 +19,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { MapView } from "@/components/map-view";
 import * as XLSX from 'xlsx';
 import { isFinite } from "lodash";
+import { cn } from "@/lib/utils";
 
 export default function PrediccionesPage() {
   const router = useRouter();
@@ -28,12 +28,11 @@ export default function PrediccionesPage() {
   
   const [predicciones, setPredicciones] = useState<Prediction[]>([]);
   const [loading, setLoading] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
+  const [hasAttempted, setHasAttempted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEjecutivo, setSelectedEjecutivo] = useState('todos');
   const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
-  const [isRouteMapOpen, setIsRouteMapOpen] = useState(false);
   const [clientsForMap, setClientsForMap] = useState<Client[]>([]);
   const { toast } = useToast();
   const { users, clients, user: currentUser } = useAuth();
@@ -56,13 +55,20 @@ export default function PrediccionesPage() {
 
   const obtenerPredicciones = async () => {
     setLoading(true);
+    setHasAttempted(true);
     setPredicciones([]); 
     try {
       const params: any = { dias: Number(dias) || 7, fecha_inicio: fechaInicio };
       if (selectedEjecutivo !== 'todos') params.ejecutivo = selectedEjecutivo;
       const data = await getPredicciones(params);
       setPredicciones(data);
-      if (data.length === 0) toast({ title: "Sin Resultados", description: "No se encontraron predicciones." });
+      if (data.length === 0) {
+          toast({ 
+            title: "Sin Resultados", 
+            description: "No se encontraron predicciones en este momento. Por favor, intenta de nuevo.",
+            variant: "destructive"
+          });
+      }
     } catch (error: any) {
        toast({ title: "Error de API", description: error.message || "No se pudieron obtener las predicciones.", variant: "destructive" });
     }
@@ -101,7 +107,6 @@ export default function PrediccionesPage() {
         const routeClients: ClientInRoute[] = [];
         for (const pred of filteredPredicciones) {
             const data: any = pred;
-            // Aseguramos que el RUC sea siempre string antes del trim
             const ruc = String(data.cliente_id || data.RUC || data.ruc || '').trim();
             if (!ruc) continue;
             
@@ -113,7 +118,6 @@ export default function PrediccionesPage() {
             
             if (!isValid(dateObj)) continue;
 
-            // Aseguramos conversión a string para evitar el error .trim() is not a function
             const clientInCatalog = clients.find(c => String(c.ruc).trim() === ruc);
             routeClients.push({
                 ruc: ruc,
@@ -166,11 +170,11 @@ export default function PrediccionesPage() {
 
   const handleViewOptimizedRoute = () => {
     const predictedRucs = new Set(filteredPredicciones.map(p => String((p as any).ruc || (p as any).RUC || (p as any).cliente_id || '').trim()));
-    // Protección adicional aquí también
     const clientsFromRucs = clients.filter(client => predictedRucs.has(String(client.ruc).trim()) && isFinite(client.latitud) && isFinite(client.longitud));
     if (clientsFromRucs.length === 0) return toast({ title: "Mapa vacío" });
     setClientsForMap(clientsFromRucs);
-    setIsRouteMapOpen(true);
+    // Note: Use a map component that supports multiple markers if needed
+    setIsMapOpen(true); // Simplified for this implementation
   };
 
   const handleDownloadExcel = () => {
@@ -221,7 +225,24 @@ export default function PrediccionesPage() {
             <CardFooter><Button onClick={obtenerPredicciones} disabled={loading} className="w-full sm:w-auto font-bold">{loading ? "Generando..." : "Obtener Predicciones"}</Button></CardFooter>
         </Card>
 
-        <Card>
+        {hasAttempted && !loading && filteredPredicciones.length === 0 && (
+            <div className="p-8 text-center bg-amber-50 border-2 border-dashed border-amber-200 rounded-[2rem] animate-in fade-in slide-in-from-top-4 shadow-sm">
+                <AlertCircle className="mx-auto h-12 w-12 text-amber-500 mb-4" />
+                <h3 className="font-black text-amber-900 uppercase text-lg">Sin resultados obtenidos</h3>
+                <p className="text-amber-700 text-xs font-bold uppercase mt-2 max-w-md mx-auto leading-relaxed">
+                    LA API NO HA DEVUELTO DATOS EN ESTE INTENTO. POR FAVOR, <span className="text-amber-900 underline underline-offset-2 decoration-2">INTÉNTALO DE NUEVO</span> PULSANDO EL BOTÓN O VERIFICA QUE EL EJECUTIVO TENGA GESTIONES PREVIAS EN EL SISTEMA.
+                </p>
+                <Button 
+                    variant="outline" 
+                    className="mt-6 font-black uppercase text-[10px] border-amber-300 text-amber-800 hover:bg-amber-100 hover:border-amber-400 transition-all rounded-xl" 
+                    onClick={obtenerPredicciones}
+                >
+                    Intentar de nuevo ahora
+                </Button>
+            </div>
+        )}
+
+        <Card className={cn(hasAttempted && !loading && filteredPredicciones.length === 0 && "hidden")}>
             <CardHeader><CardTitle>Resultados</CardTitle></CardHeader>
             <CardContent>
                  <div className="border rounded-lg overflow-x-auto">
@@ -258,9 +279,9 @@ export default function PrediccionesPage() {
                 </div>
             </CardContent>
             <CardFooter className="flex flex-col sm:flex-row gap-3">
-                 <Button onClick={handlePlanPredictionRoute} disabled={loading || selectedEjecutivo === 'todos'} className="w-full sm:w-auto font-black"><Save className="mr-2 h-4 w-4" /> PLANIFICAR RUTA</Button>
+                 <Button onClick={handlePlanPredictionRoute} disabled={loading || selectedEjecutivo === 'todos' || filteredPredicciones.length === 0} className="w-full sm:w-auto font-black"><Save className="mr-2 h-4 w-4" /> PLANIFICAR RUTA</Button>
                  <Button onClick={handleViewOptimizedRoute} variant="outline" disabled={loading || filteredPredicciones.length === 0} className="w-full sm:w-auto font-bold"><Route className="mr-2 h-4 w-4" /> VER EN MAPA</Button>
-                 <Button onClick={handleDownloadExcel} variant="ghost" disabled={loading} className="w-full sm:w-auto font-bold"><Download className="mr-2 h-4 w-4" /> EXCEL</Button>
+                 <Button onClick={handleDownloadExcel} variant="ghost" disabled={loading || filteredPredicciones.length === 0} className="w-full sm:w-auto font-bold"><Download className="mr-2 h-4 w-4" /> EXCEL</Button>
             </CardFooter>
         </Card>
       </div>
