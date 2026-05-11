@@ -71,7 +71,7 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
         const parseV = (v: any) => {
             const strValue = String(v || 0).replace(',', '.');
             const num = parseFloat(strValue);
-            return isNaN(num) ? 0 : Math.round(num * 100) / 100;
+            return isNaN(num) ? 0 : num; // SE ELIMINÓ EL REDONDEO A 2 DECIMALES
         };
         
         cleaned.valorVenta = parseV(c.valorVenta);
@@ -116,9 +116,12 @@ function RouteManagementContent() {
   const [reAdditionObservation, setReAdditionObservation] = useState('');
   const [isExpired, setIsExpired] = useState(false);
 
-  // Estados locales para evitar flicker al escribir en campos de texto
+  // Estados locales para evitar flicker al escribir en campos de texto y numéricos
   const [localVisitObs, setLocalVisitObs] = useState('');
   const [localCallObs, setLocalCallObs] = useState('');
+  const [localVenta, setLocalVenta] = useState('');
+  const [localCobro, setLocalCobro] = useState('');
+  const [localDevol, setLocalDevol] = useState('');
 
   const isAdmin = user?.role === 'Administrador';
   const isManager = isAdmin || user?.role === 'Supervisor';
@@ -168,9 +171,15 @@ function RouteManagementContent() {
       if (activeClient) {
           setLocalVisitObs(activeClient.visitObservation || '');
           setLocalCallObs(activeClient.callObservation || '');
+          setLocalVenta(activeClient.valorVenta !== undefined ? String(activeClient.valorVenta) : '');
+          setLocalCobro(activeClient.valorCobro !== undefined ? String(activeClient.valorCobro) : '');
+          setLocalDevol(activeClient.devoluciones !== undefined ? String(activeClient.devoluciones) : '');
       } else {
           setLocalVisitObs('');
           setLocalCallObs('');
+          setLocalVenta('');
+          setLocalCobro('');
+          setLocalDevol('');
       }
   }, [activeOriginalIndex, activeClient?.ruc]);
 
@@ -202,7 +211,6 @@ function RouteManagementContent() {
   const isJornadaBloqueada = isExpired && !isAdmin;
   const isEditingActiveClientDisabled = (activeClient?.visitStatus === 'Completado' || isJornadaBloqueada) && !isAdmin;
 
-  // Función de guardado con Debounce para evitar pérdida de caracteres al escribir
   const debouncedSave = useCallback(
     debounce((field: keyof ClientInRoute, value: any, routeId: string, currentClients: ClientInRoute[], index: number) => {
       const nextClients = [...currentClients];
@@ -223,14 +231,16 @@ function RouteManagementContent() {
   const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
     if (!selectedRoute || activeOriginalIndex === null || isEditingActiveClientDisabled || isSaving) return;
     
-    // Si es una observación, actualizamos primero el estado local para fluidez visual
     if (field === 'visitObservation') setLocalVisitObs(value);
     if (field === 'callObservation') setLocalCallObs(value);
+    if (field === 'valorVenta') setLocalVenta(value);
+    if (field === 'valorCobro') setLocalCobro(value);
+    if (field === 'devoluciones') setLocalDevol(value);
 
-    // Si es un campo de texto largo, usamos debounce. Si es un valor inmediato (check, tipo, etc), guardamos ya.
+    // Debounce para observaciones. Los valores numéricos se guardan en Blur para permitir decimales libres.
     if (field === 'visitObservation' || field === 'callObservation') {
         debouncedSave(field, value, selectedRoute.id, selectedRoute.clients, activeOriginalIndex);
-    } else {
+    } else if (field !== 'valorVenta' && field !== 'valorCobro' && field !== 'devoluciones') {
         const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
         nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], [field]: value };
         const sanitized = sanitizeClients(nextClients);
@@ -243,6 +253,22 @@ function RouteManagementContent() {
             }));
         });
     }
+  };
+
+  const handleNumericBlur = (field: keyof ClientInRoute, value: string) => {
+      if (!selectedRoute || activeOriginalIndex === null || isEditingActiveClientDisabled || isSaving) return;
+      
+      const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
+      nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], [field]: value };
+      const sanitized = sanitizeClients(nextClients);
+      
+      updateRoute(selectedRoute.id, { clients: sanitized }).catch(async () => {
+          errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+              path: `routes/${selectedRoute.id}`, 
+              operation: 'update', 
+              requestResourceData: { clients: sanitized } 
+          }));
+      });
   };
 
   const handleRemoveClient = async (originalIndex: number) => {
@@ -316,6 +342,9 @@ function RouteManagementContent() {
         ...nextClients[activeOriginalIndex], 
         visitObservation: localVisitObs,
         callObservation: localCallObs,
+        valorVenta: localVenta,
+        valorCobro: localCobro,
+        devoluciones: localDevol,
         checkOutTime: format(new Date(), 'HH:mm:ss'), 
         checkOutLocation: loc, 
         visitStatus: 'Completado' 
@@ -640,15 +669,36 @@ function RouteManagementContent() {
                                     <div className="grid grid-cols-3 gap-4 lg:gap-8">
                                         <div className="space-y-1">
                                             <Label className="text-[8px] lg:text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">VENTA ($)</Label>
-                                            <Input type="text" className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.valorVenta ?? ''} onChange={e => handleFieldChange('valorVenta', e.target.value)} disabled={isEditingActiveClientDisabled} />
+                                            <Input 
+                                                type="text" 
+                                                className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" 
+                                                value={localVenta} 
+                                                onChange={e => handleFieldChange('valorVenta', e.target.value)} 
+                                                onBlur={() => handleNumericBlur('valorVenta', localVenta)}
+                                                disabled={isEditingActiveClientDisabled} 
+                                            />
                                         </div>
                                         <div className="space-y-1">
                                             <Label className="text-[8px] lg:text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">COBRO ($)</Label>
-                                            <Input type="text" className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.valorCobro ?? ''} onChange={e => handleFieldChange('valorCobro', e.target.value)} disabled={isEditingActiveClientDisabled} />
+                                            <Input 
+                                                type="text" 
+                                                className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" 
+                                                value={localCobro} 
+                                                onChange={e => handleFieldChange('valorCobro', e.target.value)} 
+                                                onBlur={() => handleNumericBlur('valorCobro', localCobro)}
+                                                disabled={isEditingActiveClientDisabled} 
+                                            />
                                         </div>
                                         <div className="space-y-1">
                                             <Label className="text-[8px] lg:text-[10px] font-black uppercase text-slate-500 tracking-widest text-center block">DEVOL ($)</Label>
-                                            <Input type="text" className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" value={activeClient.devoluciones ?? ''} onChange={e => handleFieldChange('devoluciones', e.target.value)} disabled={isEditingActiveClientDisabled} />
+                                            <Input 
+                                                type="text" 
+                                                className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" 
+                                                value={localDevol} 
+                                                onChange={e => handleFieldChange('devoluciones', e.target.value)} 
+                                                onBlur={() => handleNumericBlur('devoluciones', localDevol)}
+                                                disabled={isEditingActiveClientDisabled} 
+                                            />
                                         </div>
                                     </div>
 
