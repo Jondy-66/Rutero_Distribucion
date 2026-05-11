@@ -49,14 +49,14 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   const [isSaving, setIsSaving] = useState(false);
   const [isRecovering, setIsRecovering] = useState(false);
   
-  const [calendarOpen, setCalendarOpen] = useState<{[key: string]: boolean}>({});
+  const [calendarOpen, setCalendarOpen] = useState<{[key: number]: boolean}>({});
 
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
 
   const [isRemovalDialogOpen, setIsRemovalDialogOpen] = useState(false);
   const [removalReason, setRemovalReason] = useState('');
-  const [rucToToRemove, setRucToToRemove] = useState<string | null>(null);
+  const [clientIndexToRemove, setClientIndexToRemove] = useState<number | null>(null);
 
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
@@ -69,15 +69,9 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
      if (!currentUser || !route) return false;
      const isPending = route.status === 'Pendiente de Aprobación';
      const isAuthAdmin = currentUser.role === 'Administrador';
-     // El supervisor puede aprobar si la ruta le fue asignada explícitamente
      const isMyRouteAsSupervisor = currentUser.id === route.supervisorId;
      return isPending && (isAuthAdmin || isMyRouteAsSupervisor);
   }, [currentUser, route]);
-
-  const canRecoverClients = useMemo(() => {
-    if (!currentUser) return false;
-    return currentUser.role === 'Administrador' || currentUser.permissions?.includes('recover-clients') || false;
-  }, [currentUser]);
 
   useEffect(() => {
     const fetchRouteData = async () => {
@@ -108,32 +102,37 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     setRoute(prev => (prev ? { ...prev, [field]: value } : null));
   };
   
-  const handleClientValueChange = useCallback((ruc: string, field: keyof Omit<ClientInRoute, 'ruc' | 'nombre_comercial'>, value: any) => {
-      setClientsInRoute(prev => 
-          prev.map(client => 
-              client.ruc === ruc 
-                  ? { ...client, [field]: value }
-                  : client
-          )
-      );
+  // CORRECCIÓN CRÍTICA: Usar el índice original para mutaciones independientes (evita colisiones por RUC repetido)
+  const handleClientValueChange = useCallback((index: number, field: keyof Omit<ClientInRoute, 'ruc' | 'nombre_comercial'>, value: any) => {
+      setClientsInRoute(prev => {
+          const next = [...prev];
+          if (next[index]) {
+              next[index] = { ...next[index], [field]: value };
+          }
+          return next;
+      });
   }, []);
 
-  const handleOpenRemovalDialog = (ruc: string) => {
-    setRucToToRemove(ruc);
+  const handleOpenRemovalDialog = (index: number) => {
+    setClientIndexToRemove(index);
     setRemovalReason('');
     setIsRemovalDialogOpen(true);
   };
 
   const confirmRemoval = () => {
-    if (!rucToToRemove || !removalReason.trim()) {
+    if (clientIndexToRemove === null || !removalReason.trim()) {
         toast({ title: "Motivo requerido", description: "Debes indicar por qué eliminas este cliente.", variant: "destructive" });
         return;
     }
-    setClientsInRoute(prev => prev.map(c => 
-        c.ruc === rucToToRemove ? { ...c, status: 'Eliminado', removalObservation: removalReason } : c
-    ));
+    setClientsInRoute(prev => {
+        const next = [...prev];
+        if (next[clientIndexToRemove]) {
+            next[clientIndexToRemove] = { ...next[clientIndexToRemove], status: 'Eliminado', removalObservation: removalReason };
+        }
+        return next;
+    });
     setIsRemovalDialogOpen(false);
-    setRucToToRemove(null);
+    setClientIndexToRemove(null);
     toast({ title: "Cliente eliminado", description: "Se ha registrado el motivo de la eliminación." });
   };
 
@@ -155,7 +154,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
       await refetchData('routes');
       toast({ title: 'Éxito', description: 'La ruta ha sido aprobada.' });
-      router.push('/dashboard/routes/team-routes');
+      router.push('/dashboard/team-routes' || '/dashboard/routes/team-routes');
     } catch (error) {
       toast({ title: 'Error al aprobar', variant: 'destructive' });
     } finally {
@@ -190,41 +189,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       toast({ title: 'Error al rechazar', variant: 'destructive' });
     } finally {
       setIsSaving(false);
-    }
-  };
-
-  const handleRecoverClients = async () => {
-    if (!route) return;
-    setIsRecovering(true);
-    try {
-        const execMatch = route.routeName.match(/para (.*?) -/);
-        const ejecutivo = execMatch ? execMatch[1] : '';
-        const dateObj = ensureDate(route.date);
-        const fecha_inicio = format(dateObj, 'yyyy-MM-dd');
-
-        const predictions = await getPredicciones({ ejecutivo, fecha_inicio, dias: 7 });
-
-        if (predictions.length === 0) {
-            toast({ title: "Sin respaldo", description: "No hay predicciones para esta fecha.", variant: "destructive" });
-            return;
-        }
-
-        const recovered: ClientInRoute[] = predictions.map(p => ({
-            ruc: (p as any).ruc || (p as any).RUC || (p as any).cliente_id,
-            nombre_comercial: (p as any).nombre_comercial || (p as any).Cliente || 'Cliente Recuperado',
-            date: p.fecha_predicha ? new Date(p.fecha_predicha + 'T00:00:00') : dateObj,
-            valorVenta: parseFloat(String(p.ventas)) || 0,
-            valorCobro: parseFloat(String(p.cobros)) || 0,
-            status: 'Activo',
-            visitStatus: 'Pendiente'
-        }));
-
-        setClientsInRoute(recovered);
-        toast({ title: "Recuperación Exitosa", description: `${recovered.length} clientes restaurados.` });
-    } catch (error) {
-        toast({ title: "Error de Recuperación", variant: "destructive" });
-    } finally {
-        setIsRecovering(false);
     }
   };
 
@@ -277,7 +241,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   if (loading || authLoading) return <div className="p-8"><Skeleton className="h-96 w-full" /></div>;
   if (!route) return notFound();
   
-  const isFormDisabled = isSaving || !canEdit || isRecovering;
+  const isFormDisabled = isSaving || !canEdit;
   
   return (
     <div className="flex flex-col space-y-6">
@@ -319,7 +283,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
             <div className="space-y-2">
               <Label className="font-bold uppercase text-[10px]">Supervisor Asignado</Label>
               <Select value={route.supervisorId} onValueChange={(v) => handleInputChange('supervisorId', v)} disabled={isFormDisabled}>
-                <SelectTrigger className="font-black"><Users className="mr-2 h-4 w-4" /><SelectValue placeholder="Asignar supervisor" /></SelectTrigger>
+                <SelectTrigger className="font-black"><Users className="mr-2 h-4 w-4 text-primary" /><SelectValue placeholder="Asignar supervisor" /></SelectTrigger>
                 <SelectContent>{supervisors.map(s => (<SelectItem key={s.id} value={s.id} className="font-black">{s.name}</SelectItem>))}</SelectContent>
               </Select>
             </div>
@@ -363,13 +327,13 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                     </CollapsibleTrigger>
                     <CollapsibleContent className="space-y-4 p-2 mt-2 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
                       {clientsInGroup.map((client) => (
-                        <Card key={client.ruc} className="p-4 relative hover:shadow-md border-l-2 border-l-primary/10 bg-white">
+                        <Card key={`${client.ruc}-${client.originalIndex}`} className="p-4 relative hover:shadow-md border-l-2 border-l-primary/10 bg-white">
                           <div className="flex justify-between items-start">
                             <div className="space-y-1">
                               <p className="font-black text-sm text-primary uppercase leading-tight">{client.globalIndex + 1}. {client.nombre_comercial}</p>
                               <p className="text-[10px] font-mono font-bold text-slate-400 uppercase">{client.ruc}</p>
                             </div>
-                            <Button type="button" variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.ruc)} disabled={isFormDisabled}>
+                            <Button type="button" variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.originalIndex)} disabled={isFormDisabled}>
                               <Trash2 className="h-4 w-4 text-destructive" />
                             </Button>
                           </div>
@@ -377,7 +341,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="space-y-1">
                               <Label className="text-[9px] uppercase font-black text-slate-500">Fecha de Visita</Label>
-                              <Popover open={calendarOpen[client.ruc]} onOpenChange={(o) => setCalendarOpen(p => ({ ...p, [client.ruc]: o }))}>
+                              <Popover open={calendarOpen[client.originalIndex]} onOpenChange={(o) => setCalendarOpen(p => ({ ...p, [client.originalIndex]: o }))}>
                                 <PopoverTrigger asChild>
                                   <Button variant="outline" className="w-full justify-start h-9 text-xs font-black uppercase" disabled={isFormDisabled}>
                                     <CalendarIcon className="mr-2 h-3 w-3" />
@@ -385,17 +349,17 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                                   </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="p-0" align="start">
-                                  <Calendar mode="single" selected={ensureDate(client.date)} onSelect={(d) => handleClientValueChange(client.ruc, 'date', d)} locale={es} />
+                                  <Calendar mode="single" selected={ensureDate(client.date)} onSelect={(d) => handleClientValueChange(client.originalIndex, 'date', d)} locale={es} />
                                 </PopoverContent>
                               </Popover>
                             </div>
                             <div className="space-y-1">
                               <Label className="text-[9px] uppercase font-black text-slate-500">Venta Proyectada ($)</Label>
-                              <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
+                              <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.originalIndex, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
                             </div>
                             <div className="space-y-1">
                               <Label className="text-[9px] uppercase font-black text-slate-500">Cobro Proyectado ($)</Label>
-                              <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.ruc, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
+                              <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.originalIndex, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
                             </div>
                           </div>
                         </Card>
