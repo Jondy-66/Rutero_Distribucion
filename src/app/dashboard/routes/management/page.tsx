@@ -71,7 +71,7 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
         const parseV = (v: any) => {
             const strValue = String(v || 0).replace(',', '.');
             const num = parseFloat(strValue);
-            return isNaN(num) ? 0 : num; // SE ELIMINÓ EL REDONDEO A 2 DECIMALES
+            return isNaN(num) ? 0 : num;
         };
         
         cleaned.valorVenta = parseV(c.valorVenta);
@@ -116,7 +116,6 @@ function RouteManagementContent() {
   const [reAdditionObservation, setReAdditionObservation] = useState('');
   const [isExpired, setIsExpired] = useState(false);
 
-  // Estados locales para evitar flicker al escribir en campos de texto y numéricos
   const [localVisitObs, setLocalVisitObs] = useState('');
   const [localCallObs, setLocalCallObs] = useState('');
   const [localVenta, setLocalVenta] = useState('');
@@ -166,7 +165,6 @@ function RouteManagementContent() {
         : null;
   }, [activeOriginalIndex, selectedRoute]);
 
-  // Sincronizar estados locales cuando cambia el cliente activo
   useEffect(() => {
       if (activeClient) {
           setLocalVisitObs(activeClient.visitObservation || '');
@@ -190,13 +188,23 @@ function RouteManagementContent() {
     }
   }, [selectableRoutes, selectedRouteId]);
 
+  // OPTIMIZACIÓN CRÍTICA: Crear un mapa de clientes para acceso O(1)
+  const clientsLookupMap = useMemo(() => {
+    const map = new Map<string, Client>();
+    availableClients.forEach(c => {
+      map.set(String(c.ruc).trim(), c);
+    });
+    return map;
+  }, [availableClients]);
+
   const todaysClients = useMemo(() => {
     if (!selectedRoute) return [];
     const today = startOfDay(new Date());
 
     return (selectedRoute.clients || [])
         .map((c, index) => {
-            const d = availableClients.find(ac => String(ac.ruc).trim() === String(c.ruc).trim());
+            // Usar el mapa optimizado en lugar de .find()
+            const d = clientsLookupMap.get(String(c.ruc).trim());
             return { ...c, originalIndex: index, direccion: d?.direccion || 'SIN DIRECCIÓN' };
         })
         .filter(c => {
@@ -205,7 +213,7 @@ function RouteManagementContent() {
             const clientDate = startOfDay(ensureDate(c.date));
             return isSameDay(clientDate, today);
         });
-  }, [selectedRoute, availableClients]);
+  }, [selectedRoute, clientsLookupMap]);
 
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
   const isJornadaBloqueada = isExpired && !isAdmin;
@@ -237,7 +245,6 @@ function RouteManagementContent() {
     if (field === 'valorCobro') setLocalCobro(value);
     if (field === 'devoluciones') setLocalDevol(value);
 
-    // Debounce para observaciones. Los valores numéricos se guardan en Blur para permitir decimales libres.
     if (field === 'visitObservation' || field === 'callObservation') {
         debouncedSave(field, value, selectedRoute.id, selectedRoute.clients, activeOriginalIndex);
     } else if (field !== 'valorVenta' && field !== 'valorCobro' && field !== 'devoluciones') {
@@ -485,7 +492,6 @@ function RouteManagementContent() {
             </Card>
         ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
-                {/* Lado Izquierdo: Lista de Clientes */}
                 <Card className={cn(
                     "shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden flex flex-col bg-white transition-all",
                     "h-[80vh] lg:h-[88vh]",
@@ -562,7 +568,6 @@ function RouteManagementContent() {
                     </CardContent>
                 </Card>
                 
-                {/* Lado Derecho: Panel de Detalle */}
                 <Card className={cn(
                     "lg:col-span-2 shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden flex flex-col bg-white transition-all",
                     "h-auto min-h-[70vh] lg:h-[88vh]",
