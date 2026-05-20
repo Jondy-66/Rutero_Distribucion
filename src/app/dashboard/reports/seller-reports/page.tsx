@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan, ClientInRoute } from '@/lib/types';
-import { Download, Users, MoreHorizontal, Eye, Calendar as CalendarIcon } from 'lucide-react';
+import { Download, Users, MoreHorizontal, Eye, Calendar as CalendarIcon, ClipboardCheck, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { format, startOfDay, endOfDay, startOfMonth, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -35,12 +35,16 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { DateRange } from 'react-day-picker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Progress } from '@/components/ui/progress';
 
 type DailyLog = {
     id: string;
@@ -62,6 +66,7 @@ export default function SellerReportsPage() {
   const router = useRouter();
   
   const [selectedSellerId, setSelectedSellerId] = useState<string>('all');
+  const [auditLog, setAuditLog] = useState<DailyLog | null>(null);
   
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
     from: startOfMonth(new Date()),
@@ -78,7 +83,6 @@ export default function SellerReportsPage() {
 
   const managedSellers = useMemo(() => {
     if (!currentUser) return [];
-    // Administradores y Auditores ven a todos los usuarios que no sean administradores (incluye supervisores si tienen rutas)
     if (currentUser.role === 'Administrador' || currentUser.role === 'Auditor') {
       return allUsers.filter(u => u.role !== 'Administrador');
     }
@@ -177,39 +181,41 @@ export default function SellerReportsPage() {
     const dataToExport = [];
 
     for (const dailyLog of dailyReports) {
-        if (dailyLog.clients && dailyLog.clients.length > 0) {
-            for (const client of dailyLog.clients) {
-                if (client.visitStatus === 'Completado') {
-                    dataToExport.push({
-                        'Vendedor': dailyLog.sellerName,
-                        'Nombre de Ruta': dailyLog.routeName,
-                        'Fecha de Gestión': format(dailyLog.date, 'PPP', { locale: es }),
-                        'Estado del Día': dailyLog.status,
-                        'RUC Cliente': client.ruc,
-                        'Nombre Cliente': client.nombre_comercial,
-                        'Hora de Check-in': client.checkInTime || 'N/A',
-                        'Ubicación Check-in': formatLoc(client.checkInLocation),
-                        'Hora de Check-out': client.checkOutTime || 'N/A',
-                        'Ubicación Check-out': formatLoc(client.checkOutLocation),
-                        'Tipo de Visita': client.visitType === 'presencial' ? 'Presencial' : 'Telefónica',
-                        'Observación Llamada': client.callObservation || '',
-                        'Valor Venta ($)': client.valorVenta || 0,
-                        'Valor Cobro ($)': client.valorCobro || 0,
-                        'Devoluciones ($)': client.devoluciones || 0,
-                        'Promociones ($)': client.promociones || 0,
-                        'Medicación Frecuente ($)': client.medicacionFrecuente || 0,
-                        'Es Re-adición': client.isReadded ? 'SÍ' : 'NO',
-                        'Observación Re-adición': client.reAdditionObservation || ''
-                    });
-                }
-            }
+        // Ordenar clientes por hora de ingreso para este log diario
+        const sortedClients = [...dailyLog.clients].sort((a, b) => {
+            const timeA = a.checkInTime || '99:99:99';
+            const timeB = b.checkInTime || '99:99:99';
+            return timeA.localeCompare(timeB);
+        });
+
+        for (const client of sortedClients) {
+            dataToExport.push({
+                'Vendedor': dailyLog.sellerName,
+                'Nombre de Ruta': dailyLog.routeName,
+                'Fecha de Gestión': format(dailyLog.date, 'PPP', { locale: es }),
+                'Estado del Día': dailyLog.status,
+                'RUC Cliente': client.ruc,
+                'Nombre Cliente': client.nombre_comercial,
+                'Estado de Gestión': client.visitStatus === 'Completado' ? 'GESTIONADO' : 'PENDIENTE / FALTÓ',
+                'Hora de Check-in': client.checkInTime || 'N/A',
+                'Ubicación Check-in': formatLoc(client.checkInLocation),
+                'Hora de Check-out': client.checkOutTime || 'N/A',
+                'Ubicación Check-out': formatLoc(client.checkOutLocation),
+                'Tipo de Visita': client.visitType === 'presencial' ? 'Presencial' : (client.visitType === 'telefonica' ? 'Telefónica' : 'N/A'),
+                'Observación Llamada': client.callObservation || '',
+                'Valor Venta ($)': client.valorVenta || 0,
+                'Valor Cobro ($)': client.valorCobro || 0,
+                'Devoluciones ($)': client.devoluciones || 0,
+                'Es Re-adición': client.isReadded ? 'SÍ' : 'NO',
+                'Observación Re-adición': client.reAdditionObservation || ''
+            });
         }
     }
     
     if (dataToExport.length === 0) {
         toast({
             title: "Sin Datos",
-            description: "No hay visitas completadas en los días seleccionados para exportar.",
+            description: "No se encontraron clientes para exportar.",
             variant: "destructive"
         });
         return;
@@ -217,14 +223,18 @@ export default function SellerReportsPage() {
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Detalle de Gestiones");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Auditoría de Gestiones");
     const sellerName = selectedSellerId === 'all' ? 'todos' : allUsers.find(u=>u.id === selectedSellerId)?.name.replace(/ /g, '_');
-    XLSX.writeFile(workbook, `reporte_gestiones_vendedores_${sellerName}.xlsx`);
-    toast({ title: "Descarga Iniciada", description: "Tu reporte detallado en Excel se está descargando." });
+    XLSX.writeFile(workbook, `auditoria_vendedores_${sellerName}.xlsx`);
+    toast({ title: "Descarga Iniciada", description: "El reporte de auditoría se está descargando ordenado por tiempo." });
 };
 
   const handleViewDetails = (routeId: string) => {
     router.push(`/dashboard/routes/${routeId}`);
+  };
+
+  const openAudit = (log: DailyLog) => {
+    setAuditLog(log);
   };
 
   if (authLoading) {
@@ -251,23 +261,23 @@ export default function SellerReportsPage() {
         title="Reportes de Vendedores"
         description="Visualiza y descarga los reportes de las gestiones diarias de toda la fuerza de ventas."
       >
-        <Button onClick={handleDownloadExcel} disabled={authLoading || dailyReports.length === 0}>
-          <Download className="mr-2" />
-          Descargar Excel
+        <Button onClick={handleDownloadExcel} disabled={authLoading || dailyReports.length === 0} className="font-black">
+          <Download className="mr-2 h-4 w-4" />
+          Descargar Auditoría Excel
         </Button>
       </PageHeader>
       
-      <Card>
+      <Card className="border-t-4 border-t-primary shadow-xl">
         <CardHeader>
             <CardTitle className="font-black text-slate-950 uppercase">Gestiones Diarias por Vendedor</CardTitle>
-            <CardDescription className="font-bold text-[10px] text-slate-950 uppercase">
+            <CardDescription className="font-bold text-[10px] text-slate-500 uppercase">
                 Selecciona un vendedor y un rango de fechas para auditar el detalle de sus jornadas.
             </CardDescription>
         </CardHeader>
         <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4 mb-4">
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
                  <Select value={selectedSellerId} onValueChange={setSelectedSellerId}>
-                    <SelectTrigger className="w-full sm:max-w-xs h-11 border-2 border-slate-200 font-black text-slate-950">
+                    <SelectTrigger className="w-full sm:max-w-xs h-12 border-2 border-slate-200 font-black text-slate-950 rounded-xl">
                         <Users className="mr-2 h-4 w-4 text-primary" />
                         <SelectValue placeholder="Seleccionar vendedor" />
                     </SelectTrigger>
@@ -278,51 +288,48 @@ export default function SellerReportsPage() {
                         ))}
                     </SelectContent>
                 </Select>
-                <div className="flex items-center gap-2">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          id="date"
-                          variant={"outline"}
-                          className={cn(
-                            "w-[300px] justify-start text-left font-black h-11 border-2 border-slate-200 text-slate-950",
-                            !dateRange && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
-                          {dateRange?.from ? (
-                            dateRange.to ? (
-                              <>
-                                {format(dateRange.from, "LLL dd, y", {locale: es})} -{" "}
-                                {format(dateRange.to, "LLL dd, y", {locale: es})}
-                              </>
-                            ) : (
-                              format(dateRange.from, "LLL dd, y", {locale: es})
-                            )
-                          ) : (
-                            <span>Elige un rango de fechas</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <Calendar
-                          initialFocus
-                          mode="range"
-                          defaultMonth={dateRange?.from}
-                          selected={dateRange}
-                          onSelect={setDateRange}
-                          numberOfMonths={2}
-                          locale={es}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                </div>
+                <Popover>
+                    <PopoverTrigger asChild>
+                    <Button
+                        id="date"
+                        variant={"outline"}
+                        className={cn(
+                        "w-full sm:max-w-xs justify-start text-left font-black h-12 border-2 border-slate-200 text-slate-950 rounded-xl",
+                        !dateRange && "text-muted-foreground"
+                        )}
+                    >
+                        <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
+                        {dateRange?.from ? (
+                        dateRange.to ? (
+                            <>
+                            {format(dateRange.from, "LLL dd", {locale: es})} - {format(dateRange.to, "LLL dd", {locale: es})}
+                            </>
+                        ) : (
+                            format(dateRange.from, "LLL dd", {locale: es})
+                        )
+                        ) : (
+                        <span>Elige un rango de fechas</span>
+                        )}
+                    </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                        initialFocus
+                        mode="range"
+                        defaultMonth={dateRange?.from}
+                        selected={dateRange}
+                        onSelect={setDateRange}
+                        numberOfMonths={2}
+                        locale={es}
+                    />
+                    </PopoverContent>
+                </Popover>
             </div>
-             <div className="border-2 border-slate-100 rounded-xl overflow-hidden">
+             <div className="border-2 border-slate-100 rounded-[1.5rem] overflow-hidden shadow-inner">
                 <Table>
                     <TableHeader className="bg-slate-50">
                         <TableRow>
-                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Ruta</TableHead>
+                        <TableHead className="font-black text-slate-950 uppercase text-[10px] h-12">Ruta</TableHead>
                         <TableHead className="font-black text-slate-950 uppercase text-[10px]">Vendedor</TableHead>
                         <TableHead className="font-black text-slate-950 uppercase text-[10px]">Fecha</TableHead>
                         <TableHead className="font-black text-slate-950 uppercase text-[10px]">Progreso</TableHead>
@@ -331,24 +338,18 @@ export default function SellerReportsPage() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {authLoading ? (
-                            Array.from({ length: 5 }).map((_, i) => (
-                                <TableRow key={i}>
-                                    <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-28" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                                    <TableCell><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
-                                </TableRow>
-                            ))
-                        ) : dailyReports.length > 0 ? (
+                        {dailyReports.length > 0 ? (
                             dailyReports.map((log) => (
                                 <TableRow key={log.id} className="hover:bg-slate-50/50">
                                     <TableCell className="font-black text-slate-950 text-xs uppercase">{log.routeName}</TableCell>
                                     <TableCell className="font-black text-slate-950 text-xs uppercase">{log.sellerName}</TableCell>
                                     <TableCell className="font-black text-slate-950 text-xs uppercase">{format(log.date, 'dd MMM yyyy', { locale: es })}</TableCell>
-                                    <TableCell className="font-black text-primary text-xs uppercase">{`${log.completedClients} de ${log.totalClients}`}</TableCell>
+                                    <TableCell>
+                                        <div className="flex flex-col gap-1 w-24">
+                                            <span className="font-black text-primary text-[10px] uppercase">{log.completedClients} de {log.totalClients} OK</span>
+                                            <Progress value={(log.completedClients / log.totalClients) * 100} className="h-1" />
+                                        </div>
+                                    </TableCell>
                                     <TableCell>
                                         <Badge variant={log.status === 'Completado' ? 'success' : 'destructive'} className="font-black text-[9px] uppercase border-none">
                                             {log.status}
@@ -357,14 +358,19 @@ export default function SellerReportsPage() {
                                     <TableCell className="text-right">
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
-                                                <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-slate-100">
-                                                    <MoreHorizontal className="h-4 w-4 text-slate-950" />
+                                                <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-slate-100 rounded-full">
+                                                    <MoreHorizontal className="h-5 w-5 text-slate-950" />
                                                 </Button>
                                             </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-48">
-                                                <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500">Opciones</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => handleViewDetails(log.originalRouteId)} className="font-black text-xs uppercase text-slate-950">
-                                                    <Eye className="mr-2 h-4 w-4 text-primary" />
+                                            <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-2xl border-none p-2">
+                                                <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500 mb-1">Auditoría</DropdownMenuLabel>
+                                                <DropdownMenuItem onClick={() => openAudit(log)} className="font-black text-xs uppercase text-slate-950 py-2.5 bg-primary/5 rounded-lg mb-1">
+                                                    <ClipboardCheck className="mr-2 h-4 w-4 text-primary" />
+                                                    Detalle de Auditoría
+                                                </DropdownMenuItem>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem onClick={() => handleViewDetails(log.originalRouteId)} className="font-black text-xs uppercase text-slate-950 py-2.5 rounded-lg">
+                                                    <Eye className="mr-2 h-4 w-4 text-slate-400" />
                                                     Ver Ruta Completa
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
@@ -374,8 +380,8 @@ export default function SellerReportsPage() {
                             ))
                         ) : (
                             <TableRow>
-                                <TableCell colSpan={6} className="text-center h-24 font-black text-slate-950 uppercase text-xs">
-                                    No hay gestiones diarias para mostrar.
+                                <TableCell colSpan={6} className="text-center h-32 font-black text-slate-400 uppercase text-xs">
+                                    No hay gestiones diarias para auditar en este periodo.
                                 </TableCell>
                             </TableRow>
                         )}
@@ -383,7 +389,96 @@ export default function SellerReportsPage() {
                 </Table>
             </div>
         </CardContent>
-    </Card>
+      </Card>
+
+      <Sheet open={!!auditLog} onOpenChange={() => setAuditLog(null)}>
+          <SheetContent className="sm:max-w-2xl rounded-l-[2rem] border-none shadow-2xl p-0 flex flex-col h-full bg-white">
+              <SheetHeader className="p-8 pb-4 bg-primary text-white">
+                  <div className="flex justify-between items-start">
+                    <div>
+                        <SheetTitle className="text-2xl font-black uppercase text-white tracking-tighter">Detalle de Auditoría</SheetTitle>
+                        <SheetDescription className="text-white/80 font-bold uppercase text-[10px]">
+                            {auditLog?.sellerName} | {auditLog?.routeName}
+                        </SheetDescription>
+                    </div>
+                    <Badge className="bg-white text-primary font-black uppercase text-[10px] px-3">{auditLog?.date ? format(auditLog.date, 'EEEE dd MMMM', { locale: es }) : ''}</Badge>
+                  </div>
+                  <div className="mt-6 p-4 bg-white/10 rounded-2xl border border-white/20">
+                      <div className="flex justify-between items-center mb-2">
+                          <span className="text-[10px] font-black uppercase tracking-widest">Efectividad de Jornada</span>
+                          <span className="text-xl font-black">{auditLog ? Math.round((auditLog.completedClients / auditLog.totalClients) * 100) : 0}%</span>
+                      </div>
+                      <Progress value={auditLog ? (auditLog.completedClients / auditLog.totalClients) * 100 : 0} className="h-2 bg-white/20 [&>div]:bg-white" />
+                  </div>
+              </SheetHeader>
+
+              <ScrollArea className="flex-1 p-6 lg:p-8">
+                  <div className="space-y-6">
+                      <h4 className="font-black text-xs uppercase text-slate-950 border-b-2 border-slate-100 pb-2 flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-primary" />
+                          Cronograma de Visitas (Orden de Ingreso)
+                      </h4>
+                      
+                      <div className="space-y-4">
+                        {auditLog?.clients.sort((a, b) => {
+                            const timeA = a.checkInTime || '99:99:99';
+                            const timeB = b.checkInTime || '99:99:99';
+                            return timeA.localeCompare(timeB);
+                        }).map((client, idx) => (
+                            <div key={idx} className={cn(
+                                "p-5 rounded-2xl border-2 transition-all",
+                                client.visitStatus === 'Completado' ? "bg-white border-slate-100 shadow-sm" : "bg-red-50/30 border-dashed border-red-200"
+                            )}>
+                                <div className="flex justify-between items-start mb-3">
+                                    <div className="min-w-0 flex-1">
+                                        <h5 className="font-black text-sm uppercase text-slate-950 truncate leading-tight">{client.nombre_comercial}</h5>
+                                        <p className="text-[9px] font-mono font-bold text-slate-400 mt-1 uppercase">RUC: {client.ruc}</p>
+                                    </div>
+                                    <Badge variant={client.visitStatus === 'Completado' ? 'success' : 'destructive'} className="font-black text-[8px] uppercase">
+                                        {client.visitStatus === 'Completado' ? <CheckCircle2 className="h-3 w-3 mr-1" /> : <AlertCircle className="h-3 w-3 mr-1" />}
+                                        {client.visitStatus === 'Completado' ? 'GESTIONADO' : 'FALTÓ GESTIÓN'}
+                                    </Badge>
+                                </div>
+
+                                {client.visitStatus === 'Completado' ? (
+                                    <div className="grid grid-cols-2 gap-4 mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                        <div className="space-y-1">
+                                            <p className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">Entrada / Salida</p>
+                                            <p className="text-[11px] font-black text-slate-950 uppercase">{client.checkInTime || '--:--'} / {client.checkOutTime || '--:--'}</p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">Venta / Cobro</p>
+                                            <p className="text-[11px] font-black text-primary uppercase">${client.valorVenta?.toFixed(2)} / ${client.valorCobro?.toFixed(2)}</p>
+                                        </div>
+                                        <div className="col-span-2 space-y-1 pt-2 border-t border-slate-200">
+                                            <p className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">Observación de Visita</p>
+                                            <p className="text-[10px] font-bold text-slate-600 leading-tight italic">
+                                                {client.visitType === 'telefonica' ? `[TELEFÓNICA] ${client.callObservation}` : (client.visitObservation || 'Sin observaciones registradas.')}
+                                            </p>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="mt-2 p-3 bg-red-50/50 rounded-xl border border-red-100">
+                                        <p className="text-[10px] font-black text-red-600 uppercase italic flex items-center gap-2">
+                                            <AlertCircle className="h-3 w-3" />
+                                            Parada no gestionada por el usuario.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        ))}
+                      </div>
+                  </div>
+              </ScrollArea>
+              
+              <div className="p-8 border-t bg-slate-50">
+                  <Button variant="outline" className="w-full h-12 font-black uppercase rounded-xl border-2" onClick={() => setAuditLog(null)}>
+                      Cerrar Auditoría
+                  </Button>
+              </div>
+          </SheetContent>
+      </Sheet>
     </>
   );
 }
+
