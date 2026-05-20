@@ -466,8 +466,10 @@ export default function SellerReportsPage() {
                                             <p className="text-[11px] font-black text-slate-950 uppercase">{client.checkInTime || '--:--'} / {client.checkOutTime || '--:--'}</p>
                                         </div>
                                         <div className="space-y-1">
-                                            <p className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">Venta / Cobro</p>
-                                            <p className="text-[11px] font-black text-primary uppercase">${client.valorVenta?.toFixed(2)} / ${client.valorCobro?.toFixed(2)}</p>
+                                            <p className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">Venta / Cobro / Devol.</p>
+                                            <p className="text-[11px] font-black text-primary uppercase">
+                                                ${client.valorVenta?.toFixed(2)} / ${client.valorCobro?.toFixed(2)} / ${client.devoluciones?.toFixed(2) || '0.00'}
+                                            </p>
                                         </div>
                                         <div className="col-span-2 space-y-1 pt-2 border-t border-slate-200">
                                             <p className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">Observación de Visita</p>
