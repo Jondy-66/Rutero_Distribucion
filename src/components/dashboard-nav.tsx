@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -64,10 +63,10 @@ export function DashboardNav() {
       return user.permissions.includes(id);
     }
     const roleDefaults: Record<string, string[]> = {
-      'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'map', 'reports', 'seller-reports', 'routes', 'tracking'],
+      'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes', 'recover-clients'],
       'Usuario': ['dashboard', 'clients', 'map', 'routes'],
       'Telemercaderista': ['dashboard', 'clients', 'map', 'routes'],
-      'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'seller-reports', 'routes', 'tracking'],
+      'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes'],
     };
     return (roleDefaults[user.role] || []).includes(id);
   };
@@ -119,7 +118,7 @@ export function DashboardNav() {
           </SidebarMenuItem>
         )}
 
-        {(user?.role === 'Administrador' || user?.role === 'Supervisor' || user?.role === 'Auditor') && (
+        {hasPerm('tracking') && (
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname === '/dashboard/system/tracking'} tooltip="Rastreo GPS">
               <Link href="/dashboard/system/tracking">

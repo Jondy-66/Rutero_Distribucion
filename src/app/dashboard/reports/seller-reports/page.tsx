@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useMemo } from 'react';
 import { PageHeader } from '@/components/page-header';
@@ -21,7 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import type { RoutePlan, ClientInRoute } from '@/lib/types';
+import type { RoutePlan, ClientInRoute, User } from '@/lib/types';
 import { Download, Users, MoreHorizontal, Eye, Calendar as CalendarIcon, ClipboardCheck, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { format, startOfDay, endOfDay, startOfMonth, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -72,6 +71,19 @@ export default function SellerReportsPage() {
     from: startOfMonth(new Date()),
     to: endOfDay(new Date()),
   });
+
+  const hasPerm = (id: string) => {
+    if (!currentUser) return false;
+    if (currentUser.role === 'Administrador') return true;
+    if (currentUser.permissions && currentUser.permissions.length > 0) {
+      return currentUser.permissions.includes(id);
+    }
+    const roleDefaults: Record<string, string[]> = {
+      'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes', 'recover-clients'],
+      'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes'],
+    };
+    return (roleDefaults[currentUser.role] || []).includes(id);
+  };
 
   const formatLoc = (loc: any) => {
     if (!loc) return 'N/A';
@@ -364,7 +376,14 @@ export default function SellerReportsPage() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end" className="w-56 rounded-xl shadow-2xl border-none p-2">
                                                 <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500 mb-1">Auditoría</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => openAudit(log)} className="font-black text-xs uppercase text-slate-950 py-2.5 bg-primary/5 rounded-lg mb-1">
+                                                <DropdownMenuItem 
+                                                  onClick={() => openAudit(log)} 
+                                                  disabled={!hasPerm('audit-detail')}
+                                                  className={cn(
+                                                    "font-black text-xs uppercase text-slate-950 py-2.5 bg-primary/5 rounded-lg mb-1",
+                                                    !hasPerm('audit-detail') && "opacity-50 cursor-not-allowed"
+                                                  )}
+                                                >
                                                     <ClipboardCheck className="mr-2 h-4 w-4 text-primary" />
                                                     Detalle de Auditoría
                                                 </DropdownMenuItem>
@@ -481,4 +500,3 @@ export default function SellerReportsPage() {
     </>
   );
 }
-
