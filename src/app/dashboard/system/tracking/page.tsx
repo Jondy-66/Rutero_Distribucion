@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -39,13 +38,12 @@ export default function TrackingPage() {
     }, []);
 
     const gpsStatusData = useMemo(() => {
-        // Filtrar solo usuarios operativos (vendedores/telemercaderistas)
-        const trackableUsers = allSystemUsers.filter(u => 
-            u.role === 'Usuario' || u.role === 'Telemercaderista' || u.role === 'Supervisor'
-        );
+        // Obtenemos a todos los usuarios menos Administradores para la auditoría
+        const trackableUsers = allSystemUsers.filter(u => u.role !== 'Administrador');
 
         const now = Date.now();
-        const offlineThreshold = 5 * 60 * 1000; // 5 minutos para considerar offline
+        // Umbral de 8 minutos para considerar Offline (damos margen al heartbeat de 3 min)
+        const offlineThreshold = 8 * 60 * 1000; 
 
         return trackableUsers.map(u => {
             const location = activeLocations.find(l => l.userId === u.id);
@@ -60,7 +58,8 @@ export default function TrackingPage() {
                 lastSignal: lastSignalDate,
                 isOnline: !!isOnline,
                 accuracy: location?.accuracy || 0,
-                address: location?.address_text || 'Sin registro reciente'
+                address: location?.address_text || 'Esperando primer reporte...',
+                isOutOfRoute: location?.is_out_of_route || false
             };
         }).sort((a, b) => {
             if (a.isOnline === b.isOnline) return 0;
@@ -103,7 +102,7 @@ export default function TrackingPage() {
                             <CardContent className="space-y-4">
                                 <div className="p-4 bg-green-50 rounded-2xl border-2 border-green-100 flex items-center justify-between">
                                     <div className="space-y-0.5">
-                                        <p className="text-[10px] font-black uppercase text-green-800">Ejecutivos en Ruta</p>
+                                        <p className="text-[10px] font-black uppercase text-green-800">Señales Activas</p>
                                         <p className="text-2xl font-black text-green-900">{onlineCount}</p>
                                     </div>
                                     <SignalHigh className="h-8 w-8 text-green-600 opacity-30" />
@@ -111,14 +110,14 @@ export default function TrackingPage() {
                                 <div className="p-3 bg-blue-50 rounded-xl border-2 border-blue-100">
                                     <div className="flex items-center gap-2">
                                         <Activity className="h-3 w-3 text-blue-600" />
-                                        <span className="text-[10px] font-black uppercase text-blue-800">Filtro de Precisión</span>
+                                        <span className="text-[10px] font-black uppercase text-blue-800">Heartbeat Activo</span>
                                     </div>
                                     <p className="text-[9px] text-blue-600 font-bold uppercase mt-1 leading-tight italic">
-                                        SOLO POSICIONES CON ERROR MENOR A 30M SON PROCESADAS PARA GARANTIZAR EXACTITUD.
+                                        EL SISTEMA REFRESCA LA POSICIÓN CADA 3 MINUTOS AUNQUE EL EJECUTIVO NO SE MUEVA.
                                     </p>
                                 </div>
                                 <div className="pt-2 text-[9px] font-black text-slate-400 uppercase leading-relaxed px-1">
-                                    USA LAS HERRAMIENTAS DE DIBUJO EN EL MAPA PARA DEFINIR GEOCERCAS DE SEGURIDAD.
+                                    MARCADORES EN ROJO INDICAN QUE EL USUARIO HA SALIDO DE SU GEOCERCA ASIGNADA.
                                 </div>
                             </CardContent>
                         </Card>
@@ -129,7 +128,7 @@ export default function TrackingPage() {
                                     <MapPin className="h-4 w-4 text-primary" />
                                     Mapa de Operaciones Nacional
                                 </CardTitle>
-                                <Badge variant="secondary" className="font-black text-[9px] uppercase px-3">{activeLocations.length} SEÑALES ACTIVAS</Badge>
+                                <Badge variant="secondary" className="font-black text-[9px] uppercase px-3">{activeLocations.length} SEÑALES TOTALES</Badge>
                             </CardHeader>
                             <CardContent className="p-2 lg:p-4 bg-white">
                                 <div className="h-[60vh] lg:h-[75vh]">
@@ -149,7 +148,7 @@ export default function TrackingPage() {
                                         <Signal className="h-6 w-6 text-primary" />
                                         Auditoría de Disponibilidad GPS
                                     </CardTitle>
-                                    <CardDescription className="text-xs font-bold uppercase text-slate-500 mt-1">Verificación de conectividad en tiempo real de la fuerza de ventas.</CardDescription>
+                                    <CardDescription className="text-xs font-bold uppercase text-slate-500 mt-1">Verificación de conectividad en tiempo real de toda la fuerza operativa.</CardDescription>
                                 </div>
                                 <div className="flex gap-4">
                                     <div className="flex flex-col items-center px-4 py-2 bg-white rounded-2xl border-2 border-slate-100 shadow-sm">
@@ -173,7 +172,7 @@ export default function TrackingPage() {
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950">Estado de Señal</TableHead>
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950">Último Reporte</TableHead>
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950">Precisión (M)</TableHead>
-                                            <TableHead className="font-black uppercase text-[10px] text-slate-950 pr-8">Dirección Estimada</TableHead>
+                                            <TableHead className="font-black uppercase text-[10px] text-slate-950 pr-8">Ubicación Actual</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -208,7 +207,7 @@ export default function TrackingPage() {
                                                     ) : (
                                                         <div className="flex items-center gap-2">
                                                             <WifiOff className="h-3 w-3 text-slate-300" />
-                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Sin Señal / GPS OFF</span>
+                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Sin Señal / App Cerrada</span>
                                                         </div>
                                                     )}
                                                 </TableCell>
@@ -249,4 +248,3 @@ export default function TrackingPage() {
         </div>
     );
 }
-
