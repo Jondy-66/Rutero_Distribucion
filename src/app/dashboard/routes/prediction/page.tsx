@@ -76,14 +76,31 @@ export default function PrediccionesPage() {
   };
  
   const filteredPredicciones = useMemo(() => {
-    return predicciones.filter(p => {
+    // 1. Filtrar por término de búsqueda (ejecutivo) si aplica
+    let list = predicciones.filter(p => {
         if (isSupervisorOrAdmin) {
              const execName = (p as any).Ejecutivo || (p as any).ejecutivo || '';
              return String(execName).toLowerCase().includes(searchTerm.toLowerCase());
         }
         return true;
     });
-  }, [predicciones, searchTerm, isSupervisorOrAdmin]);
+
+    // 2. DESCARTAR CLIENTES INACTIVOS (NUEVO REQUERIMIENTO)
+    // Filtramos la lista de predicciones comparando con el estado actual en el catálogo de clientes
+    list = list.filter(p => {
+        const ruc = String((p as any).cliente_id || (p as any).RUC || (p as any).ruc || '').trim();
+        const clientInCatalog = clients.find(c => String(c.ruc).trim() === ruc);
+        
+        // Si el cliente existe en el catálogo y está INACTIVO, se descarta de los resultados.
+        // Si el cliente no existe (prospecto nuevo de la IA), se permite.
+        if (clientInCatalog && clientInCatalog.status === 'inactive') {
+            return false;
+        }
+        return true;
+    });
+
+    return list;
+  }, [predicciones, searchTerm, isSupervisorOrAdmin, clients]);
 
   const handlePlanPredictionRoute = () => {
     try {
@@ -173,8 +190,7 @@ export default function PrediccionesPage() {
     const clientsFromRucs = clients.filter(client => predictedRucs.has(String(client.ruc).trim()) && isFinite(client.latitud) && isFinite(client.longitud));
     if (clientsFromRucs.length === 0) return toast({ title: "Mapa vacío" });
     setClientsForMap(clientsFromRucs);
-    // Note: Use a map component that supports multiple markers if needed
-    setIsMapOpen(true); // Simplified for this implementation
+    setIsMapOpen(true); 
   };
 
   const handleDownloadExcel = () => {
@@ -230,7 +246,7 @@ export default function PrediccionesPage() {
                 <AlertCircle className="mx-auto h-12 w-12 text-amber-500 mb-4" />
                 <h3 className="font-black text-amber-900 uppercase text-lg">Sin resultados obtenidos</h3>
                 <p className="text-amber-700 text-xs font-bold uppercase mt-2 max-w-md mx-auto leading-relaxed">
-                    LA API NO HA DEVUELTO DATOS EN ESTE INTENTO. POR FAVOR, <span className="text-amber-900 underline underline-offset-2 decoration-2">INTÉNTALO DE NUEVO</span> PULSANDO EL BOTÓN O VERIFICA QUE EL EJECUTIVO TENGA GESTIONES PREVIAS EN EL SISTEMA.
+                    LA API NO HA DEVUELTO DATOS O TODOS LOS CLIENTES PREDICHOS ESTÁN <span className="text-amber-900 underline">INACTIVOS</span>. POR FAVOR, <span className="text-amber-900 underline underline-offset-2 decoration-2">INTÉNTALO DE NUEVO</span> PULSANDO EL BOTÓN.
                 </p>
                 <Button 
                     variant="outline" 
@@ -273,7 +289,7 @@ export default function PrediccionesPage() {
                                         <TableCell><Button variant="ghost" size="icon" onClick={() => handleViewOnMap(p)}><MapPin className="h-4 w-4" /></Button></TableCell>
                                     </TableRow>
                                 ))
-                            ) : (<TableRow><TableCell colSpan={7} className="h-24 text-center">Sin resultados.</TableCell></TableRow>)}
+                            ) : (<TableRow><TableCell colSpan={7} className="h-24 text-center">Sin resultados activos.</TableCell></TableRow>)}
                         </TableBody>
                     </Table>
                 </div>
