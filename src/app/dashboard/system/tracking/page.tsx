@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/use-auth';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ShieldCheck, MapPin, Activity, Signal, SignalLow, SignalHigh, Users, Clock, WifiOff } from 'lucide-react';
+import { ShieldCheck, MapPin, Activity, Signal, SignalLow, SignalHigh, Users, Clock, WifiOff, RefreshCcw } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { db } from '@/lib/firebase/config';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -16,6 +16,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
 
 const SupervisorMap = dynamic(() => import('@/components/supervisor-map').then(m => m.SupervisorMap), {
     ssr: false,
@@ -23,8 +24,9 @@ const SupervisorMap = dynamic(() => import('@/components/supervisor-map').then(m
 });
 
 export default function TrackingPage() {
-    const { user, users: allSystemUsers } = useAuth();
+    const { user, users: allSystemUsers, loading: authLoading } = useAuth();
     const [activeLocations, setActiveLocations] = useState<ActiveLocation[]>([]);
+    const [lastSync, setLastSync] = useState(new Date());
 
     useEffect(() => {
         const unsub = onSnapshot(collection(db, 'active_locations'), (snap) => {
@@ -33,23 +35,34 @@ export default function TrackingPage() {
                 userId: d.id
             } as ActiveLocation));
             setActiveLocations(locs);
+            setLastSync(new Date());
         });
         return () => unsub();
     }, []);
 
     const gpsStatusData = useMemo(() => {
-        // Obtenemos a todos los usuarios menos Administradores para la auditoría
+        if (!allSystemUsers) return [];
+        
         const trackableUsers = allSystemUsers.filter(u => u.role !== 'Administrador');
-
         const now = Date.now();
-        // Umbral de 8 minutos para considerar Offline (damos margen al heartbeat de 3 min)
-        const offlineThreshold = 8 * 60 * 1000; 
+        
+        // Umbral de 12 minutos para mayor resiliencia ante pérdida de señal momentánea
+        const offlineThreshold = 12 * 60 * 1000; 
 
         return trackableUsers.map(u => {
             const location = activeLocations.find(l => l.userId === u.id);
-            const lastSignalDate = location?.timestamp ? 
-                (location.timestamp instanceof Date ? location.timestamp : (location.timestamp as any).toDate()) : 
-                null;
+            
+            // Manejo seguro del timestamp de Firestore
+            let lastSignalDate: Date | null = null;
+            if (location?.timestamp) {
+                if (location.timestamp instanceof Date) {
+                    lastSignalDate = location.timestamp;
+                } else if ((location.timestamp as any).toDate) {
+                    lastSignalDate = (location.timestamp as any).toDate();
+                } else if (typeof location.timestamp === 'number') {
+                    lastSignalDate = new Date(location.timestamp);
+                }
+            }
             
             const isOnline = lastSignalDate && (now - lastSignalDate.getTime()) < offlineThreshold;
             
@@ -58,11 +71,14 @@ export default function TrackingPage() {
                 lastSignal: lastSignalDate,
                 isOnline: !!isOnline,
                 accuracy: location?.accuracy || 0,
-                address: location?.address_text || 'Esperando primer reporte...',
+                address: location?.address_text || 'Sin dirección reportada aún...',
                 isOutOfRoute: location?.is_out_of_route || false
             };
         }).sort((a, b) => {
-            if (a.isOnline === b.isOnline) return 0;
+            if (a.isOnline === b.isOnline) {
+                // Si ambos tienen el mismo estado, ordenar por nombre
+                return a.user.name.localeCompare(b.user.name);
+            }
             return a.isOnline ? -1 : 1;
         });
     }, [allSystemUsers, activeLocations]);
@@ -78,7 +94,12 @@ export default function TrackingPage() {
             <PageHeader 
                 title="Supervisión Logística" 
                 description="Monitoreo GPS, Geocercas y Disponibilidad de Equipo."
-            />
+            >
+                <div className="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-full border border-slate-200">
+                    <RefreshCcw className="h-3 w-3 text-slate-400 animate-spin" />
+                    <span className="text-[10px] font-black text-slate-500 uppercase">Sincronizado: {format(lastSync, 'HH:mm:ss')}</span>
+                </div>
+            </PageHeader>
 
             <Tabs defaultValue="map" className="w-full">
                 <TabsList className="grid w-full grid-cols-2 max-w-md h-12 bg-slate-100 p-1 rounded-2xl border-2 border-slate-200">
@@ -110,14 +131,14 @@ export default function TrackingPage() {
                                 <div className="p-3 bg-blue-50 rounded-xl border-2 border-blue-100">
                                     <div className="flex items-center gap-2">
                                         <Activity className="h-3 w-3 text-blue-600" />
-                                        <span className="text-[10px] font-black uppercase text-blue-800">Heartbeat Activo</span>
+                                        <span className="text-[10px] font-black uppercase text-blue-800">Heartbeat Optimizado</span>
                                     </div>
                                     <p className="text-[9px] text-blue-600 font-bold uppercase mt-1 leading-tight italic">
-                                        EL SISTEMA REFRESCA LA POSICIÓN CADA 3 MINUTOS AUNQUE EL EJECUTIVO NO SE MUEVA.
+                                        FRECUENCIA DE REPORTE: CADA 2 MINUTOS. TOLERANCIA DE CONEXIÓN: 12 MINUTOS.
                                     </p>
                                 </div>
                                 <div className="pt-2 text-[9px] font-black text-slate-400 uppercase leading-relaxed px-1">
-                                    MARCADORES EN ROJO INDICAN QUE EL USUARIO HA SALIDO DE SU GEOCERCA ASIGNADA.
+                                    EL COLOR ROJO EN EL MAPA INDICA QUE EL USUARIO HA SALIDO DEL PERÍMETRO DE SU GEOCERCA.
                                 </div>
                             </CardContent>
                         </Card>
@@ -128,7 +149,7 @@ export default function TrackingPage() {
                                     <MapPin className="h-4 w-4 text-primary" />
                                     Mapa de Operaciones Nacional
                                 </CardTitle>
-                                <Badge variant="secondary" className="font-black text-[9px] uppercase px-3">{activeLocations.length} SEÑALES TOTALES</Badge>
+                                <Badge variant="secondary" className="font-black text-[9px] uppercase px-3">{activeLocations.length} PUNTOS ACTIVOS</Badge>
                             </CardHeader>
                             <CardContent className="p-2 lg:p-4 bg-white">
                                 <div className="h-[60vh] lg:h-[75vh]">
@@ -148,16 +169,16 @@ export default function TrackingPage() {
                                         <Signal className="h-6 w-6 text-primary" />
                                         Auditoría de Disponibilidad GPS
                                     </CardTitle>
-                                    <CardDescription className="text-xs font-bold uppercase text-slate-500 mt-1">Verificación de conectividad en tiempo real de toda la fuerza operativa.</CardDescription>
+                                    <CardDescription className="text-xs font-bold uppercase text-slate-500 mt-1">Monitoreo de latidos de posición de toda la fuerza operativa (Admin excluído).</CardDescription>
                                 </div>
                                 <div className="flex gap-4">
-                                    <div className="flex flex-col items-center px-4 py-2 bg-white rounded-2xl border-2 border-slate-100 shadow-sm">
+                                    <div className="flex flex-col items-center px-5 py-3 bg-white rounded-2xl border-2 border-slate-100 shadow-sm min-w-[100px]">
                                         <span className="text-[10px] font-black text-slate-400 uppercase">En Línea</span>
-                                        <span className="text-lg font-black text-green-600">{onlineCount}</span>
+                                        <span className="text-2xl font-black text-green-600">{onlineCount}</span>
                                     </div>
-                                    <div className="flex flex-col items-center px-4 py-2 bg-white rounded-2xl border-2 border-slate-100 shadow-sm">
-                                        <span className="text-[10px] font-black text-slate-400 uppercase">Sin Señal</span>
-                                        <span className="text-lg font-black text-slate-300">{gpsStatusData.length - onlineCount}</span>
+                                    <div className="flex flex-col items-center px-5 py-3 bg-white rounded-2xl border-2 border-slate-100 shadow-sm min-w-[100px]">
+                                        <span className="text-[10px] font-black text-slate-400 uppercase">Fuera de Línea</span>
+                                        <span className="text-2xl font-black text-slate-300">{gpsStatusData.length - onlineCount}</span>
                                     </div>
                                 </div>
                             </div>
@@ -169,70 +190,80 @@ export default function TrackingPage() {
                                         <TableRow className="hover:bg-transparent">
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950 h-14 pl-8">Vendedor / Ejecutivo</TableHead>
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950">Rol</TableHead>
-                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Estado de Señal</TableHead>
-                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Último Reporte</TableHead>
-                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Precisión (M)</TableHead>
-                                            <TableHead className="font-black uppercase text-[10px] text-slate-950 pr-8">Ubicación Actual</TableHead>
+                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Estado GPS</TableHead>
+                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Recibido hace</TableHead>
+                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Precisión (Fuerza)</TableHead>
+                                            <TableHead className="font-black uppercase text-[10px] text-slate-950 pr-8">Último Punto Reportado</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {gpsStatusData.map((data, idx) => (
+                                        {gpsStatusData.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="h-40 text-center">
+                                                    <LoaderCircle className="h-10 w-10 animate-spin mx-auto text-slate-200" />
+                                                    <p className="mt-4 font-black uppercase text-xs text-slate-400">Cargando base de usuarios operativos...</p>
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : gpsStatusData.map((data) => (
                                             <TableRow key={data.user.id} className={cn(
-                                                "hover:bg-slate-50/50 transition-colors",
-                                                data.isOnline ? "bg-green-50/10" : ""
+                                                "hover:bg-slate-50/80 transition-colors",
+                                                data.isOnline ? "bg-green-50/5" : "opacity-70"
                                             )}>
-                                                <TableCell className="pl-8 py-4">
+                                                <TableCell className="pl-8 py-5">
                                                     <div className="flex items-center gap-3">
                                                         <div className={cn(
                                                             "h-10 w-10 rounded-full flex items-center justify-center font-black text-white uppercase text-sm shadow-md",
-                                                            data.isOnline ? "bg-primary" : "bg-slate-200"
+                                                            data.isOnline ? "bg-primary" : "bg-slate-300"
                                                         )}>
                                                             {data.user.name.charAt(0)}
                                                         </div>
-                                                        <div className="flex flex-col">
-                                                            <span className="font-black text-xs uppercase text-slate-950">{data.user.name}</span>
-                                                            <span className="text-[9px] font-bold text-slate-400 uppercase truncate max-w-[150px]">{data.user.email}</span>
+                                                        <div className="flex flex-col min-w-0">
+                                                            <span className="font-black text-xs uppercase text-slate-950 truncate">{data.user.name}</span>
+                                                            <span className="text-[9px] font-bold text-slate-400 uppercase truncate max-w-[140px]">{data.user.email}</span>
                                                         </div>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant="outline" className="font-black text-[9px] uppercase border-slate-200">{data.user.role}</Badge>
+                                                    <Badge variant="outline" className="font-black text-[9px] uppercase border-slate-200 bg-white">{data.user.role}</Badge>
                                                 </TableCell>
                                                 <TableCell>
                                                     {data.isOnline ? (
                                                         <div className="flex items-center gap-2">
-                                                            <div className="h-2 w-2 rounded-full bg-green-500 animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
-                                                            <span className="text-[10px] font-black text-green-700 uppercase tracking-tighter">Conectado (GPS ON)</span>
+                                                            <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse shadow-[0_0_10px_rgba(34,197,94,0.6)]" />
+                                                            <span className="text-[10px] font-black text-green-700 uppercase tracking-tighter">EN LÍNEA (GPS ON)</span>
                                                         </div>
                                                     ) : (
                                                         <div className="flex items-center gap-2">
-                                                            <WifiOff className="h-3 w-3 text-slate-300" />
-                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">Sin Señal / App Cerrada</span>
+                                                            <WifiOff className="h-3.5 w-3.5 text-slate-400" />
+                                                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-tighter">SIN SEÑAL / OFFLINE</span>
                                                         </div>
                                                     )}
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-1.5">
-                                                        <Clock className="h-3 w-3 text-slate-400" />
+                                                        <Clock className="h-3.5 w-3.5 text-slate-400" />
                                                         <span className="text-[10px] font-black text-slate-600 uppercase">
-                                                            {data.lastSignal ? formatDistanceToNow(data.lastSignal, { addSuffix: true, locale: es }) : 'NUNCA REPORTADO'}
+                                                            {data.lastSignal ? formatDistanceToNow(data.lastSignal, { addSuffix: false, locale: es }) : 'N/A'}
                                                         </span>
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     {data.isOnline ? (
                                                         <Badge className={cn(
-                                                            "font-black text-[9px] uppercase shadow-sm",
-                                                            data.accuracy < 15 ? "bg-green-100 text-green-700 hover:bg-green-100 border-none" : "bg-amber-100 text-amber-700 hover:bg-amber-100 border-none"
+                                                            "font-black text-[10px] uppercase shadow-sm border-none",
+                                                            data.accuracy < 15 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
                                                         )}>
-                                                            {data.accuracy.toFixed(1)}m {data.accuracy < 15 ? '(Excelente)' : '(Regular)'}
+                                                            {data.accuracy.toFixed(1)}m {data.accuracy < 15 ? '(ALTA)' : '(MEDIA)'}
                                                         </Badge>
                                                     ) : (
-                                                        <span className="text-[10px] font-bold text-slate-300">--</span>
+                                                        <span className="text-[10px] font-bold text-slate-200">-- m</span>
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="pr-8">
-                                                    <p className="text-[10px] font-bold text-slate-500 uppercase leading-tight italic line-clamp-2">
+                                                    <p className={cn(
+                                                        "text-[10px] font-bold uppercase leading-tight italic line-clamp-2 max-w-[250px]",
+                                                        data.isOnline ? "text-slate-600" : "text-slate-300"
+                                                    )}>
                                                         {data.address}
                                                     </p>
                                                 </TableCell>
