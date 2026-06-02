@@ -1,10 +1,8 @@
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Polygon, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import '@geoman-io/leaflet-geoman-free';
 import type { ActiveLocation, Zone, Breadcrumb } from '@/lib/types';
 import { db } from '@/lib/firebase/config';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -12,24 +10,30 @@ import { getRecentHistory, saveZone } from '@/lib/firebase/firestore';
 import { Button } from '@/components/ui/button';
 import { LoaderCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Timestamp } from 'firebase/firestore';
+
+// Solo importar Geoman si estamos en el cliente
+if (typeof window !== 'undefined') {
+    require('@geoman-io/leaflet-geoman-free');
+}
 
 // Iconos de alta visibilidad para supervisión
-const blueIcon = new L.Icon({
+const blueIcon = typeof window !== 'undefined' ? new L.Icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
     iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-});
+}) : null;
 
-const redIcon = new L.Icon({
+const redIcon = typeof window !== 'undefined' ? new L.Icon({
     iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
     iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-});
+}) : null;
 
 function MapViewController({ center }: { center: [number, number] | null }) {
     const map = useMap();
     useEffect(() => {
-        if (center) {
+        if (center && isFinite(center[0]) && isFinite(center[1])) {
             map.flyTo(center, 13, { animate: true, duration: 1.5 });
         }
     }, [center, map]);
@@ -39,8 +43,9 @@ function MapViewController({ center }: { center: [number, number] | null }) {
 function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }) {
   const map = useMap();
   useEffect(() => {
-    if (!map || !map.pm) return;
-    map.pm.addControls({
+    if (!map || !(map as any).pm) return;
+    const m = map as any;
+    m.pm.addControls({
       position: 'topleft',
       drawCircle: false,
       drawMarker: false,
@@ -56,8 +61,8 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
       onZoneCreated(json);
     });
     return () => { 
-        if (map?.pm) {
-            map.pm.removeControls();
+        if (m.pm) {
+            m.pm.removeControls();
             map.off('pm:create');
         }
     };
@@ -66,8 +71,9 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
 }
 
 function SmoothMarker({ location }: { location: ActiveLocation }) {
+    if (!isFinite(location.lat) || !isFinite(location.lng)) return null;
     return (
-        <Marker position={[location.lat, location.lng]} icon={location.is_out_of_route ? redIcon : blueIcon}>
+        <Marker position={[location.lat, location.lng]} icon={(location.is_out_of_route ? redIcon : blueIcon) || undefined}>
             <Popup>
                 <div className="font-black uppercase text-[10px] text-slate-950">
                     <p className="font-black text-xs text-primary">{location.userName}</p>
@@ -94,7 +100,7 @@ export function SupervisorMap() {
         const locs = snap.docs.map(d => ({
             ...d.data(),
             userId: d.id
-        } as ActiveLocation));
+        } as ActiveLocation)).filter(l => isFinite(l.lat) && isFinite(l.lng));
         setActiveLocations(locs);
     });
 
@@ -113,7 +119,7 @@ export function SupervisorMap() {
     setIsHistoryLoading(true);
     try {
         const data = await getRecentHistory(userId);
-        setHistory(data);
+        setHistory(data.filter(p => isFinite(p.lat) && isFinite(p.lng)));
     } catch (e) {
         console.error(e);
     } finally {
@@ -134,7 +140,7 @@ export function SupervisorMap() {
   const mapCenter = useMemo(() => {
       if (selectedUserId) {
           const loc = activeLocations.find(l => l.userId === selectedUserId);
-          if (loc) return [loc.lat, loc.lng] as [number, number];
+          if (loc && isFinite(loc.lat) && isFinite(loc.lng)) return [loc.lat, loc.lng] as [number, number];
       }
       return null;
   }, [selectedUserId, activeLocations]);
@@ -166,7 +172,7 @@ export function SupervisorMap() {
                     </Button>
                 ))
             ) : (
-                <div className="text-[10px] font-black uppercase text-slate-400 p-2 italic">Sin señal GPS activa...</div>
+                <div className="text-[10px] font-black uppercase text-slate-400 p-2 italic">Esperando señales...</div>
             )}
         </div>
 
