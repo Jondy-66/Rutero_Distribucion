@@ -24,6 +24,8 @@ export type ActiveLocation = {
   address_text?: string;
   is_out_of_route?: boolean;
   gpsEnabled?: boolean;
+  isPermissionDenied?: boolean;
+  isSignalWeak?: boolean;
 };
 
 export type Zone = {

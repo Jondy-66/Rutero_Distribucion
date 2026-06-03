@@ -19,7 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { User, Settings, LogOut, Bell, CheckCheck, Wifi, WifiOff, Satellite, MapPinOff } from 'lucide-react';
+import { User, Settings, LogOut, Bell, CheckCheck, Wifi, WifiOff, Satellite, MapPinOff, AlertTriangle } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { handleSignOut } from '@/lib/firebase/auth';
 import { useRouter } from 'next/navigation';
@@ -36,7 +36,7 @@ export function UserNav() {
   const router = useRouter();
   const { toast } = useToast();
   const [isOnline, setIsOnline] = useState(true);
-  const [isGpsActive, setIsGpsActive] = useState(true);
+  const [gpsStatus, setGpsStatus] = useState<'active' | 'denied' | 'weak'>('active');
 
   useEffect(() => {
     const checkStatus = () => setIsOnline(navigator.onLine);
@@ -49,12 +49,16 @@ export function UserNav() {
     };
   }, []);
 
-  // Listener en tiempo real para el estado GPS reportado por este usuario
+  // Monitor de estado GPS real-time desde la base de datos para feedback preciso
   useEffect(() => {
     if (!user) return;
     const unsub = onSnapshot(doc(db, 'active_locations', user.id), (snap) => {
         if (snap.exists()) {
-            setIsGpsActive(snap.data().gpsEnabled !== false);
+            const data = snap.data();
+            if (data.isPermissionDenied) setGpsStatus('denied');
+            else if (data.isSignalWeak) setGpsStatus('weak');
+            else if (data.gpsEnabled) setGpsStatus('active');
+            else setGpsStatus('weak');
         }
     });
     return () => unsub();
@@ -78,20 +82,31 @@ export function UserNav() {
   return (
     <div className="flex items-center gap-2 sm:gap-4">
       <div className="flex items-center gap-2">
+        {/* Indicador de Red */}
         <div className={cn(
             "flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] font-bold uppercase transition-all duration-300",
             isOnline ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
           )}>
           <div className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-green-600 animate-pulse" : "bg-red-600")} />
-          <span className="hidden xs:inline-block">{isOnline ? 'En línea' : 'Sin red'}</span>
+          <span className="hidden xs:inline-block">{isOnline ? 'Red OK' : 'Sin Internet'}</span>
         </div>
 
+        {/* Indicador de GPS Inteligente */}
         <div className={cn(
             "flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] font-bold uppercase transition-all duration-300",
-            isGpsActive ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-orange-50 text-orange-700 border-orange-200 border-dashed"
+            gpsStatus === 'active' ? "bg-blue-50 text-blue-700 border-blue-200" : 
+            gpsStatus === 'weak' ? "bg-orange-50 text-orange-700 border-orange-200 border-dashed animate-pulse" :
+            "bg-red-50 text-red-700 border-red-200"
           )}>
-          {isGpsActive ? <Satellite className="h-3 w-3 animate-pulse" /> : <MapPinOff className="h-3 w-3 text-orange-600" />}
-          <span className="hidden xs:inline-block">{isGpsActive ? 'GPS Activo' : 'GPS Inactivo'}</span>
+          {gpsStatus === 'active' ? <Satellite className="h-3 w-3" /> : 
+           gpsStatus === 'weak' ? <AlertTriangle className="h-3 w-3" /> : 
+           <MapPinOff className="h-3 w-3" />}
+          
+          <span className="hidden xs:inline-block">
+            {gpsStatus === 'active' ? 'GPS OK' : 
+             gpsStatus === 'weak' ? 'Buscando Señal' : 
+             'GPS Bloqueado'}
+          </span>
         </div>
       </div>
 

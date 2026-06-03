@@ -15,13 +15,15 @@ import {
 import { DashboardNav } from '@/components/dashboard-nav';
 import { UserNav } from '@/components/user-nav';
 import { Button } from '@/components/ui/button';
-import { Settings, LogOut, Route, MapPinOff, AlertCircle, Info } from 'lucide-react';
+import { Settings, LogOut, Route, MapPinOff, AlertCircle, Info, WifiOff, Satellite } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { handleSignOut } from '@/lib/firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { useTracker } from '@/hooks/use-tracker';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function DashboardLayout({
   children,
@@ -32,8 +34,8 @@ export default function DashboardLayout({
   const router = useRouter();
   const { toast } = useToast();
   
-  // Activar tracker y obtener estado de permisos
-  const { gpsEnabled } = useTracker();
+  // Obtener estados detallados del rastreador
+  const { gpsEnabled, isPermissionDenied, isSignalWeak } = useTracker();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -60,7 +62,6 @@ export default function DashboardLayout({
     );
   }
 
-  // Los roles operativos (Vendedor y Telemercaderista) tienen GPS obligatorio
   const isSeller = user.role === 'Usuario' || user.role === 'Telemercaderista';
 
   return (
@@ -98,17 +99,18 @@ export default function DashboardLayout({
           <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background/80 backdrop-blur-lg px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
             <SidebarTrigger className="sm:hidden" />
             <div className="flex-1">
-                {isSeller && !gpsEnabled && (
+                {isSeller && isSignalWeak && (
                     <div className="flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200 animate-pulse">
-                        <MapPinOff className="h-4 w-4" />
-                        <span className="text-[10px] font-black uppercase">GPS OBLIGATORIO DESACTIVADO</span>
+                        <Satellite className="h-4 w-4" />
+                        <span className="text-[10px] font-black uppercase">Señal GPS Débil o Intermitente</span>
                     </div>
                 )}
             </div>
             <UserNav />
           </header>
           <main className="p-4 sm:p-6 relative">
-            {isSeller && !gpsEnabled && (
+            {/* BLOQUEO ESTRICTO: Solo si el permiso fue denegado o aún no ha sido otorgado */}
+            {isSeller && (isPermissionDenied || (!gpsEnabled && !isSignalWeak)) && (
                 <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-xl flex items-center justify-center p-6 text-center">
                     <Card className="max-w-md border-2 border-primary shadow-2xl rounded-[2.5rem] overflow-hidden">
                         <CardHeader className="flex flex-col items-center gap-4 bg-primary text-white py-8">
@@ -125,12 +127,12 @@ export default function DashboardLayout({
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-3">
                                 <div className="flex items-start gap-2">
                                     <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
-                                    <p className="text-[10px] font-black text-slate-600 uppercase">Cómo habilitar:</p>
+                                    <p className="text-[10px] font-black text-slate-600 uppercase">Cómo desbloquear:</p>
                                 </div>
                                 <ul className="text-[9px] font-bold text-slate-500 uppercase list-disc pl-4 space-y-1">
-                                    <li>Pulsa el botón "REINTENTAR" y acepta el permiso.</li>
-                                    <li>Si lo bloqueaste: ve a la configuración de tu navegador (Chrome/Safari) y habilita "Ubicación" para este sitio.</li>
-                                    <li>Asegúrate de que el GPS de tu celular esté encendido.</li>
+                                    <li>Pulsa "REINTENTAR ACTIVACIÓN" y acepta el permiso de ubicación.</li>
+                                    <li>Si lo bloqueaste previamente: ve a la configuración de tu navegador y permite "Ubicación" para este sitio.</li>
+                                    <li>Asegúrate de no estar en "Modo Incógnito".</li>
                                 </ul>
                             </div>
 
@@ -141,6 +143,18 @@ export default function DashboardLayout({
                     </Card>
                 </div>
             )}
+
+            {/* ADVERTENCIA DE SEÑAL: No bloquea, pero avisa */}
+            {isSeller && isSignalWeak && (
+                <Alert className="mb-6 border-orange-500 bg-orange-50 shadow-md">
+                    <Satellite className="h-5 w-5 text-orange-600 animate-bounce" />
+                    <AlertTitle className="text-orange-800 font-black uppercase text-xs">Pérdida de Señal Satelital</AlertTitle>
+                    <AlertDescription className="text-orange-700 font-bold text-[10px] uppercase">
+                        SISTEMA OPERANDO EN MODO RESILIENTE. TUS GESTIONES SE SINCRONIZARÁN AUTOMÁTICAMENTE AL RECUPERAR COBERTURA.
+                    </AlertDescription>
+                </Alert>
+            )}
+
             {children}
           </main>
       </SidebarInset>
