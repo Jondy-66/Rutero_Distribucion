@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { updateLiveLocation, saveBreadcrumb } from '@/lib/firebase/firestore';
 
@@ -28,59 +28,64 @@ export function useTracker() {
     return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   };
 
+  const sendUpdate = useCallback((lat: number, lng: number, accuracy: number, heading: number | null, isEnabled: boolean, isDenied: boolean, isWeak: boolean) => {
+    if (!user) return;
+    updateLiveLocation(user.id, {
+        lat,
+        lng,
+        accuracy,
+        heading: heading || 0,
+        userName: user.name,
+        gpsEnabled: isEnabled,
+        isPermissionDenied: isDenied,
+        isSignalWeak: isWeak
+    }).catch(() => {});
+  }, [user]);
+
+  const handleGpsError = useCallback((error: GeolocationPositionError) => {
+    if (!user) return;
+    const isDenied = error.code === error.PERMISSION_DENIED;
+    const isWeak = error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT;
+
+    setIsPermissionDenied(isDenied);
+    setIsSignalWeak(isWeak);
+    setGpsEnabled(!isDenied && !isWeak);
+
+    // Reportar el estado a Firestore para el supervisor
+    updateLiveLocation(user.id, {
+        gpsEnabled: false,
+        isPermissionDenied: isDenied,
+        isSignalWeak: isWeak,
+        userName: user.name
+    }).catch(() => {});
+  }, [user]);
+
+  /**
+   * Función para disparar la petición de permiso y actualización inmediata.
+   */
+  const requestPermission = useCallback(() => {
+    if (!navigator.geolocation) return;
+    
+    navigator.geolocation.getCurrentPosition(
+        (position) => {
+            setIsPermissionDenied(false);
+            setIsSignalWeak(false);
+            setGpsEnabled(true);
+            
+            const { latitude: lat, longitude: lng, accuracy, heading } = position.coords;
+            lastPosition.current = { lat, lng };
+            sendUpdate(lat, lng, accuracy, heading, true, false, false);
+        },
+        handleGpsError,
+        { enableHighAccuracy: true, timeout: 15000 }
+    );
+  }, [handleGpsError, sendUpdate]);
+
   useEffect(() => {
     if (!user || user.role === 'Auditor' || user.role === 'Administrador') return;
 
-    const sendUpdate = (lat: number, lng: number, accuracy: number, heading: number | null, isEnabled: boolean, isDenied: boolean, isWeak: boolean) => {
-        updateLiveLocation(user.id, {
-            lat,
-            lng,
-            accuracy,
-            heading: heading || 0,
-            userName: user.name,
-            gpsEnabled: isEnabled,
-            isPermissionDenied: isDenied,
-            isSignalWeak: isWeak
-        }).catch(() => {});
-    };
-
-    const handleGpsError = (error: GeolocationPositionError) => {
-        const isDenied = error.code === error.PERMISSION_DENIED;
-        const isWeak = error.code === error.POSITION_UNAVAILABLE || error.code === error.TIMEOUT;
-
-        setIsPermissionDenied(isDenied);
-        setIsSignalWeak(isWeak);
-        setGpsEnabled(!isDenied && !isWeak);
-
-        // Reportar el estado a Firestore para el supervisor
-        updateLiveLocation(user.id, {
-            gpsEnabled: false,
-            isPermissionDenied: isDenied,
-            isSignalWeak: isWeak,
-            userName: user.name
-        }).catch(() => {});
-    };
-
-    const triggerImmediateUpdate = () => {
-        if (!navigator.geolocation) return;
-        
-        navigator.geolocation.getCurrentPosition(
-            (position) => {
-                setIsPermissionDenied(false);
-                setIsSignalWeak(false);
-                setGpsEnabled(true);
-                
-                const { latitude: lat, longitude: lng, accuracy, heading } = position.coords;
-                lastPosition.current = { lat, lng };
-                sendUpdate(lat, lng, accuracy, heading, true, false, false);
-            },
-            handleGpsError,
-            { enableHighAccuracy: true, timeout: 15000 }
-        );
-    };
-
     // 1. CAPTURA INICIAL
-    triggerImmediateUpdate();
+    requestPermission();
 
     // 2. MONITOREO DE MOVIMIENTO Y SEÑAL
     const watchId = navigator.geolocation.watchPosition(
@@ -110,13 +115,13 @@ export function useTracker() {
     // 3. HEARTBEAT RESILIENTE (CADA 2 MINUTOS)
     const heartbeatInterval = setInterval(() => {
         if (document.visibilityState === 'visible') {
-            triggerImmediateUpdate();
+            requestPermission();
         }
     }, 2 * 60 * 1000);
 
     // 4. ACTUALIZACIÓN POR RE-ENTRADA (MÁXIMA PRIORIDAD)
     const handleVisibilityChange = () => {
-        if (document.visibilityState === 'visible') triggerImmediateUpdate();
+        if (document.visibilityState === 'visible') requestPermission();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
@@ -129,7 +134,7 @@ export function useTracker() {
                     setGpsEnabled(false);
                 } else if (status.state === 'granted') {
                     setIsPermissionDenied(false);
-                    triggerImmediateUpdate();
+                    requestPermission();
                 }
             };
         });
@@ -140,7 +145,7 @@ export function useTracker() {
         clearInterval(heartbeatInterval);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [user]);
+  }, [user, handleGpsError, requestPermission]);
 
-  return { gpsEnabled, isPermissionDenied, isSignalWeak };
+  return { gpsEnabled, isPermissionDenied, isSignalWeak, requestPermission };
 }

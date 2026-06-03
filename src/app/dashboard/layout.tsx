@@ -34,8 +34,8 @@ export default function DashboardLayout({
   const router = useRouter();
   const { toast } = useToast();
   
-  // Obtener estados detallados del rastreador
-  const { gpsEnabled, isPermissionDenied, isSignalWeak } = useTracker();
+  // Obtener estados detallados del rastreador y la función para re-pedir permiso
+  const { gpsEnabled, isPermissionDenied, isSignalWeak, requestPermission } = useTracker();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -136,7 +136,7 @@ export default function DashboardLayout({
                                 </ul>
                             </div>
 
-                            <Button onClick={() => window.location.reload()} className="w-full h-14 font-black uppercase shadow-xl text-lg rounded-2xl group">
+                            <Button onClick={() => requestPermission()} className="w-full h-14 font-black uppercase shadow-xl text-lg rounded-2xl group">
                                 REINTENTAR ACTIVACIÓN
                             </Button>
                         </CardContent>
