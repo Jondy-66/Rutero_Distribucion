@@ -1,16 +1,18 @@
+
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '@/hooks/use-auth';
 import { updateLiveLocation, saveBreadcrumb } from '@/lib/firebase/firestore';
 
 /**
  * Hook de Rastreo Profesional Optimizado
- * Implementa Heartbeat de 2 minutos y actualización por cambio de visibilidad.
+ * Implementa Heartbeat de 2 minutos, detección de permisos y reporte de estado GPS.
  */
 export function useTracker() {
   const { user } = useAuth();
   const lastPosition = useRef<{ lat: number; lng: number } | null>(null);
+  const [gpsEnabled, setGpsEnabled] = useState<boolean>(true);
 
   const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
     const R = 6371e3; // Metros
@@ -31,29 +33,43 @@ export function useTracker() {
     if (!user || user.role === 'Auditor') return;
 
     if (!navigator.geolocation) {
+      setGpsEnabled(false);
       return;
     }
 
-    const sendUpdate = (lat: number, lng: number, accuracy: number, heading: number | null) => {
+    const sendUpdate = (lat: number, lng: number, accuracy: number, heading: number | null, isEnabled: boolean = true) => {
         updateLiveLocation(user.id, {
             lat,
             lng,
             accuracy,
             heading: heading || 0,
-            userName: user.name
+            userName: user.name,
+            gpsEnabled: isEnabled
         }).catch(() => {
             // Firestore maneja la persistencia offline automáticamente
         });
     };
 
+    const reportGpsDisabled = () => {
+        setGpsEnabled(false);
+        updateLiveLocation(user.id, {
+            gpsEnabled: false,
+            userName: user.name
+        }).catch(() => {});
+    };
+
     const triggerImmediateUpdate = () => {
         navigator.geolocation.getCurrentPosition(
             (position) => {
+                setGpsEnabled(true);
                 const { latitude: lat, longitude: lng, accuracy, heading } = position.coords;
                 lastPosition.current = { lat, lng };
-                sendUpdate(lat, lng, accuracy, heading);
+                sendUpdate(lat, lng, accuracy, heading, true);
             },
-            null,
+            (error) => {
+                console.error("GPS Error:", error.message);
+                reportGpsDisabled();
+            },
             { enableHighAccuracy: true, timeout: 10000 }
         );
     };
@@ -64,6 +80,7 @@ export function useTracker() {
     // 2. MONITOREO DE MOVIMIENTO CONTINUO
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
+        setGpsEnabled(true);
         const { latitude: lat, longitude: lng, accuracy, heading } = position.coords;
 
         // Filtro de ruido: Ignorar si la precisión es muy mala (> 45m)
@@ -82,14 +99,17 @@ export function useTracker() {
         // Si hubo movimiento real (> 25 metros)
         if (!lastPosition.current || distance > 25) {
           lastPosition.current = { lat, lng };
-          sendUpdate(lat, lng, accuracy, heading);
+          sendUpdate(lat, lng, accuracy, heading, true);
           
           if (distance > 25) {
               saveBreadcrumb(user.id, { lat, lng }).catch(() => {});
           }
         }
       },
-      () => {},
+      (error) => {
+          console.error("GPS Watch Error:", error.message);
+          reportGpsDisabled();
+      },
       {
         enableHighAccuracy: true,
         maximumAge: 10000,
@@ -100,7 +120,7 @@ export function useTracker() {
     // 3. HEARTBEAT ROBUSTO (CADA 2 MINUTOS)
     const heartbeatInterval = setInterval(() => {
         if (lastPosition.current) {
-            sendUpdate(lastPosition.current.lat, lastPosition.current.lng, 10, 0);
+            sendUpdate(lastPosition.current.lat, lastPosition.current.lng, 10, 0, true);
         } else {
             triggerImmediateUpdate();
         }
@@ -121,5 +141,5 @@ export function useTracker() {
     };
   }, [user]);
 
-  return null;
+  return { gpsEnabled };
 }

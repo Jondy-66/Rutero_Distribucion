@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -18,7 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { User, Settings, LogOut, Bell, CheckCheck, Wifi, WifiOff } from 'lucide-react';
+import { User, Settings, LogOut, Bell, CheckCheck, Wifi, WifiOff, Satellite, MapPinOff } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { handleSignOut } from '@/lib/firebase/auth';
 import { useRouter } from 'next/navigation';
@@ -27,12 +28,15 @@ import type { Notification } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { db } from '@/lib/firebase/config';
+import { doc, onSnapshot } from 'firebase/firestore';
 
 export function UserNav() {
   const { user, notifications, unreadCount, markNotificationAsRead, markAllNotificationsAsRead } = useAuth();
   const router = useRouter();
   const { toast } = useToast();
   const [isOnline, setIsOnline] = useState(true);
+  const [isGpsActive, setIsGpsActive] = useState(true);
 
   useEffect(() => {
     const checkStatus = () => setIsOnline(navigator.onLine);
@@ -44,6 +48,17 @@ export function UserNav() {
       window.removeEventListener('offline', checkStatus);
     };
   }, []);
+
+  // Listener en tiempo real para el estado GPS reportado por este usuario
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(doc(db, 'active_locations', user.id), (snap) => {
+        if (snap.exists()) {
+            setIsGpsActive(snap.data().gpsEnabled !== false);
+        }
+    });
+    return () => unsub();
+  }, [user]);
   
   const onSignOut = async () => {
     await handleSignOut();
@@ -62,12 +77,22 @@ export function UserNav() {
 
   return (
     <div className="flex items-center gap-2 sm:gap-4">
-      <div className={cn(
-          "flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] font-bold uppercase transition-all duration-300",
-          isOnline ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
-        )}>
-        <div className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-green-600 animate-pulse" : "bg-red-600")} />
-        <span className="hidden xs:inline-block">{isOnline ? 'En línea' : 'Sin red'}</span>
+      <div className="flex items-center gap-2">
+        <div className={cn(
+            "flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] font-bold uppercase transition-all duration-300",
+            isOnline ? "bg-green-50 text-green-700 border-green-200" : "bg-red-50 text-red-700 border-red-200"
+          )}>
+          <div className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-green-600 animate-pulse" : "bg-red-600")} />
+          <span className="hidden xs:inline-block">{isOnline ? 'En línea' : 'Sin red'}</span>
+        </div>
+
+        <div className={cn(
+            "flex items-center gap-1.5 px-2 py-1 rounded-md border text-[10px] font-bold uppercase transition-all duration-300",
+            isGpsActive ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-orange-50 text-orange-700 border-orange-200 border-dashed"
+          )}>
+          {isGpsActive ? <Satellite className="h-3 w-3 animate-pulse" /> : <MapPinOff className="h-3 w-3 text-orange-600" />}
+          <span className="hidden xs:inline-block">{isGpsActive ? 'GPS Activo' : 'GPS Inactivo'}</span>
+        </div>
       </div>
 
       <Popover>

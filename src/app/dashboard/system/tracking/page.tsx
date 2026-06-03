@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -6,7 +7,7 @@ import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/hooks/use-auth';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ShieldCheck, MapPin, Activity, Signal, SignalLow, SignalHigh, Users, Clock, WifiOff, RefreshCcw } from 'lucide-react';
+import { ShieldCheck, MapPin, Activity, Signal, SignalLow, SignalHigh, Users, Clock, WifiOff, RefreshCcw, CheckCircle2, XCircle, MapPinOff, Satellite } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { db } from '@/lib/firebase/config';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -30,6 +31,7 @@ export default function TrackingPage() {
 
     useEffect(() => {
         setLastSync(new Date());
+        // Listener real-time reforzado para estado real de señales
         const unsub = onSnapshot(collection(db, 'active_locations'), (snap) => {
             const locs = snap.docs.map(d => ({
                 ...d.data(),
@@ -67,11 +69,13 @@ export default function TrackingPage() {
             }
             
             const isOnline = lastSignalDate && isValid(lastSignalDate) && (now - lastSignalDate.getTime()) < offlineThreshold;
+            const hasGpsPermission = location?.gpsEnabled !== false;
             
             return {
                 user: u,
                 lastSignal: lastSignalDate,
                 isOnline: !!isOnline,
+                hasGpsPermission,
                 accuracy: location?.accuracy || 0,
                 lat: location?.lat,
                 lng: location?.lng,
@@ -91,6 +95,7 @@ export default function TrackingPage() {
     }
 
     const onlineCount = gpsStatusData.filter(d => d.isOnline).length;
+    const permissionDeniedCount = gpsStatusData.filter(d => !d.hasGpsPermission).length;
 
     return (
         <div className="space-y-6 max-w-full overflow-hidden">
@@ -133,13 +138,22 @@ export default function TrackingPage() {
                                     </div>
                                     <SignalHigh className="h-8 w-8 text-green-600 opacity-30" />
                                 </div>
+                                {permissionDeniedCount > 0 && (
+                                    <div className="p-4 bg-orange-50 rounded-2xl border-2 border-orange-100 flex items-center justify-between">
+                                        <div className="space-y-0.5">
+                                            <p className="text-[10px] font-black uppercase text-orange-800">GPS Bloqueados</p>
+                                            <p className="text-2xl font-black text-orange-900">{permissionDeniedCount}</p>
+                                        </div>
+                                        <MapPinOff className="h-8 w-8 text-orange-600 opacity-30" />
+                                    </div>
+                                )}
                                 <div className="p-3 bg-blue-50 rounded-xl border-2 border-blue-100">
                                     <div className="flex items-center gap-2">
                                         <Activity className="h-3 w-3 text-blue-600" />
-                                        <span className="text-[10px] font-black uppercase text-blue-800">Heartbeat Optimizado</span>
+                                        <span className="text-[10px] font-black uppercase text-blue-800">Heartbeat Real-Time</span>
                                     </div>
                                     <p className="text-[9px] text-blue-600 font-bold uppercase mt-1 leading-tight italic">
-                                        FRECUENCIA DE REPORTE: CADA 2 MINUTOS. TOLERANCIA DE CONEXIÓN: 12 MINUTOS.
+                                        FRECUENCIA DE REPORTE: CADA 2 MINUTOS. MONITOREO DE PERMISOS ACTIVO.
                                     </p>
                                 </div>
                             </CardContent>
@@ -171,7 +185,7 @@ export default function TrackingPage() {
                                         <Signal className="h-6 w-6 text-primary" />
                                         Auditoría de Disponibilidad GPS
                                     </CardTitle>
-                                    <CardDescription className="text-xs font-bold uppercase text-slate-500 mt-1">Monitoreo de latidos de posición de toda la fuerza operativa.</CardDescription>
+                                    <CardDescription className="text-xs font-bold uppercase text-slate-500 mt-1">Monitoreo de latidos de posición y permisos de toda la fuerza operativa.</CardDescription>
                                 </div>
                             </div>
                         </CardHeader>
@@ -182,6 +196,7 @@ export default function TrackingPage() {
                                         <TableRow className="hover:bg-transparent">
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950 h-14 pl-8">Vendedor / Ejecutivo</TableHead>
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950">Estado GPS</TableHead>
+                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Permiso Geofencing</TableHead>
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950">Recibido hace</TableHead>
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950">Precisión</TableHead>
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950 pr-8">Última Dirección</TableHead>
@@ -217,6 +232,19 @@ export default function TrackingPage() {
                                                         <div className="flex items-center gap-2">
                                                             <WifiOff className="h-3.5 w-3.5 text-slate-400" />
                                                             <span className="text-[10px] font-black text-slate-400 uppercase">DESCONECTADO</span>
+                                                        </div>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {data.hasGpsPermission ? (
+                                                        <div className="flex items-center gap-1.5 text-blue-600">
+                                                            <Satellite className="h-3.5 w-3.5" />
+                                                            <span className="text-[10px] font-black uppercase">PERMITIDO</span>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-1.5 text-red-600">
+                                                            <MapPinOff className="h-3.5 w-3.5" />
+                                                            <span className="text-[10px] font-black uppercase">BLOQUEADO</span>
                                                         </div>
                                                     )}
                                                 </TableCell>

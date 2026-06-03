@@ -23,6 +23,7 @@ export type ActiveLocation = {
   accuracy?: number;
   address_text?: string;
   is_out_of_route?: boolean;
+  gpsEnabled?: boolean;
 };
 
 export type Zone = {
