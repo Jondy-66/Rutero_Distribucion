@@ -30,7 +30,8 @@ export function useTracker() {
   };
 
   useEffect(() => {
-    if (!user || user.role === 'Auditor') return;
+    // Los Auditores y Administradores no necesitan ser rastreados
+    if (!user || user.role === 'Auditor' || user.role === 'Administrador') return;
 
     if (!navigator.geolocation) {
       setGpsEnabled(false);
@@ -70,7 +71,7 @@ export function useTracker() {
                 console.error("GPS Error:", error.message);
                 reportGpsDisabled();
             },
-            { enableHighAccuracy: true, timeout: 10000 }
+            { enableHighAccuracy: true, timeout: 15000 }
         );
     };
 
@@ -83,8 +84,8 @@ export function useTracker() {
         setGpsEnabled(true);
         const { latitude: lat, longitude: lng, accuracy, heading } = position.coords;
 
-        // Filtro de ruido: Ignorar si la precisión es muy mala (> 45m)
-        if (accuracy > 45) return;
+        // Filtro de ruido: Ignorar si la precisión es muy mala (> 60m)
+        if (accuracy > 60) return;
 
         let distance = 0;
         if (lastPosition.current) {
@@ -96,7 +97,7 @@ export function useTracker() {
           );
         }
 
-        // Si hubo movimiento real (> 25 metros)
+        // Si hubo movimiento real (> 25 metros) o es el primer punto
         if (!lastPosition.current || distance > 25) {
           lastPosition.current = { lat, lng };
           sendUpdate(lat, lng, accuracy, heading, true);
@@ -112,12 +113,13 @@ export function useTracker() {
       },
       {
         enableHighAccuracy: true,
-        maximumAge: 10000,
+        maximumAge: 5000,
         timeout: 20000,
       }
     );
 
     // 3. HEARTBEAT ROBUSTO (CADA 2 MINUTOS)
+    // Esto asegura que el estado sea "EN LÍNEA" constantemente mientras la app esté abierta
     const heartbeatInterval = setInterval(() => {
         if (lastPosition.current) {
             sendUpdate(lastPosition.current.lat, lastPosition.current.lng, 10, 0, true);

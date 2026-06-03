@@ -15,14 +15,13 @@ import {
 import { DashboardNav } from '@/components/dashboard-nav';
 import { UserNav } from '@/components/user-nav';
 import { Button } from '@/components/ui/button';
-import { Settings, LogOut, Route, MapPinOff, AlertCircle } from 'lucide-react';
+import { Settings, LogOut, Route, MapPinOff, AlertCircle, Info } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { handleSignOut } from '@/lib/firebase/auth';
 import { useToast } from '@/hooks/use-toast';
-import { LocationTracker } from '@/components/location-tracker';
 import { useTracker } from '@/hooks/use-tracker';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export default function DashboardLayout({
   children,
@@ -61,6 +60,7 @@ export default function DashboardLayout({
     );
   }
 
+  // Los roles operativos (Vendedor y Telemercaderista) tienen GPS obligatorio
   const isSeller = user.role === 'Usuario' || user.role === 'Telemercaderista';
 
   return (
@@ -101,7 +101,7 @@ export default function DashboardLayout({
                 {isSeller && !gpsEnabled && (
                     <div className="flex items-center gap-2 text-orange-600 bg-orange-50 px-3 py-1 rounded-full border border-orange-200 animate-pulse">
                         <MapPinOff className="h-4 w-4" />
-                        <span className="text-[10px] font-black uppercase">¡GPS OBLIGATORIO DESACTIVADO!</span>
+                        <span className="text-[10px] font-black uppercase">GPS OBLIGATORIO DESACTIVADO</span>
                     </div>
                 )}
             </div>
@@ -109,23 +109,33 @@ export default function DashboardLayout({
           </header>
           <main className="p-4 sm:p-6 relative">
             {isSeller && !gpsEnabled && (
-                <div className="absolute inset-0 z-50 bg-background/90 backdrop-blur-md flex items-center justify-center p-6 text-center">
-                    <Card className="max-w-md border-2 border-orange-500 shadow-2xl rounded-[2rem]">
-                        <CardHeader className="flex flex-col items-center gap-4">
-                            <div className="bg-orange-100 p-4 rounded-full">
-                                <AlertCircle className="h-12 w-12 text-orange-600" />
+                <div className="fixed inset-0 z-[100] bg-background/95 backdrop-blur-xl flex items-center justify-center p-6 text-center">
+                    <Card className="max-w-md border-2 border-primary shadow-2xl rounded-[2.5rem] overflow-hidden">
+                        <CardHeader className="flex flex-col items-center gap-4 bg-primary text-white py-8">
+                            <div className="bg-white/20 p-4 rounded-full">
+                                <AlertCircle className="h-12 w-12 text-white" />
                             </div>
-                            <CardTitle className="text-2xl font-black uppercase text-slate-950">Acceso Restringido</CardTitle>
+                            <CardTitle className="text-2xl font-black uppercase tracking-tighter">Acceso Bloqueado</CardTitle>
                         </CardHeader>
-                        <CardContent className="space-y-4">
-                            <p className="font-bold text-slate-600 uppercase text-xs leading-relaxed">
-                                LA GEOLOCALIZACIÓN ES UN REQUISITO <span className="text-orange-600 font-black">OBLIGATORIO</span> PARA OPERAR EN RUTERO.
+                        <CardContent className="space-y-6 p-8">
+                            <p className="font-bold text-slate-800 uppercase text-sm leading-relaxed">
+                                LA GEOLOCALIZACIÓN ES UN REQUISITO <span className="text-primary font-black underline">OBLIGATORIO</span> PARA OPERAR EN EL RUTERO.
                             </p>
-                            <p className="text-[10px] font-medium text-slate-500 uppercase">
-                                Por favor, habilita los permisos de ubicación en la configuración de tu navegador y dispositivo para continuar.
-                            </p>
-                            <Button onClick={() => window.location.reload()} className="w-full h-12 font-black uppercase shadow-lg mt-4">
-                                REINTENTAR AHORA
+                            
+                            <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 text-left space-y-3">
+                                <div className="flex items-start gap-2">
+                                    <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                                    <p className="text-[10px] font-black text-slate-600 uppercase">Cómo habilitar:</p>
+                                </div>
+                                <ul className="text-[9px] font-bold text-slate-500 uppercase list-disc pl-4 space-y-1">
+                                    <li>Pulsa el botón "REINTENTAR" y acepta el permiso.</li>
+                                    <li>Si lo bloqueaste: ve a la configuración de tu navegador (Chrome/Safari) y habilita "Ubicación" para este sitio.</li>
+                                    <li>Asegúrate de que el GPS de tu celular esté encendido.</li>
+                                </ul>
+                            </div>
+
+                            <Button onClick={() => window.location.reload()} className="w-full h-14 font-black uppercase shadow-xl text-lg rounded-2xl group">
+                                REINTENTAR ACTIVACIÓN
                             </Button>
                         </CardContent>
                     </Card>

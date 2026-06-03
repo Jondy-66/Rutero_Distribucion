@@ -48,8 +48,17 @@ export default function TrackingPage() {
     const gpsStatusData = useMemo(() => {
         if (!allSystemUsers) return [];
         
-        const trackableUsers = allSystemUsers.filter(u => u.role !== 'Administrador');
+        // Filtrar usuarios únicos para evitar duplicados si la data de auth está sucia
+        const uniqueUsersMap = new Map();
+        allSystemUsers.forEach(u => {
+            if (u.role !== 'Administrador' && !uniqueUsersMap.has(u.id)) {
+                uniqueUsersMap.set(u.id, u);
+            }
+        });
+        const trackableUsers = Array.from(uniqueUsersMap.values());
+
         const now = Date.now();
+        // Umbral de 12 minutos para ser considerado "En Línea"
         const offlineThreshold = 12 * 60 * 1000; 
 
         return trackableUsers.map(u => {
@@ -133,7 +142,7 @@ export default function TrackingPage() {
                             <CardContent className="space-y-4">
                                 <div className="p-4 bg-green-50 rounded-2xl border-2 border-green-100 flex items-center justify-between">
                                     <div className="space-y-0.5">
-                                        <p className="text-[10px] font-black uppercase text-green-800">Señales Activas</p>
+                                        <p className="text-[10px] font-black uppercase text-green-800">Ejecutivos En Línea</p>
                                         <p className="text-2xl font-black text-green-900">{onlineCount}</p>
                                     </div>
                                     <SignalHigh className="h-8 w-8 text-green-600 opacity-30" />
@@ -195,9 +204,9 @@ export default function TrackingPage() {
                                     <TableHeader className="bg-slate-100/50">
                                         <TableRow className="hover:bg-transparent">
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950 h-14 pl-8">Vendedor / Ejecutivo</TableHead>
-                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Estado GPS</TableHead>
-                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Permiso Geofencing</TableHead>
-                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Recibido hace</TableHead>
+                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Estado Señal</TableHead>
+                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Permiso Geolocalización</TableHead>
+                                            <TableHead className="font-black uppercase text-[10px] text-slate-950">Último Reporte</TableHead>
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950">Precisión</TableHead>
                                             <TableHead className="font-black uppercase text-[10px] text-slate-950 pr-8">Última Dirección</TableHead>
                                         </TableRow>
@@ -206,7 +215,7 @@ export default function TrackingPage() {
                                         {gpsStatusData.map((data) => (
                                             <TableRow key={data.user.id} className={cn(
                                                 "hover:bg-slate-50/80 transition-colors",
-                                                data.isOnline ? "bg-green-50/5" : "opacity-70"
+                                                data.isOnline ? "bg-green-50/5" : "opacity-80"
                                             )}>
                                                 <TableCell className="pl-8 py-5">
                                                     <div className="flex items-center gap-3">
@@ -257,7 +266,7 @@ export default function TrackingPage() {
                                                     {data.isOnline ? (
                                                         <Badge className={cn(
                                                             "font-black text-[10px] uppercase",
-                                                            data.accuracy < 20 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
+                                                            data.accuracy < 25 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"
                                                         )}>
                                                             {data.accuracy.toFixed(0)}m
                                                         </Badge>
