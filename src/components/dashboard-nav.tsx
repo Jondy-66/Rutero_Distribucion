@@ -63,9 +63,9 @@ export function DashboardNav() {
       return user.permissions.includes(id);
     }
     const roleDefaults: Record<string, string[]> = {
-      'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes', 'recover-clients'],
-      'Usuario': ['dashboard', 'clients', 'map', 'routes'],
-      'Telemercaderista': ['dashboard', 'clients', 'map', 'routes'],
+      'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes', 'recover-clients', 'crm'],
+      'Usuario': ['dashboard', 'clients', 'map', 'routes', 'crm'],
+      'Telemercaderista': ['dashboard', 'clients', 'map', 'routes', 'crm'],
       'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes'],
     };
     return (roleDefaults[user.role] || []).includes(id);
@@ -264,6 +264,47 @@ export function DashboardNav() {
                         </SidebarMenuSubButton>
                     </SidebarMenuItem>
                  )}
+              </SidebarMenuSub>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
+
+        {hasPerm('crm') && (
+          <Collapsible open={isCrmOpen} onOpenChange={setIsCrmOpen}>
+            <SidebarMenuItem>
+              <CollapsibleTrigger asChild>
+                <SidebarMenuButton tooltip="CRM">
+                  <Phone className="h-5 w-5" />
+                  <span>CRM</span>
+                </SidebarMenuButton>
+              </CollapsibleTrigger>
+            </SidebarMenuItem>
+            <CollapsibleContent>
+              <SidebarMenuSub>
+                <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/prediction'}>
+                      <Link href="/dashboard/crm/prediction">
+                        <Wand2 />
+                        <span>Cola Inteligente</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/management'}>
+                      <Link href="/dashboard/crm/management">
+                        <ClipboardList />
+                        <span>Gestión de Llamada</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/phone-base'}>
+                      <Link href="/dashboard/crm/phone-base">
+                        <Database />
+                        <span>Base Telefónica</span>
+                      </Link>
+                    </SidebarMenuSubButton>
+                </SidebarMenuSubItem>
               </SidebarMenuSub>
             </CollapsibleContent>
           </Collapsible>

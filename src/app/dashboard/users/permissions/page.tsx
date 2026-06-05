@@ -27,15 +27,16 @@ const modules = [
     { id: 'audit-detail', label: 'Detalle de Auditoría (Desglose Jornada)' },
     { id: 'tracking', label: 'Rastreo GPS en Vivo (Supervisión)' },
     { id: 'routes', label: 'Gestión de Rutas' },
+    { id: 'crm', label: 'Módulo CRM (Telemercadeo)' },
     { id: 'users', label: 'Administración de Usuarios' },
     { id: 'recover-clients', label: 'RECUPERAR CLIENTES (Rescate de Datos)' },
 ];
 
 const defaultPermissionsByRole: Record<User['role'], string[]> = {
-    'Administrador': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'locations', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes', 'users', 'recover-clients'],
-    'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes', 'recover-clients'],
-    'Usuario': ['dashboard', 'clients', 'map', 'routes'],
-    'Telemercaderista': ['dashboard', 'clients', 'map', 'routes'],
+    'Administrador': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'locations', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes', 'crm', 'users', 'recover-clients'],
+    'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes', 'crm', 'recover-clients'],
+    'Usuario': ['dashboard', 'clients', 'map', 'routes', 'crm'],
+    'Telemercaderista': ['dashboard', 'clients', 'map', 'routes', 'crm'],
     'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes'],
 };
 
