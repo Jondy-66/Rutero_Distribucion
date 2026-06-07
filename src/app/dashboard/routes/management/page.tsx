@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
@@ -159,6 +160,45 @@ function RouteManagementContent() {
     return allRoutes.find(r => r.id === rid);
   }, [selectedRouteId, allRoutes, searchParams]);
 
+  // LÓGICA DE CIERRE AUTOMÁTICO (Viernes 19:30)
+  useEffect(() => {
+    if (!selectedRoute || selectedRoute.status !== 'En Progreso' || isAdmin) return;
+
+    const checkAutoClosure = async () => {
+      const now = new Date();
+      const isFriday = now.getDay() === 5;
+      const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+      const isPastClosureTime = now.getHours() > 19 || (now.getHours() === 19 && now.getMinutes() >= 30);
+
+      // Si es viernes noche o fin de semana, cerrar la ruta definitivamente
+      if ((isFriday && isPastClosureTime) || isWeekend) {
+        setIsSaving(true);
+        try {
+          const sanitized = sanitizeClients(selectedRoute.clients);
+          await updateRoute(selectedRoute.id, { 
+            status: 'Completada', 
+            clients: sanitized,
+            supervisorObservation: 'Cierre automático por finalización de semana (Viernes 19:30).' 
+          });
+          toast({ 
+            title: "Cierre de Semana", 
+            description: "Tu ruta ha sido completada automáticamente. Gestiona tu nueva ruta de la semana.",
+          });
+          setSelectedRouteId(undefined);
+          setActiveOriginalIndex(null);
+        } catch (e) {
+          console.error("Auto-closure error:", e);
+        } finally {
+          setIsSaving(false);
+        }
+      }
+    };
+
+    checkAutoClosure();
+    const interval = setInterval(checkAutoClosure, 60000);
+    return () => clearInterval(interval);
+  }, [selectedRoute, isAdmin, toast]);
+
   const activeClient = useMemo(() => {
     return activeOriginalIndex !== null && selectedRoute?.clients[activeOriginalIndex] 
         ? selectedRoute.clients[activeOriginalIndex] 
@@ -188,7 +228,6 @@ function RouteManagementContent() {
     }
   }, [selectableRoutes, selectedRouteId]);
 
-  // OPTIMIZACIÓN CRÍTICA: Crear un mapa de clientes para acceso O(1)
   const clientsLookupMap = useMemo(() => {
     const map = new Map<string, Client>();
     availableClients.forEach(c => {
@@ -203,7 +242,6 @@ function RouteManagementContent() {
 
     return (selectedRoute.clients || [])
         .map((c, index) => {
-            // Usar el mapa optimizado en lugar de .find()
             const d = clientsLookupMap.get(String(c.ruc).trim());
             return { ...c, originalIndex: index, direccion: d?.direccion || 'SIN DIRECCIÓN' };
         })

@@ -7,7 +7,8 @@ const adminApp = initializeAdminApp();
 
 /**
  * @fileoverview Endpoint de sincronización forzada para Cron Jobs.
- * OBJETIVO PRINCIPAL: Evitar hibernación de la API de Render (Keep-Alive).
+ * OBJETIVO PRINCIPAL: Evitar hibernación de la API de Render (Keep-Alive)
+ * y realizar mantenimiento de cierre de rutas semanal.
  */
 export async function GET(request: Request) {
   // 1. Verificación de Seguridad
@@ -61,6 +62,8 @@ export async function GET(request: Request) {
     const token = process.env.API_PREDICCION_TOKEN;
     if (!token) throw new Error("Token de API externa no configurado.");
 
+    const report = [];
+
     // 4. ACCIÓN KEEP-ALIVE: Ping a la API para evitar hibernación
     const baseUrl = "https://api-distribucion-rutas.onrender.com";
     let apiAwake = false;
@@ -71,14 +74,37 @@ export async function GET(request: Request) {
         console.warn("Fallo al despertar API (Keep-Alive):", e);
     }
 
-    // 5. Obtener ejecutivos activos para sincronización de datos
+    // 5. CIERRE AUTOMÁTICO DE RUTAS (Viernes 19:30+)
+    // Esta lógica asegura que las rutas "En Progreso" se cierren al finalizar la semana.
+    const isFriday = now.getDay() === 5;
+    const isWeekend = now.getDay() === 0 || now.getDay() === 6;
+    const isPastClosureTime = now.getHours() > 19 || (now.getHours() === 19 && now.getMinutes() >= 30);
+
+    if ((isFriday && isPastClosureTime) || isWeekend) {
+      const routesSnapshot = await db.collection('routes')
+        .where('status', '==', 'En Progreso')
+        .get();
+
+      if (!routesSnapshot.empty) {
+        const batch = db.batch();
+        routesSnapshot.docs.forEach(doc => {
+          batch.update(doc.ref, { 
+            status: 'Completada', 
+            supervisorObservation: 'Cierre automático de fin de semana (Mantenimiento Viernes 19:30).' 
+          });
+        });
+        await batch.commit();
+        report.push({ type: 'AUTO_ROUTE_CLOSURE', count: routesSnapshot.size });
+      }
+    }
+
+    // 6. Obtener ejecutivos activos para sincronización de datos
     const usersSnapshot = await db.collection('users')
       .where('role', 'in', ['Usuario', 'Telemercaderista'])
       .where('status', '==', 'active')
       .get();
 
     const ejecutivos = usersSnapshot.docs.map(doc => doc.data().name);
-    const report = [];
 
     if (ejecutivos.length > 0) {
         // Ejecutar sincronización con Backoff de 1s
@@ -109,7 +135,7 @@ export async function GET(request: Request) {
         }
     }
 
-    // 6. Registrar log y actualizar última ejecución
+    // 7. Registrar log y actualizar última ejecución
     await db.collection('system_logs').add({
       type: 'CRON_REFRESH',
       timestamp: now,
