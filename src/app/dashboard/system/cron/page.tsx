@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/hooks/use-auth';
 import { getCronConfig, updateCronConfig, getSystemLogs } from '@/lib/firebase/firestore';
 import type { CronConfig, SystemLog } from '@/lib/types';
-import { Clock, Calendar, Power, Save, LoaderCircle, History, ShieldCheck, AlertCircle, Timer, Activity, Zap, Server, CheckCircle2, Wifi } from 'lucide-react';
+import { Clock, Calendar, Power, Save, LoaderCircle, History, ShieldCheck, AlertCircle, Timer, Activity, Zap, Server, CheckCircle2, Wifi, Copy, ExternalLink, Terminal } from 'lucide-react';
 import { format, differenceInMinutes, isValid } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
@@ -63,16 +63,15 @@ export default function CronJobsPage() {
   }, []);
 
   const systemHealth = useMemo(() => {
-    if (logs.length === 0) return { status: 'Unknown', color: 'text-slate-400', label: 'Sin Datos' };
+    if (logs.length === 0) return { status: 'Unknown', color: 'text-slate-400', label: 'Sin Datos', diff: 0 };
     
     const lastLog = logs[0];
     const lastDate = lastLog.timestamp instanceof Date ? lastLog.timestamp : new Date(lastLog.timestamp);
     
-    if (!isValid(lastDate)) return { status: 'Error', color: 'text-red-500', label: 'Error de Fecha' };
+    if (!isValid(lastDate)) return { status: 'Error', color: 'text-red-500', label: 'Error de Fecha', diff: 0 };
 
     const diff = differenceInMinutes(new Date(), lastDate);
     
-    // Si el último barrido fue hace menos de 20 minutos, el sistema está "Despierto"
     if (diff <= 20) return { status: 'Healthy', color: 'text-green-500', label: 'Sincronizado (API Awake)', diff };
     if (diff <= 60) return { status: 'Warning', color: 'text-orange-500', label: 'API en Riesgo de Hibernación', diff };
     return { status: 'Critical', color: 'text-red-600', label: 'API Hibernada (Desconectada)', diff };
@@ -101,6 +100,11 @@ export default function CronJobsPage() {
     }
   };
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text);
+    toast({ title: "Copiado", description: "Texto copiado al portapapeles." });
+  };
+
   if (user?.role !== 'Administrador') {
     return <PageHeader title="Acceso Denegado" description="Solo administradores pueden gestionar los cron jobs." />;
   }
@@ -120,7 +124,7 @@ export default function CronJobsPage() {
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2 space-y-6">
-          {/* INDICADOR VISUAL DE SALUD (NUEVO) */}
+          {/* INDICADOR VISUAL DE SALUD */}
           <Card className="bg-slate-950 text-white border-none shadow-2xl overflow-hidden rounded-[2rem]">
             <CardHeader className="pb-2 border-b border-white/10">
                 <div className="flex justify-between items-center">
@@ -140,7 +144,7 @@ export default function CronJobsPage() {
                         <div>
                             <p className="text-[10px] font-black uppercase text-slate-500 tracking-tighter">Estado de API Render</p>
                             <h4 className={cn("text-lg font-black uppercase leading-tight", systemHealth.color)}>{systemHealth.label}</h4>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Último contacto: {systemHealth.diff || 0} min. ago</p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Último contacto: {systemHealth.diff} min. ago</p>
                         </div>
                     </div>
                     <div className="space-y-1.5">
@@ -171,11 +175,54 @@ export default function CronJobsPage() {
             </CardContent>
           </Card>
 
+          {/* INSTRUCCIONES TÉCNICAS PARA EL USUARIO */}
+          <Card className="border-2 border-primary/20 shadow-xl rounded-2xl overflow-hidden bg-slate-50">
+            <CardHeader className="bg-primary/5 pb-4">
+                <CardTitle className="text-sm font-black uppercase flex items-center gap-2 text-primary">
+                    <Terminal className="h-4 w-4" />
+                    Configuración del Disparador Externo
+                </CardTitle>
+                <CardDescription className="text-[10px] font-bold uppercase text-slate-500">
+                    Copia estos datos en tu servicio de Cron (ej. cron-job.org) para evitar la hibernación.
+                </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-6 space-y-4">
+                <div className="space-y-2">
+                    <Label className="text-[9px] font-black uppercase text-slate-500">URL del Endpoint (Cada 14 minutos)</Label>
+                    <div className="flex gap-2">
+                        <Input 
+                            readOnly 
+                            value={`${window.location.origin}/api/cron/refresh`} 
+                            className="font-mono text-[10px] bg-white border-2" 
+                        />
+                        <Button size="icon" variant="outline" onClick={() => copyToClipboard(`${window.location.origin}/api/cron/refresh`)}>
+                            <Copy className="h-4 w-4" />
+                        </Button>
+                    </div>
+                </div>
+                <div className="space-y-2">
+                    <Label className="text-[9px] font-black uppercase text-slate-500">Cabecera de Autorización (Header)</Label>
+                    <div className="p-3 bg-slate-900 rounded-lg font-mono text-[10px] text-green-400 border-l-4 border-green-500 flex justify-between items-center">
+                        <span>Authorization: Bearer [TU_SECRETO]</span>
+                        <Badge variant="outline" className="text-green-400 border-green-400 text-[8px]">Header Requerido</Badge>
+                    </div>
+                </div>
+                <div className="pt-2">
+                    <Button variant="link" asChild className="p-0 h-auto text-[10px] font-black uppercase text-primary">
+                        <a href="https://cron-job.org" target="_blank" rel="noopener noreferrer" className="flex items-center gap-1">
+                            Ir a Cron-Job.org (Recomendado)
+                            <ExternalLink className="h-3 w-3" />
+                        </a>
+                    </Button>
+                </div>
+            </CardContent>
+          </Card>
+
           <Card className="shadow-xl border-t-4 border-t-primary rounded-2xl overflow-hidden">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 font-black uppercase text-slate-950 text-base">
                 <Power className={config?.enabled ? "text-green-600" : "text-destructive"} />
-                Configuración del Barrido
+                Configuración del Barrido Interno
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-8">
