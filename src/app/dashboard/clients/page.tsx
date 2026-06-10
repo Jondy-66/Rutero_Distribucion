@@ -16,7 +16,7 @@ import { deleteClient } from '@/lib/firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { writeBatch, doc, collection } from 'firebase/firestore';
 import type { Client } from '@/lib/types';
-import { PlusCircle, UploadCloud, Search, MoreHorizontal, Download, Users, CheckCircle2, ArrowRightLeft, LoaderCircle } from 'lucide-react';
+import { PlusCircle, UploadCloud, Search, MoreHorizontal, Download, Users, CheckCircle2, ArrowRightLeft, LoaderCircle, FileSpreadsheet } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import {
   DropdownMenu,
@@ -37,7 +37,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -68,6 +68,7 @@ export default function ClientsPage() {
   const [isUploadFinished, setIsUploadFinished] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const migrateFileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   // Estados para Migración
@@ -75,6 +76,8 @@ export default function ClientsPage() {
   const [sourceExecutive, setSourceExecutive] = useState('');
   const [targetExecutive, setTargetExecutive] = useState('');
   const [isMigrating, setIsMigrating] = useState(false);
+  const [migrationMode, setMigrationMode] = useState<'manual' | 'file'>('manual');
+  const [migrationFile, setMigrationFile] = useState<File | null>(null);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -297,6 +300,112 @@ export default function ClientsPage() {
     }
   };
 
+  const processFileMigration = async (data: ClientCsvData[], fields: string[] | undefined) => {
+    const requiredColumns = ['ruc', 'ejecutivo_nuevo'];
+    const headers = (fields || []).map(h => h.toString().trim().toLowerCase().replace(/ /g, '_'));
+    const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+
+    if (missingColumns.length > 0) {
+      toast({
+        title: 'Error de formato',
+        description: `Faltan las siguientes columnas en el archivo: Ruc, Ejecutivo Nuevo.`,
+        variant: 'destructive',
+      });
+      setIsMigrating(false);
+      return;
+    }
+
+    const normalizedData = data.map(row => {
+        const newRow: any = {};
+        for(const key in row) {
+            newRow[key.trim().toLowerCase().replace(/ /g, '_')] = row[key];
+        }
+        return newRow;
+    });
+
+    const validData = normalizedData.filter(row => row.ruc && row.ejecutivo_nuevo);
+    if (validData.length === 0) {
+        toast({ title: 'Sin datos válidos', description: `No se encontraron filas con RUC y Ejecutivo Nuevo.`, variant: 'destructive' });
+        setIsMigrating(false);
+        return;
+    }
+
+    try {
+        const rucsInDb = new Map(clients.map(c => [String(c.ruc).trim(), c.id]));
+        let migratedCount = 0;
+        let currentBatch = writeBatch(db);
+        let count = 0;
+
+        for (let i = 0; i < validData.length; i++) {
+            const row = validData[i];
+            const ruc = String(row.ruc).trim();
+            
+            if (rucsInDb.has(ruc)) {
+                const clientId = rucsInDb.get(ruc)!;
+                const clientRef = doc(db, 'clients', clientId);
+                currentBatch.update(clientRef, { ejecutivo: String(row.ejecutivo_nuevo).trim() });
+                migratedCount++;
+                count++;
+            }
+
+            if (count === 450 || i === validData.length - 1) {
+                await currentBatch.commit();
+                currentBatch = writeBatch(db);
+                count = 0;
+                await new Promise(r => setTimeout(r, 50));
+            }
+        }
+
+        toast({ title: "Migración por Archivo Exitosa", description: `Se han transferido ${migratedCount} clientes correctamente.` });
+        await refetchData('clients');
+        setIsMigrateDialogOpen(false);
+        setMigrationFile(null);
+    } catch (error) {
+        console.error("Migration file error:", error);
+        toast({ title: "Error", description: "Ocurrió un fallo durante el procesamiento del archivo.", variant: "destructive" });
+    } finally {
+        setIsMigrating(false);
+    }
+  };
+
+  const handleMigrateFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setMigrationFile(file);
+  };
+
+  const handleStartFileMigration = () => {
+    if (!migrationFile) return;
+    setIsMigrating(true);
+
+    if (migrationFile.name.endsWith('.csv')) {
+        Papa.parse<ClientCsvData>(migrationFile, {
+            header: true,
+            skipEmptyLines: true,
+            complete: (results) => processFileMigration(results.data, results.meta.fields),
+            error: () => {
+                toast({ title: 'Error', description: 'No se pudo procesar el CSV.', variant: 'destructive' });
+                setIsMigrating(false);
+            }
+        });
+    } else {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const data = e.target?.result;
+                const workbook = XLSX.read(data, { type: 'binary' });
+                const json: ClientCsvData[] = XLSX.utils.sheet_to_json(XLSX.utils.book_new().Sheets[workbook.SheetNames[0]]);
+                const headers = json.length > 0 ? Object.keys(json[0]) : [];
+                processFileMigration(json, headers);
+            } catch (err) {
+                toast({ title: 'Error', description: 'No se pudo procesar el archivo Excel.', variant: 'destructive' });
+                setIsMigrating(false);
+            }
+        };
+        reader.readAsBinaryString(migrationFile);
+    }
+  };
+
   const uniqueEjecutivos = useMemo(() => {
     const ejecutivos = new Set(clients.map(c => c.ejecutivo).filter(Boolean));
     return ['all', ...Array.from(ejecutivos)];
@@ -363,54 +472,97 @@ export default function ClientsPage() {
                             <ArrowRightLeft className="mr-2 h-4 w-4" /> Migrar Cartera
                         </Button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-md rounded-2xl border-none shadow-2xl">
-                        <DialogHeader>
-                            <DialogTitle className="text-2xl font-black uppercase text-slate-950">Migrar Clientes</DialogTitle>
-                            <DialogDescription className="text-xs font-bold uppercase text-slate-500">
-                                Transfiere todos los clientes de un ejecutivo hacia otro de forma masiva.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-6 py-6">
-                            <div className="space-y-2">
-                                <Label className="font-black uppercase text-[10px] text-slate-950">Ejecutivo de Origen (Quien entrega)</Label>
-                                <Select value={sourceExecutive} onValueChange={setSourceExecutive} disabled={isMigrating}>
-                                    <SelectTrigger className="h-12 border-2 border-slate-200 font-black text-slate-950">
-                                        <SelectValue placeholder="Seleccionar origen..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {executivesForMigration.map(e => <SelectItem key={e} value={e} className="font-black">{e}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            
-                            <div className="flex justify-center">
-                                <div className="bg-primary/10 p-2 rounded-full">
-                                    <ArrowRightLeft className="h-6 w-6 text-primary rotate-90" />
-                                </div>
+                    <DialogContent className="sm:max-w-xl rounded-3xl border-none shadow-2xl p-0 overflow-hidden">
+                        <Tabs value={migrationMode} onValueChange={(v: any) => setMigrationMode(v)} className="w-full">
+                            <div className="p-8 pb-4 bg-slate-50 border-b">
+                                <DialogTitle className="text-2xl font-black uppercase text-slate-950 mb-1">Migrar Cartera</DialogTitle>
+                                <DialogDescription className="text-xs font-bold uppercase text-slate-500 mb-6">
+                                    Transfiere clientes entre ejecutivos de forma masiva.
+                                </DialogDescription>
+                                <TabsList className="grid w-full grid-cols-2 h-12 bg-slate-200/50 rounded-xl p-1">
+                                    <TabsTrigger value="manual" className="font-black uppercase text-[10px] data-[state=active]:bg-white data-[state=active]:text-primary rounded-lg">Por Ejecutivo</TabsTrigger>
+                                    <TabsTrigger value="file" className="font-black uppercase text-[10px] data-[state=active]:bg-white data-[state=active]:text-primary rounded-lg">Por Archivo (Excel)</TabsTrigger>
+                                </TabsList>
                             </div>
 
-                            <div className="space-y-2">
-                                <Label className="font-black uppercase text-[10px] text-slate-950">Ejecutivo de Destino (Quien recibe)</Label>
-                                <Select value={targetExecutive} onValueChange={setTargetExecutive} disabled={isMigrating}>
-                                    <SelectTrigger className="h-12 border-2 border-slate-200 font-black text-slate-950">
-                                        <SelectValue placeholder="Seleccionar destino..." />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {executivesForMigration.map(e => <SelectItem key={e} value={e} className="font-black">{e}</SelectItem>)}
-                                    </SelectContent>
-                                </Select>
+                            <div className="p-8 pt-6">
+                                <TabsContent value="manual" className="space-y-6 mt-0">
+                                    <div className="space-y-2">
+                                        <Label className="font-black uppercase text-[10px] text-slate-950">Ejecutivo de Origen (Quien entrega)</Label>
+                                        <Select value={sourceExecutive} onValueChange={setSourceExecutive} disabled={isMigrating}>
+                                            <SelectTrigger className="h-12 border-2 border-slate-200 font-black text-slate-950 rounded-xl">
+                                                <SelectValue placeholder="Seleccionar origen..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {executivesForMigration.map(e => <SelectItem key={e} value={e} className="font-black">{e}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    
+                                    <div className="flex justify-center">
+                                        <div className="bg-primary/10 p-3 rounded-full border-2 border-primary/20 shadow-inner">
+                                            <ArrowRightLeft className="h-6 w-6 text-primary rotate-90" />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label className="font-black uppercase text-[10px] text-slate-950">Ejecutivo de Destino (Quien recibe)</Label>
+                                        <Select value={targetExecutive} onValueChange={setTargetExecutive} disabled={isMigrating}>
+                                            <SelectTrigger className="h-12 border-2 border-slate-200 font-black text-slate-950 rounded-xl">
+                                                <SelectValue placeholder="Seleccionar destino..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {executivesForMigration.map(e => <SelectItem key={e} value={e} className="font-black">{e}</SelectItem>)}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    
+                                    <div className="flex justify-end gap-3 pt-4">
+                                        <DialogClose asChild><Button variant="ghost" className="font-black uppercase" disabled={isMigrating}>Cancelar</Button></DialogClose>
+                                        <Button 
+                                            onClick={handleMigrateClients} 
+                                            className="font-black uppercase h-12 px-8 shadow-xl rounded-xl" 
+                                            disabled={isMigrating || !sourceExecutive || !targetExecutive}
+                                        >
+                                            {isMigrating ? <><LoaderCircle className="animate-spin mr-2 h-4 w-4" /> Procesando...</> : 'Confirmar Migración'}
+                                        </Button>
+                                    </div>
+                                </TabsContent>
+
+                                <TabsContent value="file" className="space-y-6 mt-0">
+                                    <Alert className="bg-primary/5 border-primary/20">
+                                        <FileSpreadsheet className="h-4 w-4 text-primary" />
+                                        <AlertDescription className="text-[10px] font-black uppercase text-primary leading-relaxed">
+                                            El archivo debe contener las columnas:<br/>
+                                            <span className="underline">Ruc, Nombre Cliente, Ejecutivo Anterior, Ejecutivo Nuevo</span>.
+                                        </AlertDescription>
+                                    </Alert>
+
+                                    <div className="space-y-2">
+                                        <Label className="font-black uppercase text-[10px] text-slate-950">Subir Archivo de Migración</Label>
+                                        <Input 
+                                            type="file" 
+                                            accept=".csv, .xlsx, .xls" 
+                                            ref={migrateFileInputRef} 
+                                            onChange={handleMigrateFileSelect} 
+                                            disabled={isMigrating} 
+                                            className="h-12 border-2 border-slate-200 font-black rounded-xl"
+                                        />
+                                    </div>
+
+                                    <div className="flex justify-end gap-3 pt-4">
+                                        <DialogClose asChild><Button variant="ghost" className="font-black uppercase" disabled={isMigrating}>Cancelar</Button></DialogClose>
+                                        <Button 
+                                            onClick={handleStartFileMigration} 
+                                            className="font-black uppercase h-12 px-8 shadow-xl rounded-xl" 
+                                            disabled={isMigrating || !migrationFile}
+                                        >
+                                            {isMigrating ? <><LoaderCircle className="animate-spin mr-2 h-4 w-4" /> Procesando...</> : 'Procesar Archivo'}
+                                        </Button>
+                                    </div>
+                                </TabsContent>
                             </div>
-                        </div>
-                        <DialogFooter className="gap-2">
-                            <DialogClose asChild><Button variant="ghost" className="font-black uppercase" disabled={isMigrating}>Cancelar</Button></DialogClose>
-                            <Button 
-                                onClick={handleMigrateClients} 
-                                className="font-black uppercase h-12 shadow-lg" 
-                                disabled={isMigrating || !sourceExecutive || !targetExecutive}
-                            >
-                                {isMigrating ? <><LoaderCircle className="animate-spin mr-2 h-4 w-4" /> Procesando...</> : 'Confirmar Migración'}
-                            </Button>
-                        </DialogFooter>
+                        </Tabs>
                     </DialogContent>
                 </Dialog>
             )}
@@ -513,6 +665,7 @@ export default function ClientsPage() {
                       <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
                       <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-full" /></TableCell>
                       <TableCell><Skeleton className="h-6 w-16 rounded-full" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20" /></TableCell>
                       <TableCell className="text-right"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
                     </TableRow>
                   ))
