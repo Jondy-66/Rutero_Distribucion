@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, use } from 'react';
+import { useEffect, useState, use, useMemo } from 'react';
 import { notFound, useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import Link from 'next/link';
-import { ArrowLeft, LoaderCircle } from 'lucide-react';
+import { ArrowLeft, LoaderCircle, UserCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getClient, updateClient } from '@/lib/firebase/firestore';
 import type { Client } from '@/lib/types';
@@ -26,7 +26,7 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
   const { id: clientId } = use(params);
   const router = useRouter();
   const { toast } = useToast();
-  const { refetchData } = useAuth();
+  const { refetchData, users, user: currentUser } = useAuth();
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -53,15 +53,20 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
     }
   }, [clientId, toast]);
 
+  const availableExecutives = useMemo(() => {
+    if (!users) return [];
+    return users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
+  }, [users]);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!client) return;
     const { id, value } = e.target;
     setClient(prev => ({ ...prev!, [id]: value }));
   };
 
-  const handleStatusChange = (value: 'active' | 'inactive') => {
+  const handleSelectChange = (id: string, value: string) => {
     if (!client) return;
-    setClient(prev => ({...prev!, status: value}));
+    setClient(prev => ({ ...prev!, [id]: value }));
   };
 
   const handleUpdateClient = async (e: React.FormEvent) => {
@@ -123,6 +128,8 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
     return notFound();
   }
 
+  const isAdmin = currentUser?.role === 'Administrador';
+
   return (
     <>
       <PageHeader
@@ -137,67 +144,93 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
         </Link>
       </PageHeader>
       <form onSubmit={handleUpdateClient}>
-        <Card>
+        <Card className="shadow-lg border-t-4 border-t-primary">
           <CardHeader>
-            <CardTitle>Información del Cliente</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+                <UserCircle className="h-5 w-5 text-primary" />
+                Información del Cliente
+            </CardTitle>
             <CardDescription>
               Modifica los detalles del cliente y guarda los cambios.
             </CardDescription>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="space-y-2">
-              <Label htmlFor="ejecutivo">Ejecutivo</Label>
-              <Input id="ejecutivo" placeholder="Ej: Juan Pérez" value={client.ejecutivo} onChange={handleInputChange} disabled={isSaving} />
+              <Label htmlFor="ejecutivo" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Ejecutivo Asignado</Label>
+              {isAdmin ? (
+                  <Select 
+                    value={client.ejecutivo} 
+                    onValueChange={(value) => handleSelectChange('ejecutivo', value)}
+                    disabled={isSaving}
+                  >
+                    <SelectTrigger className="h-11 font-black text-slate-950">
+                        <SelectValue placeholder="Seleccionar un ejecutivo..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {availableExecutives.length > 0 ? (
+                            availableExecutives.map(exec => (
+                                <SelectItem key={exec.id} value={exec.name} className="font-bold">
+                                    {exec.name} ({exec.role})
+                                </SelectItem>
+                            ))
+                        ) : (
+                            <SelectItem value="none" disabled>No hay ejecutivos disponibles</SelectItem>
+                        )}
+                    </SelectContent>
+                </Select>
+              ) : (
+                <Input id="ejecutivo" placeholder="Ej: Juan Pérez" value={client.ejecutivo} onChange={handleInputChange} disabled className="h-11 bg-muted font-bold" />
+              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="ruc">RUC</Label>
-              <Input id="ruc" placeholder="Ej: 1792233445001" value={client.ruc} onChange={handleInputChange} required disabled={isSaving}/>
+              <Label htmlFor="ruc" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">RUC</Label>
+              <Input id="ruc" placeholder="Ej: 1792233445001" value={client.ruc} onChange={handleInputChange} required disabled={isSaving} className="h-11 font-mono font-bold" />
+            </div>
+             <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="nombre_cliente" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Nombre o Razón Social</Label>
+              <Input id="nombre_cliente" placeholder="Ej: Supermercados La Favorita" value={client.nombre_cliente} onChange={handleInputChange} required disabled={isSaving} className="h-11 font-black uppercase text-slate-950" />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="nombre_comercial" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Nombre Comercial</Label>
+              <Input id="nombre_comercial" placeholder="Ej: Supermaxi" value={client.nombre_comercial} onChange={handleInputChange} disabled={isSaving} className="h-11 font-black uppercase text-slate-950" />
             </div>
              <div className="space-y-2">
-              <Label htmlFor="nombre_cliente">Nombre del Cliente</Label>
-              <Input id="nombre_cliente" placeholder="Ej: Supermercados La Favorita" value={client.nombre_cliente} onChange={handleInputChange} required disabled={isSaving}/>
+              <Label htmlFor="provincia" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Provincia</Label>
+              <Input id="provincia" placeholder="Ej: Pichincha" value={client.provincia} onChange={handleInputChange} disabled={isSaving} className="h-11 font-bold" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="nombre_comercial">Nombre Comercial</Label>
-              <Input id="nombre_comercial" placeholder="Ej: Supermaxi" value={client.nombre_comercial} onChange={handleInputChange} disabled={isSaving}/>
+              <Label htmlFor="canton" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Cantón</Label>
+              <Input id="canton" placeholder="Ej: Quito" value={client.canton} onChange={handleInputChange} disabled={isSaving} className="h-11 font-bold" />
             </div>
-             <div className="space-y-2">
-              <Label htmlFor="provincia">Provincia</Label>
-              <Input id="provincia" placeholder="Ej: Pichincha" value={client.provincia} onChange={handleInputChange} disabled={isSaving}/>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="canton">Cantón</Label>
-              <Input id="canton" placeholder="Ej: Quito" value={client.canton} onChange={handleInputChange} disabled={isSaving}/>
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="direccion" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Dirección</Label>
+              <Input id="direccion" placeholder="Ej: Av. de los Shyris y Naciones Unidas" value={client.direccion} onChange={handleInputChange} disabled={isSaving} className="h-11 font-bold" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="direccion">Dirección</Label>
-              <Input id="direccion" placeholder="Ej: Av. de los Shyris y Naciones Unidas" value={client.direccion} onChange={handleInputChange} disabled={isSaving}/>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="status">Estado</Label>
-              <Select value={client.status || 'active'} onValueChange={handleStatusChange} disabled={isSaving}>
-                <SelectTrigger id="status">
+              <Label htmlFor="status" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Estado</Label>
+              <Select value={client.status || 'active'} onValueChange={(v) => handleSelectChange('status', v)} disabled={isSaving}>
+                <SelectTrigger id="status" className="h-11 font-bold">
                   <SelectValue placeholder="Seleccionar estado" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="active">Activo</SelectItem>
-                  <SelectItem value="inactive">Inactivo</SelectItem>
+                  <SelectItem value="active" className="font-bold">Activo</SelectItem>
+                  <SelectItem value="inactive" className="font-bold">Inactivo</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="latitud">Latitud</Label>
-              <Input id="latitud" type="number" step="any" placeholder="Ej: -0.1762" value={client.latitud} onChange={handleInputChange} disabled={isSaving}/>
+              <Label htmlFor="latitud" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Latitud</Label>
+              <Input id="latitud" type="number" step="any" placeholder="Ej: -0.1762" value={client.latitud} onChange={handleInputChange} disabled={isSaving} className="h-11 font-mono font-bold" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="longitud">Longitud</Label>
-              <Input id="longitud" type="number" step="any" placeholder="Ej: -78.4847" value={client.longitud} onChange={handleInputChange} disabled={isSaving}/>
+              <Label htmlFor="longitud" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Longitud</Label>
+              <Input id="longitud" type="number" step="any" placeholder="Ej: -78.4847" value={client.longitud} onChange={handleInputChange} disabled={isSaving} className="h-11 font-mono font-bold" />
             </div>
           </CardContent>
-          <CardFooter>
-            <Button type="submit" disabled={isSaving}>
-              {isSaving && <LoaderCircle className="animate-spin" />}
-              Guardar Cambios
+          <CardFooter className="bg-muted/30 border-t p-6">
+            <Button type="submit" disabled={isSaving} className="w-full sm:w-auto font-black px-10 h-12 shadow-md">
+              {isSaving && <LoaderCircle className="animate-spin mr-2" />}
+              GUARDAR CAMBIOS
             </Button>
           </CardFooter>
         </Card>
