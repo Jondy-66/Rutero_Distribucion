@@ -177,6 +177,7 @@ export default function SellerReportsPage() {
         });
     });
     
+    // UI: Mostrar los más recientes primero
     return logs.sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [selectedSellerId, allRoutes, managedSellers, currentUser, dateRange, allUsers]);
   
@@ -190,10 +191,13 @@ export default function SellerReportsPage() {
         return;
     }
 
+    // EXCEL: Ordenar cronológicamente ascendente (p.ej: 1 jun, 2 jun, 3 jun...)
+    const chronologicalReports = [...dailyReports].sort((a, b) => a.date.getTime() - b.date.getTime());
+
     const dataToExport = [];
 
-    for (const dailyLog of dailyReports) {
-        // Ordenar clientes por hora de ingreso para este log diario
+    for (const dailyLog of chronologicalReports) {
+        // Ordenar clientes por hora de ingreso para este log diario (orden cronológico del día)
         const sortedClients = [...dailyLog.clients].sort((a, b) => {
             const timeA = a.checkInTime || '99:99:99';
             const timeB = b.checkInTime || '99:99:99';
@@ -238,7 +242,7 @@ export default function SellerReportsPage() {
     XLSX.utils.book_append_sheet(workbook, worksheet, "Auditoría de Gestiones");
     const sellerName = selectedSellerId === 'all' ? 'todos' : allUsers.find(u=>u.id === selectedSellerId)?.name.replace(/ /g, '_');
     XLSX.writeFile(workbook, `auditoria_vendedores_${sellerName}.xlsx`);
-    toast({ title: "Descarga Iniciada", description: "El reporte de auditoría se está descargando ordenado por tiempo." });
+    toast({ title: "Descarga Iniciada", description: "El reporte de auditoría se está descargando en orden cronológico." });
 };
 
   const handleViewDetails = (routeId: string) => {
