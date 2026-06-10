@@ -302,6 +302,7 @@ export default function ClientsPage() {
   };
 
   const processFileMigration = async (data: ClientCsvData[], fields: string[] | undefined) => {
+    // Normalizar encabezados requeridos para ser más tolerantes
     const requiredColumns = ['ruc', 'ejecutivo_nuevo'];
     const headers = (fields || []).map(h => h.toString().trim().toLowerCase().replace(/ /g, '_'));
     const missingColumns = requiredColumns.filter(col => !headers.includes(col));
@@ -309,7 +310,7 @@ export default function ClientsPage() {
     if (missingColumns.length > 0) {
       toast({
         title: 'Error de formato',
-        description: `Faltan las siguientes columnas en el archivo: Ruc, Ejecutivo Nuevo.`,
+        description: `Faltan columnas requeridas: Ruc y Ejecutivo Nuevo.`,
         variant: 'destructive',
       });
       setIsMigrating(false);
@@ -319,12 +320,15 @@ export default function ClientsPage() {
     const normalizedData = data.map(row => {
         const newRow: any = {};
         for(const key in row) {
+            // Normalizar las llaves de cada fila eliminando espacios y convirtiendo a snake_case
             newRow[key.trim().toLowerCase().replace(/ /g, '_')] = row[key];
         }
         return newRow;
     });
 
-    const validData = normalizedData.filter(row => row.ruc && row.ejecutivo_nuevo);
+    // Filtrar filas válidas (que tengan RUC y un Ejecutivo Nuevo definido)
+    const validData = normalizedData.filter(row => row.ruc && (row.ejecutivo_nuevo || row.ejecutivo_nuevo));
+    
     if (validData.length === 0) {
         toast({ title: 'Sin datos válidos', description: `No se encontraron filas con RUC y Ejecutivo Nuevo.`, variant: 'destructive' });
         setIsMigrating(false);
@@ -340,11 +344,12 @@ export default function ClientsPage() {
         for (let i = 0; i < validData.length; i++) {
             const row = validData[i];
             const ruc = String(row.ruc).trim();
+            const nuevoEjecutivo = String(row.ejecutivo_nuevo || '').trim();
             
-            if (rucsInDb.has(ruc)) {
+            if (rucsInDb.has(ruc) && nuevoEjecutivo) {
                 const clientId = rucsInDb.get(ruc)!;
                 const clientRef = doc(db, 'clients', clientId);
-                currentBatch.update(clientRef, { ejecutivo: String(row.ejecutivo_nuevo).trim() });
+                currentBatch.update(clientRef, { ejecutivo: nuevoEjecutivo });
                 migratedCount++;
                 count++;
             }
@@ -357,7 +362,7 @@ export default function ClientsPage() {
             }
         }
 
-        toast({ title: "Migración por Archivo Exitosa", description: `Se han transferido ${migratedCount} clientes correctamente.` });
+        toast({ title: "Migración Finalizada", description: `Se han transferido ${migratedCount} clientes correctamente.` });
         await refetchData('clients');
         setIsMigrateDialogOpen(false);
         setMigrationFile(null);
@@ -395,7 +400,8 @@ export default function ClientsPage() {
             try {
                 const data = e.target?.result;
                 const workbook = XLSX.read(data, { type: 'binary' });
-                const json: ClientCsvData[] = XLSX.utils.sheet_to_json(XLSX.utils.book_new().Sheets[workbook.SheetNames[0]]);
+                const sheet = workbook.Sheets[workbook.SheetNames[0]];
+                const json: ClientCsvData[] = XLSX.utils.sheet_to_json(sheet);
                 const headers = json.length > 0 ? Object.keys(json[0]) : [];
                 processFileMigration(json, headers);
             } catch (err) {
@@ -534,8 +540,8 @@ export default function ClientsPage() {
                                     <Alert className="bg-primary/5 border-primary/20">
                                         <FileSpreadsheet className="h-4 w-4 text-primary" />
                                         <AlertDescription className="text-[10px] font-black uppercase text-primary leading-relaxed">
-                                            El archivo debe contener las columnas:<br/>
-                                            <span className="underline">Ruc, Nombre Cliente, Ejecutivo Anterior, Ejecutivo Nuevo</span>.
+                                            El archivo debe contener las siguientes columnas exactamente:<br/>
+                                            <span className="font-bold underline">Ruc, Nombre Cliente, Ejecutivo Anterior, Ejecutivo Nuevo</span>.
                                         </AlertDescription>
                                     </Alert>
 
