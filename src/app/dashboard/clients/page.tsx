@@ -50,6 +50,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 type ClientCsvData = {
     [key: string]: string;
@@ -452,7 +453,7 @@ export default function ClientsPage() {
     const worksheet = XLSX.utils.json_to_sheet(filteredClients);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Clientes");
-    XLSX.writeFile(workbook, "reporte_clientes.xlsx");
+    XLSX.writeFile(workbook, "reporte_clients.xlsx");
   };
   
   const isAdmin = user?.role === 'Administrador';
