@@ -18,14 +18,12 @@ import {
   Users2,
   GitCommitHorizontal,
   Lock,
-  HeartHandshake,
-  Database,
   Phone,
   BarChart,
   Settings2,
-  RefreshCw,
   LocateFixed,
   Clock,
+  ChevronRight,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -50,11 +48,9 @@ export function DashboardNav() {
   const { user } = useAuth();
   
   const [isRoutesOpen, setIsRoutesOpen] = useState(pathname.startsWith('/dashboard/routes'));
-  const [isPlanningOpen, setIsPlanningOpen] = useState(pathname.startsWith('/dashboard/routes'));
   const [isCrmOpen, setIsCrmOpen] = useState(pathname.startsWith('/dashboard/crm'));
   const [isUsersOpen, setIsUsersOpen] = useState(pathname.startsWith('/dashboard/users') || pathname.startsWith('/dashboard/system'));
   const [isReportsOpen, setIsReportsOpen] = useState(pathname.startsWith('/dashboard/reports'));
-  const [isDashboardOpen, setIsDashboardOpen] = useState(pathname.startsWith('/dashboard/admin-dashboard') || pathname === '/dashboard');
 
   const hasPerm = (id: string) => {
     if (!user) return false;
@@ -71,308 +67,258 @@ export function DashboardNav() {
     return (roleDefaults[user.role] || []).includes(id);
   };
 
-  // Clases comunes para iconos vibrantes
-  const iconClass = "h-5 w-5 text-sidebar-primary shrink-0 transition-colors";
-  const subIconClass = "h-4 w-4 text-sidebar-primary/80 shrink-0 transition-colors";
+  const NavGroupHeader = ({ title }: { title: string }) => (
+    <div className="flex items-center gap-2 px-4 mt-8 mb-3 opacity-80">
+      <span className="text-[9px] font-black tracking-[0.25em] text-[#8F98A8] uppercase whitespace-nowrap">{title}</span>
+      <div className="h-[1px] flex-1 bg-white/5 relative">
+        <div className="absolute right-0 top-[-2px] h-[5px] w-[5px] rounded-full bg-[#8CC81F]" />
+      </div>
+    </div>
+  );
+
+  const iconClass = "h-[18px] w-[18px] text-[#8CC81F] shrink-0 transition-all duration-300";
+  const subIconClass = "h-[14px] w-[14px] text-[#F4F6FA]/60 shrink-0";
+
+  const buttonStyles = (active: boolean) => cn(
+    "flex w-full items-center gap-3 px-4 py-2.5 rounded-xl transition-all duration-200 group",
+    active 
+      ? "bg-[#8CC81F]/10 border border-[#8CC81F]/30 text-[#F4F6FA] shadow-[0_0_20px_rgba(140,200,31,0.1)]" 
+      : "text-[#8F98A8] hover:text-[#F4F6FA] hover:bg-white/5"
+  );
 
   return (
-    <nav>
+    <div className="flex flex-col gap-1 px-3">
+      {/* SECCIÓN PRINCIPAL */}
+      <NavGroupHeader title="Principal" />
       <SidebarMenu>
+        {hasPerm('dashboard') && (
+          <SidebarMenuItem>
+            <Link href="/dashboard" className={buttonStyles(pathname === '/dashboard')}>
+              <LayoutDashboard className={iconClass} />
+              <span className="text-sm font-semibold">Panel de Control</span>
+            </Link>
+          </SidebarMenuItem>
+        )}
+
         {hasPerm('admin-dashboard') && (
-          <Collapsible open={isDashboardOpen} onOpenChange={setIsDashboardOpen}>
-            <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton tooltip="Dashboard">
-                  <LayoutDashboard className={iconClass} />
-                  <span>Dashboard</span>
-                </SidebarMenuButton>
-              </CollapsibleTrigger>
-            </SidebarMenuItem>
-            <CollapsibleContent>
-              <SidebarMenuSub>
-                  <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard'}>
-                        <Link href="/dashboard">
-                          <ClipboardList className={subIconClass} />
-                          <span>Panel de Control</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                  <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/admin-dashboard'}>
-                        <Link href="/dashboard/admin-dashboard">
-                          <BarChart className={subIconClass} />
-                          <span>KPIs</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-              </SidebarMenuSub>
-            </CollapsibleContent>
-          </Collapsible>
+          <SidebarMenuItem>
+            <Link href="/dashboard/admin-dashboard" className={buttonStyles(pathname === '/dashboard/admin-dashboard')}>
+              <BarChart className={iconClass} />
+              <span className="text-sm font-semibold">KPIs Administrativos</span>
+            </Link>
+          </SidebarMenuItem>
         )}
 
         {hasPerm('clients') && (
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname.startsWith('/dashboard/clients')} tooltip="Clientes">
-              <Link href="/dashboard/clients">
-                <Briefcase className={iconClass} />
-                <span>Clientes</span>
-              </Link>
-            </SidebarMenuButton>
+            <Link href="/dashboard/clients" className={buttonStyles(pathname.startsWith('/dashboard/clients'))}>
+              <Briefcase className={iconClass} />
+              <span className="text-sm font-semibold">Cartera Clientes</span>
+            </Link>
           </SidebarMenuItem>
         )}
+      </SidebarMenu>
 
+      {/* SECCIÓN MONITOREO */}
+      <NavGroupHeader title="Monitoreo" />
+      <SidebarMenu>
         {hasPerm('tracking') && (
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === '/dashboard/system/tracking'} tooltip="Rastreo GPS">
-              <Link href="/dashboard/system/tracking">
-                <LocateFixed className={iconClass} />
-                <span className="font-black">Rastreo GPS</span>
-              </Link>
-            </SidebarMenuButton>
+            <Link href="/dashboard/system/tracking" className={buttonStyles(pathname === '/dashboard/system/tracking')}>
+              <LocateFixed className={iconClass} />
+              <span className="text-sm font-semibold">Rastreo GPS Vivo</span>
+            </Link>
           </SidebarMenuItem>
         )}
 
         {hasPerm('locations') && (
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === '/dashboard/locations'} tooltip="Ubicaciones">
-              <Link href="/dashboard/locations">
-                <MapPin className={iconClass} />
-                <span>Ubicaciones</span>
-              </Link>
-            </SidebarMenuButton>
+            <Link href="/dashboard/locations" className={buttonStyles(pathname === '/dashboard/locations')}>
+              <MapPin className={iconClass} />
+              <span className="text-sm font-semibold">Ubicaciones</span>
+            </Link>
           </SidebarMenuItem>
         )}
 
         {hasPerm('map') && (
           <SidebarMenuItem>
-            <SidebarMenuButton asChild isActive={pathname === '/dashboard/map'} tooltip="Mapa">
-              <Link href="/dashboard/map">
-                <Map className={iconClass} />
-                <span>Mapa</span>
-              </Link>
-            </SidebarMenuButton>
+            <Link href="/dashboard/map" className={buttonStyles(pathname === '/dashboard/map')}>
+              <Map className={iconClass} />
+              <span className="text-sm font-semibold">Geomapa General</span>
+            </Link>
           </SidebarMenuItem>
         )}
+      </SidebarMenu>
 
-        {hasPerm('reports') && (
-          <Collapsible open={isReportsOpen} onOpenChange={setIsReportsOpen}>
-            <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton tooltip="Reportes">
-                  <FileText className={iconClass} />
-                  <span>Reportes</span>
-                </SidebarMenuButton>
-              </CollapsibleTrigger>
-            </SidebarMenuItem>
-            <CollapsibleContent>
-              <SidebarMenuSub>
-                <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-completed-routes'}>
-                      <Link href="/dashboard/reports/my-completed-routes">
-                        <List className={subIconClass} />
-                        <span>Rutas Completadas</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                {(user?.role === 'Supervisor' || user?.role === 'Administrador' || user?.role === 'Auditor') && (
-                  <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-reports'}>
-                        <Link href="/dashboard/reports/my-reports">
-                          <FileText className={subIconClass} />
-                          <span>Rutas Asignadas</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                )}
-                {hasPerm('seller-reports') && (
-                  <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/seller-reports'}>
-                        <Link href="/dashboard/reports/seller-reports">
-                          <Users className={subIconClass} />
-                          <span>Reportes Vendedores</span>
-                        </Link>
-                      </SidebarMenuSubButton>
-                  </SidebarMenuSubItem>
-                )}
-              </SidebarMenuSub>
-            </CollapsibleContent>
-          </Collapsible>
-        )}
-
+      {/* SECCIÓN GESTIÓN */}
+      <NavGroupHeader title="Gestión" />
+      <SidebarMenu>
         {hasPerm('routes') && (
           <Collapsible open={isRoutesOpen} onOpenChange={setIsRoutesOpen}>
             <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton tooltip="Rutas">
-                  <Route className={iconClass} />
-                  <span>Rutas</span>
-                </SidebarMenuButton>
+              <CollapsibleTrigger className={buttonStyles(pathname.startsWith('/dashboard/routes'))}>
+                <Route className={iconClass} />
+                <span className="flex-1 text-sm font-semibold">Rutas</span>
+                <ChevronRight className={cn("h-4 w-4 transition-transform duration-200", isRoutesOpen && "rotate-90")} />
               </CollapsibleTrigger>
+              <CollapsibleContent className="pl-6 border-l border-white/5 mt-1 ml-6 space-y-1">
+                <SidebarMenuSubItem>
+                  <Link href="/dashboard/routes/management" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes/management' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <ClipboardList className={subIconClass} />
+                    Gestión Diaria
+                  </Link>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <Link href="/dashboard/routes/new" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes/new' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <PlusCircle className={subIconClass} />
+                    Planificar Semana
+                  </Link>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <Link href="/dashboard/routes/prediction" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes/prediction' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <Wand2 className={subIconClass} />
+                    IA Predicción
+                  </Link>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <Link href="/dashboard/routes/optimal-route" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes/optimal-route' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <GitCommitHorizontal className={subIconClass} />
+                    Ruta Óptima
+                  </Link>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <Link href="/dashboard/routes" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <List className={subIconClass} />
+                    Mis Rutas
+                  </Link>
+                </SidebarMenuSubItem>
+                {(user?.role === 'Administrador' || user?.role === 'Supervisor') && (
+                  <SidebarMenuSubItem>
+                    <Link href="/dashboard/routes/team-routes" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes/team-routes' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                      <Users2 className={subIconClass} />
+                      Rutas de Equipo
+                    </Link>
+                  </SidebarMenuSubItem>
+                )}
+              </CollapsibleContent>
             </SidebarMenuItem>
-            <CollapsibleContent>
-              <SidebarMenuSub>
-                  <Collapsible open={isPlanningOpen} onOpenChange={setIsPlanningOpen}>
-                     <SidebarMenuItem>
-                        <CollapsibleTrigger asChild>
-                            <SidebarMenuSubButton>
-                                <PlusCircle className={subIconClass} />
-                                <span>Planificación de Ruta</span>
-                             </SidebarMenuSubButton>
-                        </CollapsibleTrigger>
-                     </SidebarMenuItem>
-                      <CollapsibleContent>
-                         <SidebarMenuSub>
-                            <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/prediction'}>
-                                <Link href="/dashboard/routes/prediction">
-                                    <Wand2 className={subIconClass} />
-                                    <span>Predicción Ruta</span>
-                                </Link>
-                                </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                            <SidebarMenuSubItem>
-                                <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/optimal-route'}>
-                                <Link href="/dashboard/routes/optimal-route">
-                                    <GitCommitHorizontal className={subIconClass} />
-                                    <span>Ruta Óptima</span>
-                                </Link>
-                                </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                            <SidebarMenuSubItem>
-                               <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes'}>
-                                 <Link href="/dashboard/routes">
-                                    <List className={subIconClass} />
-                                    <span>Mis Rutas</span>
-                                 </Link>
-                               </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                         </SidebarMenuSub>
-                      </CollapsibleContent>
-                  </Collapsible>
-                 <SidebarMenuItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/management'}>
-                      <Link href="/dashboard/routes/management">
-                        <ClipboardList className={subIconClass} />
-                        <span>Gestión Ruta</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuItem>
-                 {(user?.role === 'Administrador' || user?.role === 'Supervisor') && (
-                    <SidebarMenuItem>
-                        <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/team-routes'}>
-                            <Link href="/dashboard/routes/team-routes">
-                                <Users2 className={subIconClass} />
-                                <span>Rutas de Equipo</span>
-                            </Link>
-                        </SidebarMenuSubButton>
-                    </SidebarMenuItem>
-                 )}
-              </SidebarMenuSub>
-            </CollapsibleContent>
           </Collapsible>
         )}
 
         {hasPerm('crm') && (
           <Collapsible open={isCrmOpen} onOpenChange={setIsCrmOpen}>
             <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton tooltip="CRM">
-                  <Phone className={iconClass} />
-                  <span>CRM</span>
-                </SidebarMenuButton>
+              <CollapsibleTrigger className={buttonStyles(pathname.startsWith('/dashboard/crm'))}>
+                <Phone className={iconClass} />
+                <span className="flex-1 text-sm font-semibold">CRM Telemercadeo</span>
+                <ChevronRight className={cn("h-4 w-4 transition-transform duration-200", isCrmOpen && "rotate-90")} />
               </CollapsibleTrigger>
+              <CollapsibleContent className="pl-6 border-l border-white/5 mt-1 ml-6 space-y-1">
+                <SidebarMenuSubItem>
+                  <Link href="/dashboard/crm/prediction" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/crm/prediction' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <Wand2 className={subIconClass} />
+                    Cola Inteligente
+                  </Link>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <Link href="/dashboard/crm/management" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/crm/management' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <ClipboardList className={subIconClass} />
+                    Gestión de Llamada
+                  </Link>
+                </SidebarMenuSubItem>
+                <SidebarMenuSubItem>
+                  <Link href="/dashboard/crm/phone-base" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/crm/phone-base' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <Database className={subIconClass} />
+                    Base Telefónica
+                  </Link>
+                </SidebarMenuSubItem>
+              </CollapsibleContent>
             </SidebarMenuItem>
-            <CollapsibleContent>
-              <SidebarMenuSub>
+          </Collapsible>
+        )}
+
+        {hasPerm('reports') && (
+          <Collapsible open={isReportsOpen} onOpenChange={setIsReportsOpen}>
+            <SidebarMenuItem>
+              <CollapsibleTrigger className={buttonStyles(pathname.startsWith('/dashboard/reports'))}>
+                <FileText className={iconClass} />
+                <span className="flex-1 text-sm font-semibold">Reportes</span>
+                <ChevronRight className={cn("h-4 w-4 transition-transform duration-200", isReportsOpen && "rotate-90")} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pl-6 border-l border-white/5 mt-1 ml-6 space-y-1">
                 <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/prediction'}>
-                      <Link href="/dashboard/crm/prediction">
-                        <Wand2 className={subIconClass} />
-                        <span>Cola Inteligente</span>
-                      </Link>
-                    </SidebarMenuSubButton>
+                  <Link href="/dashboard/reports/my-completed-routes" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/reports/my-completed-routes' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <List className={subIconClass} />
+                    Mis Rutas OK
+                  </Link>
                 </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/management'}>
-                      <Link href="/dashboard/crm/management">
-                        <ClipboardList className={subIconClass} />
-                        <span>Gestión de Llamada</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/phone-base'}>
-                      <Link href="/dashboard/crm/phone-base">
-                        <Database className={subIconClass} />
-                        <span>Base Telefónica</span>
-                      </Link>
-                    </SidebarMenuSubButton>
-                </SidebarMenuSubItem>
-              </SidebarMenuSub>
-            </CollapsibleContent>
+                {(user?.role === 'Supervisor' || user?.role === 'Administrador' || user?.role === 'Auditor') && (
+                  <SidebarMenuSubItem>
+                    <Link href="/dashboard/reports/my-reports" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/reports/my-reports' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                      <FileText className={subIconClass} />
+                      Auditoría Rutas
+                    </Link>
+                  </SidebarMenuSubItem>
+                )}
+                {hasPerm('seller-reports') && (
+                  <SidebarMenuSubItem>
+                    <Link href="/dashboard/reports/seller-reports" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/reports/seller-reports' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                      <Users className={subIconClass} />
+                      Log Vendedores
+                    </Link>
+                  </SidebarMenuSubItem>
+                )}
+              </CollapsibleContent>
+            </SidebarMenuItem>
           </Collapsible>
         )}
 
         {hasPerm('users') && (
           <Collapsible open={isUsersOpen} onOpenChange={setIsUsersOpen}>
             <SidebarMenuItem>
-              <CollapsibleTrigger asChild>
-                <SidebarMenuButton tooltip="Administración">
-                  <Users className={iconClass} />
-                  <span>Administración</span>
-                </SidebarMenuButton>
+              <CollapsibleTrigger className={buttonStyles(pathname.startsWith('/dashboard/users') || pathname.startsWith('/dashboard/system'))}>
+                <Lock className={iconClass} />
+                <span className="flex-1 text-sm font-semibold">Administración</span>
+                <ChevronRight className={cn("h-4 w-4 transition-transform duration-200", isUsersOpen && "rotate-90")} />
               </CollapsibleTrigger>
-            </SidebarMenuItem>
-            <CollapsibleContent>
-              <SidebarMenuSub>
+              <CollapsibleContent className="pl-6 border-l border-white/5 mt-1 ml-6 space-y-1">
                 <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/users'}>
-                      <Link href="/dashboard/users">
-                        <Users className={subIconClass} />
-                        <span>Todos los Usuarios</span>
-                      </Link>
-                    </SidebarMenuSubButton>
+                  <Link href="/dashboard/users" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/users' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <Users className={subIconClass} />
+                    Gestión Usuarios
+                  </Link>
                 </SidebarMenuSubItem>
                 <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/users/supervisors'}>
-                      <Link href="/dashboard/users/supervisors">
-                        <UserCheck className={subIconClass} />
-                        <span>Supervisores</span>
-                      </Link>
-                    </SidebarMenuSubButton>
+                  <Link href="/dashboard/users/supervisors" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/users/supervisors' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <UserCheck className={subIconClass} />
+                    Supervisores
+                  </Link>
                 </SidebarMenuSubItem>
                 <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/users/permissions'}>
-                      <Link href="/dashboard/users/permissions">
-                        <Lock className={subIconClass} />
-                        <span>Permisos</span>
-                      </Link>
-                    </SidebarMenuSubButton>
+                  <Link href="/dashboard/users/permissions" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/users/permissions' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <Lock className={subIconClass} />
+                    Privilegios
+                  </Link>
                 </SidebarMenuSubItem>
                 {user?.role === 'Administrador' && (
                   <SidebarMenuSubItem>
-                      <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/system/cron'}>
-                        <Link href="/dashboard/system/cron">
-                          <Clock className={subIconClass} />
-                          <span>Cron Jobs</span>
-                        </Link>
-                      </SidebarMenuSubButton>
+                    <Link href="/dashboard/system/cron" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/system/cron' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                      <Clock className={subIconClass} />
+                      Cron Jobs (Keep)
+                    </Link>
                   </SidebarMenuSubItem>
                 )}
                 <SidebarMenuSubItem>
-                    <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/system/usage'}>
-                      <Link href="/dashboard/system/usage">
-                        <Settings2 className={subIconClass} />
-                        <span>Uso del Sistema</span>
-                      </Link>
-                    </SidebarMenuSubButton>
+                  <Link href="/dashboard/system/usage" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/system/usage' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                    <Settings2 className={subIconClass} />
+                    Salud Sistema
+                  </Link>
                 </SidebarMenuSubItem>
-              </SidebarMenuSub>
-            </CollapsibleContent>
+              </CollapsibleContent>
+            </SidebarMenuItem>
           </Collapsible>
         )}
       </SidebarMenu>
-    </nav>
+    </div>
   );
 }
