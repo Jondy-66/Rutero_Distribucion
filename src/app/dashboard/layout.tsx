@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -81,14 +80,14 @@ export default function DashboardLayout({
           <SidebarContent>
             <DashboardNav />
           </SidebarContent>
-          <SidebarFooter>
+          <SidebarFooter className="p-4">
             <Link href="/dashboard/profile">
-              <Button variant="ghost" className="w-full justify-start gap-2">
-                <Settings className="h-5 w-5" />
+              <Button variant="ghost" className="w-full justify-start gap-2 hover:bg-sidebar-accent">
+                <Settings className="h-5 w-5 text-sidebar-primary" />
                 <span className="group-data-[collapsible=icon]:hidden">Configuración</span>
               </Button>
             </Link>
-            <Button variant="ghost" className="w-full justify-start gap-2" onClick={onSignOut}>
+            <Button variant="ghost" className="w-full justify-start gap-2 text-red-400 hover:text-red-500 hover:bg-red-500/10" onClick={onSignOut}>
               <LogOut className="h-5 w-5" />
               <span className="group-data-[collapsible=icon]:hidden">Cerrar Sesión</span>
             </Button>

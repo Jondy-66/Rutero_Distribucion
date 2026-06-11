@@ -71,6 +71,10 @@ export function DashboardNav() {
     return (roleDefaults[user.role] || []).includes(id);
   };
 
+  // Clases comunes para iconos vibrantes
+  const iconClass = "h-5 w-5 text-sidebar-primary shrink-0 transition-colors";
+  const subIconClass = "h-4 w-4 text-sidebar-primary/80 shrink-0 transition-colors";
+
   return (
     <nav>
       <SidebarMenu>
@@ -79,7 +83,7 @@ export function DashboardNav() {
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton tooltip="Dashboard">
-                  <LayoutDashboard className="h-5 w-5" />
+                  <LayoutDashboard className={iconClass} />
                   <span>Dashboard</span>
                 </SidebarMenuButton>
               </CollapsibleTrigger>
@@ -89,7 +93,7 @@ export function DashboardNav() {
                   <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild isActive={pathname === '/dashboard'}>
                         <Link href="/dashboard">
-                          <ClipboardList />
+                          <ClipboardList className={subIconClass} />
                           <span>Panel de Control</span>
                         </Link>
                       </SidebarMenuSubButton>
@@ -97,7 +101,7 @@ export function DashboardNav() {
                   <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/admin-dashboard'}>
                         <Link href="/dashboard/admin-dashboard">
-                          <BarChart />
+                          <BarChart className={subIconClass} />
                           <span>KPIs</span>
                         </Link>
                       </SidebarMenuSubButton>
@@ -111,7 +115,7 @@ export function DashboardNav() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname.startsWith('/dashboard/clients')} tooltip="Clientes">
               <Link href="/dashboard/clients">
-                <Briefcase className="h-5 w-5" />
+                <Briefcase className={iconClass} />
                 <span>Clientes</span>
               </Link>
             </SidebarMenuButton>
@@ -122,7 +126,7 @@ export function DashboardNav() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname === '/dashboard/system/tracking'} tooltip="Rastreo GPS">
               <Link href="/dashboard/system/tracking">
-                <LocateFixed className="h-5 w-5 text-primary" />
+                <LocateFixed className={iconClass} />
                 <span className="font-black">Rastreo GPS</span>
               </Link>
             </SidebarMenuButton>
@@ -133,7 +137,7 @@ export function DashboardNav() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname === '/dashboard/locations'} tooltip="Ubicaciones">
               <Link href="/dashboard/locations">
-                <MapPin className="h-5 w-5" />
+                <MapPin className={iconClass} />
                 <span>Ubicaciones</span>
               </Link>
             </SidebarMenuButton>
@@ -144,7 +148,7 @@ export function DashboardNav() {
           <SidebarMenuItem>
             <SidebarMenuButton asChild isActive={pathname === '/dashboard/map'} tooltip="Mapa">
               <Link href="/dashboard/map">
-                <Map className="h-5 w-5" />
+                <Map className={iconClass} />
                 <span>Mapa</span>
               </Link>
             </SidebarMenuButton>
@@ -156,7 +160,7 @@ export function DashboardNav() {
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton tooltip="Reportes">
-                  <FileText className="h-5 w-5" />
+                  <FileText className={iconClass} />
                   <span>Reportes</span>
                 </SidebarMenuButton>
               </CollapsibleTrigger>
@@ -166,7 +170,7 @@ export function DashboardNav() {
                 <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-completed-routes'}>
                       <Link href="/dashboard/reports/my-completed-routes">
-                        <List />
+                        <List className={subIconClass} />
                         <span>Rutas Completadas</span>
                       </Link>
                     </SidebarMenuSubButton>
@@ -175,7 +179,7 @@ export function DashboardNav() {
                   <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/my-reports'}>
                         <Link href="/dashboard/reports/my-reports">
-                          <FileText />
+                          <FileText className={subIconClass} />
                           <span>Rutas Asignadas</span>
                         </Link>
                       </SidebarMenuSubButton>
@@ -185,7 +189,7 @@ export function DashboardNav() {
                   <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/reports/seller-reports'}>
                         <Link href="/dashboard/reports/seller-reports">
-                          <Users />
+                          <Users className={subIconClass} />
                           <span>Reportes Vendedores</span>
                         </Link>
                       </SidebarMenuSubButton>
@@ -201,7 +205,7 @@ export function DashboardNav() {
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton tooltip="Rutas">
-                  <Route className="h-5 w-5" />
+                  <Route className={iconClass} />
                   <span>Rutas</span>
                 </SidebarMenuButton>
               </CollapsibleTrigger>
@@ -212,7 +216,7 @@ export function DashboardNav() {
                      <SidebarMenuItem>
                         <CollapsibleTrigger asChild>
                             <SidebarMenuSubButton>
-                                <PlusCircle />
+                                <PlusCircle className={subIconClass} />
                                 <span>Planificación de Ruta</span>
                              </SidebarMenuSubButton>
                         </CollapsibleTrigger>
@@ -222,7 +226,7 @@ export function DashboardNav() {
                             <SidebarMenuSubItem>
                                 <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/prediction'}>
                                 <Link href="/dashboard/routes/prediction">
-                                    <Wand2 />
+                                    <Wand2 className={subIconClass} />
                                     <span>Predicción Ruta</span>
                                 </Link>
                                 </SidebarMenuSubButton>
@@ -230,7 +234,7 @@ export function DashboardNav() {
                             <SidebarMenuSubItem>
                                 <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/optimal-route'}>
                                 <Link href="/dashboard/routes/optimal-route">
-                                    <GitCommitHorizontal />
+                                    <GitCommitHorizontal className={subIconClass} />
                                     <span>Ruta Óptima</span>
                                 </Link>
                                 </SidebarMenuSubButton>
@@ -238,7 +242,7 @@ export function DashboardNav() {
                             <SidebarMenuSubItem>
                                <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes'}>
                                  <Link href="/dashboard/routes">
-                                    <List />
+                                    <List className={subIconClass} />
                                     <span>Mis Rutas</span>
                                  </Link>
                                </SidebarMenuSubButton>
@@ -249,7 +253,7 @@ export function DashboardNav() {
                  <SidebarMenuItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/management'}>
                       <Link href="/dashboard/routes/management">
-                        <ClipboardList />
+                        <ClipboardList className={subIconClass} />
                         <span>Gestión Ruta</span>
                       </Link>
                     </SidebarMenuSubButton>
@@ -258,7 +262,7 @@ export function DashboardNav() {
                     <SidebarMenuItem>
                         <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/routes/team-routes'}>
                             <Link href="/dashboard/routes/team-routes">
-                                <Users2 />
+                                <Users2 className={subIconClass} />
                                 <span>Rutas de Equipo</span>
                             </Link>
                         </SidebarMenuSubButton>
@@ -274,7 +278,7 @@ export function DashboardNav() {
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton tooltip="CRM">
-                  <Phone className="h-5 w-5" />
+                  <Phone className={iconClass} />
                   <span>CRM</span>
                 </SidebarMenuButton>
               </CollapsibleTrigger>
@@ -284,7 +288,7 @@ export function DashboardNav() {
                 <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/prediction'}>
                       <Link href="/dashboard/crm/prediction">
-                        <Wand2 />
+                        <Wand2 className={subIconClass} />
                         <span>Cola Inteligente</span>
                       </Link>
                     </SidebarMenuSubButton>
@@ -292,7 +296,7 @@ export function DashboardNav() {
                 <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/management'}>
                       <Link href="/dashboard/crm/management">
-                        <ClipboardList />
+                        <ClipboardList className={subIconClass} />
                         <span>Gestión de Llamada</span>
                       </Link>
                     </SidebarMenuSubButton>
@@ -300,7 +304,7 @@ export function DashboardNav() {
                 <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/crm/phone-base'}>
                       <Link href="/dashboard/crm/phone-base">
-                        <Database />
+                        <Database className={subIconClass} />
                         <span>Base Telefónica</span>
                       </Link>
                     </SidebarMenuSubButton>
@@ -315,7 +319,7 @@ export function DashboardNav() {
             <SidebarMenuItem>
               <CollapsibleTrigger asChild>
                 <SidebarMenuButton tooltip="Administración">
-                  <Users className="h-5 w-5" />
+                  <Users className={iconClass} />
                   <span>Administración</span>
                 </SidebarMenuButton>
               </CollapsibleTrigger>
@@ -325,7 +329,7 @@ export function DashboardNav() {
                 <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/users'}>
                       <Link href="/dashboard/users">
-                        <Users />
+                        <Users className={subIconClass} />
                         <span>Todos los Usuarios</span>
                       </Link>
                     </SidebarMenuSubButton>
@@ -333,7 +337,7 @@ export function DashboardNav() {
                 <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/users/supervisors'}>
                       <Link href="/dashboard/users/supervisors">
-                        <UserCheck />
+                        <UserCheck className={subIconClass} />
                         <span>Supervisores</span>
                       </Link>
                     </SidebarMenuSubButton>
@@ -341,7 +345,7 @@ export function DashboardNav() {
                 <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/users/permissions'}>
                       <Link href="/dashboard/users/permissions">
-                        <Lock />
+                        <Lock className={subIconClass} />
                         <span>Permisos</span>
                       </Link>
                     </SidebarMenuSubButton>
@@ -350,7 +354,7 @@ export function DashboardNav() {
                   <SidebarMenuSubItem>
                       <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/system/cron'}>
                         <Link href="/dashboard/system/cron">
-                          <Clock />
+                          <Clock className={subIconClass} />
                           <span>Cron Jobs</span>
                         </Link>
                       </SidebarMenuSubButton>
@@ -359,7 +363,7 @@ export function DashboardNav() {
                 <SidebarMenuSubItem>
                     <SidebarMenuSubButton asChild isActive={pathname === '/dashboard/system/usage'}>
                       <Link href="/dashboard/system/usage">
-                        <Settings2 />
+                        <Settings2 className={subIconClass} />
                         <span>Uso del Sistema</span>
                       </Link>
                     </SidebarMenuSubButton>
