@@ -66,6 +66,16 @@ export default function NewClientPage() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
+    
+    // Validación específica para RUC/Identificación: Solo números y máx 13 dígitos
+    if (id === 'ruc') {
+        const numericValue = value.replace(/\D/g, ''); // Eliminar cualquier cosa que no sea número
+        if (numericValue.length <= 13) {
+            setFormData(prev => ({ ...prev, [id]: numericValue }));
+        }
+        return;
+    }
+    
     setFormData(prev => ({ ...prev, [id]: value }));
   };
 
@@ -83,6 +93,17 @@ export default function NewClientPage() {
     
     if (!formData.ruc || !formData.nombre_cliente) {
         toast({ title: "Error", description: "RUC y Nombre del Cliente son campos obligatorios.", variant: "destructive" });
+        return;
+    }
+
+    // Validación de longitud para identificación ecuatoriana
+    const rucLength = formData.ruc.length;
+    if (rucLength !== 10 && rucLength !== 13) {
+        toast({ 
+            title: "Identificación Inválida", 
+            description: "La identificación debe tener exactamente 10 dígitos (Cédula) o 13 dígitos (RUC).", 
+            variant: "destructive" 
+        });
         return;
     }
 
@@ -174,7 +195,17 @@ export default function NewClientPage() {
 
             <div className="space-y-2">
               <Label htmlFor="ruc" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">RUC / Identificación</Label>
-              <Input id="ruc" placeholder="Ej: 1792233445001" value={formData.ruc} onChange={handleInputChange} required disabled={isLoading} className="h-11 font-mono font-bold text-slate-950" />
+              <Input 
+                id="ruc" 
+                placeholder="Ej: 1792233445001" 
+                value={formData.ruc} 
+                onChange={handleInputChange} 
+                required 
+                disabled={isLoading} 
+                className="h-11 font-mono font-bold text-slate-950" 
+                inputMode="numeric"
+              />
+              <p className="text-[9px] text-muted-foreground font-bold uppercase">Solo números (10 para Cédula, 13 para RUC)</p>
             </div>
 
              <div className="space-y-2 md:col-span-2">
