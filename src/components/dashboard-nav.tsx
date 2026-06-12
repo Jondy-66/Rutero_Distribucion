@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'link';
+import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -10,9 +10,6 @@ import {
   Briefcase,
   MapPin,
   ClipboardList,
-  PlusCircle,
-  FileText,
-  UserCheck,
   List,
   Wand2,
   Users2,
@@ -22,18 +19,16 @@ import {
   BarChart,
   Settings2,
   LocateFixed,
-  Clock,
   ChevronRight,
   Database,
+  FileText,
+  UserCheck,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import {
   SidebarMenu,
   SidebarMenuItem,
-  SidebarMenuButton,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/hooks/use-auth';
@@ -74,7 +69,7 @@ export function DashboardNav() {
   };
 
   const NavGroupHeader = ({ title }: { title: string }) => (
-    <div className="flex items-center gap-2 px-4 mt-5 mb-2 opacity-80">
+    <div className="flex items-center gap-2 px-4 mt-4 mb-2 opacity-80">
       <span className="text-[8px] font-black tracking-[0.2em] text-[#8F98A8] uppercase whitespace-nowrap">{title}</span>
       <div className="h-[1px] flex-1 bg-white/5 relative">
         <div className="absolute right-0 top-[-2px] h-[4px] w-[4px] rounded-full bg-[#8CC81F]" />
@@ -82,11 +77,11 @@ export function DashboardNav() {
     </div>
   );
 
-  const iconClass = "h-[17px] w-[17px] text-[#8CC81F] shrink-0 transition-all duration-300";
+  const iconClass = "h-[16px] w-[17px] text-[#8CC81F] shrink-0 transition-all duration-300";
   const subIconClass = "h-[13px] w-[13px] text-[#F4F6FA]/60 shrink-0";
 
   const buttonStyles = (active: boolean) => cn(
-    "flex w-full items-center gap-3 px-3.5 py-2 rounded-xl transition-all duration-200 group",
+    "flex w-full items-center gap-3 px-3.5 py-1.5 rounded-xl transition-all duration-200 group h-9",
     active 
       ? "bg-[#8CC81F]/10 border border-[#8CC81F]/30 text-[#F4F6FA] shadow-[0_0_15px_rgba(140,200,31,0.1)]" 
       : "text-[#8F98A8] hover:text-[#F4F6FA] hover:bg-white/5"
@@ -164,7 +159,7 @@ export function DashboardNav() {
             <SidebarMenuItem>
               <CollapsibleTrigger className={buttonStyles(pathname.startsWith('/dashboard/routes'))}>
                 <Route className={iconClass} />
-                <span className="flex-1 text-xs font-semibold">Rutas</span>
+                <span className="flex-1 text-xs font-semibold text-left">Rutas</span>
                 <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-200", isRoutesOpen && "rotate-90")} />
               </CollapsibleTrigger>
               <CollapsibleContent className="pl-5 border-l border-white/5 mt-0.5 ml-5 space-y-0.5">
@@ -227,7 +222,7 @@ export function DashboardNav() {
             <SidebarMenuItem>
               <CollapsibleTrigger className={buttonStyles(pathname.startsWith('/dashboard/crm'))}>
                 <Phone className={iconClass} />
-                <span className="flex-1 text-xs font-semibold">CRM Telemercadeo</span>
+                <span className="flex-1 text-xs font-semibold text-left">CRM Telemercadeo</span>
                 <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-200", isCrmOpen && "rotate-90")} />
               </CollapsibleTrigger>
               <CollapsibleContent className="pl-5 border-l border-white/5 mt-0.5 ml-5 space-y-0.5">
@@ -259,7 +254,7 @@ export function DashboardNav() {
             <SidebarMenuItem>
               <CollapsibleTrigger className={buttonStyles(pathname.startsWith('/dashboard/reports'))}>
                 <FileText className={iconClass} />
-                <span className="flex-1 text-xs font-semibold">Reportes</span>
+                <span className="flex-1 text-xs font-semibold text-left">Reportes</span>
                 <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-200", isReportsOpen && "rotate-90")} />
               </CollapsibleTrigger>
               <CollapsibleContent className="pl-5 border-l border-white/5 mt-0.5 ml-5 space-y-0.5">
@@ -282,8 +277,8 @@ export function DashboardNav() {
                     <Link href="/dashboard/reports/seller-reports" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/reports/seller-reports' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
                       <Users className={subIconClass} />
                       Reporte Vendedores
-                    </Link>
-                  </SidebarMenuSubItem>
+                  </Link>
+                </SidebarMenuSubItem>
                 )}
               </CollapsibleContent>
             </SidebarMenuItem>
@@ -295,7 +290,7 @@ export function DashboardNav() {
             <SidebarMenuItem>
               <CollapsibleTrigger className={buttonStyles(pathname.startsWith('/dashboard/users') || pathname.startsWith('/dashboard/system'))}>
                 <Lock className={iconClass} />
-                <span className="flex-1 text-xs font-semibold">Administración</span>
+                <span className="flex-1 text-xs font-semibold text-left">Administración</span>
                 <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-200", isUsersOpen && "rotate-90")} />
               </CollapsibleTrigger>
               <CollapsibleContent className="pl-5 border-l border-white/5 mt-0.5 ml-5 space-y-0.5">
