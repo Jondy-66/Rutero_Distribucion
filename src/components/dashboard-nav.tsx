@@ -150,7 +150,7 @@ export function DashboardNav() {
           <SidebarMenuItem>
             <Link href="/dashboard/map" className={buttonStyles(pathname === '/dashboard/map')}>
               <Map className={iconClass} />
-              <span className="text-sm font-semibold">Geomapa General</span>
+              <span className="text-sm font-semibold">Mapa</span>
             </Link>
           </SidebarMenuItem>
         )}
@@ -266,7 +266,7 @@ export function DashboardNav() {
                 <SidebarMenuSubItem>
                   <Link href="/dashboard/reports/my-completed-routes" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/reports/my-completed-routes' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
                     <List className={subIconClass} />
-                    Mis Rutas OK
+                    Rutas Completadas
                   </Link>
                 </SidebarMenuSubItem>
                 {(user?.role === 'Supervisor' || user?.role === 'Administrador' || user?.role === 'Auditor') && (
@@ -281,7 +281,7 @@ export function DashboardNav() {
                   <SidebarMenuSubItem>
                     <Link href="/dashboard/reports/seller-reports" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/reports/seller-reports' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
                       <Users className={subIconClass} />
-                      Log Vendedores
+                      Reporte Vendedores
                     </Link>
                   </SidebarMenuSubItem>
                 )}
