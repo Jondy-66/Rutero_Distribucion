@@ -49,6 +49,11 @@ export function DashboardNav() {
   const { user } = useAuth();
   
   const [isRoutesOpen, setIsRoutesOpen] = useState(pathname.startsWith('/dashboard/routes'));
+  const [isPlanOpen, setIsPlanOpen] = useState(
+    pathname === '/dashboard/routes/prediction' || 
+    pathname === '/dashboard/routes/optimal-route' || 
+    pathname === '/dashboard/routes/management'
+  );
   const [isCrmOpen, setIsCrmOpen] = useState(pathname.startsWith('/dashboard/crm'));
   const [isUsersOpen, setIsUsersOpen] = useState(pathname.startsWith('/dashboard/users') || pathname.startsWith('/dashboard/system'));
   const [isReportsOpen, setIsReportsOpen] = useState(pathname.startsWith('/dashboard/reports'));
@@ -163,41 +168,52 @@ export function DashboardNav() {
                 <ChevronRight className={cn("h-4 w-4 transition-transform duration-200", isRoutesOpen && "rotate-90")} />
               </CollapsibleTrigger>
               <CollapsibleContent className="pl-6 border-l border-white/5 mt-1 ml-6 space-y-1">
-                <SidebarMenuSubItem>
-                  <Link href="/dashboard/routes/management" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes/management' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                
+                {/* SUBGRUPO: Planificación de Ruta */}
+                <Collapsible open={isPlanOpen} onOpenChange={setIsPlanOpen}>
+                  <CollapsibleTrigger className={cn(
+                    "flex w-full items-center gap-2 py-2 text-xs font-medium transition-colors hover:text-[#F4F6FA]",
+                    isPlanOpen ? "text-[#8CC81F]" : "text-[#8F98A8]"
+                  )}>
                     <ClipboardList className={subIconClass} />
-                    Gestión Diaria
-                  </Link>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                  <Link href="/dashboard/routes/new" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes/new' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
-                    <PlusCircle className={subIconClass} />
-                    Planificar Semana
-                  </Link>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                  <Link href="/dashboard/routes/prediction" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes/prediction' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
-                    <Wand2 className={subIconClass} />
-                    IA Predicción
-                  </Link>
-                </SidebarMenuSubItem>
-                <SidebarMenuSubItem>
-                  <Link href="/dashboard/routes/optimal-route" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes/optimal-route' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
-                    <GitCommitHorizontal className={subIconClass} />
-                    Ruta Óptima
-                  </Link>
-                </SidebarMenuSubItem>
+                    <span className="flex-1 text-left">Planificación de Ruta</span>
+                    <ChevronRight className={cn("h-3 w-3 transition-transform duration-200", isPlanOpen && "rotate-90")} />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pl-4 border-l border-white/10 mt-1 space-y-1">
+                    <SidebarMenuSubItem>
+                      <Link href="/dashboard/routes/prediction" className={cn("flex items-center gap-2 py-2 text-[11px] font-medium", pathname === '/dashboard/routes/prediction' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                        <Wand2 className="h-3 w-3 shrink-0" />
+                        IA Predicción Ruta
+                      </Link>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <Link href="/dashboard/routes/optimal-route" className={cn("flex items-center gap-2 py-2 text-[11px] font-medium", pathname === '/dashboard/routes/optimal-route' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                        <GitCommitHorizontal className="h-3 w-3 shrink-0" />
+                        Ruta Optima
+                      </Link>
+                    </SidebarMenuSubItem>
+                    <SidebarMenuSubItem>
+                      <Link href="/dashboard/routes/management" className={cn("flex items-center gap-2 py-2 text-[11px] font-medium", pathname === '/dashboard/routes/management' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                        <Route className="h-3 w-3 shrink-0" />
+                        Gestión Ruta
+                      </Link>
+                    </SidebarMenuSubItem>
+                  </CollapsibleContent>
+                </Collapsible>
+
+                {/* OPCIONES FUERA DE PLANIFICACIÓN */}
                 <SidebarMenuSubItem>
                   <Link href="/dashboard/routes" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
                     <List className={subIconClass} />
                     Mis Rutas
                   </Link>
                 </SidebarMenuSubItem>
+
                 {(user?.role === 'Administrador' || user?.role === 'Supervisor') && (
                   <SidebarMenuSubItem>
                     <Link href="/dashboard/routes/team-routes" className={cn("flex items-center gap-2 py-2 text-xs font-medium", pathname === '/dashboard/routes/team-routes' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
                       <Users2 className={subIconClass} />
-                      Rutas de Equipo
+                      Rutas de equipo
                     </Link>
                   </SidebarMenuSubItem>
                 )}
