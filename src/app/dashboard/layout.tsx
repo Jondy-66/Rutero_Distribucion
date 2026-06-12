@@ -67,17 +67,17 @@ export default function DashboardLayout({
     <SidebarProvider>
       <Sidebar className="glass-sidebar border-none">
         <div className="flex flex-col h-full bg-transparent">
-          {/* HEADER PREMIUM */}
-          <SidebarHeader className="p-6 pb-2">
-            <Link href="/dashboard" className="flex items-center gap-4 group">
-              <div className="bg-[#8CC81F] text-white p-2.5 rounded-2xl shadow-[0_8px_20px_rgba(140,200,31,0.25)] transition-transform group-hover:scale-105">
-                <Route className="h-6 w-6" />
+          {/* HEADER PREMIUM COMPACTO */}
+          <SidebarHeader className="p-4 pb-1">
+            <Link href="/dashboard" className="flex items-center gap-3 group">
+              <div className="bg-[#8CC81F] text-white p-2 rounded-xl shadow-[0_8px_20px_rgba(140,200,31,0.25)] transition-transform group-hover:scale-105">
+                <Route className="h-5 w-5" />
               </div>
               <div className="flex flex-col">
-                <h1 className="text-xl font-black tracking-tighter text-[#F4F6FA] leading-none">
+                <h1 className="text-lg font-black tracking-tighter text-[#F4F6FA] leading-none">
                   Rutero
                 </h1>
-                <span className="text-[10px] font-bold text-[#8F98A8] uppercase tracking-widest mt-1">Gestión comercial</span>
+                <span className="text-[9px] font-bold text-[#8F98A8] uppercase tracking-widest mt-0.5">Gestión comercial</span>
               </div>
             </Link>
           </SidebarHeader>
@@ -87,31 +87,16 @@ export default function DashboardLayout({
             <DashboardNav />
           </SidebarContent>
 
-          {/* FOOTER PREMIUM */}
-          <SidebarFooter className="p-4 gap-3">
-            {/* TARJETA DE USUARIO */}
-            <div className="p-4 bg-[#121722] rounded-2xl border border-white/5 shadow-inner">
-                <div className="flex items-center gap-3">
-                    <Avatar className="h-9 w-9 border-2 border-[#8CC81F]/20">
-                        <AvatarImage src={user.avatar} />
-                        <AvatarFallback className="bg-[#8CC81F] text-white font-bold text-xs uppercase">{user.name.charAt(0)}</AvatarFallback>
-                    </Avatar>
-                    <div className="flex flex-col min-w-0">
-                        <p className="text-xs font-black text-[#F4F6FA] truncate">{user.name}</p>
-                        <div className="flex items-center gap-1.5">
-                            <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
-                            <span className="text-[9px] font-bold text-[#8F98A8] uppercase truncate">{user.role}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
+          {/* FOOTER PREMIUM COMPACTO */}
+          <SidebarFooter className="p-3 gap-1">
+            {/* SE ELIMINA LA TARJETA DE USUARIO PARA COMPACTAR EL MENÚ */}
 
             {/* BOTÓN CONFIGURACIÓN */}
             <Link href="/dashboard/profile">
-              <div className="flex items-center justify-between p-3 bg-[#121722]/50 hover:bg-[#121722] border border-white/5 rounded-xl transition-all group">
+              <div className="flex items-center justify-between p-2.5 bg-[#121722]/50 hover:bg-[#121722] border border-white/5 rounded-xl transition-all group">
                 <div className="flex items-center gap-3">
                     <Settings className="h-4 w-4 text-[#8CC81F]" />
-                    <span className="text-[11px] font-bold text-[#F4F6FA] uppercase tracking-tighter">Configuración</span>
+                    <span className="text-[10px] font-bold text-[#F4F6FA] uppercase tracking-tighter">Configuración</span>
                 </div>
                 <ChevronRight className="h-3 w-3 text-[#8F98A8] group-hover:translate-x-0.5 transition-transform" />
               </div>
@@ -120,7 +105,7 @@ export default function DashboardLayout({
             {/* BOTÓN CERRAR SESIÓN */}
             <Button 
                 variant="ghost" 
-                className="w-full justify-start gap-3 text-[#FF6B6B] hover:text-[#FF6B6B] hover:bg-[#FF6B6B]/10 h-11 px-4 rounded-xl font-bold text-[11px] uppercase tracking-tighter" 
+                className="w-full justify-start gap-3 text-[#FF6B6B] hover:text-[#FF6B6B] hover:bg-[#FF6B6B]/10 h-10 px-3 rounded-xl font-bold text-[10px] uppercase tracking-tighter" 
                 onClick={onSignOut}
             >
               <LogOut className="h-4 w-4" />
