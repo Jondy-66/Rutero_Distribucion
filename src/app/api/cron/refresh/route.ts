@@ -29,42 +29,10 @@ export async function GET(request: Request) {
     
     // 2. Cargar configuración de Cron desde Firestore
     const configSnap = await db.collection('system_config').doc('cron').get();
-    const config = configSnap.exists ? configSnap.data() : { enabled: true, active24h: true, scheduledDays: [1,2,3,4,5], refreshIntervalMinutes: 60 };
+    const config = configSnap.exists ? configSnap.data() : { enabled: true, active24h: true, scheduledDays: [1,2,3,4,5], refreshIntervalMinutes: 14 };
 
-    // 3. Validaciones de Ejecución
-    if (!config?.enabled) {
-      return NextResponse.json({ message: 'Cron Job está desactivado globalmente.' });
-    }
-
-    const now = new Date();
-    const today = now.getDay(); // 0 = Domingo, 1 = Lunes...
-    const isScheduledToday = config?.scheduledDays?.includes(today);
-
-    if (!isScheduledToday && !config?.active24h) {
-      return NextResponse.json({ message: 'Hoy no es un día programado para ejecución y modo 24h está desactivado.' });
-    }
-
-    // Validación de Intervalo
-    if (config.lastRun) {
-        const lastRun = config.lastRun.toDate();
-        const diffMinutes = Math.floor((now.getTime() - lastRun.getTime()) / 60000);
-        const minInterval = config.refreshIntervalMinutes || 60;
-
-        if (diffMinutes < minInterval) {
-            return NextResponse.json({ 
-                message: `Saltando ejecución. Faltan ${minInterval - diffMinutes} minutos para el próximo refresco.`,
-                lastRun: lastRun,
-                intervalSet: minInterval
-            });
-        }
-    }
-
-    const token = process.env.API_PREDICCION_TOKEN;
-    if (!token) throw new Error("Token de API externa no configurado.");
-
-    const report = [];
-
-    // 4. ACCIÓN KEEP-ALIVE: Ping a la API para evitar hibernación
+    // --- ACCIÓN KEEP-ALIVE (PRIORIDAD ALTA) ---
+    // Esta parte se ejecuta SIEMPRE para evitar la hibernación de 15 min de Render.
     const baseUrl = "https://api-distribucion-rutas.onrender.com";
     let apiAwake = false;
     try {
@@ -74,8 +42,46 @@ export async function GET(request: Request) {
         console.warn("Fallo al despertar API (Keep-Alive):", e);
     }
 
-    // 5. CIERRE AUTOMÁTICO DE RUTAS (Viernes 19:30+)
-    // Esta lógica asegura que las rutas "En Progreso" se cierren al finalizar la semana.
+    // 3. Validaciones de Ejecución para Tareas Pesadas (Sync)
+    if (!config?.enabled) {
+      return NextResponse.json({ 
+        message: 'Keep-Alive ejecutado, pero Sync está desactivado globalmente.',
+        apiStatus: apiAwake ? 'Awake' : 'Down'
+      });
+    }
+
+    const now = new Date();
+    const today = now.getDay(); // 0 = Domingo, 1 = Lunes...
+    const isScheduledToday = config?.scheduledDays?.includes(today);
+
+    if (!isScheduledToday && !config?.active24h) {
+      return NextResponse.json({ 
+        message: 'Keep-Alive ejecutado. Hoy no es un día programado para Sync.',
+        apiStatus: apiAwake ? 'Awake' : 'Down'
+      });
+    }
+
+    // Validación de Intervalo para Sincronización de Datos
+    if (config.lastRun) {
+        const lastRun = config.lastRun.toDate();
+        const diffMinutes = Math.floor((now.getTime() - lastRun.getTime()) / 60000);
+        const minInterval = config.refreshIntervalMinutes || 14;
+
+        if (diffMinutes < minInterval) {
+            return NextResponse.json({ 
+                message: `Keep-Alive OK. Sync saltado por intervalo (faltan ${minInterval - diffMinutes} min).`,
+                lastRun: lastRun,
+                apiStatus: apiAwake ? 'Awake' : 'Down'
+            });
+        }
+    }
+
+    const token = process.env.API_PREDICCION_TOKEN;
+    if (!token) throw new Error("Token de API externa no configurado.");
+
+    const report = [];
+
+    // 4. CIERRE AUTOMÁTICO DE RUTAS (Viernes 19:30+)
     const isFriday = now.getDay() === 5;
     const isWeekend = now.getDay() === 0 || now.getDay() === 6;
     const isPastClosureTime = now.getHours() > 19 || (now.getHours() === 19 && now.getMinutes() >= 30);
@@ -98,7 +104,7 @@ export async function GET(request: Request) {
       }
     }
 
-    // 6. Obtener ejecutivos activos para sincronización de datos
+    // 5. Obtener ejecutivos activos para sincronización de datos
     const usersSnapshot = await db.collection('users')
       .where('role', 'in', ['Usuario', 'Telemercaderista'])
       .where('status', '==', 'active')
@@ -135,7 +141,7 @@ export async function GET(request: Request) {
         }
     }
 
-    // 7. Registrar log y actualizar última ejecución
+    // 6. Registrar log y actualizar última ejecución
     await db.collection('system_logs').add({
       type: 'CRON_REFRESH',
       timestamp: now,

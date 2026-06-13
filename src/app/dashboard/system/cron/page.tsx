@@ -72,8 +72,8 @@ export default function CronJobsPage() {
 
     const diff = differenceInMinutes(new Date(), lastDate);
     
-    if (diff <= 20) return { status: 'Healthy', color: 'text-green-500', label: 'Sincronizado (API Awake)', diff };
-    if (diff <= 60) return { status: 'Warning', color: 'text-orange-500', label: 'API en Riesgo de Hibernación', diff };
+    if (diff <= 16) return { status: 'Healthy', color: 'text-green-500', label: 'Sincronizado (API Awake)', diff };
+    if (diff <= 30) return { status: 'Warning', color: 'text-orange-500', label: 'API en Riesgo de Hibernación', diff };
     return { status: 'Critical', color: 'text-red-600', label: 'API Hibernada (Desconectada)', diff };
   }, [logs]);
 
@@ -144,12 +144,12 @@ export default function CronJobsPage() {
                         <div>
                             <p className="text-[10px] font-black uppercase text-slate-500 tracking-tighter">Estado de API Render</p>
                             <h4 className={cn("text-lg font-black uppercase leading-tight", systemHealth.color)}>{systemHealth.label}</h4>
-                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Último contacto: {systemHealth.diff} min. ago</p>
+                            <p className="text-[9px] font-bold text-slate-400 uppercase mt-1">Último Sync: {systemHealth.diff} min. ago</p>
                         </div>
                     </div>
                     <div className="space-y-1.5">
                         <div className="flex justify-between text-[9px] font-black uppercase text-slate-400">
-                            <span>Frecuencia Programada</span>
+                            <span>Frecuencia de Sync</span>
                             <span>{config?.refreshIntervalMinutes} min</span>
                         </div>
                         <Progress value={Math.min(100, (14 / (config?.refreshIntervalMinutes || 14)) * 100)} className="h-1.5 bg-white/10" />
@@ -188,7 +188,7 @@ export default function CronJobsPage() {
             </CardHeader>
             <CardContent className="pt-6 space-y-4">
                 <div className="space-y-2">
-                    <Label className="text-[9px] font-black uppercase text-slate-500">URL del Endpoint (Cada 14 minutos)</Label>
+                    <Label className="text-[9px] font-black uppercase text-slate-500">URL del Endpoint (Configurar cada 10-14 min)</Label>
                     <div className="flex gap-2">
                         <Input 
                             readOnly 
@@ -228,7 +228,7 @@ export default function CronJobsPage() {
             <CardContent className="space-y-8">
               <div className="flex items-center justify-between p-5 bg-slate-50 rounded-2xl border-2 border-slate-100">
                 <div className="space-y-0.5">
-                  <Label className="text-sm font-black uppercase text-slate-950">Cron Job Maestro</Label>
+                  <Label className="text-sm font-black uppercase text-slate-950">Sincronización Maestra</Label>
                   <p className="text-[10px] font-black text-muted-foreground uppercase">Habilita pings automáticos y cierres de ruta semanales.</p>
                 </div>
                 <Switch checked={config?.enabled} onCheckedChange={(val) => setCronConfig(prev => prev ? { ...prev, enabled: val } : null)} />
@@ -238,21 +238,22 @@ export default function CronJobsPage() {
                   <div className="p-5 bg-slate-50 rounded-2xl border-2 border-slate-100 space-y-3">
                       <div className="flex items-center gap-2">
                           <Timer className="h-4 w-4 text-primary" />
-                          <Label className="text-xs font-black uppercase text-slate-950">Intervalo de Seguridad</Label>
+                          <Label className="text-xs font-black uppercase text-slate-950">Frecuencia de Sync</Label>
                       </div>
                       <div className="flex items-center gap-2">
                           <Input 
                               type="number" 
                               min="5" 
-                              value={config?.refreshIntervalMinutes || 60} 
-                              onChange={(e) => setCronConfig(prev => prev ? { ...prev, refreshIntervalMinutes: parseInt(e.target.value) || 60 } : null)}
+                              max="14"
+                              value={config?.refreshIntervalMinutes || 14} 
+                              onChange={(e) => setCronConfig(prev => prev ? { ...prev, refreshIntervalMinutes: parseInt(e.target.value) || 14 } : null)}
                               className="font-black text-center h-10 border-2 text-primary text-lg"
                           />
                           <span className="text-[10px] font-black uppercase text-slate-500">Minutos</span>
                       </div>
                       <Alert className="py-2 px-3 bg-blue-50 border-blue-200">
                         <Zap className="h-3 w-3 text-blue-600" />
-                        <AlertDescription className="text-[9px] font-bold text-blue-800 uppercase italic">RECOMENDADO: 14 MIN PARA EVITAR SUSPENSIÓN.</AlertDescription>
+                        <AlertDescription className="text-[9px] font-bold text-blue-800 uppercase italic">CRÍTICO: NO EXCEDER 14 MIN PARA EVITAR SUSPENSIÓN DE RENDER.</AlertDescription>
                       </Alert>
                   </div>
 
@@ -341,7 +342,7 @@ export default function CronJobsPage() {
             <AlertCircle className="h-4 w-4 text-amber-600" />
             <AlertTitle className="text-amber-800 font-black uppercase text-[10px]">Importante</AlertTitle>
             <AlertDescription className="text-amber-700 font-bold text-[9px] uppercase leading-tight">
-              Asegúrate de que tu servicio de Cron externo esté configurado para llamar a /api/cron/refresh con el token de autorización Bearer correspondiente.
+              Asegúrate de que tu servicio de Cron externo esté configurado para llamar a /api/cron/refresh con el token de autorización Bearer correspondiente. La API de Render hibernerá si no recibe una llamada en menos de 15 minutos.
             </AlertDescription>
           </Alert>
         </div>
