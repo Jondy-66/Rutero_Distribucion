@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -14,7 +15,7 @@ import {
 import { DashboardNav } from '@/components/dashboard-nav';
 import { UserNav } from '@/components/user-nav';
 import { Button } from '@/components/ui/button';
-import { Settings, LogOut, Route, MapPinOff, AlertCircle, Info, Satellite, ChevronRight } from 'lucide-react';
+import { Settings, LogOut, Route, MapPinOff, AlertCircle, Info, Satellite, ChevronRight, LoaderCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
 import { handleSignOut } from '@/lib/firebase/auth';
@@ -34,7 +35,7 @@ export default function DashboardLayout({
   const router = useRouter();
   const { toast } = useToast();
   
-  const { gpsEnabled, isPermissionDenied, isSignalWeak, requestPermission } = useTracker();
+  const { gpsEnabled, isPermissionDenied, isSignalWeak, isChecking, requestPermission } = useTracker();
 
   useEffect(() => {
     if (!loading && !user) {
@@ -89,8 +90,6 @@ export default function DashboardLayout({
 
           {/* FOOTER PREMIUM COMPACTO */}
           <SidebarFooter className="p-3 gap-1">
-            {/* SE ELIMINA LA TARJETA DE USUARIO PARA COMPACTAR EL MENÚ */}
-
             {/* BOTÓN CONFIGURACIÓN */}
             <Link href="/dashboard/profile">
               <div className="flex items-center justify-between p-2.5 bg-[#121722]/50 hover:bg-[#121722] border border-white/5 rounded-xl transition-all group">
@@ -132,7 +131,7 @@ export default function DashboardLayout({
             {/* BLOQUEO ESTRICTO GPS */}
             {isSeller && (isPermissionDenied || (!gpsEnabled && !isSignalWeak)) && (
                 <div className="fixed inset-0 z-[100] bg-[#0B0F18]/95 backdrop-blur-2xl flex items-center justify-center p-6 text-center">
-                    <Card className="max-w-md border-none bg-[#121722] shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[3rem] overflow-hidden">
+                    <Card className="max-w-md border-none bg-[#121722] shadow-[0_20px_50px_rgba(0,0,0,0.5)] rounded-[3rem] overflow-hidden animate-in fade-in zoom-in duration-500">
                         <CardHeader className="flex flex-col items-center gap-4 bg-[#8CC81F] text-white py-10">
                             <div className="bg-white/20 p-5 rounded-full backdrop-blur-md shadow-inner">
                                 <AlertCircle className="h-14 w-12 text-white" />
@@ -155,8 +154,19 @@ export default function DashboardLayout({
                                 </ul>
                             </div>
 
-                            <Button onClick={() => requestPermission()} className="w-full h-14 bg-[#8CC81F] hover:bg-[#9AD326] text-white font-black uppercase shadow-[0_10px_20px_rgba(140,200,31,0.3)] text-lg rounded-2xl transition-all">
-                                ACTIVAR RASTREO
+                            <Button 
+                                onClick={() => requestPermission(true)} 
+                                disabled={isChecking}
+                                className="w-full h-14 bg-[#8CC81F] hover:bg-[#9AD326] text-white font-black uppercase shadow-[0_10px_20px_rgba(140,200,31,0.3)] text-lg rounded-2xl transition-all flex items-center justify-center gap-3"
+                            >
+                                {isChecking ? (
+                                    <>
+                                        <LoaderCircle className="animate-spin h-6 w-6" />
+                                        <span>Verificando GPS...</span>
+                                    </>
+                                ) : (
+                                    "ACTIVAR RASTREO"
+                                )}
                             </Button>
                         </CardContent>
                     </Card>
