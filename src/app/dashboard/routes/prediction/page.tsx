@@ -11,7 +11,7 @@ import { Button } from "@/components/ui/button";
 import { LoaderCircle, Search, Save, MapPin, Download, Route, Users, AlertCircle } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
-import { format, parseISO, isValid } from 'date-fns';
+import { format, parseISO, isValid, isBefore, startOfDay, getDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/hooks/use-auth";
@@ -23,7 +23,19 @@ import { cn } from "@/lib/utils";
 
 export default function PrediccionesPage() {
   const router = useRouter();
-  const [fechaInicio, setFechaInicio] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const { toast } = useToast();
+  const { users, clients, user: currentUser } = useAuth();
+
+  // Función para obtener la fecha inicial válida (si hoy es fin de semana, saltar al lunes)
+  const getInitialValidDate = () => {
+    const now = new Date();
+    const day = getDay(now);
+    if (day === 6) return format(addDays(now, 2), 'yyyy-MM-dd'); // Sábado -> Lunes
+    if (day === 0) return format(addDays(now, 1), 'yyyy-MM-dd'); // Domingo -> Lunes
+    return format(now, 'yyyy-MM-dd');
+  };
+
+  const [fechaInicio, setFechaInicio] = useState(getInitialValidDate());
   const [dias, setDias] = useState<number | ''>(7);
   
   const [predicciones, setPredicciones] = useState<Prediction[]>([]);
@@ -34,8 +46,6 @@ export default function PrediccionesPage() {
   const [selectedLocation, setSelectedLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [clientsForMap, setClientsForMap] = useState<Client[]>([]);
-  const { toast } = useToast();
-  const { users, clients, user: currentUser } = useAuth();
 
   const isSupervisorOrAdmin = currentUser?.role === 'Administrador' || currentUser?.role === 'Supervisor';
   
@@ -53,7 +63,46 @@ export default function PrediccionesPage() {
     if (currentUser && !isSupervisorOrAdmin) setSelectedEjecutivo(currentUser.name);
   }, [isSupervisorOrAdmin, currentUser]);
 
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (!val) return;
+
+    const selectedDate = parseISO(val);
+    const today = startOfDay(new Date());
+
+    // 1. Validar que no sea menor a hoy
+    if (isBefore(startOfDay(selectedDate), today)) {
+        toast({
+            title: "Fecha Inválida",
+            description: "La fecha de inicio no puede ser menor a la fecha de hoy.",
+            variant: "destructive"
+        });
+        return;
+    }
+
+    // 2. Validar que no sea sábado (6) o domingo (0)
+    const day = getDay(selectedDate);
+    if (day === 6 || day === 0) {
+        toast({
+            title: "Día no Laboral",
+            description: "La fecha de inicio no puede ser Sábado o Domingo.",
+            variant: "destructive"
+        });
+        return;
+    }
+
+    setFechaInicio(val);
+  };
+
   const obtenerPredicciones = async () => {
+    // Re-validar antes de ejecutar por seguridad
+    const selectedDate = parseISO(fechaInicio);
+    const day = getDay(selectedDate);
+    if (day === 6 || day === 0 || isBefore(startOfDay(selectedDate), startOfDay(new Date()))) {
+        toast({ title: "Atención", description: "La fecha seleccionada no es válida para iniciar una predicción.", variant: "destructive" });
+        return;
+    }
+
     setLoading(true);
     setHasAttempted(true);
     setPredicciones([]); 
@@ -76,7 +125,6 @@ export default function PrediccionesPage() {
   };
  
   const filteredPredicciones = useMemo(() => {
-    // 1. Filtrar por término de búsqueda (ejecutivo) si aplica
     let list = predicciones.filter(p => {
         if (isSupervisorOrAdmin) {
              const execName = (p as any).Ejecutivo || (p as any).ejecutivo || '';
@@ -85,14 +133,9 @@ export default function PrediccionesPage() {
         return true;
     });
 
-    // 2. DESCARTAR CLIENTES INACTIVOS (NUEVO REQUERIMIENTO)
-    // Filtramos la lista de predicciones comparando con el estado actual en el catálogo de clientes
     list = list.filter(p => {
         const ruc = String((p as any).cliente_id || (p as any).RUC || (p as any).ruc || '').trim();
         const clientInCatalog = clients.find(c => String(c.ruc).trim() === ruc);
-        
-        // Si el cliente existe en el catálogo y está INACTIVO, se descarta de los resultados.
-        // Si el cliente no existe (prospecto nuevo de la IA), se permite.
         if (clientInCatalog && clientInCatalog.status === 'inactive') {
             return false;
         }
@@ -216,6 +259,8 @@ export default function PrediccionesPage() {
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
   };
 
+  const todayStr = format(new Date(), 'yyyy-MM-dd');
+
   return (
     <>
       <PageHeader title="Predicciones de Visitas" description="IA para predecir visitas." />
@@ -234,7 +279,16 @@ export default function PrediccionesPage() {
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="space-y-2"><Label>Fecha Inicio</Label><Input type="date" value={fechaInicio} onChange={(e) => setFechaInicio(e.target.value)} /></div>
+                    <div className="space-y-2">
+                        <Label>Fecha Inicio</Label>
+                        <Input 
+                            type="date" 
+                            value={fechaInicio} 
+                            onChange={handleDateChange} 
+                            min={todayStr}
+                        />
+                        <p className="text-[10px] text-muted-foreground font-bold uppercase mt-1">Lunes a Viernes únicamente.</p>
+                    </div>
                     <div className="space-y-2"><Label>Días</Label><Input type="number" value={dias} onChange={(e) => setDias(e.target.value === '' ? '' : parseInt(e.target.value))} min="1" /></div>
                 </div>
             </CardContent>
