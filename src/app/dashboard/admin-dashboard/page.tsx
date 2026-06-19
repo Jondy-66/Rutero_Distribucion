@@ -21,7 +21,7 @@ import {
 import { Target, TrendingUp, Users, Wallet, Activity, Database } from 'lucide-react';
 import Image from 'next/image';
 import { useMemo } from 'react';
-import { isWithinInterval, startOfWeek, endOfWeek, eachDayOfInterval, format, getDay, startOfMonth, endOfMonth } from 'date-fns';
+import { isWithinInterval, startOfWeek, endOfWeek, eachDayOfInterval, format, getDay, startOfMonth, endOfMonth, startOfDay, endOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Timestamp } from 'firebase/firestore';
 import { Progress } from '@/components/ui/progress';
@@ -36,7 +36,7 @@ const portfolioData = [
 
 const CircularProgress = ({ value, label, subLabel, colorClass = 'text-primary' }) => {
   const circumference = 2 * Math.PI * 45;
-  const offset = circumference - (value / 100) * circumference;
+  const offset = circumference - (Math.min(100, value) / 100) * circumference;
 
   return (
     <div className="flex flex-col items-center gap-2 text-center w-full">
@@ -92,18 +92,19 @@ export default function AdminDashboardPage() {
         }));
         
         const relevantRoutes = routes.filter(route => {
-            const routeDate = route.date;
-            return route.status === 'Completada' && routeDate && isWithinInterval(routeDate, { start, end });
+            const routeDate = route.date instanceof Timestamp ? route.date.toDate() : (route.date instanceof Date ? route.date : new Date(route.date));
+            // Incluimos rutas completadas y en progreso para ver el avance real
+            return (route.status === 'Completada' || route.status === 'En Progreso') && routeDate && isWithinInterval(routeDate, { start: startOfDay(start), end: endOfDay(end) });
         });
 
         relevantRoutes.forEach(route => {
-            const routeDate = route.date;
+            const routeDate = route.date instanceof Timestamp ? route.date.toDate() : (route.date instanceof Date ? route.date : new Date(route.date));
             if(routeDate){
                 const dayIndex = getDay(routeDate) === 0 ? 6 : getDay(routeDate) - 1; // Lunes = 0, Domingo = 6
                 if (dayIndex >= 0 && dayIndex < 7) {
                     const totalSales = route.clients
                         .filter(c => c.visitStatus === 'Completado' && c.valorVenta)
-                        .reduce((sum, c) => sum + (c.valorVenta || 0), 0);
+                        .reduce((sum, c) => sum + (parseFloat(String(c.valorVenta)) || 0), 0);
                     weekData[dayIndex].value += totalSales;
                 }
             }
@@ -124,17 +125,17 @@ export default function AdminDashboardPage() {
         const monthStart = startOfMonth(today);
         const monthEnd = endOfMonth(today);
 
-        const monthlyCompletedRoutes = routes.filter(r =>
-            r.status === 'Completada' && r.date && isWithinInterval(r.date, { start: monthStart, end: monthEnd })
+        const monthlyRoutes = routes.filter(r =>
+            (r.status === 'Completada' || r.status === 'En Progreso') && r.date && isWithinInterval(r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any), { start: monthStart, end: monthEnd })
         );
 
         let totalSales = 0;
         let totalCollections = 0;
-        monthlyCompletedRoutes.forEach(route => {
+        monthlyRoutes.forEach(route => {
             route.clients.forEach(c => {
                 if (c.visitStatus === 'Completado') {
-                    totalSales += c.valorVenta || 0;
-                    totalCollections += c.valorCobro || 0;
+                    totalSales += parseFloat(String(c.valorVenta || 0)) || 0;
+                    totalCollections += parseFloat(String(c.valorCobro || 0)) || 0;
                 }
             });
         });
@@ -142,7 +143,7 @@ export default function AdminDashboardPage() {
         const salesGoal = 156000;
         const collectionGoal = 15000;
 
-        const allProgrammedRoutes = routes.filter(r => r.status !== 'Rechazada');
+        const allProgrammedRoutes = routes.filter(r => r.status !== 'Rechazada' && r.status !== 'Pendiente de Aprobación');
         const allCompletedRoutes = allProgrammedRoutes.filter(r => r.status === 'Completada');
 
         return {
@@ -160,7 +161,7 @@ export default function AdminDashboardPage() {
         const executiveStats: { [key: string]: { planned: number, visited: number } } = {};
 
         routes.forEach(route => {
-            if (route.status === 'Completada') {
+            if (route.status === 'Completada' || route.status === 'En Progreso') {
                 const creatorId = route.createdBy;
                 if (!executiveStats[creatorId]) {
                     executiveStats[creatorId] = { planned: 0, visited: 0 };
@@ -193,7 +194,7 @@ export default function AdminDashboardPage() {
     const operativeSummaryData = useMemo(() => {
         const sellers = users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
         return sellers.map(seller => {
-            const sellerRoutes = routes.filter(r => r.createdBy === seller.id && r.status === 'Completada');
+            const sellerRoutes = routes.filter(r => r.createdBy === seller.id && (r.status === 'Completada' || r.status === 'En Progreso'));
             let totalSales = 0;
             let visitedClientsCount = 0;
             let plannedClientsCount = 0;
@@ -202,7 +203,7 @@ export default function AdminDashboardPage() {
                 const visitedInRoute = route.clients.filter(c => c.visitStatus === 'Completado');
                 visitedClientsCount += visitedInRoute.length;
                 plannedClientsCount += route.clients.filter(c => c.status !== 'Eliminado').length;
-                totalSales += visitedInRoute.reduce((sum, c) => sum + (c.valorVenta || 0), 0);
+                totalSales += visitedInRoute.reduce((sum, c) => sum + (parseFloat(String(c.valorVenta)) || 0), 0);
             });
             
             return {
@@ -229,7 +230,7 @@ export default function AdminDashboardPage() {
           <div className="absolute inset-0 bg-gradient-to-r from-primary/90 to-primary/60" />
           <div className="relative text-primary-foreground">
               <h1 className="text-2xl sm:text-4xl font-bold uppercase tracking-tighter">FUERZA DE VENTAS & COBRANZA</h1>
-              <p className="text-sm sm:text-lg font-bold">KPIS SEMANALES</p>
+              <p className="text-sm sm:text-lg font-bold">KPIS SEMANALES (VIVO)</p>
           </div>
       </div>
 
@@ -377,7 +378,7 @@ export default function AdminDashboardPage() {
       
       <Card className="shadow-lg border-t-2">
           <CardHeader>
-              <CardTitle className="font-black text-slate-950 uppercase text-lg">Resumen Operativo por Ejecutivo</CardTitle>
+              <CardTitle className="font-black text-slate-950 uppercase text-lg">Resumen Operativo por Ejecutivo (Real-Time)</CardTitle>
           </CardHeader>
           <CardContent>
               <div className="overflow-x-auto rounded-xl border-2 border-slate-50">
@@ -407,3 +408,4 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+

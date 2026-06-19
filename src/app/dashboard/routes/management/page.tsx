@@ -50,6 +50,9 @@ const ensureDate = (d: any): Date => {
   return isNaN(date.getTime()) ? new Date() : date;
 };
 
+/**
+ * Sanitiza el array de clientes asegurando que se preserven todos los datos de gestión.
+ */
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     if (!clients) return [];
     return clients.map(c => {
@@ -206,7 +209,7 @@ function RouteManagementContent() {
           setLocalCobro('');
           setLocalDevol('');
       }
-  }, [activeOriginalIndex, activeClient?.ruc]);
+  }, [activeOriginalIndex, activeClient?.ruc, activeClient?.visitStatus]); // Añadido visitStatus como trigger por seguridad
 
   useEffect(() => {
     if (!selectedRouteId && selectableRoutes.length > 0) {
