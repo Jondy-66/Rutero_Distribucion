@@ -21,7 +21,8 @@ import { PageHeader } from '@/components/page-header';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Timestamp, GeoPoint } from 'firebase/firestore';
+import { Timestamp, GeoPoint, onSnapshot, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase/config';
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -109,6 +110,7 @@ function RouteManagementContent() {
   const router = useRouter();
   
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>(searchParams.get('routeId') || undefined);
+  const [routeOverride, setRouteOverride] = useState<RoutePlan | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('all');
   const [activeOriginalIndex, setActiveOriginalIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -126,6 +128,27 @@ function RouteManagementContent() {
 
   const isAdmin = user?.role === 'Administrador';
   const isManager = isAdmin || user?.role === 'Supervisor';
+
+  // Listener en tiempo real para el documento de la ruta seleccionada
+  useEffect(() => {
+    const rid = selectedRouteId || searchParams.get('routeId');
+    if (!rid) {
+      setRouteOverride(null);
+      return;
+    }
+
+    const unsub = onSnapshot(doc(db, 'routes', rid), 
+      (snap) => {
+        if (snap.exists()) {
+          setRouteOverride({ id: snap.id, ...snap.data() } as any);
+        }
+      },
+      (error) => {
+        console.error("Error direct route sync:", error);
+      }
+    );
+    return () => unsub();
+  }, [selectedRouteId, searchParams]);
 
   useEffect(() => {
     const check = () => setIsExpired(new Date().getHours() >= 19 && !isAdmin);
@@ -157,43 +180,10 @@ function RouteManagementContent() {
   }, [allRoutes, user, isAdmin, isManager, selectedAgentId, managedUsers]);
 
   const selectedRoute = useMemo(() => {
+    if (routeOverride) return routeOverride;
     const rid = selectedRouteId || searchParams.get('routeId');
     return allRoutes.find(r => r.id === rid);
-  }, [selectedRouteId, allRoutes, searchParams]);
-
-  useEffect(() => {
-    if (!selectedRoute || selectedRoute.status !== 'En Progreso' || isAdmin) return;
-
-    const checkAutoClosure = async () => {
-      const now = new Date();
-      const isFriday = now.getDay() === 5;
-      const isWeekend = now.getDay() === 0 || now.getDay() === 6;
-      const isPastClosureTime = now.getHours() > 19 || (now.getHours() === 19 && now.getMinutes() >= 30);
-
-      if ((isFriday && isPastClosureTime) || isWeekend) {
-        try {
-          const sanitized = sanitizeClients(selectedRoute.clients);
-          updateRoute(selectedRoute.id, { 
-            status: 'Completada', 
-            clients: sanitized,
-            supervisorObservation: 'Cierre automático por finalización de semana (Viernes 19:30).' 
-          });
-          toast({ 
-            title: "Cierre de Semana", 
-            description: "Tu ruta ha sido completada automáticamente.",
-          });
-          setSelectedRouteId(undefined);
-          setActiveOriginalIndex(null);
-        } catch (e) {
-          console.error("Auto-closure error:", e);
-        }
-      }
-    };
-
-    checkAutoClosure();
-    const interval = setInterval(checkAutoClosure, 60000);
-    return () => clearInterval(interval);
-  }, [selectedRoute, isAdmin, toast]);
+  }, [routeOverride, selectedRouteId, allRoutes, searchParams]);
 
   const activeClient = useMemo(() => {
     return activeOriginalIndex !== null && selectedRoute?.clients[activeOriginalIndex] 
@@ -244,8 +234,7 @@ function RouteManagementContent() {
         .filter(c => {
             if (c.status === 'Eliminado') return false;
             
-            // Unificamos el filtro: Todos los roles ven únicamente los clientes de hoy
-            // Esto permite que el Admin vea exactamente lo mismo que el usuario, incluyendo repeticiones.
+            // Administradores y Usuarios ven exactamente lo mismo: Filtro de fecha para hoy
             if (!c.date) return false;
             const clientDate = startOfDay(ensureDate(c.date));
             return isSameDay(clientDate, today);
@@ -452,11 +441,6 @@ function RouteManagementContent() {
   const handleAddClients = async () => {
     if (!selectedRoute || multiSelectedClients.length === 0 || isSaving) return;
     
-    if (isTodayFinished && !isAdmin) {
-        toast({ title: "Jornada Completa", description: "No puedes añadir más clientes tras finalizar tu jornada.", variant: "destructive" });
-        return;
-    }
-
     if (!reAdditionObservation.trim()) {
         toast({ title: "Motivo Requerido", description: "Indica por qué estás agregando este cliente extra.", variant: "destructive" });
         return;
