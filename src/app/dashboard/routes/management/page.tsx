@@ -243,11 +243,15 @@ function RouteManagementContent() {
         })
         .filter(c => {
             if (c.status === 'Eliminado') return false;
+            // CRÍTICO: Los administradores y supervisores deben ver TODOS los clientes de la ruta
+            // para poder auditar los que ya están OK y los que el usuario ha añadido.
+            if (isManager) return true;
+            
             if (!c.date) return false;
             const clientDate = startOfDay(ensureDate(c.date));
             return isSameDay(clientDate, today);
         });
-  }, [selectedRoute, clientsLookupMap]);
+  }, [selectedRoute, clientsLookupMap, isManager]);
 
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
   const isJornadaBloqueada = isExpired && !isAdmin;
