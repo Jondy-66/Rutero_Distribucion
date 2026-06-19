@@ -28,7 +28,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
-import { debounce } from 'lodash';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -44,6 +43,7 @@ import {
 const ensureDate = (d: any): Date => {
   if (!d) return new Date();
   if (d instanceof Date) return d;
+  if (d instanceof Timestamp) return d.toDate();
   if (d && typeof d.toDate === 'function') return d.toDate();
   if (d && typeof d.seconds === 'number') return new Date(d.seconds * 1000);
   const date = new Date(d);
@@ -59,7 +59,7 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
             ruc: c.ruc || '',
             nombre_comercial: c.nombre_comercial || 'Sin Nombre',
             visitStatus: c.visitStatus || 'Pendiente',
-            status: c.status || 'active',
+            status: c.status || 'Activo',
             visitType: c.visitType || null,
             isReadded: !!c.isReadded,
             reAdditionObservation: c.reAdditionObservation || '',
@@ -253,65 +253,6 @@ function RouteManagementContent() {
   const isJornadaBloqueada = isExpired && !isAdmin;
   const isEditingActiveClientDisabled = (activeClient?.visitStatus === 'Completado' || isJornadaBloqueada) && !isAdmin;
 
-  const debouncedSave = useCallback(
-    debounce((field: keyof ClientInRoute, value: any, routeId: string, currentClients: ClientInRoute[], index: number) => {
-      const nextClients = [...currentClients];
-      nextClients[index] = { ...nextClients[index], [field]: value };
-      const sanitized = sanitizeClients(nextClients);
-      
-      updateRoute(routeId, { clients: sanitized }).catch(async () => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-            path: `routes/${routeId}`, 
-            operation: 'update', 
-            requestResourceData: { clients: sanitized } 
-        }));
-      });
-    }, 500),
-    []
-  );
-
-  const handleFieldChange = (field: keyof ClientInRoute, value: any) => {
-    if (!selectedRoute || activeOriginalIndex === null || isEditingActiveClientDisabled || isSaving) return;
-    
-    if (field === 'visitObservation') setLocalVisitObs(value);
-    if (field === 'callObservation') setLocalCallObs(value);
-    if (field === 'valorVenta') setLocalVenta(value);
-    if (field === 'valorCobro') setLocalCobro(value);
-    if (field === 'devoluciones') setLocalDevol(value);
-
-    if (field === 'visitObservation' || field === 'callObservation') {
-        debouncedSave(field, value, selectedRoute.id, selectedRoute.clients, activeOriginalIndex);
-    } else if (field !== 'valorVenta' && field !== 'valorCobro' && field !== 'devoluciones') {
-        const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
-        nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], [field]: value };
-        const sanitized = sanitizeClients(nextClients);
-        
-        updateRoute(selectedRoute.id, { clients: sanitized }).catch(async () => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-                path: `routes/${selectedRoute.id}`, 
-                operation: 'update', 
-                requestResourceData: { clients: sanitized } 
-            }));
-        });
-    }
-  };
-
-  const handleNumericBlur = (field: keyof ClientInRoute, value: string) => {
-      if (!selectedRoute || activeOriginalIndex === null || isEditingActiveClientDisabled || isSaving) return;
-      
-      const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
-      nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], [field]: value };
-      const sanitized = sanitizeClients(nextClients);
-      
-      updateRoute(selectedRoute.id, { clients: sanitized }).catch(async () => {
-          errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-              path: `routes/${selectedRoute.id}`, 
-              operation: 'update', 
-              requestResourceData: { clients: sanitized } 
-          }));
-      });
-  };
-
   const handleRemoveClient = (originalIndex: number) => {
     if (!selectedRoute || isSaving) return;
 
@@ -360,7 +301,6 @@ function RouteManagementContent() {
         
         const sanitized = sanitizeClients(nextClients);
         
-        // Mutación no bloqueante: quitamos el await
         updateRoute(selectedRoute.id, { clients: sanitized })
             .catch(async () => {
                 errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `routes/${selectedRoute.id}`, operation: 'update', requestResourceData: { clients: sanitized } }));
@@ -370,7 +310,6 @@ function RouteManagementContent() {
                 toast({ title: "Llegada marcada", description: "Puedes iniciar la gestión." });
             });
 
-        // GPS en segundo plano silencioso
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 p => {
@@ -421,7 +360,6 @@ function RouteManagementContent() {
         const allDone = nextClients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
         const sanitized = sanitizeClients(nextClients);
         
-        // Mutación no bloqueante
         updateRoute(selectedRoute.id, { 
             clients: sanitized, 
             status: allDone ? 'Completada' : 'En Progreso' 
@@ -435,7 +373,6 @@ function RouteManagementContent() {
             toast({ title: "Gestión Cerrada", description: "La visita se ha registrado exitosamente." });
         });
 
-        // GPS silencioso
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 p => {
@@ -471,7 +408,7 @@ function RouteManagementContent() {
             nombre_comercial: c.nombre_comercial, 
             date: now, 
             visitStatus: 'Pendiente', 
-            status: 'active', 
+            status: 'Activo', 
             isReadded: true, 
             reAdditionObservation: reAdditionObservation || '',
             visitObservation: '',
@@ -713,7 +650,11 @@ function RouteManagementContent() {
                                 <div className={cn("space-y-6 lg:space-y-10 transition-all duration-500", !activeClient.checkInTime && !isManager && "opacity-20 pointer-events-none blur-[2px]")}>
                                     <div className="space-y-4">
                                         <Label className="text-[10px] lg:text-xs font-black uppercase text-slate-500 tracking-widest">Tipo de Gestión</Label>
-                                        <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4 lg:gap-6" disabled={isEditingActiveClientDisabled || isSaving}>
+                                        <RadioGroup onValueChange={v => {
+                                            const nextClients = [...selectedRoute.clients];
+                                            nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], visitType: v as any };
+                                            updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) });
+                                        }} value={activeClient.visitType || undefined} className="grid grid-cols-2 gap-4 lg:gap-6" disabled={isEditingActiveClientDisabled || isSaving}>
                                             <Label className={cn("flex flex-col items-center gap-3 lg:gap-4 border-2 p-4 lg:p-8 rounded-[2rem] lg:rounded-[2.5rem] cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "bg-slate-50 hover:bg-slate-100")}>
                                                 <RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-8 w-8 lg:h-10 lg:w-10 text-primary" /><span className="text-[10px] lg:text-sm font-black uppercase">Presencial</span>
                                             </Label>
@@ -729,7 +670,7 @@ function RouteManagementContent() {
                                             <Textarea 
                                                 className="font-black text-sm lg:text-base border-2 rounded-2xl text-slate-950 h-24 lg:h-32 focus:ring-4 focus:ring-primary/10" 
                                                 value={localVisitObs} 
-                                                onChange={e => handleFieldChange('visitObservation', e.target.value)} 
+                                                onChange={e => setLocalVisitObs(e.target.value)} 
                                                 disabled={isEditingActiveClientDisabled || isSaving} 
                                                 placeholder="Detalles de la gestión..." 
                                             />
@@ -741,7 +682,7 @@ function RouteManagementContent() {
                                                 <Textarea 
                                                     className="font-black text-sm lg:text-base border-2 rounded-2xl text-slate-950 h-20 lg:h-24 focus:ring-4 focus:ring-primary/10" 
                                                     value={localCallObs} 
-                                                    onChange={e => handleFieldChange('callObservation', e.target.value)} 
+                                                    onChange={e => setLocalCallObs(e.target.value)} 
                                                     disabled={isEditingActiveClientDisabled || isSaving} 
                                                     placeholder="Resumen obligatorio de la llamada..." 
                                                 />
@@ -756,8 +697,7 @@ function RouteManagementContent() {
                                                 type="text" 
                                                 className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" 
                                                 value={localVenta} 
-                                                onChange={e => handleFieldChange('valorVenta', e.target.value)} 
-                                                onBlur={() => handleNumericBlur('valorVenta', localVenta)}
+                                                onChange={e => setLocalVenta(e.target.value)} 
                                                 disabled={isEditingActiveClientDisabled || isSaving} 
                                             />
                                         </div>
@@ -767,8 +707,7 @@ function RouteManagementContent() {
                                                 type="text" 
                                                 className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" 
                                                 value={localCobro} 
-                                                onChange={e => handleFieldChange('valorCobro', e.target.value)} 
-                                                onBlur={() => handleNumericBlur('valorCobro', localCobro)}
+                                                onChange={e => setLocalCobro(e.target.value)} 
                                                 disabled={isEditingActiveClientDisabled || isSaving} 
                                             />
                                         </div>
@@ -778,8 +717,7 @@ function RouteManagementContent() {
                                                 type="text" 
                                                 className="h-12 lg:h-16 text-lg lg:text-2xl font-black text-primary border-2 rounded-xl lg:rounded-2xl text-center text-slate-950 bg-slate-50/50" 
                                                 value={localDevol} 
-                                                onChange={e => handleFieldChange('devoluciones', e.target.value)} 
-                                                onBlur={() => handleNumericBlur('devoluciones', localDevol)}
+                                                onChange={e => setLocalDevol(e.target.value)} 
                                                 disabled={isEditingActiveClientDisabled || isSaving} 
                                             />
                                         </div>
