@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter, notFound } from 'next/navigation';
@@ -47,7 +48,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isRecovering, setIsRecovering] = useState(false);
   
   const [calendarOpen, setCalendarOpen] = useState<{[key: number]: boolean}>({});
 
@@ -102,7 +102,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     setRoute(prev => (prev ? { ...prev, [field]: value } : null));
   };
   
-  // CORRECCIÓN CRÍTICA: Usar el índice original para mutaciones independientes (evita colisiones por RUC repetido)
   const handleClientValueChange = useCallback((index: number, field: keyof Omit<ClientInRoute, 'ruc' | 'nombre_comercial'>, value: any) => {
       setClientsInRoute(prev => {
           const next = [...prev];
@@ -153,8 +152,8 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       });
 
       await refetchData('routes');
-      toast({ title: 'Éxito', description: 'La ruta ha sido aprobada.' });
-      router.push('/dashboard/team-routes' || '/dashboard/routes/team-routes');
+      toast({ title: 'Éxito', description: 'La ruta ha sido aprobada y enviada a gestión.' });
+      router.push('/dashboard/routes/management');
     } catch (error) {
       toast({ title: 'Error al aprobar', variant: 'destructive' });
     } finally {
@@ -213,6 +212,8 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       });
       await refetchData('routes');
       toast({ title: 'Éxito', description: `Ruta actualizada correctamente.` });
+      // Regresa a la pestaña de gestión de ruta tras actualizar paradas
+      router.push('/dashboard/routes/management');
     } catch (error) {
       toast({ title: 'Error al actualizar', variant: 'destructive' });
     } finally {

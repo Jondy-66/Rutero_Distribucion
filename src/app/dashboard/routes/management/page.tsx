@@ -243,8 +243,6 @@ function RouteManagementContent() {
         })
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            // CRÍTICO: Los administradores y supervisores deben ver TODOS los clientes de la ruta
-            // para poder auditar los que ya están OK y los que el usuario ha añadido.
             if (isManager) return true;
             
             if (!c.date) return false;
@@ -347,7 +345,7 @@ function RouteManagementContent() {
     
     try {
         const loc = await new Promise<any>(r => {
-            const timeout = setTimeout(() => r(null), 3500); // 3.5s timeout for GPS
+            const timeout = setTimeout(() => r(null), 3500); 
             navigator.geolocation.getCurrentPosition(
                 p => { clearTimeout(timeout); r({latitude: p.coords.latitude, longitude: p.coords.longitude}); }, 
                 () => { clearTimeout(timeout); r(null); }, 
@@ -484,7 +482,8 @@ function RouteManagementContent() {
                 setIsAddClientDialogOpen(false); 
                 setMultiSelectedClients([]); 
                 setReAdditionObservation('');
-                toast({ title: "Clientes añadidos", description: "Se han agregado nuevas paradas." });
+                setActiveOriginalIndex(null); // Regresa a la vista de gestión (listado)
+                toast({ title: "Cliente Añadido", description: "Se ha agregado la parada a tu gestión de hoy." });
             })
             .catch(async () => {
                 errorEmitter.emit('permission-error', new FirestorePermissionError({ 

@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -44,13 +45,12 @@ export default function NewUserPage() {
   
   const [routeName, setRouteName] = useState('');
   
-  // Lógica de fecha inteligente: Si es fin de semana, sugerir próximo lunes.
   const [routeDate, setRouteDate] = useState<Date | undefined>(() => {
       const now = new Date();
       const day = now.getDay();
-      if (day === 6) return addDays(now, 2); // Sábado -> Lunes
-      if (day === 0) return addDays(now, 1); // Domingo -> Lunes
-      if (day === 5 && now.getHours() >= 19) return addDays(now, 3); // Viernes noche -> Lunes
+      if (day === 6) return addDays(now, 2); 
+      if (day === 0) return addDays(now, 1); 
+      if (day === 5 && now.getHours() >= 19) return addDays(now, 3); 
       return now;
   });
 
@@ -218,9 +218,10 @@ export default function NewUserPage() {
                 });
             }
         }
-        toast({ title: 'Rutas Guardadas' });
+        toast({ title: 'Rutas Guardadas', description: "Tu plan de ruta ha sido registrado con éxito." });
         await refetchData('routes');
-        router.push('/dashboard/routes');
+        // Redirección inmediata a la pestaña de gestión
+        router.push('/dashboard/routes/management');
     } catch(e) { toast({ title: 'Error', variant: 'destructive' }); } finally { setIsSaving(false); }
   }
 
