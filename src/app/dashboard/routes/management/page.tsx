@@ -70,6 +70,7 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
         cleaned.date = Timestamp.fromDate(ensureDate(c.date));
         
         const parseV = (v: any) => {
+            if (typeof v === 'number') return v;
             const strValue = String(v || 0).replace(',', '.');
             const num = parseFloat(strValue);
             return isNaN(num) ? 0 : num;
@@ -160,7 +161,6 @@ function RouteManagementContent() {
     return allRoutes.find(r => r.id === rid);
   }, [selectedRouteId, allRoutes, searchParams]);
 
-  // LÓGICA DE CIERRE AUTOMÁTICO (Viernes 19:30)
   useEffect(() => {
     if (!selectedRoute || selectedRoute.status !== 'En Progreso' || isAdmin) return;
 
@@ -170,26 +170,22 @@ function RouteManagementContent() {
       const isWeekend = now.getDay() === 0 || now.getDay() === 6;
       const isPastClosureTime = now.getHours() > 19 || (now.getHours() === 19 && now.getMinutes() >= 30);
 
-      // Si es viernes noche o fin de semana, cerrar la ruta definitivamente
       if ((isFriday && isPastClosureTime) || isWeekend) {
-        setIsSaving(true);
         try {
           const sanitized = sanitizeClients(selectedRoute.clients);
-          await updateRoute(selectedRoute.id, { 
+          updateRoute(selectedRoute.id, { 
             status: 'Completada', 
             clients: sanitized,
             supervisorObservation: 'Cierre automático por finalización de semana (Viernes 19:30).' 
           });
           toast({ 
             title: "Cierre de Semana", 
-            description: "Tu ruta ha sido completada automáticamente. Gestiona tu nueva ruta de la semana.",
+            description: "Tu ruta ha sido completada automáticamente.",
           });
           setSelectedRouteId(undefined);
           setActiveOriginalIndex(null);
         } catch (e) {
           console.error("Auto-closure error:", e);
-        } finally {
-          setIsSaving(false);
         }
       }
     };
@@ -319,56 +315,75 @@ function RouteManagementContent() {
   const handleRemoveClient = async (originalIndex: number) => {
     if (!selectedRoute || !isAdmin || isSaving) return;
     setIsSaving(true);
-    const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
-    nextClients[originalIndex] = { ...nextClients[originalIndex], status: 'Eliminado' };
-    const sanitized = sanitizeClients(nextClients);
+    try {
+        const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
+        nextClients[originalIndex] = { ...nextClients[originalIndex], status: 'Eliminado' };
+        const sanitized = sanitizeClients(nextClients);
 
-    updateRoute(selectedRoute.id, { clients: sanitized })
-        .then(() => {
-            if (activeOriginalIndex === originalIndex) setActiveOriginalIndex(null);
-            toast({ title: "Cliente eliminado", description: "La parada ha sido removida de la ruta." });
-        })
-        .catch(async () => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-                path: `routes/${selectedRoute.id}`, 
-                operation: 'update', 
-                requestResourceData: { clients: sanitized } 
-            }));
-        })
-        .finally(() => setIsSaving(false));
+        updateRoute(selectedRoute.id, { clients: sanitized })
+            .then(() => {
+                if (activeOriginalIndex === originalIndex) setActiveOriginalIndex(null);
+                toast({ title: "Cliente eliminado", description: "La parada ha sido removida de la ruta." });
+            })
+            .catch(async () => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                    path: `routes/${selectedRoute.id}`, 
+                    operation: 'update', 
+                    requestResourceData: { clients: sanitized } 
+                }));
+            });
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const handleCheckIn = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
     setIsSaving(true);
     
-    const loc = await new Promise<any>(r => navigator.geolocation.getCurrentPosition(
-        p => r({latitude: p.coords.latitude, longitude: p.coords.longitude}), 
-        () => r(null), 
-        {timeout: 5000}
-    ));
-    
-    const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
-    nextClients[activeOriginalIndex] = { 
-        ...nextClients[activeOriginalIndex], 
-        checkInTime: format(new Date(), 'HH:mm:ss'), 
-        checkInLocation: loc 
-    };
-    
-    const sanitized = sanitizeClients(nextClients);
-    updateRoute(selectedRoute.id, { clients: sanitized })
-        .catch(async () => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-                path: `routes/${selectedRoute.id}`, 
-                operation: 'update', 
-                requestResourceData: { clients: sanitized } 
-            }));
-        })
-        .finally(() => setIsSaving(false));
+    try {
+        const loc = await new Promise<any>(r => {
+            const timeout = setTimeout(() => r(null), 3500); // 3.5s timeout for GPS
+            navigator.geolocation.getCurrentPosition(
+                p => { clearTimeout(timeout); r({latitude: p.coords.latitude, longitude: p.coords.longitude}); }, 
+                () => { clearTimeout(timeout); r(null); }, 
+                {timeout: 3000, enableHighAccuracy: false}
+            );
+        });
+        
+        const nextClients = [...selectedRoute.clients];
+        nextClients[activeOriginalIndex] = { 
+            ...nextClients[activeOriginalIndex], 
+            checkInTime: format(new Date(), 'HH:mm:ss'), 
+            checkInLocation: loc 
+        };
+        
+        const sanitized = sanitizeClients(nextClients);
+        updateRoute(selectedRoute.id, { clients: sanitized })
+            .catch(async () => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                    path: `routes/${selectedRoute.id}`, 
+                    operation: 'update', 
+                    requestResourceData: { clients: sanitized } 
+                }));
+            });
+        
+        toast({ title: "Llegada marcada", description: "Puedes iniciar la gestión." });
+    } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "No se pudo marcar la llegada.", variant: "destructive" });
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const handleCheckOut = async () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
+    
+    if (activeClient?.visitType !== 'presencial' && activeClient?.visitType !== 'telefonica') {
+        toast({title: "Selecciona el tipo de gestión", variant: "destructive"});
+        return;
+    }
     
     if (activeClient?.visitType === 'telefonica' && !localCallObs.trim()) {
         toast({title: "Observación de llamada requerida", variant: "destructive"});
@@ -376,44 +391,52 @@ function RouteManagementContent() {
     }
     
     setIsSaving(true);
-    const loc = await new Promise<any>(r => navigator.geolocation.getCurrentPosition(
-        p => r({latitude: p.coords.latitude, longitude: p.coords.longitude}), 
-        () => r(null), 
-        {timeout: 5000}
-    ));
-    
-    const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
-    nextClients[activeOriginalIndex] = { 
-        ...nextClients[activeOriginalIndex], 
-        visitObservation: localVisitObs,
-        callObservation: localCallObs,
-        valorVenta: localVenta,
-        valorCobro: localCobro,
-        devoluciones: localDevol,
-        checkOutTime: format(new Date(), 'HH:mm:ss'), 
-        checkOutLocation: loc, 
-        visitStatus: 'Completado' 
-    };
-    
-    const allDone = nextClients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
-    const sanitized = sanitizeClients(nextClients);
-    
-    updateRoute(selectedRoute.id, { 
-        clients: sanitized, 
-        status: allDone ? 'Completada' : 'En Progreso' 
-    })
-    .then(() => {
+    try {
+        const loc = await new Promise<any>(r => {
+            const timeout = setTimeout(() => r(null), 3500);
+            navigator.geolocation.getCurrentPosition(
+                p => { clearTimeout(timeout); r({latitude: p.coords.latitude, longitude: p.coords.longitude}); }, 
+                () => { clearTimeout(timeout); r(null); }, 
+                {timeout: 3000, enableHighAccuracy: false}
+            );
+        });
+        
+        const nextClients = [...selectedRoute.clients];
+        nextClients[activeOriginalIndex] = { 
+            ...nextClients[activeOriginalIndex], 
+            visitObservation: localVisitObs,
+            callObservation: localCallObs,
+            valorVenta: localVenta,
+            valorCobro: localCobro,
+            devoluciones: localDevol,
+            checkOutTime: format(new Date(), 'HH:mm:ss'), 
+            checkOutLocation: loc, 
+            visitStatus: 'Completado' 
+        };
+        
+        const allDone = nextClients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
+        const sanitized = sanitizeClients(nextClients);
+        
+        updateRoute(selectedRoute.id, { 
+            clients: sanitized, 
+            status: allDone ? 'Completada' : 'En Progreso' 
+        })
+        .catch(async () => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                path: `routes/${selectedRoute.id}`, 
+                operation: 'update', 
+                requestResourceData: { clients: sanitized } 
+            }));
+        });
+
         if (!isAdmin && !isManager) setActiveOriginalIndex(null);
         toast({ title: "Gestión Cerrada", description: "La visita se ha registrado exitosamente." });
-    })
-    .catch(async () => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-            path: `routes/${selectedRoute.id}`, 
-            operation: 'update', 
-            requestResourceData: { clients: sanitized } 
-        }));
-    })
-    .finally(() => setIsSaving(false));
+    } catch (e) {
+        console.error(e);
+        toast({ title: "Error", description: "No se pudo finalizar la visita.", variant: "destructive" });
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   const handleAddClients = async () => {
@@ -430,42 +453,45 @@ function RouteManagementContent() {
     }
 
     setIsSaving(true);
-    const now = new Date();
-    const newVisits: ClientInRoute[] = multiSelectedClients.map(c => ({
-        ruc: c.ruc, 
-        nombre_comercial: c.nombre_comercial, 
-        date: now, 
-        visitStatus: 'Pendiente', 
-        status: 'active', 
-        isReadded: true, 
-        reAdditionObservation: reAdditionObservation || '',
-        visitObservation: '',
-        callObservation: '',
-        valorVenta: 0,
-        valorCobro: 0,
-        devoluciones: 0,
-        promociones: 0,
-        medicacionFrecuente: 0
-    } as any));
-    
-    const nextClients = [...selectedRoute.clients, ...newVisits];
-    const sanitized = sanitizeClients(nextClients);
-    
-    updateRoute(selectedRoute.id, { clients: sanitized, status: 'En Progreso' })
-        .then(() => {
-            setIsAddClientDialogOpen(false); 
-            setMultiSelectedClients([]); 
-            setReAdditionObservation('');
-            toast({ title: "Clientes añadidos", description: "Se han agregado nuevas paradas a la jornada activa." });
-        })
-        .catch(async () => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-                path: `routes/${selectedRoute.id}`, 
-                operation: 'update', 
-                requestResourceData: { clients: sanitized } 
-            }));
-        })
-        .finally(() => setIsSaving(false));
+    try {
+        const now = new Date();
+        const newVisits: ClientInRoute[] = multiSelectedClients.map(c => ({
+            ruc: c.ruc, 
+            nombre_comercial: c.nombre_comercial, 
+            date: now, 
+            visitStatus: 'Pendiente', 
+            status: 'active', 
+            isReadded: true, 
+            reAdditionObservation: reAdditionObservation || '',
+            visitObservation: '',
+            callObservation: '',
+            valorVenta: 0,
+            valorCobro: 0,
+            devoluciones: 0,
+            promociones: 0,
+            medicacionFrecuente: 0
+        } as any));
+        
+        const nextClients = [...selectedRoute.clients, ...newVisits];
+        const sanitized = sanitizeClients(nextClients);
+        
+        updateRoute(selectedRoute.id, { clients: sanitized, status: 'En Progreso' })
+            .then(() => {
+                setIsAddClientDialogOpen(false); 
+                setMultiSelectedClients([]); 
+                setReAdditionObservation('');
+                toast({ title: "Clientes añadidos", description: "Se han agregado nuevas paradas." });
+            })
+            .catch(async () => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                    path: `routes/${selectedRoute.id}`, 
+                    operation: 'update', 
+                    requestResourceData: { clients: sanitized } 
+                }));
+            });
+    } finally {
+        setIsSaving(false);
+    }
   };
 
   if (authLoading) {
@@ -667,13 +693,13 @@ function RouteManagementContent() {
                                             <p className="text-base lg:text-lg font-black text-slate-950 uppercase opacity-60">{activeClient.checkInTime || 'Esperando registro...'}</p>
                                         </div>
                                     </div>
-                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="w-full sm:auto font-black h-12 lg:h-14 px-8 lg:px-10 text-base lg:text-lg uppercase rounded-2xl shadow-lg" disabled={isJornadaBloqueada}>MARCAR LLEGADA</Button>}
+                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="w-full sm:auto font-black h-12 lg:h-14 px-8 lg:px-10 text-base lg:text-lg uppercase rounded-2xl shadow-lg" disabled={isJornadaBloqueada || isSaving}>MARCAR LLEGADA</Button>}
                                 </div>
 
                                 <div className={cn("space-y-6 lg:space-y-10 transition-all duration-500", !activeClient.checkInTime && !isManager && "opacity-20 pointer-events-none blur-[2px]")}>
                                     <div className="space-y-4">
                                         <Label className="text-[10px] lg:text-xs font-black uppercase text-slate-500 tracking-widest">Tipo de Gestión</Label>
-                                        <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4 lg:gap-6" disabled={isEditingActiveClientDisabled}>
+                                        <RadioGroup onValueChange={v => handleFieldChange('visitType', v)} value={activeClient.visitType} className="grid grid-cols-2 gap-4 lg:gap-6" disabled={isEditingActiveClientDisabled || isSaving}>
                                             <Label className={cn("flex flex-col items-center gap-3 lg:gap-4 border-2 p-4 lg:p-8 rounded-[2rem] lg:rounded-[2.5rem] cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "bg-slate-50 hover:bg-slate-100")}>
                                                 <RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-8 w-8 lg:h-10 lg:w-10 text-primary" /><span className="text-[10px] lg:text-sm font-black uppercase">Presencial</span>
                                             </Label>
@@ -690,7 +716,7 @@ function RouteManagementContent() {
                                                 className="font-black text-sm lg:text-base border-2 rounded-2xl text-slate-950 h-24 lg:h-32 focus:ring-4 focus:ring-primary/10" 
                                                 value={localVisitObs} 
                                                 onChange={e => handleFieldChange('visitObservation', e.target.value)} 
-                                                disabled={isEditingActiveClientDisabled} 
+                                                disabled={isEditingActiveClientDisabled || isSaving} 
                                                 placeholder="Detalles de la gestión..." 
                                             />
                                         </div>
@@ -702,7 +728,7 @@ function RouteManagementContent() {
                                                     className="font-black text-sm lg:text-base border-2 rounded-2xl text-slate-950 h-20 lg:h-24 focus:ring-4 focus:ring-primary/10" 
                                                     value={localCallObs} 
                                                     onChange={e => handleFieldChange('callObservation', e.target.value)} 
-                                                    disabled={isEditingActiveClientDisabled} 
+                                                    disabled={isEditingActiveClientDisabled || isSaving} 
                                                     placeholder="Resumen obligatorio de la llamada..." 
                                                 />
                                             </div>
@@ -718,7 +744,7 @@ function RouteManagementContent() {
                                                 value={localVenta} 
                                                 onChange={e => handleFieldChange('valorVenta', e.target.value)} 
                                                 onBlur={() => handleNumericBlur('valorVenta', localVenta)}
-                                                disabled={isEditingActiveClientDisabled} 
+                                                disabled={isEditingActiveClientDisabled || isSaving} 
                                             />
                                         </div>
                                         <div className="space-y-1">
@@ -729,7 +755,7 @@ function RouteManagementContent() {
                                                 value={localCobro} 
                                                 onChange={e => handleFieldChange('valorCobro', e.target.value)} 
                                                 onBlur={() => handleNumericBlur('valorCobro', localCobro)}
-                                                disabled={isEditingActiveClientDisabled} 
+                                                disabled={isEditingActiveClientDisabled || isSaving} 
                                             />
                                         </div>
                                         <div className="space-y-1">
@@ -740,7 +766,7 @@ function RouteManagementContent() {
                                                 value={localDevol} 
                                                 onChange={e => handleFieldChange('devoluciones', e.target.value)} 
                                                 onBlur={() => handleNumericBlur('devoluciones', localDevol)}
-                                                disabled={isEditingActiveClientDisabled} 
+                                                disabled={isEditingActiveClientDisabled || isSaving} 
                                             />
                                         </div>
                                     </div>
