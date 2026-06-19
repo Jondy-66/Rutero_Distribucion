@@ -129,7 +129,6 @@ function RouteManagementContent() {
   const isAdmin = user?.role === 'Administrador';
   const isManager = isAdmin || user?.role === 'Supervisor';
 
-  // Listener en tiempo real para el documento de la ruta seleccionada
   useEffect(() => {
     const rid = selectedRouteId || searchParams.get('routeId');
     if (!rid) {
@@ -233,14 +232,12 @@ function RouteManagementContent() {
         })
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            
             if (!c.date) return false;
             const clientDate = startOfDay(ensureDate(c.date));
             return isSameDay(clientDate, today);
         });
   }, [selectedRoute, clientsLookupMap]);
 
-  // Contador de RUCs para detectar duplicados en la jornada de hoy
   const rucCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     todaysClients.forEach(c => {
@@ -313,52 +310,40 @@ function RouteManagementContent() {
       });
   };
 
-  const handleRemoveClient = async (originalIndex: number) => {
+  const handleRemoveClient = (originalIndex: number) => {
     if (!selectedRoute || isSaving) return;
 
     const clientToRemove = selectedRoute.clients[originalIndex];
     const isDuplicate = clientToRemove ? (rucCounts[String(clientToRemove.ruc).trim()] || 0) > 1 : false;
     const isManaged = clientToRemove?.visitStatus === 'Completado';
 
-    // Validación de permiso: Admin siempre puede O (Usuario si es duplicado y no está gestionado)
     const canDelete = isAdmin || (isDuplicate && !isManaged);
 
     if (!canDelete) {
-        toast({ 
-            title: "Acceso denegado", 
-            description: isManaged ? "No se puede eliminar una visita ya gestionada." : "Solo puedes eliminar paradas que estén duplicadas.", 
-            variant: "destructive" 
-        });
+        toast({ title: "Acceso denegado", description: isManaged ? "No se puede eliminar una visita ya gestionada." : "Solo puedes eliminar paradas duplicadas.", variant: "destructive" });
         return;
     }
 
     setIsSaving(true);
-    try {
-        const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
-        nextClients[originalIndex] = { ...nextClients[originalIndex], status: 'Eliminado' };
-        const sanitized = sanitizeClients(nextClients);
+    const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
+    nextClients[originalIndex] = { ...nextClients[originalIndex], status: 'Eliminado' };
+    const sanitized = sanitizeClients(nextClients);
 
-        updateRoute(selectedRoute.id, { clients: sanitized })
-            .then(() => {
-                if (activeOriginalIndex === originalIndex) setActiveOriginalIndex(null);
-                toast({ title: "Cliente eliminado", description: "La parada duplicada ha sido removida." });
-            })
-            .catch(async () => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-                    path: `routes/${selectedRoute.id}`, 
-                    operation: 'update', 
-                    requestResourceData: { clients: sanitized } 
-                }));
-            });
-    } finally {
-        setIsSaving(false);
-    }
+    updateRoute(selectedRoute.id, { clients: sanitized })
+        .catch(async () => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `routes/${selectedRoute.id}`, operation: 'update', requestResourceData: { clients: sanitized } }));
+        })
+        .finally(() => {
+            if (activeOriginalIndex === originalIndex) setActiveOriginalIndex(null);
+            setIsSaving(false);
+            toast({ title: "Cliente eliminado", description: "La parada ha sido removida de la jornada." });
+        });
   };
 
   const handleCheckIn = () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
-    setIsSaving(true);
     
+    setIsSaving(true);
     const nowTime = format(new Date(), 'HH:mm:ss');
     const nextClients = [...selectedRoute.clients];
     nextClients[activeOriginalIndex] = { 
@@ -369,18 +354,12 @@ function RouteManagementContent() {
     const sanitized = sanitizeClients(nextClients);
     
     updateRoute(selectedRoute.id, { clients: sanitized })
-        .then(() => {
-            toast({ title: "Llegada marcada", description: "Puedes iniciar la gestión." });
-        })
         .catch(async () => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-                path: `routes/${selectedRoute.id}`, 
-                operation: 'update', 
-                requestResourceData: { clients: sanitized } 
-            }));
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `routes/${selectedRoute.id}`, operation: 'update', requestResourceData: { clients: sanitized } }));
         })
         .finally(() => {
             setIsSaving(false);
+            toast({ title: "Llegada marcada", description: "Puedes iniciar la gestión." });
         });
 
     if (navigator.geolocation) {
@@ -391,7 +370,7 @@ function RouteManagementContent() {
                     ...clientsWithLoc[activeOriginalIndex],
                     checkInLocation: new GeoPoint(p.coords.latitude, p.coords.longitude)
                 };
-                updateRoute(selectedRoute.id, { clients: sanitizeClients(clientsWithLoc) });
+                updateRoute(selectedRoute.id, { clients: sanitizeClients(clientsWithLoc) }).catch(() => {});
             },
             null,
             { timeout: 5000, enableHighAccuracy: false }
@@ -433,19 +412,13 @@ function RouteManagementContent() {
         clients: sanitized, 
         status: allDone ? 'Completada' : 'En Progreso' 
     })
-    .then(() => {
-        if (!isAdmin && !isManager) setActiveOriginalIndex(null);
-        toast({ title: "Gestión Cerrada", description: "La visita se ha registrado exitosamente." });
-    })
     .catch(async () => {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-            path: `routes/${selectedRoute.id}`, 
-            operation: 'update', 
-            requestResourceData: { clients: sanitized } 
-        }));
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `routes/${selectedRoute.id}`, operation: 'update', requestResourceData: { clients: sanitized } }));
     })
     .finally(() => {
+        if (!isAdmin && !isManager) setActiveOriginalIndex(null);
         setIsSaving(false);
+        toast({ title: "Gestión Cerrada", description: "La visita se ha registrado exitosamente." });
     });
 
     if (navigator.geolocation) {
@@ -456,7 +429,7 @@ function RouteManagementContent() {
                     ...clientsWithLoc[activeOriginalIndex],
                     checkOutLocation: new GeoPoint(p.coords.latitude, p.coords.longitude)
                 };
-                updateRoute(selectedRoute.id, { clients: sanitizeClients(clientsWithLoc) });
+                updateRoute(selectedRoute.id, { clients: sanitizeClients(clientsWithLoc) }).catch(() => {});
             },
             null,
             { timeout: 5000, enableHighAccuracy: false }
@@ -464,7 +437,7 @@ function RouteManagementContent() {
     }
   };
 
-  const handleAddClients = async () => {
+  const handleAddClients = () => {
     if (!selectedRoute || multiSelectedClients.length === 0 || isSaving) return;
     
     if (!reAdditionObservation.trim()) {
@@ -473,44 +446,39 @@ function RouteManagementContent() {
     }
 
     setIsSaving(true);
-    try {
-        const now = new Date();
-        const newVisits: ClientInRoute[] = multiSelectedClients.map(c => ({
-            ruc: c.ruc, 
-            nombre_comercial: c.nombre_comercial, 
-            date: now, 
-            visitStatus: 'Pendiente', 
-            status: 'active', 
-            isReadded: true, 
-            reAdditionObservation: reAdditionObservation || '',
-            visitObservation: '',
-            callObservation: '',
-            valorVenta: 0,
-            valorCobro: 0,
-            devoluciones: 0,
-            promociones: 0,
-            medicacionFrecuente: 0
-        } as any));
-        
-        const nextClients = [...selectedRoute.clients, ...newVisits];
-        const sanitized = sanitizeClients(nextClients);
-        
-        await updateRoute(selectedRoute.id, { clients: sanitized, status: 'En Progreso' });
-        
-        setIsAddClientDialogOpen(false); 
-        setMultiSelectedClients([]); 
-        setReAdditionObservation('');
-        setActiveOriginalIndex(null); 
-        toast({ title: "Cliente Añadido", description: "Se ha agregado la parada a tu gestión de hoy." });
-
-    } catch (e) {
-        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-            path: `routes/${selectedRoute.id}`, 
-            operation: 'update', 
-        } as any));
-    } finally {
-        setIsSaving(false);
-    }
+    const now = new Date();
+    const newVisits: ClientInRoute[] = multiSelectedClients.map(c => ({
+        ruc: c.ruc, 
+        nombre_comercial: c.nombre_comercial, 
+        date: now, 
+        visitStatus: 'Pendiente', 
+        status: 'active', 
+        isReadded: true, 
+        reAdditionObservation: reAdditionObservation || '',
+        visitObservation: '',
+        callObservation: '',
+        valorVenta: 0,
+        valorCobro: 0,
+        devoluciones: 0,
+        promociones: 0,
+        medicacionFrecuente: 0
+    } as any));
+    
+    const nextClients = [...selectedRoute.clients, ...newVisits];
+    const sanitized = sanitizeClients(nextClients);
+    
+    updateRoute(selectedRoute.id, { clients: sanitized, status: 'En Progreso' })
+        .catch(async () => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `routes/${selectedRoute.id}`, operation: 'update', requestResourceData: { clients: sanitized } }));
+        })
+        .finally(() => {
+            setIsSaving(false);
+            setIsAddClientDialogOpen(false); 
+            setMultiSelectedClients([]); 
+            setReAdditionObservation('');
+            setActiveOriginalIndex(null); 
+            toast({ title: "Cliente Añadido", description: "Se ha agregado la parada a tu gestión de hoy." });
+        });
   };
 
   if (authLoading) {
@@ -564,11 +532,12 @@ function RouteManagementContent() {
                         <Button 
                             className="w-full font-black h-14 rounded-2xl text-lg shadow-xl uppercase" 
                             onClick={() => {
-                                updateRoute(selectedRoute.id, { status: 'En Progreso' });
+                                setIsSaving(true);
+                                updateRoute(selectedRoute.id, { status: 'En Progreso' }).finally(() => setIsSaving(false));
                             }} 
-                            disabled={isJornadaBloqueada}
+                            disabled={isJornadaBloqueada || isSaving}
                         >
-                            INICIAR GESTIÓN
+                            {isSaving ? <LoaderCircle className="animate-spin" /> : "INICIAR GESTIÓN"}
                         </Button>
                     )}
                 </CardContent>
@@ -589,7 +558,7 @@ function RouteManagementContent() {
                             variant="outline" 
                             className="w-full h-12 border-dashed border-2 font-black text-xs rounded-xl flex items-center justify-center gap-2" 
                             onClick={() => setIsAddClientDialogOpen(true)} 
-                            disabled={isJornadaBloqueada || (isTodayFinished && !isAdmin)}
+                            disabled={isJornadaBloqueada || (isTodayFinished && !isAdmin) || isSaving}
                         >
                             <CirclePlus className="h-4 w-4 text-primary" /> AGREGAR EXTRA
                         </Button>
@@ -624,6 +593,7 @@ function RouteManagementContent() {
                                                             isAdmin ? "lg:opacity-0 lg:group-hover:opacity-100" : "opacity-100"
                                                         )}
                                                         onClick={(e) => e.stopPropagation()}
+                                                        disabled={isSaving}
                                                     >
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
@@ -632,10 +602,7 @@ function RouteManagementContent() {
                                                     <AlertDialogHeader>
                                                         <AlertDialogTitle className="font-black uppercase text-slate-950">¿Eliminar parada?</AlertDialogTitle>
                                                         <AlertDialogDescription className="font-bold text-xs uppercase text-slate-500">
-                                                            {isAdmin 
-                                                                ? `Como administrador, estás por remover a ${c.nombre_comercial} de esta ruta definitivamente.`
-                                                                : `Estás por remover este duplicado de ${c.nombre_comercial} de tu gestión de hoy.`
-                                                            }
+                                                            Estás por remover esta parada de tu gestión de hoy.
                                                         </AlertDialogDescription>
                                                     </AlertDialogHeader>
                                                     <AlertDialogFooter className="gap-2">
@@ -822,9 +789,10 @@ function RouteManagementContent() {
                 <ScrollArea className="flex-1 px-6 lg:px-8 py-4">
                     <div className="space-y-3">
                         {availableClients.filter(c => {
-                            const matchesSearch = String(c.nombre_cliente).toLowerCase().includes(addClientSearchTerm.toLowerCase()) || 
-                                                String(c.ruc).includes(addClientSearchTerm) ||
-                                                String(c.nombre_comercial).toLowerCase().includes(addClientSearchTerm.toLowerCase());
+                            const term = addClientSearchTerm.trim().toLowerCase();
+                            const matchesSearch = String(c.nombre_cliente).toLowerCase().includes(term) || 
+                                                String(c.ruc).includes(term) ||
+                                                String(c.nombre_comercial).toLowerCase().includes(term);
                             const matchesExecutive = isAdmin || (c.ejecutivo?.trim().toLowerCase() === user?.name?.trim().toLowerCase());
                             return matchesSearch && matchesExecutive;
                         }).map(c => (
@@ -845,7 +813,7 @@ function RouteManagementContent() {
                         disabled={multiSelectedClients.length === 0 || isSaving || !reAdditionObservation.trim()} 
                         className="w-full h-14 font-black rounded-2xl text-lg shadow-lg"
                     >
-                        AÑADIR {multiSelectedClients.length} PUNTOS
+                        {isSaving ? <LoaderCircle className="animate-spin" /> : `AÑADIR ${multiSelectedClients.length} PUNTOS`}
                     </Button>
                 </div>
             </DialogContent>
