@@ -339,47 +339,53 @@ function RouteManagementContent() {
     }
   };
 
-  const handleCheckIn = async () => {
+  const handleCheckIn = () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
     setIsSaving(true);
     
-    try {
-        const loc = await new Promise<any>(r => {
-            const timeout = setTimeout(() => r(null), 3500); 
-            navigator.geolocation.getCurrentPosition(
-                p => { clearTimeout(timeout); r({latitude: p.coords.latitude, longitude: p.coords.longitude}); }, 
-                () => { clearTimeout(timeout); r(null); }, 
-                {timeout: 3000, enableHighAccuracy: false}
-            );
+    const nowTime = format(new Date(), 'HH:mm:ss');
+    const nextClients = [...selectedRoute.clients];
+    nextClients[activeOriginalIndex] = { 
+        ...nextClients[activeOriginalIndex], 
+        checkInTime: nowTime, 
+    };
+    
+    const sanitized = sanitizeClients(nextClients);
+    
+    // Escritura inmediata para sincronizar con Admin y otros dispositivos
+    updateRoute(selectedRoute.id, { clients: sanitized })
+        .then(() => {
+            toast({ title: "Llegada marcada", description: "Puedes iniciar la gestión." });
+        })
+        .catch(async () => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                path: `routes/${selectedRoute.id}`, 
+                operation: 'update', 
+                requestResourceData: { clients: sanitized } 
+            }));
+        })
+        .finally(() => {
+            setIsSaving(false);
         });
-        
-        const nextClients = [...selectedRoute.clients];
-        nextClients[activeOriginalIndex] = { 
-            ...nextClients[activeOriginalIndex], 
-            checkInTime: format(new Date(), 'HH:mm:ss'), 
-            checkInLocation: loc 
-        };
-        
-        const sanitized = sanitizeClients(nextClients);
-        updateRoute(selectedRoute.id, { clients: sanitized })
-            .catch(async () => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-                    path: `routes/${selectedRoute.id}`, 
-                    operation: 'update', 
-                    requestResourceData: { clients: sanitized } 
-                }));
-            });
-        
-        toast({ title: "Llegada marcada", description: "Puedes iniciar la gestión." });
-    } catch (e) {
-        console.error(e);
-        toast({ title: "Error", description: "No se pudo marcar la llegada.", variant: "destructive" });
-    } finally {
-        setIsSaving(false);
+
+    // Captura GPS en paralelo (no bloqueante)
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            p => {
+                const clientsWithLoc = [...nextClients];
+                clientsWithLoc[activeOriginalIndex] = {
+                    ...clientsWithLoc[activeOriginalIndex],
+                    checkInLocation: new GeoPoint(p.coords.latitude, p.coords.longitude)
+                };
+                updateRoute(selectedRoute.id, { clients: sanitizeClients(clientsWithLoc) });
+            },
+            null,
+            { timeout: 5000, enableHighAccuracy: false }
+        );
     }
   };
 
-  const handleCheckOut = async () => {
+  const handleCheckOut = () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
     
     if (activeClient?.visitType !== 'presencial' && activeClient?.visitType !== 'telefonica') {
@@ -393,51 +399,56 @@ function RouteManagementContent() {
     }
     
     setIsSaving(true);
-    try {
-        const loc = await new Promise<any>(r => {
-            const timeout = setTimeout(() => r(null), 3500);
-            navigator.geolocation.getCurrentPosition(
-                p => { clearTimeout(timeout); r({latitude: p.coords.latitude, longitude: p.coords.longitude}); }, 
-                () => { clearTimeout(timeout); r(null); }, 
-                {timeout: 3000, enableHighAccuracy: false}
-            );
-        });
-        
-        const nextClients = [...selectedRoute.clients];
-        nextClients[activeOriginalIndex] = { 
-            ...nextClients[activeOriginalIndex], 
-            visitObservation: localVisitObs,
-            callObservation: localCallObs,
-            valorVenta: localVenta,
-            valorCobro: localCobro,
-            devoluciones: localDevol,
-            checkOutTime: format(new Date(), 'HH:mm:ss'), 
-            checkOutLocation: loc, 
-            visitStatus: 'Completado' 
-        };
-        
-        const allDone = nextClients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
-        const sanitized = sanitizeClients(nextClients);
-        
-        updateRoute(selectedRoute.id, { 
-            clients: sanitized, 
-            status: allDone ? 'Completada' : 'En Progreso' 
-        })
-        .catch(async () => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-                path: `routes/${selectedRoute.id}`, 
-                operation: 'update', 
-                requestResourceData: { clients: sanitized } 
-            }));
-        });
-
+    const nowTime = format(new Date(), 'HH:mm:ss');
+    const nextClients = [...selectedRoute.clients];
+    nextClients[activeOriginalIndex] = { 
+        ...nextClients[activeOriginalIndex], 
+        visitObservation: localVisitObs,
+        callObservation: localCallObs,
+        valorVenta: localVenta,
+        valorCobro: localCobro,
+        devoluciones: localDevol,
+        checkOutTime: nowTime, 
+        visitStatus: 'Completado' 
+    };
+    
+    const allDone = nextClients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
+    const sanitized = sanitizeClients(nextClients);
+    
+    // Escritura inmediata para sincronizar
+    updateRoute(selectedRoute.id, { 
+        clients: sanitized, 
+        status: allDone ? 'Completada' : 'En Progreso' 
+    })
+    .then(() => {
         if (!isAdmin && !isManager) setActiveOriginalIndex(null);
         toast({ title: "Gestión Cerrada", description: "La visita se ha registrado exitosamente." });
-    } catch (e) {
-        console.error(e);
-        toast({ title: "Error", description: "No se pudo finalizar la visita.", variant: "destructive" });
-    } finally {
+    })
+    .catch(async () => {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+            path: `routes/${selectedRoute.id}`, 
+            operation: 'update', 
+            requestResourceData: { clients: sanitized } 
+        }));
+    })
+    .finally(() => {
         setIsSaving(false);
+    });
+
+    // Captura GPS en paralelo
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            p => {
+                const clientsWithLoc = [...nextClients];
+                clientsWithLoc[activeOriginalIndex] = {
+                    ...clientsWithLoc[activeOriginalIndex],
+                    checkOutLocation: new GeoPoint(p.coords.latitude, p.coords.longitude)
+                };
+                updateRoute(selectedRoute.id, { clients: sanitizeClients(clientsWithLoc) });
+            },
+            null,
+            { timeout: 5000, enableHighAccuracy: false }
+        );
     }
   };
 
@@ -477,21 +488,19 @@ function RouteManagementContent() {
         const nextClients = [...selectedRoute.clients, ...newVisits];
         const sanitized = sanitizeClients(nextClients);
         
-        updateRoute(selectedRoute.id, { clients: sanitized, status: 'En Progreso' })
-            .then(() => {
-                setIsAddClientDialogOpen(false); 
-                setMultiSelectedClients([]); 
-                setReAdditionObservation('');
-                setActiveOriginalIndex(null); // Regresa a la vista de gestión (listado)
-                toast({ title: "Cliente Añadido", description: "Se ha agregado la parada a tu gestión de hoy." });
-            })
-            .catch(async () => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ 
-                    path: `routes/${selectedRoute.id}`, 
-                    operation: 'update', 
-                    requestResourceData: { clients: sanitized } 
-                }));
-            });
+        await updateRoute(selectedRoute.id, { clients: sanitized, status: 'En Progreso' });
+        
+        setIsAddClientDialogOpen(false); 
+        setMultiSelectedClients([]); 
+        setReAdditionObservation('');
+        setActiveOriginalIndex(null); 
+        toast({ title: "Cliente Añadido", description: "Se ha agregado la parada a tu gestión de hoy." });
+
+    } catch (e) {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+            path: `routes/${selectedRoute.id}`, 
+            operation: 'update', 
+        } as any));
     } finally {
         setIsSaving(false);
     }
