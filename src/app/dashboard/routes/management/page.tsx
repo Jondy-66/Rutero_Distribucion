@@ -234,12 +234,21 @@ function RouteManagementContent() {
         .filter(c => {
             if (c.status === 'Eliminado') return false;
             
-            // Administradores y Usuarios ven exactamente lo mismo: Filtro de fecha para hoy
             if (!c.date) return false;
             const clientDate = startOfDay(ensureDate(c.date));
             return isSameDay(clientDate, today);
         });
   }, [selectedRoute, clientsLookupMap]);
+
+  // Contador de RUCs para detectar duplicados en la jornada de hoy
+  const rucCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    todaysClients.forEach(c => {
+      const ruc = String(c.ruc).trim();
+      counts[ruc] = (counts[ruc] || 0) + 1;
+    });
+    return counts;
+  }, [todaysClients]);
 
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
   const isJornadaBloqueada = isExpired && !isAdmin;
@@ -305,7 +314,24 @@ function RouteManagementContent() {
   };
 
   const handleRemoveClient = async (originalIndex: number) => {
-    if (!selectedRoute || !isAdmin || isSaving) return;
+    if (!selectedRoute || isSaving) return;
+
+    const clientToRemove = selectedRoute.clients[originalIndex];
+    const isDuplicate = clientToRemove ? (rucCounts[String(clientToRemove.ruc).trim()] || 0) > 1 : false;
+    const isManaged = clientToRemove?.visitStatus === 'Completado';
+
+    // Validación de permiso: Admin siempre puede O (Usuario si es duplicado y no está gestionado)
+    const canDelete = isAdmin || (isDuplicate && !isManaged);
+
+    if (!canDelete) {
+        toast({ 
+            title: "Acceso denegado", 
+            description: isManaged ? "No se puede eliminar una visita ya gestionada." : "Solo puedes eliminar paradas que estén duplicadas.", 
+            variant: "destructive" 
+        });
+        return;
+    }
+
     setIsSaving(true);
     try {
         const nextClients = JSON.parse(JSON.stringify(selectedRoute.clients));
@@ -315,7 +341,7 @@ function RouteManagementContent() {
         updateRoute(selectedRoute.id, { clients: sanitized })
             .then(() => {
                 if (activeOriginalIndex === originalIndex) setActiveOriginalIndex(null);
-                toast({ title: "Cliente eliminado", description: "La parada ha sido removida de la ruta." });
+                toast({ title: "Cliente eliminado", description: "La parada duplicada ha sido removida." });
             })
             .catch(async () => {
                 errorEmitter.emit('permission-error', new FirestorePermissionError({ 
@@ -587,13 +613,16 @@ function RouteManagementContent() {
                                             </div>
                                         </div>
                                         
-                                        {isAdmin && (
+                                        {(isAdmin || (rucCounts[String(c.ruc).trim()] > 1 && c.visitStatus !== 'Completado')) && (
                                             <AlertDialog>
                                                 <AlertDialogTrigger asChild>
                                                     <Button 
                                                         variant="ghost" 
                                                         size="icon" 
-                                                        className="absolute top-2 right-2 h-8 w-8 text-destructive lg:opacity-0 lg:group-hover:opacity-100 transition-opacity"
+                                                        className={cn(
+                                                            "absolute top-2 right-2 h-8 w-8 text-destructive transition-opacity",
+                                                            isAdmin ? "lg:opacity-0 lg:group-hover:opacity-100" : "opacity-100"
+                                                        )}
                                                         onClick={(e) => e.stopPropagation()}
                                                     >
                                                         <Trash2 className="h-4 w-4" />
@@ -603,7 +632,10 @@ function RouteManagementContent() {
                                                     <AlertDialogHeader>
                                                         <AlertDialogTitle className="font-black uppercase text-slate-950">¿Eliminar parada?</AlertDialogTitle>
                                                         <AlertDialogDescription className="font-bold text-xs uppercase text-slate-500">
-                                                            Como administrador, estás por remover a {c.nombre_comercial} de esta ruta definitivamente.
+                                                            {isAdmin 
+                                                                ? `Como administrador, estás por remover a ${c.nombre_comercial} de esta ruta definitivamente.`
+                                                                : `Estás por remover este duplicado de ${c.nombre_comercial} de tu gestión de hoy.`
+                                                            }
                                                         </AlertDialogDescription>
                                                     </AlertDialogHeader>
                                                     <AlertDialogFooter className="gap-2">
