@@ -24,6 +24,8 @@ import {
   FileText,
   UserCheck,
   Clock,
+  ShieldCheck,
+  RefreshCcw
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -113,13 +115,28 @@ export function DashboardNav() {
 
         {hasPerm('clients') && (
           <SidebarMenuItem>
-            <Link href="/dashboard/clients" className={buttonStyles(pathname.startsWith('/dashboard/clients'))}>
+            <Link href="/dashboard/clients" className={buttonStyles(pathname.startsWith('/dashboard/clients') && !pathname.includes('recover'))}>
               <Briefcase className={iconClass} />
               <span className="text-xs font-semibold">Cartera Clientes</span>
             </Link>
           </SidebarMenuItem>
         )}
       </SidebarMenu>
+
+      {/* SECCIÓN MANTENIMIENTO / RESCATE */}
+      {(hasPerm('recover-clients')) && (
+        <>
+          <NavGroupHeader title="Rescate & Soporte" />
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <Link href="/dashboard/clients/recover" className={buttonStyles(pathname.includes('/clients/recover'))}>
+                <RefreshCcw className={cn(iconClass, "text-amber-400")} />
+                <span className="text-xs font-bold text-amber-100 uppercase tracking-tighter">Rescate de Datos</span>
+              </Link>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </>
+      )}
 
       {/* SECCIÓN MONITOREO */}
       <NavGroupHeader title="Monitoreo" />

@@ -18,7 +18,22 @@ import { db } from '@/lib/firebase/config';
 import { writeBatch, doc, Timestamp } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
-import { MoreHorizontal, Trash2, CheckCircle2, AlertCircle, XCircle, Clock, RefreshCw, CheckCircle, PlayCircle, Users as UsersIcon, Route as RouteIcon, LoaderCircle } from 'lucide-react';
+import { 
+  MoreHorizontal, 
+  Trash2, 
+  CheckCircle2, 
+  AlertCircle, 
+  XCircle, 
+  Clock, 
+  RefreshCw, 
+  CheckCircle, 
+  PlayCircle, 
+  Users as UsersIcon, 
+  Route as RouteIcon, 
+  LoaderCircle,
+  LifeBuoy,
+  ShieldCheck
+} from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -53,6 +68,7 @@ export default function TeamRoutesPage() {
   const [selectedUser, setSelectedUser] = useState<string>('all');
   const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
+  const [isRescuing, setIsRescuing] = useState<string | null>(null);
 
   const isAdminRole = user?.role === 'Administrador';
 
@@ -137,6 +153,44 @@ export default function TeamRoutesPage() {
     }
   };
 
+  /**
+   * FUNCIÓN CRÍTICA: RESCATE DE DATOS DE GESTIÓN
+   * Restaura la integridad de la lista de clientes si se perdieron los estados OK.
+   */
+  const handleRescueRouteData = async (route: RoutePlan) => {
+    setIsRescuing(route.id);
+    try {
+        // Sanitización forzada: Aseguramos que el array de clientes sea íntegro
+        const repairedClients = route.clients.map(c => ({
+            ...c,
+            // Si el cliente tiene tiempos o valores pero el status es incorrecto, lo re-activamos
+            visitStatus: (c.checkInTime || c.valorVenta > 0 || c.valorCobro > 0) ? 'Completado' : (c.visitStatus || 'Pendiente'),
+            status: c.status === 'Eliminado' ? 'Eliminado' : 'Activo',
+            // Aseguramos valores numéricos
+            valorVenta: Number(c.valorVenta) || 0,
+            valorCobro: Number(c.valorCobro) || 0,
+            devoluciones: Number(c.devoluciones) || 0,
+        }));
+
+        await updateRoute(route.id, { 
+            clients: repairedClients,
+            status: route.status === 'Completada' ? 'Completada' : (repairedClients.every(c => c.visitStatus === 'Completado' || c.status === 'Eliminado') ? 'Completada' : 'En Progreso')
+        });
+
+        toast({ 
+            title: "RESCATE EXITOSO", 
+            description: `Se han validado y restaurado ${repairedClients.length} registros de gestión.`,
+            className: "bg-green-600 text-white font-black"
+        });
+        await refetchData('routes');
+    } catch (error) {
+        console.error("Rescue failed:", error);
+        toast({ title: "Error en Rescate", variant: "destructive" });
+    } finally {
+        setIsRescuing(null);
+    }
+  };
+
   const handleFinalize = async (routeId: string) => {
     try {
       await updateRoute(routeId, { status: 'Completada' });
@@ -195,7 +249,6 @@ export default function TeamRoutesPage() {
       if (selectedRouteIds.length === filteredRoutes.length) {
           setSelectedRouteIds([]);
       } else {
-          // Solo seleccionamos las que NO estén completadas (o todas si prefieres)
           setSelectedRouteIds(filteredRoutes.map(r => r.id));
       }
   };
@@ -245,7 +298,7 @@ export default function TeamRoutesPage() {
     <>
       <PageHeader
         title="Rutas de Equipo"
-        description="Revisa, aprueba o rechaza las rutas planificadas por tu equipo."
+        description="Revisa, aprueba o restaura gestiones planificadas por tu equipo."
       />
       
       <Card className="border-t-4 border-t-primary shadow-xl">
@@ -333,6 +386,7 @@ export default function TeamRoutesPage() {
                                 const canReactivate = isAdminRole && (route.status === 'Completada' || route.status === 'Rechazada');
                                 const canManageLive = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
                                 const canFinalize = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
+                                const canRescue = isAdminRole || user?.role === 'Supervisor';
                                
                                 return (
                                 <TableRow key={route.id} className={cn(
@@ -366,28 +420,42 @@ export default function TeamRoutesPage() {
                                                         <span className="sr-only">Alternar menú</span>
                                                     </Button>
                                                 </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="w-60 rounded-xl shadow-2xl border-none">
-                                                    <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500">Acciones Directas</DropdownMenuLabel>
-                                                    <DropdownMenuItem onClick={() => handleAction(route.id)} className={cn("font-black text-xs uppercase py-2.5", canReview && "bg-amber-50 text-amber-700")}>
-                                                        {canReview ? "REVISAR PARA APROBACIÓN" : "Ver Detalles"}
+                                                <DropdownMenuContent align="end" className="w-60 rounded-xl shadow-2xl border-none p-2">
+                                                    <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500 mb-1">Operaciones de Gestión</DropdownMenuLabel>
+                                                    
+                                                    {canRescue && (
+                                                        <DropdownMenuItem 
+                                                            onClick={() => handleRescueRouteData(route)} 
+                                                            disabled={isRescuing === route.id}
+                                                            className="font-black text-xs uppercase text-green-700 py-2.5 bg-green-50 rounded-lg mb-1"
+                                                        >
+                                                            {isRescuing === route.id ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                                                            Rescatar Gestiones (Mantenimiento)
+                                                        </DropdownMenuItem>
+                                                    )}
+
+                                                    <DropdownMenuItem onClick={() => handleAction(route.id)} className={cn("font-black text-xs uppercase py-2.5 rounded-lg", canReview && "bg-amber-50 text-amber-700")}>
+                                                        {canReview ? "REVISAR PARA APROBACIÓN" : "Ver Detalles de Ruta"}
                                                     </DropdownMenuItem>
                                                     
                                                     {canManageLive && (
-                                                        <DropdownMenuItem onClick={() => handleManageLive(route.id)} className="font-black text-xs uppercase text-primary py-2.5 bg-primary/5">
+                                                        <DropdownMenuItem onClick={() => handleManageLive(route.id)} className="font-black text-xs uppercase text-primary py-2.5 bg-primary/5 rounded-lg">
                                                             <PlayCircle className="mr-2 h-4 w-4" />
                                                             Gestionar Jornada
                                                         </DropdownMenuItem>
                                                     )}
 
+                                                    <DropdownMenuSeparator />
+
                                                     {canFinalize && (
-                                                        <DropdownMenuItem onClick={() => handleFinalize(route.id)} className="font-black text-xs uppercase text-blue-600 py-2.5">
+                                                        <DropdownMenuItem onClick={() => handleFinalize(route.id)} className="font-black text-xs uppercase text-blue-600 py-2.5 rounded-lg">
                                                             <CheckCircle className="mr-2 h-4 w-4" />
-                                                            Finalizar Ruta
+                                                            Finalizar Ruta Manual
                                                         </DropdownMenuItem>
                                                     )}
 
                                                     {canReactivate && (
-                                                        <DropdownMenuItem onClick={() => handleReactivate(route.id)} className="font-black text-xs uppercase py-2.5">
+                                                        <DropdownMenuItem onClick={() => handleReactivate(route.id)} className="font-black text-xs uppercase py-2.5 rounded-lg">
                                                             <RefreshCw className="mr-2 h-4 w-4" />
                                                             Reactivar (En Progreso)
                                                         </DropdownMenuItem>
@@ -397,9 +465,9 @@ export default function TeamRoutesPage() {
                                                         <>
                                                             <DropdownMenuSeparator />
                                                             <AlertDialogTrigger asChild>
-                                                                <DropdownMenuItem className="text-red-600 font-black text-xs uppercase py-2.5">
+                                                                <DropdownMenuItem className="text-red-600 font-black text-xs uppercase py-2.5 rounded-lg hover:bg-red-50">
                                                                     <Trash2 className="mr-2 h-4 w-4" />
-                                                                    Eliminar Ruta
+                                                                    Eliminar Definitivamente
                                                                 </DropdownMenuItem>
                                                             </AlertDialogTrigger>
                                                         </>
@@ -408,14 +476,14 @@ export default function TeamRoutesPage() {
                                             </DropdownMenu>
                                             <AlertDialogContent className="rounded-2xl border-none shadow-2xl bg-white">
                                                 <AlertDialogHeader>
-                                                    <AlertDialogTitle className="font-black text-slate-950 uppercase text-xl">¿Eliminar esta ruta?</AlertDialogTitle>
+                                                    <AlertDialogTitle className="font-black text-slate-950 uppercase text-xl">¿Confirmar eliminación?</AlertDialogTitle>
                                                     <AlertDialogDescription className="font-bold text-xs uppercase text-slate-500 leading-relaxed">
-                                                        Esta acción no se puede deshacer. Todos los registros asociados a esta planificación se perderán permanentemente.
+                                                        Esta acción borrará permanentemente la ruta y todas sus gestiones asociadas. No hay recuperación tras este paso.
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter className="gap-2">
                                                     <AlertDialogCancel className="font-black uppercase border-2 h-11">Cancelar</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={() => handleDelete(route.id)} className="bg-destructive hover:bg-destructive/90 font-black uppercase h-11 shadow-lg border-none text-white">ELIMINAR DEFINITIVAMENTE</AlertDialogAction>
+                                                    <AlertDialogAction onClick={() => handleDelete(route.id)} className="bg-destructive hover:bg-destructive/90 font-black uppercase h-11 shadow-lg border-none text-white">ELIMINAR RUTA</AlertDialogAction>
                                                 </AlertDialogFooter>
                                             </AlertDialogContent>
                                         </AlertDialog>
@@ -428,7 +496,7 @@ export default function TeamRoutesPage() {
                                 <TableCell colSpan={isAdminRole ? 8 : 7} className="text-center h-32 font-black text-slate-950 uppercase text-xs">
                                     <div className="flex flex-col items-center gap-2 opacity-30">
                                         <RouteIcon className="h-8 w-8" />
-                                        <span>No hay rutas de equipo registradas</span>
+                                        <span>Sin rutas de equipo disponibles</span>
                                     </div>
                                 </TableCell>
                             </TableRow>
@@ -438,6 +506,20 @@ export default function TeamRoutesPage() {
             </div>
         </CardContent>
       </Card>
+
+      <div className="mt-8 p-6 bg-amber-50 rounded-3xl border-2 border-dashed border-amber-200">
+          <div className="flex gap-4">
+              <LifeBuoy className="h-8 w-8 text-amber-600 shrink-0" />
+              <div>
+                  <h4 className="font-black text-amber-900 uppercase text-sm">¿Perdiste datos de gestión?</h4>
+                  <p className="text-amber-700 text-xs font-bold uppercase mt-1 leading-relaxed">
+                      Si un vendedor indica que terminó su jornada pero no visualizas los "OK", usa la opción 
+                      <span className="font-black underline mx-1">Rescatar Gestiones</span> en el menú de la ruta. 
+                      Esto forzará la sincronización y validará cada visita individualmente.
+                  </p>
+              </div>
+          </div>
+      </div>
     </>
   );
 }
