@@ -1,9 +1,10 @@
+
 /**
- * @fileoverview Configuración de Firebase con soporte multi-pestaña y persistencia resiliente.
+ * @fileoverview Configuración de Firebase optimizada para estabilidad y persistencia.
  */
 
 import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, getFirestore } from 'firebase/firestore';
+import { getFirestore } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -21,23 +22,11 @@ const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const createSecondaryApp = (appName: string) => initializeApp(firebaseConfig, appName);
 export const deleteSecondaryApp = (appInstance: any) => deleteApp(appInstance);
 
-let db: any;
-if (typeof window !== 'undefined') {
-    try {
-        // Configuramos Firestore para manejar el arrendamiento de caché en múltiples pestañas de forma resiliente
-        db = initializeFirestore(app, {
-            localCache: persistentLocalCache({ 
-                tabManager: persistentMultipleTabManager() 
-            })
-        });
-    } catch (e) {
-        // Fallback si la inicialización avanzada falla (ej. por error de Primary Lease)
-        console.warn("Firestore: Persistencia multi-pestaña no disponible, conmutando a modo estándar.", e);
-        db = getFirestore(app);
-    }
-} else {
-    db = getFirestore(app);
-}
-
+/**
+ * Inicialización simplificada de Firestore para evitar bloqueos de lease en múltiples pestañas
+ * que causan que las promesas de escritura se queden colgadas.
+ */
+const db = getFirestore(app);
 const auth = getAuth(app);
+
 export { app, db, auth };
