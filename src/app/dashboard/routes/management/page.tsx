@@ -243,13 +243,14 @@ function RouteManagementContent() {
         })
         .filter(c => {
             if (c.status === 'Eliminado') return false;
-            if (isManager) return true;
             
+            // Unificamos el filtro: Todos los roles ven únicamente los clientes de hoy
+            // Esto permite que el Admin vea exactamente lo mismo que el usuario, incluyendo repeticiones.
             if (!c.date) return false;
             const clientDate = startOfDay(ensureDate(c.date));
             return isSameDay(clientDate, today);
         });
-  }, [selectedRoute, clientsLookupMap, isManager]);
+  }, [selectedRoute, clientsLookupMap]);
 
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
   const isJornadaBloqueada = isExpired && !isAdmin;
@@ -352,7 +353,6 @@ function RouteManagementContent() {
     
     const sanitized = sanitizeClients(nextClients);
     
-    // Escritura inmediata para sincronizar con Admin y otros dispositivos
     updateRoute(selectedRoute.id, { clients: sanitized })
         .then(() => {
             toast({ title: "Llegada marcada", description: "Puedes iniciar la gestión." });
@@ -368,7 +368,6 @@ function RouteManagementContent() {
             setIsSaving(false);
         });
 
-    // Captura GPS en paralelo (no bloqueante)
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             p => {
@@ -415,7 +414,6 @@ function RouteManagementContent() {
     const allDone = nextClients.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
     const sanitized = sanitizeClients(nextClients);
     
-    // Escritura inmediata para sincronizar
     updateRoute(selectedRoute.id, { 
         clients: sanitized, 
         status: allDone ? 'Completada' : 'En Progreso' 
@@ -435,7 +433,6 @@ function RouteManagementContent() {
         setIsSaving(false);
     });
 
-    // Captura GPS en paralelo
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             p => {
