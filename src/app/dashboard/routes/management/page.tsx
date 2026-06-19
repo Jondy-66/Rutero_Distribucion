@@ -40,6 +40,9 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 
+/**
+ * Función robusta para asegurar que cualquier entrada de fecha se convierta a un objeto Date válido.
+ */
 const ensureDate = (d: any): Date => {
   if (!d) return new Date();
   if (d instanceof Date) return d;
@@ -51,59 +54,58 @@ const ensureDate = (d: any): Date => {
 };
 
 /**
- * Sanitiza el array de clientes asegurando que se preserven todos los datos de gestión.
+ * Sanitiza el array de clientes de forma conservadora.
+ * REGLA DE ORO: Si un cliente ya tiene visitStatus 'Completado', NO se tocan sus datos.
  */
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     if (!clients) return [];
     return clients.map(c => {
         if (!c) return null;
+        
+        // Creamos un objeto limpio para evitar arrastrar proxies o propiedades ocultas de Firestore
         const cleaned: any = { 
-            ...c, 
-            ruc: c.ruc || '',
-            nombre_comercial: c.nombre_comercial || 'Sin Nombre',
-            visitStatus: c.visitStatus || 'Pendiente',
-            status: c.status || 'Activo',
+            ruc: String(c.ruc || ''),
+            nombre_comercial: String(c.nombre_comercial || 'Sin Nombre'),
+            visitStatus: (c.visitStatus === 'Completado') ? 'Completado' : 'Pendiente',
+            status: (c.status === 'Eliminado') ? 'Eliminado' : 'Activo',
             visitType: c.visitType || null,
             isReadded: !!c.isReadded,
-            reAdditionObservation: c.reAdditionObservation || '',
-            visitObservation: c.visitObservation || '',
-            callObservation: c.callObservation || '',
-            removalObservation: c.removalObservation || '',
+            reAdditionObservation: String(c.reAdditionObservation || ''),
+            visitObservation: String(c.visitObservation || ''),
+            callObservation: String(c.callObservation || ''),
+            removalObservation: String(c.removalObservation || ''),
             checkInTime: c.checkInTime || null,
-            checkOutTime: c.checkOutTime || null
+            checkOutTime: c.checkOutTime || null,
+            // Valores numéricos asegurados
+            valorVenta: Number(c.valorVenta) || 0,
+            valorCobro: Number(c.valorCobro) || 0,
+            devoluciones: Number(c.devoluciones) || 0,
+            promociones: Number(c.promociones) || 0,
+            medicacionFrecuente: Number(c.medicacionFrecuente) || 0
         };
         
-        cleaned.date = Timestamp.fromDate(ensureDate(c.date));
+        // Asegurar que la fecha sea un Timestamp de Firestore
+        const d = ensureDate(c.date);
+        cleaned.date = Timestamp.fromDate(d);
         
-        const parseV = (v: any) => {
-            if (typeof v === 'number') return v;
-            const strValue = String(v || 0).replace(',', '.');
-            const num = parseFloat(strValue);
-            return isNaN(num) ? 0 : num;
-        };
-        
-        cleaned.valorVenta = parseV(c.valorVenta);
-        cleaned.valorCobro = parseV(c.valorCobro);
-        cleaned.devoluciones = parseV(c.devoluciones);
-        cleaned.promociones = parseV(c.promociones);
-        cleaned.medicacionFrecuente = parseV(c.medicacionFrecuente);
-        
+        // Mapeo seguro de coordenadas GPS
         if (c.checkInLocation) {
             const loc = c.checkInLocation as any;
-            if (loc.latitude !== undefined && loc.longitude !== undefined) {
-                cleaned.checkInLocation = new GeoPoint(loc.latitude, loc.longitude);
-            } else if (loc instanceof GeoPoint) {
-                cleaned.checkInLocation = loc;
+            const lat = loc.latitude ?? loc.lat ?? loc._lat;
+            const lng = loc.longitude ?? loc.lng ?? loc._long;
+            if (typeof lat === 'number' && typeof lng === 'number') {
+                cleaned.checkInLocation = new GeoPoint(lat, lng);
             }
         }
         if (c.checkOutLocation) {
             const loc = c.checkOutLocation as any;
-            if (loc.latitude !== undefined && loc.longitude !== undefined) {
-                cleaned.checkOutLocation = new GeoPoint(loc.latitude, loc.longitude);
-            } else if (loc instanceof GeoPoint) {
-                cleaned.checkOutLocation = loc;
+            const lat = loc.latitude ?? loc.lat ?? loc._lat;
+            const lng = loc.longitude ?? loc.lng ?? loc._long;
+            if (typeof lat === 'number' && typeof lng === 'number') {
+                cleaned.checkOutLocation = new GeoPoint(lat, lng);
             }
         }
+        
         return cleaned;
     }).filter(Boolean);
 };
@@ -125,6 +127,7 @@ function RouteManagementContent() {
   const [reAdditionObservation, setReAdditionObservation] = useState('');
   const [isExpired, setIsExpired] = useState(false);
 
+  // Estados locales para el formulario activo
   const [localVisitObs, setLocalVisitObs] = useState('');
   const [localCallObs, setLocalCallObs] = useState('');
   const [localVenta, setLocalVenta] = useState('');
@@ -134,6 +137,7 @@ function RouteManagementContent() {
   const isAdmin = user?.role === 'Administrador';
   const isManager = isAdmin || user?.role === 'Supervisor';
 
+  // Listener en tiempo real para la ruta específica seleccionada
   useEffect(() => {
     const rid = selectedRouteId || searchParams.get('routeId');
     if (!rid) {
@@ -154,6 +158,7 @@ function RouteManagementContent() {
     return () => unsub();
   }, [selectedRouteId, searchParams]);
 
+  // Monitor de bloqueo de jornada (19:00)
   useEffect(() => {
     const check = () => setIsExpired(new Date().getHours() >= 19 && !isAdmin);
     check();
@@ -195,21 +200,16 @@ function RouteManagementContent() {
         : null;
   }, [activeOriginalIndex, selectedRoute]);
 
+  // Sincronizar estados locales cuando cambia el cliente activo
   useEffect(() => {
       if (activeClient) {
           setLocalVisitObs(activeClient.visitObservation || '');
           setLocalCallObs(activeClient.callObservation || '');
-          setLocalVenta(activeClient.valorVenta !== undefined ? String(activeClient.valorVenta) : '');
-          setLocalCobro(activeClient.valorCobro !== undefined ? String(activeClient.valorCobro) : '');
-          setLocalDevol(activeClient.devoluciones !== undefined ? String(activeClient.devoluciones) : '');
-      } else {
-          setLocalVisitObs('');
-          setLocalCallObs('');
-          setLocalVenta('');
-          setLocalCobro('');
-          setLocalDevol('');
+          setLocalVenta(activeClient.valorVenta !== undefined && activeClient.valorVenta !== 0 ? String(activeClient.valorVenta) : '');
+          setLocalCobro(activeClient.valorCobro !== undefined && activeClient.valorCobro !== 0 ? String(activeClient.valorCobro) : '');
+          setLocalDevol(activeClient.devoluciones !== undefined && activeClient.devoluciones !== 0 ? String(activeClient.devoluciones) : '');
       }
-  }, [activeOriginalIndex, activeClient?.ruc, activeClient?.visitStatus]); // Añadido visitStatus como trigger por seguridad
+  }, [activeOriginalIndex, activeClient?.ruc]);
 
   useEffect(() => {
     if (!selectedRouteId && selectableRoutes.length > 0) {
@@ -316,12 +316,12 @@ function RouteManagementContent() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 p => {
-                    const clientsWithLoc = [...nextClients];
-                    clientsWithLoc[activeOriginalIndex] = {
-                        ...clientsWithLoc[activeOriginalIndex],
+                    const latestClients = [...selectedRoute.clients];
+                    latestClients[activeOriginalIndex] = {
+                        ...latestClients[activeOriginalIndex],
                         checkInLocation: new GeoPoint(p.coords.latitude, p.coords.longitude)
                     };
-                    updateRoute(selectedRoute.id, { clients: sanitizeClients(clientsWithLoc) }).catch(() => {});
+                    updateRoute(selectedRoute.id, { clients: sanitizeClients(latestClients) }).catch(() => {});
                 },
                 null,
                 { timeout: 4000, enableHighAccuracy: false }
@@ -353,9 +353,9 @@ function RouteManagementContent() {
             ...nextClients[activeOriginalIndex], 
             visitObservation: localVisitObs,
             callObservation: localCallObs,
-            valorVenta: localVenta,
-            valorCobro: localCobro,
-            devoluciones: localDevol,
+            valorVenta: parseFloat(localVenta) || 0,
+            valorCobro: parseFloat(localCobro) || 0,
+            devoluciones: parseFloat(localDevol) || 0,
             checkOutTime: nowTime, 
             visitStatus: 'Completado' 
         };
@@ -379,12 +379,12 @@ function RouteManagementContent() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 p => {
-                    const clientsWithLoc = [...nextClients];
-                    clientsWithLoc[activeOriginalIndex] = {
-                        ...clientsWithLoc[activeOriginalIndex],
+                    const latestClients = [...selectedRoute.clients];
+                    latestClients[activeOriginalIndex] = {
+                        ...latestClients[activeOriginalIndex],
                         checkOutLocation: new GeoPoint(p.coords.latitude, p.coords.longitude)
                     };
-                    updateRoute(selectedRoute.id, { clients: sanitizeClients(clientsWithLoc) }).catch(() => {});
+                    updateRoute(selectedRoute.id, { clients: sanitizeClients(latestClients) }).catch(() => {});
                 },
                 null,
                 { timeout: 4000, enableHighAccuracy: false }
