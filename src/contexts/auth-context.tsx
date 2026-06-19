@@ -1,5 +1,5 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales optimizada para cuota y resiliencia con sincronización en tiempo real.
+ * @fileoverview Gestión de estado de autenticación y datos globales con sincronización total en tiempo real para todos los roles.
  */
 
 'use client';
@@ -9,7 +9,7 @@ import { User as FirebaseAuthUser, onAuthStateChanged, signOut } from 'firebase/
 import { db, auth } from '@/lib/firebase/config';
 import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
 import { collection, doc, onSnapshot, query, where, Timestamp, orderBy } from 'firebase/firestore';
-import { getUsers, getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore, getMyClients, getClients } from '@/lib/firebase/firestore';
+import { getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore } from '@/lib/firebase/firestore';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
 
@@ -45,45 +45,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const isDataInitialized = useRef<string | null>(null);
 
   /**
-   * Carga inicial de datos globales estáticos.
+   * Refetch manual para datos que no están en snapshot (si aplica).
    */
-  const fetchInitialData = useCallback(async (currentUser: User) => {
-    if (isDataInitialized.current === currentUser.id) return;
-    
-    setDataLoading(true);
-    const isSourcingAll = currentUser.role === 'Administrador' || currentUser.role === 'Supervisor' || currentUser.role === 'Auditor';
-    
-    try {
-        const [usersRes, clientsRes, phoneRes] = await Promise.all([
-            getUsers().catch(e => { console.error("Error cargando usuarios:", e); return []; }),
-            (isSourcingAll ? getClients() : getMyClients(currentUser.name)).catch(e => { console.error("Error cargando clientes:", e); return []; }),
-            getPhoneContacts().catch(e => { console.error("Error cargando contactos:", e); return []; })
-        ]);
-
-        setUsers(usersRes);
-        setClients(clientsRes);
-        setPhoneContacts(phoneRes);
-        
-        isDataInitialized.current = currentUser.id;
-    } catch(error) {
-        console.error("Error crítico cargando datos iniciales:", error);
-    } finally {
-        setDataLoading(false);
-    }
-  }, []);
-  
   const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'phoneContacts') => {
-      if (!user) return;
-      const isSourcingAll = user.role === 'Administrador' || user.role === 'Supervisor' || user.role === 'Auditor';
-      
-      try {
-          if (dataType === 'clients') setClients(isSourcingAll ? await getClients() : await getMyClients(user.name));
-          if (dataType === 'users') setUsers(await getUsers());
-          if (dataType === 'phoneContacts') setPhoneContacts(await getPhoneContacts());
-      } catch (error) {
-          console.error(`Error al refrescar ${dataType}:`, error);
+      // Nota: Con snapshots en tiempo real, refetch suele ser innecesario para clients/users,
+      // pero se mantiene para compatibilidad con componentes que lo invocan.
+      if (dataType === 'phoneContacts') {
+          const res = await getPhoneContacts();
+          setPhoneContacts(res);
       }
-  }, [user]);
+  }, []);
 
   const handleMarkNotificationAsRead = async (notificationId: string) => {
     try { await markAsReadFirestore(notificationId); } catch (error) { console.error(error); }
@@ -101,13 +72,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
         
+        // Listener del perfil del usuario actual
         const unsubscribeUser = onSnapshot(userDocRef, 
           (docSnap) => {
             if (docSnap.exists()) {
               const userData = { id: fbUser.uid, ...docSnap.data() } as User;
               setUser(userData);
               setLoading(false);
-              fetchInitialData(userData);
             } else {
               setLoading(false);
               signOut(auth);
@@ -121,24 +92,40 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
           }
         );
 
+        // --- SINCRONIZACIÓN DE USUARIOS EN TIEMPO REAL (COLECCIÓN) ---
+        const usersQuery = query(collection(db, 'users'));
+        const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
+            const usersData = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data()
+            } as User));
+            setUsers(usersData);
+        }, (error) => {
+            console.error("Error real-time users:", error);
+        });
+
         // --- SINCRONIZACIÓN DE RUTAS EN TIEMPO REAL ---
-        // Eliminamos el orderBy por si causa problemas de índices faltantes en algunos clientes
         const routesQuery = query(collection(db, 'routes')); 
         const unsubscribeRoutes = onSnapshot(routesQuery, (snapshot) => {
             const routesData = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data()
             } as any)) as RoutePlan[];
-            // Ordenar en memoria para evitar errores de Firebase Index
+            
             setRoutes(routesData.sort((a, b) => {
-                const dateA = a.createdAt instanceof Timestamp ? a.createdAt.toMillis() : 0;
-                const dateB = b.createdAt instanceof Timestamp ? b.createdAt.toMillis() : 0;
-                return dateB - dateA;
+                const getMillis = (ts: any) => {
+                    if (ts instanceof Timestamp) return ts.toMillis();
+                    if (ts?.seconds) return ts.seconds * 1000 + (ts.nanoseconds / 1000000 || 0);
+                    if (ts instanceof Date) return ts.getTime();
+                    return 0;
+                };
+                return getMillis(b.createdAt) - getMillis(a.createdAt);
             }));
         }, (error) => {
-            console.error("Error en tiempo real de rutas:", error);
+            console.error("Error real-time routes:", error);
         });
 
+        // --- SINCRONIZACIÓN DE NOTIFICACIONES EN TIEMPO REAL ---
         const notificationsQuery = query(
             collection(db, 'notifications'), 
             where('userId', '==', fbUser.uid)
@@ -159,16 +146,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             
             setNotifications(notificationsData);
           },
-          async (serverError) => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-              path: 'notifications',
-              operation: 'list'
-            }));
+          (error) => {
+            console.error("Error real-time notifications:", error);
           }
         );
 
+        // Carga inicial de PhoneContacts (estático por ahora)
+        getPhoneContacts().then(setPhoneContacts).catch(console.error);
+
         return () => {
             unsubscribeUser();
+            unsubscribeUsers();
             unsubscribeRoutes();
             unsubscribeNotifications();
         };
@@ -185,7 +173,29 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
 
     return () => unsubscribeAuth();
-  }, [fetchInitialData]);
+  }, []);
+
+  // Effect para manejar la sincronización de Clientes basada en el rol del usuario cargado
+  useEffect(() => {
+    if (!user) return;
+
+    const isSourcingAll = user.role === 'Administrador' || user.role === 'Supervisor' || user.role === 'Auditor';
+    const clientsQuery = isSourcingAll 
+        ? query(collection(db, 'clients')) 
+        : query(collection(db, 'clients'), where('ejecutivo', '==', user.name.trim()));
+
+    const unsubscribeClients = onSnapshot(clientsQuery, (snapshot) => {
+        const clientsData = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+        } as Client));
+        setClients(clientsData);
+    }, (error) => {
+        console.error("Error real-time clients:", error);
+    });
+
+    return () => unsubscribeClients();
+  }, [user?.role, user?.name]);
 
   return (
     <AuthContext.Provider value={{ 
