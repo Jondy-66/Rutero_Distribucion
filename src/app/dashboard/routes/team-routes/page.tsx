@@ -15,7 +15,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { deleteRoute, updateRoute } from '@/lib/firebase/firestore';
 import { db } from '@/lib/firebase/config';
-import { writeBatch, doc, Timestamp } from 'firebase/firestore';
+import { writeBatch, doc, Timestamp, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan } from '@/lib/types';
 import { 
@@ -60,6 +60,8 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
+import { errorEmitter } from '@/firebase/error-emitter';
+import { FirestorePermissionError } from '@/firebase/errors';
 
 export default function TeamRoutesPage() {
   const { user, users, routes: globalRoutes, loading: authLoading, dataLoading, refetchData } = useAuth();
@@ -154,39 +156,77 @@ export default function TeamRoutesPage() {
   };
 
   /**
-   * FUNCIÓN CRÍTICA: RESCATE DE DATOS DE GESTIÓN
-   * Restaura la integridad de la lista de clientes si se perdieron los estados OK.
+   * FUNCIÓN CRÍTICA DE MANTENIMIENTO: RESCATE DE DATOS
+   * Valida la evidencia de trabajo y restaura el estado "OK" si hay registros.
    */
-  const handleRescueRouteData = async (route: RoutePlan) => {
-    setIsRescuing(route.id);
+  const handleRescueRouteData = async (routeId: string) => {
+    setIsRescuing(routeId);
     try {
-        // Sanitización forzada: Aseguramos que el array de clientes sea íntegro
-        const repairedClients = route.clients.map(c => ({
-            ...c,
-            // Si el cliente tiene tiempos o valores pero el status es incorrecto, lo re-activamos
-            visitStatus: (c.checkInTime || c.valorVenta > 0 || c.valorCobro > 0) ? 'Completado' : (c.visitStatus || 'Pendiente'),
-            status: c.status === 'Eliminado' ? 'Eliminado' : 'Activo',
-            // Aseguramos valores numéricos
-            valorVenta: Number(c.valorVenta) || 0,
-            valorCobro: Number(c.valorCobro) || 0,
-            devoluciones: Number(c.devoluciones) || 0,
-        }));
+        // 1. Obtener datos frescos del servidor
+        const routeRef = doc(db, 'routes', routeId);
+        const snap = await getDoc(routeRef);
+        
+        if (!snap.exists()) {
+            toast({ title: "Error", description: "La ruta no existe en el servidor.", variant: "destructive" });
+            return;
+        }
 
-        await updateRoute(route.id, { 
+        const freshData = snap.data() as RoutePlan;
+        const clients = freshData.clients || [];
+
+        // 2. Algoritmo de reparación: buscar evidencia de gestión real
+        const repairedClients = clients.map(c => {
+            const hasData = !!(
+                c.checkInTime || 
+                c.checkOutTime || 
+                c.visitType || 
+                c.visitObservation?.trim() || 
+                c.callObservation?.trim() || 
+                (c.valorVenta && Number(c.valorVenta) > 0) || 
+                (c.valorCobro && Number(c.valorCobro) > 0)
+            );
+
+            return {
+                ...c,
+                visitStatus: hasData ? 'Completado' : (c.visitStatus || 'Pendiente'),
+                status: c.status === 'Eliminado' ? 'Eliminado' : 'Activo',
+                // Asegurar tipos numéricos para evitar errores de Firestore
+                valorVenta: Number(c.valorVenta) || 0,
+                valorCobro: Number(c.valorCobro) || 0,
+                devoluciones: Number(c.devoluciones) || 0,
+            };
+        });
+
+        // 3. Determinar estado de la ruta
+        const isNowFinished = repairedClients.filter(r => r.status !== 'Eliminado').every(r => r.visitStatus === 'Completado');
+
+        // 4. Actualización no bloqueante
+        updateRoute(routeId, { 
             clients: repairedClients,
-            status: route.status === 'Completada' ? 'Completada' : (repairedClients.every(c => c.visitStatus === 'Completado' || c.status === 'Eliminado') ? 'Completada' : 'En Progreso')
+            status: freshData.status === 'Completada' ? 'Completada' : (isNowFinished ? 'Completada' : 'En Progreso')
+        })
+        .then(() => {
+            toast({ 
+                title: "RESCATE EXITOSO", 
+                description: `Se han validado y restaurado los registros de gestión.`,
+                className: "bg-green-600 text-white font-black"
+            });
+            refetchData('routes');
+        })
+        .catch(async (error) => {
+            errorEmitter.emit('permission-error', new FirestorePermissionError({
+                path: routeRef.path,
+                operation: 'update',
+                requestResourceData: { clients: repairedClients }
+            }));
+        })
+        .finally(() => {
+            setIsRescuing(null);
         });
 
-        toast({ 
-            title: "RESCATE EXITOSO", 
-            description: `Se han validado y restaurado ${repairedClients.length} registros de gestión.`,
-            className: "bg-green-600 text-white font-black"
-        });
-        await refetchData('routes');
     } catch (error) {
-        console.error("Rescue failed:", error);
-        toast({ title: "Error en Rescate", variant: "destructive" });
-    } finally {
+        console.error("Rescue process error:", error);
+        toast({ title: "Error en Rescate", description: "Ocurrió un fallo al intentar acceder a los datos.", variant: "destructive" });
         setIsRescuing(null);
     }
   };
@@ -425,7 +465,7 @@ export default function TeamRoutesPage() {
                                                     
                                                     {canRescue && (
                                                         <DropdownMenuItem 
-                                                            onClick={() => handleRescueRouteData(route)} 
+                                                            onClick={() => handleRescueRouteData(route.id)} 
                                                             disabled={isRescuing === route.id}
                                                             className="font-black text-xs uppercase text-green-700 py-2.5 bg-green-50 rounded-lg mb-1"
                                                         >
@@ -515,7 +555,7 @@ export default function TeamRoutesPage() {
                   <p className="text-amber-700 text-xs font-bold uppercase mt-1 leading-relaxed">
                       Si un vendedor indica que terminó su jornada pero no visualizas los "OK", usa la opción 
                       <span className="font-black underline mx-1">Rescatar Gestiones</span> en el menú de la ruta. 
-                      Esto forzará la sincronización y validará cada visita individualmente.
+                      Esto forzará la sincronización y validará cada visita individualmente basándose en evidencia real.
                   </p>
               </div>
           </div>

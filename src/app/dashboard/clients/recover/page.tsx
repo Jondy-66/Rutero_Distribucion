@@ -6,24 +6,26 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
-import { updateClient } from '@/lib/firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { RefreshCcw, Search, CheckCircle2, ShieldAlert, LoaderCircle, AlertTriangle, UserPlus } from 'lucide-react';
+import { RefreshCcw, Search, ShieldAlert, LoaderCircle, AlertTriangle, UserPlus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
+import { db } from '@/lib/firebase/config';
+import { writeBatch, doc } from 'firebase/firestore';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function RecoverClientsPage() {
     const { user, clients, refetchData, loading } = useAuth();
     const { toast } = useToast();
     const [searchTerm, setSearchTerm] = useState('');
-    const [selectedIds, setSelectedRouteIds] = useState<string[]>([]);
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
     const [isProcessing, setIsProcessing] = useState(false);
 
     const inactiveClients = useMemo(() => {
         return clients
-            .filter(c => c.status === 'inactive')
+            .filter(c => (c.status === 'inactive' || (c as any).estado === 'inactive'))
             .filter(c => {
                 const term = searchTerm.toLowerCase();
                 return c.nombre_cliente.toLowerCase().includes(term) || 
@@ -36,25 +38,32 @@ export default function RecoverClientsPage() {
         if (ids.length === 0) return;
         setIsProcessing(true);
         try {
-            for (const id of ids) {
-                await updateClient(id, { status: 'active' });
-            }
+            const batch = writeBatch(db);
+            ids.forEach(id => {
+                const clientRef = doc(db, 'clients', id);
+                batch.update(clientRef, { status: 'active' });
+            });
+            
+            await batch.commit();
+            
             toast({ 
                 title: "Restauración Completada", 
                 description: `Se han reactivado ${ids.length} clientes con éxito.`,
                 className: "bg-green-600 text-white font-black"
             });
-            setSelectedRouteIds([]);
+            
+            setSelectedIds([]);
             await refetchData('clients');
         } catch (error) {
-            toast({ title: "Error", description: "No se pudieron restaurar los registros.", variant: "destructive" });
+            console.error("Batch recovery error:", error);
+            toast({ title: "Error", description: "No se pudieron restaurar los registros en el servidor.", variant: "destructive" });
         } finally {
             setIsProcessing(false);
         }
     };
 
     const toggleSelect = (id: string) => {
-        setSelectedRouteIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+        setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     };
 
     if (user?.role !== 'Administrador' && !user?.permissions?.includes('recover-clients')) {
@@ -110,7 +119,7 @@ export default function RecoverClientsPage() {
                                         <TableHead className="w-12 text-center h-14">
                                             <Checkbox 
                                                 checked={selectedIds.length === inactiveClients.length && inactiveClients.length > 0}
-                                                onCheckedChange={() => setSelectedRouteIds(selectedIds.length === inactiveClients.length ? [] : inactiveClients.map(c => c.id))}
+                                                onCheckedChange={() => setSelectedIds(selectedIds.length === inactiveClients.length ? [] : inactiveClients.map(c => c.id))}
                                             />
                                         </TableHead>
                                         <TableHead className="font-black text-slate-950 uppercase text-[10px]">Cliente / RUC</TableHead>
