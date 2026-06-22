@@ -157,12 +157,12 @@ export default function TeamRoutesPage() {
 
   /**
    * FUNCIÓN CRÍTICA DE MANTENIMIENTO: RESCATE DE DATOS
-   * Valida la evidencia de trabajo y restaura el estado "OK" si hay registros.
+   * Valida la evidencia de trabajo y restaura el estado "OK" si hay registros reales.
+   * CORRECCIÓN: Los valores de venta/cobro proyectados por IA NO activan el OK.
    */
   const handleRescueRouteData = async (routeId: string) => {
     setIsRescuing(routeId);
     try {
-        // 1. Obtener datos frescos del servidor
         const routeRef = doc(db, 'routes', routeId);
         const snap = await getDoc(routeRef);
         
@@ -174,33 +174,28 @@ export default function TeamRoutesPage() {
         const freshData = snap.data() as RoutePlan;
         const clients = freshData.clients || [];
 
-        // 2. Algoritmo de reparación: buscar evidencia de gestión real
         const repairedClients = clients.map(c => {
+            // Evidencia real de gestión MANUAL o FINALIZADA
+            // Ignoramos valorVenta/valorCobro porque pueden ser proyecciones de IA
             const hasData = !!(
-                c.checkInTime || 
                 c.checkOutTime || 
                 c.visitType || 
                 c.visitObservation?.trim() || 
-                c.callObservation?.trim() || 
-                (c.valorVenta && Number(c.valorVenta) > 0) || 
-                (c.valorCobro && Number(c.valorCobro) > 0)
+                c.callObservation?.trim()
             );
 
             return {
                 ...c,
                 visitStatus: hasData ? 'Completado' : (c.visitStatus || 'Pendiente'),
                 status: c.status === 'Eliminado' ? 'Eliminado' : 'Activo',
-                // Asegurar tipos numéricos para evitar errores de Firestore
                 valorVenta: Number(c.valorVenta) || 0,
                 valorCobro: Number(c.valorCobro) || 0,
                 devoluciones: Number(c.devoluciones) || 0,
             };
         });
 
-        // 3. Determinar estado de la ruta
         const isNowFinished = repairedClients.filter(r => r.status !== 'Eliminado').every(r => r.visitStatus === 'Completado');
 
-        // 4. Actualización no bloqueante
         updateRoute(routeId, { 
             clients: repairedClients,
             status: freshData.status === 'Completada' ? 'Completada' : (isNowFinished ? 'Completada' : 'En Progreso')
@@ -208,7 +203,7 @@ export default function TeamRoutesPage() {
         .then(() => {
             toast({ 
                 title: "RESCATE EXITOSO", 
-                description: `Se han validado y restaurado los registros de gestión.`,
+                description: `Se han validado y restaurado los registros de gestión real.`,
                 className: "bg-green-600 text-white font-black"
             });
             refetchData('routes');
@@ -555,7 +550,7 @@ export default function TeamRoutesPage() {
                   <p className="text-amber-700 text-xs font-bold uppercase mt-1 leading-relaxed">
                       Si un vendedor indica que terminó su jornada pero no visualizas los "OK", usa la opción 
                       <span className="font-black underline mx-1">Rescatar Gestiones</span> en el menú de la ruta. 
-                      Esto forzará la sincronización y validará cada visita individualmente basándose en evidencia real.
+                      Esto forzará la sincronización y validará cada visita individualmente basándose en evidencia real (check-out u observaciones).
                   </p>
               </div>
           </div>
