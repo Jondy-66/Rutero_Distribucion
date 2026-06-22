@@ -75,15 +75,17 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
         
         if (c.checkInLocation) {
             const loc = c.checkInLocation as any;
-            const lat = loc.latitude ?? loc.lat ?? loc._lat;
-            const lng = loc.longitude ?? loc.lng ?? loc._long;
+            const lat = loc.latitude ?? loc.lat ?? loc._lat ?? (typeof loc.lat === 'function' ? loc.lat() : undefined);
+            const lng = loc.longitude ?? loc.lng ?? loc._long ?? (typeof loc.lng === 'function' ? loc.lng() : undefined);
             if (typeof lat === 'number' && typeof lng === 'number') cleaned.checkInLocation = new GeoPoint(lat, lng);
+            else cleaned.checkInLocation = loc;
         }
         if (c.checkOutLocation) {
             const loc = c.checkOutLocation as any;
-            const lat = loc.latitude ?? loc.lat ?? loc._lat;
-            const lng = loc.longitude ?? loc.lng ?? loc._long;
+            const lat = loc.latitude ?? loc.lat ?? loc._lat ?? (typeof loc.lat === 'function' ? loc.lat() : undefined);
+            const lng = loc.longitude ?? loc.lng ?? loc._long ?? (typeof loc.lng === 'function' ? loc.lng() : undefined);
             if (typeof lat === 'number' && typeof lng === 'number') cleaned.checkOutLocation = new GeoPoint(lat, lng);
+            else cleaned.checkOutLocation = loc;
         }
         
         return cleaned;
@@ -230,34 +232,48 @@ function RouteManagementContent() {
     } catch (e) { setIsSaving(false); }
   };
 
+  /**
+   * REFACTORIZACIÓN CRÍTICA: Se integra la captura de GPS antes de grabar para evitar pérdida de datos por race conditions.
+   */
   const handleCheckIn = () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
     
     setIsSaving(true);
-    try {
+    const timeStr = format(new Date(), 'HH:mm:ss');
+
+    const proceedWithSave = (coords?: {lat: number, lng: number}) => {
+        if (!selectedRoute) return;
         const nextClients = [...selectedRoute.clients];
-        nextClients[activeOriginalIndex] = { ...nextClients[activeOriginalIndex], checkInTime: format(new Date(), 'HH:mm:ss') };
-        const sanitized = sanitizeClients(nextClients);
+        nextClients[activeOriginalIndex] = { 
+            ...nextClients[activeOriginalIndex], 
+            checkInTime: timeStr,
+            checkInLocation: coords ? new GeoPoint(coords.lat, coords.lng) : (nextClients[activeOriginalIndex].checkInLocation || null)
+        };
         
+        const sanitized = sanitizeClients(nextClients);
         updateRoute(selectedRoute.id, { clients: sanitized, status: 'En Progreso' })
-            .catch(async (err) => {
-                errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `routes/${selectedRoute.id}`, operation: 'update', requestResourceData: { clients: sanitized } }));
+            .catch(async () => {
+                errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                    path: `routes/${selectedRoute.id}`, 
+                    operation: 'update', 
+                    requestResourceData: { clients: sanitized } 
+                }));
             })
             .finally(() => { 
                 setIsSaving(false); 
                 toast({ title: "Entrada registrada" }); 
             });
+    };
 
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(p => {
-                if (selectedRoute) {
-                    const latest = [...selectedRoute.clients];
-                    latest[activeOriginalIndex] = { ...latest[activeOriginalIndex], checkInLocation: new GeoPoint(p.coords.latitude, p.coords.longitude) };
-                    updateRoute(selectedRoute.id, { clients: sanitizeClients(latest) }).catch(() => {});
-                }
-            }, null, { timeout: 5000 });
-        }
-    } catch (e) { setIsSaving(false); }
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            p => proceedWithSave({ lat: p.coords.latitude, lng: p.coords.longitude }),
+            () => proceedWithSave(),
+            { timeout: 4000, enableHighAccuracy: true }
+        );
+    } else {
+        proceedWithSave();
+    }
   };
 
   const handleCheckOut = () => {
@@ -268,7 +284,10 @@ function RouteManagementContent() {
     }
     
     setIsSaving(true);
-    try {
+    const timeStr = format(new Date(), 'HH:mm:ss');
+
+    const proceedWithSave = (coords?: {lat: number, lng: number}) => {
+        if (!selectedRoute) return;
         const nextClients = [...selectedRoute.clients];
         nextClients[activeOriginalIndex] = { 
             ...nextClients[activeOriginalIndex], 
@@ -277,11 +296,12 @@ function RouteManagementContent() {
             valorVenta: parseFloat(localVenta) || 0,
             valorCobro: parseFloat(localCobro) || 0,
             devoluciones: parseFloat(localDevol) || 0,
-            checkOutTime: format(new Date(), 'HH:mm:ss'), 
-            visitStatus: 'Completado' 
+            checkOutTime: timeStr, 
+            visitStatus: 'Completado',
+            checkOutLocation: coords ? new GeoPoint(coords.lat, coords.lng) : (nextClients[activeOriginalIndex].checkOutLocation || null)
         };
-        const sanitized = sanitizeClients(nextClients);
         
+        const sanitized = sanitizeClients(nextClients);
         const allDone = sanitized.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
         const nextStatus = (selectedRoute.status === 'Completada' || allDone) ? 'Completada' : 'En Progreso';
 
@@ -290,24 +310,28 @@ function RouteManagementContent() {
             status: nextStatus 
         })
         .catch(async () => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `routes/${selectedRoute.id}`, operation: 'update', requestResourceData: { clients: sanitized } }));
+            errorEmitter.emit('permission-error', new FirestorePermissionError({ 
+                path: `routes/${selectedRoute.id}`, 
+                operation: 'update', 
+                requestResourceData: { clients: sanitized } 
+            }));
         })
         .finally(() => { 
             if (!isManager) setActiveOriginalIndex(null); 
             setIsSaving(false); 
             toast({ title: "Gestión Finalizada" }); 
         });
+    };
 
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(p => {
-                if (selectedRoute) {
-                    const latest = [...selectedRoute.clients];
-                    latest[activeOriginalIndex] = { ...latest[activeOriginalIndex], checkOutLocation: new GeoPoint(p.coords.latitude, p.coords.longitude) };
-                    updateRoute(selectedRoute.id, { clients: sanitizeClients(latest) }).catch(() => {});
-                }
-            }, null, { timeout: 5000 });
-        }
-    } catch (e) { setIsSaving(false); }
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            p => proceedWithSave({ lat: p.coords.latitude, lng: p.coords.longitude }),
+            () => proceedWithSave(),
+            { timeout: 4000, enableHighAccuracy: true }
+        );
+    } else {
+        proceedWithSave();
+    }
   };
 
   const handleAddClients = () => {
@@ -429,7 +453,10 @@ function RouteManagementContent() {
                                 )}
                                 <div className={cn("p-6 rounded-[2rem] border-2 flex flex-col sm:flex-row items-center justify-between gap-4", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-slate-50 border-dashed")}>
                                     <div className="flex items-center gap-4 lg:gap-6"><div className={cn("p-3 rounded-full bg-white shadow-sm", activeClient.checkInTime ? "text-green-600" : "text-slate-950")}><LogIn className="h-6 w-6" /></div><div><h4 className="font-black text-[10px] uppercase text-slate-950 tracking-widest">Hora de Llegada</h4><p className="text-base font-black text-slate-950 uppercase opacity-60">{activeClient.checkInTime || 'Pendiente de marcar...'}</p></div></div>
-                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="w-full sm:auto font-black h-12 px-8 uppercase rounded-2xl shadow-lg" disabled={isJornadaBloqueada || isSaving}>MARCAR ENTRADA (GPS)</Button>}
+                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="w-full sm:auto font-black h-12 px-8 uppercase rounded-2xl shadow-lg" disabled={isJornadaBloqueada || isSaving}>
+                                        {isSaving ? <LoaderCircle className="animate-spin mr-2 h-5 w-5" /> : null}
+                                        MARCAR ENTRADA (GPS)
+                                    </Button>}
                                 </div>
                                 <div className={cn("space-y-6 transition-all duration-500", !activeClient.checkInTime && !isManager && "opacity-20 pointer-events-none blur-[2px]")}>
                                     <div className="space-y-4"><Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Tipo de Gestión Realizada</Label><RadioGroup onValueChange={v => { if (selectedRoute && activeOriginalIndex !== null) { const next = [...selectedRoute.clients]; next[activeOriginalIndex] = { ...next[activeOriginalIndex], visitType: v as any }; updateRoute(selectedRoute.id, { clients: sanitizeClients(next) }); } }} value={activeClient.visitType || undefined} className="grid grid-cols-2 gap-4" disabled={isEditingActiveClientDisabled || isSaving}><Label className={cn("flex flex-col items-center gap-3 border-2 p-4 rounded-[2rem] cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "bg-slate-50 hover:bg-slate-100")}><RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-8 w-8 text-primary" /><span className="text-[10px] font-black uppercase">Presencial</span></Label><Label className={cn("flex flex-col items-center gap-3 border-2 p-4 rounded-[2rem] cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "bg-slate-50 hover:bg-slate-100")}><RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-8 w-8 text-primary" /><span className="text-[10px] font-black uppercase">Telefónica</span></Label></RadioGroup></div>
