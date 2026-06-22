@@ -158,7 +158,7 @@ export default function TeamRoutesPage() {
   /**
    * FUNCIÓN CRÍTICA DE MANTENIMIENTO: RESCATE DE DATOS
    * Valida la evidencia de trabajo y restaura el estado "OK" si hay registros reales.
-   * CORRECCIÓN: Los valores de venta/cobro proyectados por IA NO activan el OK.
+   * CORRECCIÓN: Sólo checkOutTime cuenta como evidencia absoluta de OK.
    */
   const handleRescueRouteData = async (routeId: string) => {
     setIsRescuing(routeId);
@@ -175,18 +175,13 @@ export default function TeamRoutesPage() {
         const clients = freshData.clients || [];
 
         const repairedClients = clients.map(c => {
-            // Evidencia real de gestión MANUAL o FINALIZADA
-            // Ignoramos valorVenta/valorCobro porque pueden ser proyecciones de IA
-            const hasData = !!(
-                c.checkOutTime || 
-                c.visitType || 
-                c.visitObservation?.trim() || 
-                c.callObservation?.trim()
-            );
+            // Evidencia real de gestión FINALIZADA.
+            // Ignoramos valores de IA (venta/cobro) para evitar OKs fantasmas.
+            const hasRealData = !!c.checkOutTime;
 
             return {
                 ...c,
-                visitStatus: hasData ? 'Completado' : (c.visitStatus || 'Pendiente'),
+                visitStatus: hasRealData ? 'Completado' : 'Pendiente',
                 status: c.status === 'Eliminado' ? 'Eliminado' : 'Activo',
                 valorVenta: Number(c.valorVenta) || 0,
                 valorCobro: Number(c.valorCobro) || 0,
@@ -194,6 +189,7 @@ export default function TeamRoutesPage() {
             };
         });
 
+        // Solo cerrar la ruta automáticamente si REALMENTE todas están completadas con evidencia
         const isNowFinished = repairedClients.filter(r => r.status !== 'Eliminado').every(r => r.visitStatus === 'Completado');
 
         updateRoute(routeId, { 
@@ -202,8 +198,8 @@ export default function TeamRoutesPage() {
         })
         .then(() => {
             toast({ 
-                title: "RESCATE EXITOSO", 
-                description: `Se han validado y restaurado los registros de gestión real.`,
+                title: "MANTENIMIENTO FINALIZADO", 
+                description: `Se han depurado los estados de gestión basados en evidencia real.`,
                 className: "bg-green-600 text-white font-black"
             });
             refetchData('routes');

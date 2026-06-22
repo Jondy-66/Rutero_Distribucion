@@ -47,8 +47,8 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     return clients.map(c => {
         if (!c) return null;
         
-        // La gestión solo está finalizada si existe hora de salida
-        const isActuallyFinished = !!c.checkOutTime || c.visitStatus === 'Completado';
+        // La gestión solo está finalizada si existe hora de salida real grabada por el usuario
+        const isActuallyFinished = !!c.checkOutTime;
 
         const cleaned: any = { 
             ruc: String(c.ruc || ''),
@@ -263,7 +263,7 @@ function RouteManagementContent() {
   const handleCheckOut = () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
     if (activeClient?.visitType === 'telefonica' && !localCallObs.trim()) { 
-        toast({title: "Observación de llamada requerida", variant: "destructive"}); 
+        toast({title: "Resumen de llamada requerido", variant: "destructive"}); 
         return; 
     }
     
