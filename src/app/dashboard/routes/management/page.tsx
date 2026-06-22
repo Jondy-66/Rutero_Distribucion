@@ -154,7 +154,8 @@ function RouteManagementContent() {
     return allRoutes.filter(r => {
         const isOwn = r.createdBy === user.id;
         const isManaged = managedUsers.some(u => u.id === r.createdBy);
-        const isValidStatus = ['Planificada', 'En Progreso', 'Completada'].includes(r.status);
+        // FILTRO ACTUALIZADO: Solo se muestran rutas Planificadas o En Progreso. Se eliminó 'Completada'.
+        const isValidStatus = ['Planificada', 'En Progreso'].includes(r.status);
         if (!isValidStatus) return false;
         if (!isOwn && !isManaged && !isAdmin) return false;
         if (isManager && selectedAgentId !== 'all' && r.createdBy !== selectedAgentId) return false;
