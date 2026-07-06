@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, Suspense, useCallback } from 'react';
@@ -7,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTriangle, ThumbsUp, Users as UsersIcon, CalendarDays, Sparkles, MessageSquare, Trash2, ArrowLeft } from 'lucide-react';
+import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, CirclePlus, AlertTriangle, ThumbsUp, Users as UsersIcon, CalendarDays, Sparkles, MessageSquare, Trash2, ArrowLeft, Clock } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -146,12 +147,40 @@ function RouteManagementContent() {
     return () => unsub();
   }, [selectedRouteId, searchParams]);
 
+  const selectedRoute = useMemo(() => {
+    if (routeOverride) return routeOverride;
+    const rid = selectedRouteId || searchParams.get('routeId');
+    return allRoutes.find(r => r.id === rid);
+  }, [routeOverride, selectedRouteId, allRoutes, searchParams]);
+
   useEffect(() => {
-    const check = () => setIsExpired(new Date().getHours() >= 19 && !isAdmin);
+    const check = () => {
+      if (isAdmin) {
+        setIsExpired(false);
+        return;
+      }
+
+      const now = new Date();
+      let limitHour = 19;
+      let limitMinute = 0;
+
+      // Si el administrador extendió la hora para esta ruta, usarla.
+      if (selectedRoute?.extendedClosingTime) {
+        const [h, m] = selectedRoute.extendedClosingTime.split(':').map(Number);
+        if (!isNaN(h)) limitHour = h;
+        if (!isNaN(m)) limitMinute = m;
+      }
+
+      const currentMinutesTotal = now.getHours() * 60 + now.getMinutes();
+      const limitMinutesTotal = limitHour * 60 + limitMinute;
+
+      setIsExpired(currentMinutesTotal >= limitMinutesTotal);
+    };
+    
     check();
-    const t = setInterval(check, 60000);
+    const t = setInterval(check, 30000); // Revisar cada 30 segundos
     return () => clearInterval(t);
-  }, [isAdmin]);
+  }, [isAdmin, selectedRoute?.extendedClosingTime]);
 
   const managedUsers = useMemo(() => {
     if (!user) return [];
@@ -172,12 +201,6 @@ function RouteManagementContent() {
         return true; 
     });
   }, [allRoutes, user, isAdmin, isManager, selectedAgentId, managedUsers]);
-
-  const selectedRoute = useMemo(() => {
-    if (routeOverride) return routeOverride;
-    const rid = selectedRouteId || searchParams.get('routeId');
-    return allRoutes.find(r => r.id === rid);
-  }, [routeOverride, selectedRouteId, allRoutes, searchParams]);
 
   const activeClient = useMemo(() => {
     return activeOriginalIndex !== null && selectedRoute?.clients[activeOriginalIndex] 
@@ -298,7 +321,6 @@ function RouteManagementContent() {
         if (!selectedRoute) return;
         const nextClients = [...selectedRoute.clients];
         
-        // Asignación explícita de valores parseados para asegurar el guardado
         nextClients[activeOriginalIndex] = { 
             ...nextClients[activeOriginalIndex], 
             visitObservation: localVisitObs,
@@ -313,6 +335,8 @@ function RouteManagementContent() {
         
         const sanitized = sanitizeClients(nextClients);
         const allDone = sanitized.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
+        
+        // No degradar el estado si el administrador ya la marcó como completada manual.
         const nextStatus = (selectedRoute.status === 'Completada' || allDone) ? 'Completada' : 'En Progreso';
 
         updateRoute(selectedRoute.id, { 
@@ -353,7 +377,10 @@ function RouteManagementContent() {
         } as any));
         const sanitized = sanitizeClients([...selectedRoute.clients, ...newVisits]);
         
-        updateRoute(selectedRoute.id, { clients: sanitized, status: 'En Progreso' })
+        // Respetar estado completado
+        const nextStatus = selectedRoute.status === 'Completada' ? 'Completada' : 'En Progreso';
+
+        updateRoute(selectedRoute.id, { clients: sanitized, status: nextStatus })
             .catch(async () => errorEmitter.emit('permission-error', new FirestorePermissionError({ path: `routes/${selectedRoute.id}`, operation: 'update', requestResourceData: { clients: sanitized } })))
             .finally(() => { 
                 setIsSaving(false); 
@@ -373,8 +400,15 @@ function RouteManagementContent() {
         {isExpired && !isAdmin && (
             <Alert variant="destructive" className="mb-6 border-red-600 bg-red-50">
                 <AlertTriangle className="h-5 w-5 text-red-600" />
-                <AlertTitle className="text-red-800 font-black uppercase text-xs">Jornada Bloqueada (19:00)</AlertTitle>
-                <AlertDescription className="text-red-700 font-bold uppercase text-[10px]">POR SEGURIDAD, EL REGISTRO DIARIO SE CIERRA A LAS 19:00. CONTACTA AL ADMINISTRADOR.</AlertDescription>
+                <div>
+                    <AlertTitle className="text-red-800 font-black uppercase text-xs">Jornada Bloqueada</AlertTitle>
+                    <AlertDescription className="text-red-700 font-bold uppercase text-[10px]">
+                        {selectedRoute?.extendedClosingTime 
+                            ? `POR SEGURIDAD, EL REGISTRO DIARIO SE CERRÓ A LAS ${selectedRoute.extendedClosingTime} (HORARIO EXTENDIDO).`
+                            : "POR SEGURIDAD, EL REGISTRO DIARIO SE CIERRA A LAS 19:00. CONTACTA AL ADMINISTRADOR."
+                        }
+                    </AlertDescription>
+                </div>
             </Alert>
         )}
         {!selectedRoute || (selectedRoute.status !== 'En Progreso' && !isManager) ? (
@@ -407,7 +441,14 @@ function RouteManagementContent() {
                 <Card className={cn("shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden flex flex-col h-[80vh] lg:h-[88vh] bg-white", activeOriginalIndex !== null ? "hidden lg:flex" : "flex")}>
                     <CardHeader className="bg-muted/5 px-6 py-6 border-b">
                         <h2 className="text-xl font-black text-primary uppercase truncate" title={selectedRoute?.routeName}>{selectedRoute?.routeName || "Ruta Activa"}</h2>
-                        <p className="text-[10px] font-black text-slate-950 uppercase">FECHA: {format(new Date(), 'EEEE dd MMMM', { locale: es })}</p>
+                        <div className="flex justify-between items-center mt-1">
+                            <p className="text-[10px] font-black text-slate-950 uppercase">FECHA: {format(new Date(), 'EEEE dd MMMM', { locale: es })}</p>
+                            {selectedRoute?.extendedClosingTime && (
+                                <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 font-black text-[8px] uppercase">
+                                    <Clock className="h-2 w-2 mr-1" /> Cierre: {selectedRoute.extendedClosingTime}
+                                </Badge>
+                            )}
+                        </div>
                     </CardHeader>
                     <CardContent className="p-4 lg:p-6 flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">
                         <Button variant="outline" className="w-full h-12 border-dashed border-2 font-black text-xs rounded-xl flex items-center justify-center gap-2" onClick={() => setIsAddClientDialogOpen(true)} disabled={isJornadaBloqueada || (isTodayFinished && !isAdmin) || isSaving}>

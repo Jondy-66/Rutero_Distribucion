@@ -101,6 +101,7 @@ export type RoutePlan = {
   supervisorName: string;
   createdAt: Date | Timestamp;
   supervisorObservation?: string;
+  extendedClosingTime?: string; // Hora máxima de cierre extendida (HH:mm)
 };
 
 export type Prediction = {

@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -40,6 +41,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -59,6 +62,15 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { errorEmitter } from '@/firebase/error-emitter';
 import { FirestorePermissionError } from '@/firebase/errors';
@@ -71,6 +83,12 @@ export default function TeamRoutesPage() {
   const [selectedRouteIds, setSelectedRouteIds] = useState<string[]>([]);
   const [isBulkProcessing, setIsBulkProcessing] = useState(false);
   const [isRescuing, setIsRescuing] = useState<string | null>(null);
+
+  // Estados para extensión de horario
+  const [isExtendClosingDialogOpen, setIsExtendClosingDialogOpen] = useState(false);
+  const [extendingRouteId, setExtendingRouteId] = useState<string | null>(null);
+  const [newClosingTime, setNewClosingTime] = useState('21:00');
+  const [isExtending, setIsExtending] = useState(false);
 
   const isAdminRole = user?.role === 'Administrador';
 
@@ -155,11 +173,6 @@ export default function TeamRoutesPage() {
     }
   };
 
-  /**
-   * FUNCIÓN CRÍTICA DE MANTENIMIENTO: RESCATE DE DATOS
-   * Valida la evidencia de trabajo y restaura el estado "OK" si hay registros reales.
-   * CORRECCIÓN: Sólo checkOutTime cuenta como evidencia absoluta de OK.
-   */
   const handleRescueRouteData = async (routeId: string) => {
     setIsRescuing(routeId);
     try {
@@ -175,10 +188,7 @@ export default function TeamRoutesPage() {
         const clients = freshData.clients || [];
 
         const repairedClients = clients.map(c => {
-            // Evidencia real de gestión FINALIZADA.
-            // Ignoramos valores de IA (venta/cobro) para evitar OKs fantasmas.
             const hasRealData = !!c.checkOutTime;
-
             return {
                 ...c,
                 visitStatus: hasRealData ? 'Completado' : 'Pendiente',
@@ -189,7 +199,6 @@ export default function TeamRoutesPage() {
             };
         });
 
-        // Solo cerrar la ruta automáticamente si REALMENTE todas están completadas con evidencia
         const isNowFinished = repairedClients.filter(r => r.status !== 'Eliminado').every(r => r.visitStatus === 'Completado');
 
         updateRoute(routeId, { 
@@ -269,10 +278,30 @@ export default function TeamRoutesPage() {
       toast({ title: "Error", description: "No se pudo reactivar la ruta.", variant: "destructive" });
     }
   };
+
+  const handleExtendClosing = async () => {
+    if (!extendingRouteId) return;
+    setIsExtending(true);
+    try {
+        await updateRoute(extendingRouteId, { extendedClosingTime: newClosingTime });
+        toast({ 
+            title: "CIERRE EXTENDIDO", 
+            description: `La jornada ahora se bloqueará a las ${newClosingTime} para este usuario.`,
+            className: "bg-orange-600 text-white font-black"
+        });
+        setIsExtendClosingDialogOpen(false);
+        setExtendingRouteId(null);
+        await refetchData('routes');
+    } catch (error) {
+        toast({ title: "Error", description: "No se pudo extender el cierre.", variant: "destructive" });
+    } finally {
+        setIsExtending(false);
+    }
+  };
   
   const toggleRouteSelection = (routeId: string) => {
       setSelectedRouteIds(prev => 
-        prev.includes(routeId) ? prev.filter(id => id !== routeId) : [...prev, routeId]
+        prev.includes(routeId) ? prev.filter(id => id !== routeId) : [...prev, id]
       );
   };
 
@@ -439,7 +468,14 @@ export default function TeamRoutesPage() {
                                     <TableCell className="font-black text-primary text-xs uppercase">{getCreatorName(route.createdBy)}</TableCell>
                                     <TableCell className="font-black text-slate-950 text-xs uppercase">{getRouteDate(route)}</TableCell>
                                     <TableCell>
-                                        {getBadgeForStatus(route.status)}
+                                        <div className="flex flex-col gap-1">
+                                            {getBadgeForStatus(route.status)}
+                                            {route.extendedClosingTime && (
+                                                <span className="text-[8px] font-black text-orange-600 uppercase flex items-center gap-0.5">
+                                                    <Clock className="h-2 w-2" /> Cierre: {route.extendedClosingTime}
+                                                </span>
+                                            )}
+                                        </div>
                                     </TableCell>
                                     <TableCell className="text-center font-black text-slate-950">{route.clients?.length || 0}</TableCell>
                                     <TableCell className="text-right pr-6">
@@ -473,6 +509,20 @@ export default function TeamRoutesPage() {
                                                         <DropdownMenuItem onClick={() => handleManageLive(route.id)} className="font-black text-xs uppercase text-primary py-2.5 bg-primary/5 rounded-lg">
                                                             <PlayCircle className="mr-2 h-4 w-4" />
                                                             Gestionar Jornada
+                                                        </DropdownMenuItem>
+                                                    )}
+
+                                                    {isAdminRole && (
+                                                        <DropdownMenuItem 
+                                                            onClick={() => {
+                                                                setExtendingRouteId(route.id);
+                                                                setNewClosingTime(route.extendedClosingTime || '21:00');
+                                                                setIsExtendClosingDialogOpen(true);
+                                                            }} 
+                                                            className="font-black text-xs uppercase text-orange-600 py-2.5 bg-orange-50 rounded-lg mt-1"
+                                                        >
+                                                            <Clock className="mr-2 h-4 w-4" />
+                                                            Extender Cierre
                                                         </DropdownMenuItem>
                                                     )}
 
@@ -537,6 +587,41 @@ export default function TeamRoutesPage() {
             </div>
         </CardContent>
       </Card>
+
+      <Dialog open={isExtendClosingDialogOpen} onOpenChange={setIsExtendClosingDialogOpen}>
+          <DialogContent className="sm:max-w-md rounded-2xl border-none shadow-2xl">
+              <DialogHeader>
+                  <DialogTitle className="font-black uppercase text-slate-950 text-xl">Extender Cierre de Rutero</DialogTitle>
+                  <DialogDescription className="text-xs font-bold uppercase text-slate-500">
+                      Define la nueva hora máxima permitida para que el usuario registre sus gestiones hoy.
+                  </DialogDescription>
+              </DialogHeader>
+              <div className="py-6 space-y-4">
+                  <div className="space-y-2">
+                      <Label htmlFor="closing-time" className="font-black uppercase text-[10px] text-slate-950">Hora Máxima (Formato 24h)</Label>
+                      <Input 
+                        id="closing-time" 
+                        type="time" 
+                        value={newClosingTime} 
+                        onChange={(e) => setNewClosingTime(e.target.value)} 
+                        className="h-12 border-2 border-slate-200 font-black text-primary text-lg rounded-xl"
+                      />
+                      <p className="text-[9px] font-bold text-slate-400 uppercase italic">Por defecto: 19:00</p>
+                  </div>
+              </div>
+              <DialogFooter className="gap-2">
+                  <DialogClose asChild><Button variant="ghost" className="font-black uppercase">Cancelar</Button></DialogClose>
+                  <Button 
+                    onClick={handleExtendClosing} 
+                    disabled={isExtending}
+                    className="font-black h-11 px-8 uppercase shadow-lg bg-orange-600 hover:bg-orange-700"
+                  >
+                      {isExtending ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : <Clock className="mr-2 h-4 w-4" />}
+                      Confirmar Extensión
+                  </Button>
+              </DialogFooter>
+          </DialogContent>
+      </Dialog>
 
       <div className="mt-8 p-6 bg-amber-50 rounded-3xl border-2 border-dashed border-amber-200">
           <div className="flex gap-4">
