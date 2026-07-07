@@ -53,7 +53,6 @@ const ensureDate = (d: any): Date => {
 
 /**
  * Sanitiza el array de clientes protegiendo los datos registrados.
- * CRÍTICO: Asegura que los valores numéricos se graben correctamente como Number.
  */
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     if (!clients) return [];
@@ -161,14 +160,26 @@ function RouteManagementContent() {
       }
 
       const now = new Date();
+      const currentDay = now.getDay(); // 0-6
       let limitHour = 19;
       let limitMinute = 0;
 
-      // Si el administrador extendió la hora para esta ruta, usarla.
+      // REGLA DE PRIORIDAD PARA EXTENSIÓN:
+      // 1. Extensión específica de la ruta (Prioridad Máxima)
       if (selectedRoute?.extendedClosingTime) {
         const [h, m] = selectedRoute.extendedClosingTime.split(':').map(Number);
-        if (!isNaN(h)) limitHour = h;
-        if (!isNaN(m)) limitMinute = m;
+        if (!isNaN(h)) {
+            limitHour = h;
+            limitMinute = m;
+        }
+      } 
+      // 2. Extensión semanal del perfil de usuario (Si hoy está habilitado)
+      else if (user?.extendedClosingTime && user?.extendedClosingDays?.includes(currentDay)) {
+        const [h, m] = user.extendedClosingTime.split(':').map(Number);
+        if (!isNaN(h)) {
+            limitHour = h;
+            limitMinute = m;
+        }
       }
 
       const currentMinutesTotal = now.getHours() * 60 + now.getMinutes();
@@ -178,9 +189,9 @@ function RouteManagementContent() {
     };
     
     check();
-    const t = setInterval(check, 30000); // Revisar cada 30 segundos
+    const t = setInterval(check, 30000); 
     return () => clearInterval(t);
-  }, [isAdmin, selectedRoute?.extendedClosingTime]);
+  }, [isAdmin, selectedRoute?.extendedClosingTime, user?.extendedClosingTime, user?.extendedClosingDays]);
 
   const managedUsers = useMemo(() => {
     if (!user) return [];
@@ -336,7 +347,6 @@ function RouteManagementContent() {
         const sanitized = sanitizeClients(nextClients);
         const allDone = sanitized.filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
         
-        // No degradar el estado si el administrador ya la marcó como completada manual.
         const nextStatus = (selectedRoute.status === 'Completada' || allDone) ? 'Completada' : 'En Progreso';
 
         updateRoute(selectedRoute.id, { 
@@ -348,7 +358,7 @@ function RouteManagementContent() {
                 path: `routes/${selectedRoute.id}`, 
                 operation: 'update', 
                 requestResourceData: { clients: sanitized } 
-            }));
+                }));
         })
         .finally(() => { 
             if (!isManager) setActiveOriginalIndex(null); 
@@ -377,7 +387,6 @@ function RouteManagementContent() {
         } as any));
         const sanitized = sanitizeClients([...selectedRoute.clients, ...newVisits]);
         
-        // Respetar estado completado
         const nextStatus = selectedRoute.status === 'Completada' ? 'Completada' : 'En Progreso';
 
         updateRoute(selectedRoute.id, { clients: sanitized, status: nextStatus })
@@ -403,10 +412,7 @@ function RouteManagementContent() {
                 <div>
                     <AlertTitle className="text-red-800 font-black uppercase text-xs">Jornada Bloqueada</AlertTitle>
                     <AlertDescription className="text-red-700 font-bold uppercase text-[10px]">
-                        {selectedRoute?.extendedClosingTime 
-                            ? `POR SEGURIDAD, EL REGISTRO DIARIO SE CERRÓ A LAS ${selectedRoute.extendedClosingTime} (HORARIO EXTENDIDO).`
-                            : "POR SEGURIDAD, EL REGISTRO DIARIO SE CIERRA A LAS 19:00. CONTACTA AL ADMINISTRADOR."
-                        }
+                        TU JORNADA HA CONCLUIDO. CONTACTA AL ADMINISTRADOR PARA UNA EXTENSIÓN.
                     </AlertDescription>
                 </div>
             </Alert>
@@ -443,11 +449,6 @@ function RouteManagementContent() {
                         <h2 className="text-xl font-black text-primary uppercase truncate" title={selectedRoute?.routeName}>{selectedRoute?.routeName || "Ruta Activa"}</h2>
                         <div className="flex justify-between items-center mt-1">
                             <p className="text-[10px] font-black text-slate-950 uppercase">FECHA: {format(new Date(), 'EEEE dd MMMM', { locale: es })}</p>
-                            {selectedRoute?.extendedClosingTime && (
-                                <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-50 font-black text-[8px] uppercase">
-                                    <Clock className="h-2 w-2 mr-1" /> Cierre: {selectedRoute.extendedClosingTime}
-                                </Badge>
-                            )}
                         </div>
                     </CardHeader>
                     <CardContent className="p-4 lg:p-6 flex flex-col gap-4 flex-1 min-h-0 overflow-hidden">

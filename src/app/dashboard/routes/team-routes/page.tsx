@@ -14,7 +14,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useAuth } from '@/hooks/use-auth';
-import { deleteRoute, updateRoute } from '@/lib/firebase/firestore';
+import { deleteRoute, updateRoute, updateUser } from '@/lib/firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { writeBatch, doc, Timestamp, getDoc } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
@@ -33,7 +33,8 @@ import {
   Route as RouteIcon, 
   LoaderCircle,
   LifeBuoy,
-  ShieldCheck
+  ShieldCheck,
+  CalendarDays
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -43,6 +44,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -87,6 +89,7 @@ export default function TeamRoutesPage() {
   // Estados para extensión de horario
   const [isExtendClosingDialogOpen, setIsExtendClosingDialogOpen] = useState(false);
   const [extendingRouteId, setExtendingRouteId] = useState<string | null>(null);
+  const [extensionType, setExtensionType] = useState<'route' | 'weekly'>('route');
   const [newClosingTime, setNewClosingTime] = useState('21:00');
   const [isExtending, setIsExtending] = useState(false);
 
@@ -283,17 +286,36 @@ export default function TeamRoutesPage() {
     if (!extendingRouteId) return;
     setIsExtending(true);
     try {
-        await updateRoute(extendingRouteId, { extendedClosingTime: newClosingTime });
-        toast({ 
-            title: "CIERRE EXTENDIDO", 
-            description: `La jornada ahora se bloqueará a las ${newClosingTime} para este usuario.`,
-            className: "bg-orange-600 text-white font-black"
-        });
+        const route = filteredRoutes.find(r => r.id === extendingRouteId);
+        if (!route) throw new Error("Ruta no encontrada");
+
+        if (extensionType === 'weekly') {
+            // Extender de Lunes a Viernes para el Usuario (Permanente)
+            await updateUser(route.createdBy, {
+                extendedClosingTime: newClosingTime,
+                extendedClosingDays: [1, 2, 3, 4, 5]
+            });
+            toast({ 
+                title: "CONFIGURACIÓN SEMANAL GUARDADA", 
+                description: `El usuario ahora tiene cierre a las ${newClosingTime} de Lunes a Viernes.`,
+                className: "bg-blue-600 text-white font-black"
+            });
+        } else {
+            // Extender solo la Ruta Actual
+            await updateRoute(extendingRouteId, { extendedClosingTime: newClosingTime });
+            toast({ 
+                title: "CIERRE EXTENDIDO (SOLO HOY)", 
+                description: `Esta jornada específica se bloqueará a las ${newClosingTime}.`,
+                className: "bg-orange-600 text-white font-black"
+            });
+        }
+
         setIsExtendClosingDialogOpen(false);
         setExtendingRouteId(null);
         await refetchData('routes');
+        await refetchData('users');
     } catch (error) {
-        toast({ title: "Error", description: "No se pudo extender el cierre.", variant: "destructive" });
+        toast({ title: "Error", description: "No se pudo procesar la extensión.", variant: "destructive" });
     } finally {
         setIsExtending(false);
     }
@@ -396,11 +418,6 @@ export default function TeamRoutesPage() {
                         ))}
                     </SelectContent>
                 </Select>
-                {isAdminRole && selectedRouteIds.length > 0 && (
-                    <span className="text-[10px] font-black uppercase text-primary bg-primary/5 px-4 py-2 rounded-full border border-primary/20">
-                        {selectedRouteIds.length} rutas listas para cierre masivo
-                    </span>
-                )}
             </div>
 
              <div className="border-2 border-slate-100 rounded-2xl overflow-hidden shadow-inner bg-white">
@@ -472,7 +489,7 @@ export default function TeamRoutesPage() {
                                             {getBadgeForStatus(route.status)}
                                             {route.extendedClosingTime && (
                                                 <span className="text-[8px] font-black text-orange-600 uppercase flex items-center gap-0.5">
-                                                    <Clock className="h-2 w-2" /> Cierre: {route.extendedClosingTime}
+                                                    <Clock className="h-2 w-2" /> Ruta hoy: {route.extendedClosingTime}
                                                 </span>
                                             )}
                                         </div>
@@ -591,22 +608,44 @@ export default function TeamRoutesPage() {
       <Dialog open={isExtendClosingDialogOpen} onOpenChange={setIsExtendClosingDialogOpen}>
           <DialogContent className="sm:max-w-md rounded-2xl border-none shadow-2xl">
               <DialogHeader>
-                  <DialogTitle className="font-black uppercase text-slate-950 text-xl">Extender Cierre de Rutero</DialogTitle>
+                  <DialogTitle className="font-black uppercase text-slate-950 text-xl">Configurar Extensión Horaria</DialogTitle>
                   <DialogDescription className="text-xs font-bold uppercase text-slate-500">
-                      Define la nueva hora máxima permitida para que el usuario registre sus gestiones hoy.
+                      Define el alcance y la hora máxima permitida para este usuario.
                   </DialogDescription>
               </DialogHeader>
-              <div className="py-6 space-y-4">
+              <div className="py-6 space-y-6">
+                  <div className="space-y-3">
+                      <Label className="font-black uppercase text-[10px] text-slate-500">Alcance de la Extensión</Label>
+                      <RadioGroup value={extensionType} onValueChange={(v: any) => setExtensionType(v)} className="grid grid-cols-2 gap-4">
+                          <Label className={cn(
+                              "flex flex-col items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all",
+                              extensionType === 'route' ? "border-primary bg-primary/5 ring-2 ring-primary/10" : "bg-slate-50"
+                          )}>
+                              <RadioGroupItem value="route" className="sr-only" />
+                              <RouteIcon className="h-6 w-6" />
+                              <span className="text-[10px] font-black uppercase">Solo esta Ruta</span>
+                          </Label>
+                          <Label className={cn(
+                              "flex flex-col items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all",
+                              extensionType === 'weekly' ? "border-primary bg-primary/5 ring-2 ring-primary/10" : "bg-slate-50"
+                          )}>
+                              <RadioGroupItem value="weekly" className="sr-only" />
+                              <CalendarDays className="h-6 w-6" />
+                              <span className="text-[10px] font-black uppercase">Semana L-V</span>
+                          </Label>
+                      </RadioGroup>
+                  </div>
+
                   <div className="space-y-2">
-                      <Label htmlFor="closing-time" className="font-black uppercase text-[10px] text-slate-950">Hora Máxima (Formato 24h)</Label>
+                      <Label htmlFor="closing-time" className="font-black uppercase text-[10px] text-slate-500">Nueva Hora Máxima (24h)</Label>
                       <Input 
                         id="closing-time" 
                         type="time" 
                         value={newClosingTime} 
                         onChange={(e) => setNewClosingTime(e.target.value)} 
-                        className="h-12 border-2 border-slate-200 font-black text-primary text-lg rounded-xl"
+                        className="h-12 border-2 border-slate-200 font-black text-primary text-2xl rounded-xl text-center"
                       />
-                      <p className="text-[9px] font-bold text-slate-400 uppercase italic">Por defecto: 19:00</p>
+                      <p className="text-[9px] font-bold text-slate-400 uppercase italic text-center">Hora de bloqueo definitiva</p>
                   </div>
               </div>
               <DialogFooter className="gap-2">
@@ -617,7 +656,7 @@ export default function TeamRoutesPage() {
                     className="font-black h-11 px-8 uppercase shadow-lg bg-orange-600 hover:bg-orange-700"
                   >
                       {isExtending ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : <Clock className="mr-2 h-4 w-4" />}
-                      Confirmar Extensión
+                      {extensionType === 'weekly' ? 'Aplicar Semanalmente' : 'Extender hoy'}
                   </Button>
               </DialogFooter>
           </DialogContent>

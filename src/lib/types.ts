@@ -11,6 +11,8 @@ export type User = {
   supervisorId?: string;
   failedLoginAttempts?: number;
   permissions?: string[];
+  extendedClosingTime?: string; // HH:mm para cierre permanente
+  extendedClosingDays?: number[]; // [1,2,3,4,5] días de la semana
 };
 
 export type ActiveLocation = {
