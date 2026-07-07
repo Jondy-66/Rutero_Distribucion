@@ -61,18 +61,40 @@ export default function DashboardPage() {
     return todayClients.length > 0 && todayClients.every(c => c.visitStatus === 'Completado');
   }, [todayClients]);
 
-  const [remainingTime, setRemainingTime] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false });
+  const [remainingTime, setRemainingTime] = useState({ hours: 0, minutes: 0, seconds: 0, expired: false, closingTime: '19:00' });
   
   useEffect(() => {
     if (!activeRoute) return;
 
     const interval = setInterval(() => {
       const now = new Date();
-      const expirationDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 19, 0, 0); 
+      let limitHour = 19;
+      let limitMinute = 0;
+
+      // REGLA DE PRIORIDAD PARA EXTENSIÓN (Igual que en management/page.tsx):
+      // 1. Extensión específica de la ruta
+      if (activeRoute?.extendedClosingTime) {
+        const [h, m] = activeRoute.extendedClosingTime.split(':').map(Number);
+        if (!isNaN(h)) {
+            limitHour = h;
+            limitMinute = m;
+        }
+      } 
+      // 2. Extensión semanal del perfil de usuario
+      else if (user?.extendedClosingTime && user?.extendedClosingDays?.includes(now.getDay())) {
+        const [h, m] = user.extendedClosingTime.split(':').map(Number);
+        if (!isNaN(h)) {
+            limitHour = h;
+            limitMinute = m;
+        }
+      }
+
+      const closingTimeStr = `${String(limitHour).padStart(2, '0')}:${String(limitMinute).padStart(2, '0')}`;
+      const expirationDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), limitHour, limitMinute, 0); 
       const diff = expirationDate.getTime() - now.getTime();
 
       if (diff <= 0) {
-        setRemainingTime({ hours: 0, minutes: 0, seconds: 0, expired: true });
+        setRemainingTime({ hours: 0, minutes: 0, seconds: 0, expired: true, closingTime: closingTimeStr });
         clearInterval(interval);
         return;
       }
@@ -81,13 +103,13 @@ export default function DashboardPage() {
       const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diff % (1000 * 60)) / 1000);
       
-      setRemainingTime({ hours, minutes, seconds, expired: false });
+      setRemainingTime({ hours, minutes, seconds, expired: false, closingTime: closingTimeStr });
 
     }, 1000);
 
     return () => clearInterval(interval);
 
-  }, [activeRoute]);
+  }, [activeRoute, user]);
 
 
   const activeClientsInRoute = useMemo(() => {
@@ -280,7 +302,7 @@ export default function DashboardPage() {
                                 : `${String(remainingTime.hours).padStart(2, '0')}:${String(remainingTime.minutes).padStart(2, '0')}:${String(remainingTime.seconds).padStart(2, '0')}`
                             }
                         </div>
-                        <p className="text-xs text-muted-foreground">Para finalizar la ruta de hoy (19:00)</p>
+                        <p className="text-xs text-muted-foreground">Para finalizar la ruta de hoy ({remainingTime.closingTime})</p>
                        </>
                    )}
                 </CardContent>
