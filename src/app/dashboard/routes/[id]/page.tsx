@@ -212,7 +212,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       });
       await refetchData('routes');
       toast({ title: 'Éxito', description: `Ruta actualizada correctamente.` });
-      // Regresa a la pestaña de gestión de ruta tras actualizar paradas
       router.push('/dashboard/routes/management');
     } catch (error) {
       toast({ title: 'Error al actualizar', variant: 'destructive' });
@@ -267,10 +266,16 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         )}
 
         {route.status === 'Rechazada' && (
-          <Alert variant="destructive" className="mb-6">
-            <ThumbsDown className="h-4 w-4" />
-            <AlertTitle>Ruta Rechazada</AlertTitle>
-            <AlertDescription>{route.supervisorObservation || 'Sin observaciones del supervisor.'}</AlertDescription>
+          <Alert variant="destructive" className="mb-6 bg-red-50 border-red-200">
+            <ThumbsDown className="h-4 w-4 text-red-600" />
+            <AlertTitle className="font-black uppercase text-red-800">Ruta Rechazada</AlertTitle>
+            <AlertDescription className="font-bold text-red-700">
+                {route.supervisorObservation ? (
+                    <div className="mt-1 p-3 bg-white rounded-lg border border-red-100 italic">
+                        "{route.supervisorObservation}"
+                    </div>
+                ) : 'Sin observaciones del supervisor.'}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -327,12 +332,17 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                       </div>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="space-y-4 p-2 mt-2 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-                      {clientsInGroup.map((client) => (
+                      {clientsInGroup.map((client, idx) => (
                         <Card key={`${client.ruc}-${client.originalIndex}`} className="p-4 relative hover:shadow-md border-l-2 border-l-primary/10 bg-white">
                           <div className="flex justify-between items-start">
-                            <div className="space-y-1">
-                              <p className="font-black text-sm text-primary uppercase leading-tight">{client.globalIndex + 1}. {client.nombre_comercial}</p>
-                              <p className="text-[10px] font-mono font-bold text-slate-400 uppercase">{client.ruc}</p>
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center font-black text-[10px] text-primary shrink-0">
+                                    {idx + 1}
+                                </div>
+                                <div className="space-y-1 min-w-0">
+                                  <p className="font-black text-sm text-primary uppercase leading-tight truncate">{client.nombre_comercial}</p>
+                                  <p className="text-[10px] font-mono font-bold text-slate-400 uppercase">{client.ruc}</p>
+                                </div>
                             </div>
                             <Button type="button" variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.originalIndex)} disabled={isFormDisabled}>
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -410,7 +420,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
             <DialogDescription className="text-xs font-bold uppercase text-slate-500 leading-relaxed">Indica el motivo del rechazo para que el ejecutivo pueda realizar las correcciones necesarias.</DialogDescription>
           </DialogHeader>
           <div className="py-6">
-            <Label className="font-black uppercase text-[10px] text-slate-950">Observación del Supervisor</Label>
+            <Label className="font-black uppercase text-[10px] text-slate-950">Observación del Supervisor (Obligatorio)</Label>
             <Textarea 
               value={rejectionReason} 
               onChange={(e) => setRejectionReason(e.target.value)}

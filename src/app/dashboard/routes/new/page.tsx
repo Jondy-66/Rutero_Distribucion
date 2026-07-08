@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, AlertCircle, ShieldCheck, ChevronDown, Info } from 'lucide-react';
+import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, AlertCircle, ShieldCheck, ChevronDown, Info, ArrowUp, ArrowDown } from 'lucide-react';
 import { addRoutesBatch, getUser, addNotification } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -67,7 +67,7 @@ export default function NewUserPage() {
   
   const [isRemovalDialogOpen, setIsRemovalDialogOpen] = useState(false);
   const [removalReason, setRemovalReason] = useState('');
-  const [rucToToRemove, setRucToToRemove] = useState<string | null>(null);
+  const [clientIndexToRemove, setClientIndexToRemove] = useState<number | null>(null);
 
   const [stagedRoutes, setStagedRoutes] = useState<StagedRoute[]>([]);
   const [resolvedSupervisor, setResolvedSupervisor] = useState<User | null>(null);
@@ -151,18 +151,57 @@ export default function NewUserPage() {
     setIsClientDialogOpen(true);
   };
 
-  const handleOpenRemovalDialog = (ruc: string) => {
+  const handleOpenRemovalDialog = (index: number) => {
     if (isFormLocked) return;
-    setRucToToRemove(ruc);
+    setClientIndexToRemove(index);
     setRemovalReason('');
     setIsRemovalDialogOpen(true);
   };
 
   const confirmRemoval = () => {
-    if (!rucToToRemove || !removalReason.trim()) return;
-    setSelectedClients(prev => prev.map(c => c.ruc === rucToToRemove ? { ...c, status: 'Eliminado', removalObservation: removalReason } : c));
+    if (clientIndexToRemove === null || !removalReason.trim()) return;
+    setSelectedClients(prev => {
+        const next = [...prev];
+        if (next[clientIndexToRemove]) {
+            next[clientIndexToRemove] = { ...next[clientIndexToRemove], status: 'Eliminado', removalObservation: removalReason };
+        }
+        return next;
+    });
     setIsRemovalDialogOpen(false);
-    setRucToToRemove(null);
+    setClientIndexToRemove(null);
+  };
+
+  const handleMoveClient = (index: number, direction: 'up' | 'down') => {
+    if (isFormLocked) return;
+    setSelectedClients(prev => {
+        const next = [...prev];
+        const currentClient = next[index];
+        const targetDate = ensureDate(currentClient.date);
+
+        let swapIndex = -1;
+        if (direction === 'up') {
+            for (let i = index - 1; i >= 0; i--) {
+                if (next[i].status !== 'Eliminado' && isSameDay(ensureDate(next[i].date), targetDate)) {
+                    swapIndex = i;
+                    break;
+                }
+            }
+        } else {
+            for (let i = index + 1; i < next.length; i++) {
+                if (next[i].status !== 'Eliminado' && isSameDay(ensureDate(next[i].date), targetDate)) {
+                    swapIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (swapIndex !== -1) {
+            const temp = next[index];
+            next[index] = next[swapIndex];
+            next[swapIndex] = temp;
+        }
+        return next;
+    });
   };
 
   const handleAddClientsToSelected = () => {
@@ -220,7 +259,6 @@ export default function NewUserPage() {
         }
         toast({ title: 'Rutas Guardadas', description: "Tu plan de ruta ha sido registrado con éxito." });
         await refetchData('routes');
-        // Redirección inmediata a la pestaña de gestión
         router.push('/dashboard/routes/management');
     } catch(e) { toast({ title: 'Error', variant: 'destructive' }); } finally { setIsSaving(false); }
   }
@@ -285,7 +323,7 @@ export default function NewUserPage() {
                 <Alert className="bg-primary/5 border-primary/20 py-2">
                     <Info className="h-4 w-4 text-primary" />
                     <AlertDescription className="text-[10px] font-bold text-primary uppercase">
-                        Haz clic en los encabezados de cada día para expandir o contraer la lista de clientes.
+                        Haz clic en los encabezados para expandir. Usa las flechas para ordenar las paradas.
                     </AlertDescription>
                 </Alert>
 
@@ -299,8 +337,6 @@ export default function NewUserPage() {
                                         <CalendarIcon className="h-4 w-4 text-primary" />
                                         <div className="flex flex-col">
                                             <h4 className="font-black text-xs uppercase text-slate-950">{format(day, 'EEEE dd', { locale: es })}</h4>
-                                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=open]:hidden">Ver clientes</span>
-                                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=closed]:hidden">Contraer</span>
                                         </div>
                                         <Badge variant="secondary" className="font-black h-5">{dayClients.length}</Badge>
                                         <ChevronDown className="h-4 w-4 text-slate-400 transition-transform duration-300 group-data-[state=open]:rotate-180" />
@@ -312,13 +348,28 @@ export default function NewUserPage() {
                             </div>
                             <CollapsibleContent className="space-y-2 mt-2 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
                                 {dayClients.length > 0 ? (
-                                    dayClients.map((client) => (
-                                        <div key={client.ruc} className="p-3 bg-white border-2 rounded-xl flex justify-between items-center shadow-sm">
-                                            <div className="min-w-0 flex-1">
-                                                <p className="font-black text-[11px] text-primary uppercase truncate">{client.nombre_comercial}</p>
-                                                <p className="text-[9px] font-bold text-slate-500 uppercase">{client.ruc}</p>
+                                    dayClients.map((client, groupIdx) => (
+                                        <div key={`${client.ruc}-${client.originalIndex}`} className="p-3 bg-white border-2 rounded-xl flex justify-between items-center shadow-sm group/item">
+                                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                                                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center font-black text-[10px] text-primary shrink-0 border border-primary/20">
+                                                    {groupIdx + 1}
+                                                </div>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="font-black text-[11px] text-primary uppercase truncate">{client.nombre_comercial}</p>
+                                                    <p className="text-[9px] font-bold text-slate-500 uppercase">{client.ruc}</p>
+                                                </div>
                                             </div>
-                                            <Button variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.ruc)} disabled={isFormLocked} className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                            <div className="flex items-center gap-1">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveClient(client.originalIndex, 'up')} disabled={isFormLocked || groupIdx === 0}>
+                                                        <ArrowUp className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveClient(client.originalIndex, 'down')} disabled={isFormLocked || groupIdx === dayClients.length - 1}>
+                                                        <ArrowDown className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                                <Button variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.originalIndex)} disabled={isFormLocked} className="h-8 w-8 text-destructive"><Trash2 className="h-4 w-4" /></Button>
+                                            </div>
                                         </div>
                                     ))
                                 ) : (
