@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -376,6 +375,10 @@ export default function TeamRoutesPage() {
       );
   }
 
+  // Lógica de permisos granulares
+  const canRescue = isAdminRole || user?.permissions?.includes('rescue-gestiones');
+  const canExtend = isAdminRole || user?.permissions?.includes('extend-closing');
+
   return (
     <>
       <PageHeader
@@ -463,7 +466,6 @@ export default function TeamRoutesPage() {
                                 const canReactivate = isAdminRole && (route.status === 'Completada' || route.status === 'Rechazada');
                                 const canManageLive = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
                                 const canFinalize = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
-                                const canRescue = isAdminRole || user?.role === 'Supervisor';
                                
                                 return (
                                 <TableRow key={route.id} className={cn(
@@ -529,7 +531,7 @@ export default function TeamRoutesPage() {
                                                         </DropdownMenuItem>
                                                     )}
 
-                                                    {isAdminRole && (
+                                                    {canExtend && (
                                                         <DropdownMenuItem 
                                                             onClick={() => {
                                                                 setExtendingRouteId(route.id);

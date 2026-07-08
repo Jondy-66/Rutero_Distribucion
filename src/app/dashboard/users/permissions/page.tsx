@@ -30,10 +30,12 @@ const modules = [
     { id: 'crm', label: 'Módulo CRM (Telemercadeo)' },
     { id: 'users', label: 'Administración de Usuarios' },
     { id: 'recover-clients', label: 'RECUPERAR CLIENTES (Rescate de Datos)' },
+    { id: 'rescue-gestiones', label: 'RESCATAR GESTIONES (Mantenimiento)' },
+    { id: 'extend-closing', label: 'EXTENDER HORARIO DE CIERRE' },
 ];
 
 const defaultPermissionsByRole: Record<User['role'], string[]> = {
-    'Administrador': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'locations', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes', 'crm', 'users', 'recover-clients'],
+    'Administrador': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'locations', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes', 'crm', 'users', 'recover-clients', 'rescue-gestiones', 'extend-closing'],
     'Supervisor': ['dashboard', 'admin-dashboard', 'clients', 'import-clients', 'delete-clients', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes', 'crm', 'recover-clients'],
     'Usuario': ['dashboard', 'clients', 'map', 'routes', 'crm'],
     'Telemercaderista': ['dashboard', 'clients', 'map', 'routes', 'crm'],

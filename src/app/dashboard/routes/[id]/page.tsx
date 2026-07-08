@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter, notFound } from 'next/navigation';
@@ -7,13 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle, MessageSquare, Info, ChevronDown, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle, MessageSquare, Info, ChevronDown, ShieldCheck, ArrowUp, ArrowDown } from 'lucide-react';
 import { getRoute, updateRoute, addNotification } from '@/lib/firebase/firestore';
-import { getPredicciones } from '@/services/api';
 import type { User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { Timestamp } from 'firebase/firestore';
@@ -60,9 +58,22 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
+    
+    // El Administrador puede editar cualquier ruta que no esté completada
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
+    
+    // Los Usuarios y Telemercaderistas NUNCA pueden editar, solo ver el detalle.
+    // Según requerimiento: "solo deberia poder ver su ruta planificada mas ya no editarla ni modificarla"
+    if (currentUser.role === 'Usuario' || currentUser.role === 'Telemercaderista') {
+        return false;
+    }
+
+    // Los supervisores pueden editar rutas de su equipo o asignadas a ellos en ciertos estados
     const isOwner = currentUser.id === route.createdBy;
-    return isOwner && (route.status === 'Planificada' || route.status === 'Rechazada' || route.status === 'En Progreso');
+    const isAssignedSupervisor = currentUser.id === route.supervisorId;
+    const isEditableStatus = ['Planificada', 'Rechazada', 'En Progreso', 'Pendiente de Aprobación'].includes(route.status);
+    
+    return (isOwner || isAssignedSupervisor) && isEditableStatus;
   }, [currentUser, route]);
 
   const canApprove = useMemo(() => {
@@ -111,6 +122,39 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
           return next;
       });
   }, []);
+
+  const handleMoveClient = (index: number, direction: 'up' | 'down') => {
+    if (!canEdit) return;
+    setClientsInRoute(prev => {
+        const next = [...prev];
+        const currentClient = next[index];
+        const targetDate = ensureDate(currentClient.date);
+
+        let swapIndex = -1;
+        if (direction === 'up') {
+            for (let i = index - 1; i >= 0; i--) {
+                if (next[i].status !== 'Eliminado' && isSameDay(ensureDate(next[i].date), targetDate)) {
+                    swapIndex = i;
+                    break;
+                }
+            }
+        } else {
+            for (let i = index + 1; i < next.length; i++) {
+                if (next[i].status !== 'Eliminado' && isSameDay(ensureDate(next[i].date), targetDate)) {
+                    swapIndex = i;
+                    break;
+                }
+            }
+        }
+
+        if (swapIndex !== -1) {
+            const temp = next[index];
+            next[index] = next[swapIndex];
+            next[swapIndex] = temp;
+        }
+        return next;
+    });
+  };
 
   const handleOpenRemovalDialog = (index: number) => {
     setClientIndexToRemove(index);
@@ -247,7 +291,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     <div className="flex flex-col space-y-6">
       <PageHeader 
         title={canApprove ? "Revisión de Plan de Ruta" : "Detalles de la Ruta"} 
-        description="Gestión de paradas y cronograma semanal."
+        description={canEdit ? "Gestión de paradas y cronograma semanal." : "Vista de solo lectura del plan de ruta."}
       >
         <Link href="/dashboard/routes/team-routes">
           <Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" /> Volver al Listado</Button>
@@ -277,6 +321,16 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                 ) : 'Sin observaciones del supervisor.'}
             </AlertDescription>
           </Alert>
+        )}
+
+        {!canEdit && currentUser?.role === 'Usuario' && (
+            <Alert className="bg-slate-100 border-slate-300">
+                <Info className="h-4 w-4 text-slate-600" />
+                <AlertTitle className="font-black uppercase text-[10px] text-slate-700">Modo Solo Lectura</AlertTitle>
+                <AlertDescription className="text-[9px] font-bold text-slate-500 uppercase">
+                    Como usuario operativo, puedes visualizar tu plan de ruta pero no realizar modificaciones.
+                </AlertDescription>
+            </Alert>
         )}
 
         <Card>
@@ -344,9 +398,21 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                                   <p className="text-[10px] font-mono font-bold text-slate-400 uppercase">{client.ruc}</p>
                                 </div>
                             </div>
-                            <Button type="button" variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.originalIndex)} disabled={isFormDisabled}>
-                              <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                                {!isFormDisabled && (
+                                    <div className="flex flex-col gap-0.5 mr-2">
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveClient(client.originalIndex, 'up')} disabled={isFormDisabled || idx === 0}>
+                                            <ArrowUp className="h-3 w-3" />
+                                        </Button>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveClient(client.originalIndex, 'down')} disabled={isFormDisabled || idx === clientsInGroup.length - 1}>
+                                            <ArrowDown className="h-3 w-3" />
+                                        </Button>
+                                    </div>
+                                )}
+                                <Button type="button" variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.originalIndex)} disabled={isFormDisabled}>
+                                    <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                            </div>
                           </div>
                           <Separator className="my-3" />
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
