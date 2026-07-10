@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -25,7 +26,8 @@ import {
   UserCheck,
   Clock,
   ShieldCheck,
-  RefreshCcw
+  RefreshCcw,
+  CalendarCheck
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -298,6 +300,14 @@ export function DashboardNav() {
                   </Link>
                 </SidebarMenuSubItem>
                 )}
+                {hasPerm('seller-reports') && (
+                  <SidebarMenuSubItem>
+                    <Link href="/dashboard/reports/customer-visits" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/reports/customer-visits' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                      <CalendarCheck className={subIconClass} />
+                      Visita Clientes
+                    </Link>
+                  </SidebarMenuSubItem>
+                )}
               </CollapsibleContent>
             </SidebarMenuItem>
           </Collapsible>
@@ -352,3 +362,4 @@ export function DashboardNav() {
     </div>
   );
 }
+
