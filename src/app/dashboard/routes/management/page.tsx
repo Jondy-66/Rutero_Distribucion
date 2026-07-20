@@ -217,6 +217,12 @@ function RouteManagementContent() {
         : null;
   }, [activeOriginalIndex, selectedRoute]);
 
+  // Identificar si hay alguna gestión en curso (check-in sin check-out)
+  const clientInManagement = useMemo(() => {
+    if (!selectedRoute) return null;
+    return selectedRoute.clients.find(c => c.checkInTime && !c.checkOutTime && c.status !== 'Eliminado');
+  }, [selectedRoute]);
+
   useEffect(() => {
       if (activeClient) {
           setLocalVisitObs(activeClient.visitObservation || '');
@@ -311,6 +317,16 @@ function RouteManagementContent() {
   const handleCheckIn = () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
     
+    // VALIDACIÓN: No permitir doble check-in
+    if (clientInManagement) {
+        toast({
+            title: "Gestión en curso",
+            description: `Ya tienes una visita activa con ${clientInManagement.nombre_comercial}. Debes finalizarla antes de iniciar otra.`,
+            variant: "destructive"
+        });
+        return;
+    }
+
     setIsSaving(true);
     const timeStr = format(new Date(), 'HH:mm:ss');
 
@@ -496,6 +512,7 @@ function RouteManagementContent() {
                                                 <p className="text-[9px] font-black text-slate-400 uppercase font-mono">{c.ruc}</p>
                                                 {c.visitStatus === 'Completado' && <Badge variant="success" className="font-black text-[8px] uppercase bg-green-500 text-white h-4">OK</Badge>}
                                                 {c.isReadded && <Badge variant="outline" className="font-black text-[8px] uppercase border-primary text-primary h-4 bg-primary/5">EXTRA</Badge>}
+                                                {clientInManagement?.ruc === c.ruc && c.visitStatus === 'Pendiente' && <Badge className="bg-blue-600 animate-pulse font-black text-[8px] uppercase border-none h-4">EN CURSO</Badge>}
                                             </div>
                                         </div>
                                         {(isAdmin || (rucCounts[String(c.ruc).trim()] > 1 && c.visitStatus !== 'Completado')) && (
@@ -534,9 +551,22 @@ function RouteManagementContent() {
                                 {activeClient.isReadded && (
                                     <Alert className="bg-primary/5 border-primary/20 rounded-[1.5rem]"><Sparkles className="h-5 w-5 text-primary" /><AlertTitle className="text-primary font-black uppercase text-[10px]">Cliente Adicionado Manualmente</AlertTitle><AlertDescription className="text-slate-600 font-bold text-[9px] mt-1 italic"><MessageSquare className="inline h-3 w-3 mr-1" />"{activeClient.reAdditionObservation || 'Sin comentarios.'}"</AlertDescription></Alert>
                                 )}
+                                
+                                {clientInManagement && clientInManagement.ruc !== activeClient.ruc && !activeClient.checkInTime && (
+                                    <Alert className="border-blue-600 bg-blue-50 rounded-2xl animate-pulse">
+                                        <Clock className="h-5 w-5 text-blue-600" />
+                                        <div>
+                                            <AlertTitle className="text-blue-800 font-black uppercase text-xs">Gestión Bloqueada</AlertTitle>
+                                            <AlertDescription className="text-blue-700 font-bold uppercase text-[10px]">
+                                                DEBES FINALIZAR LA VISITA DE <span className="font-black underline">{clientInManagement.nombre_comercial}</span> ANTES DE INICIAR OTRA.
+                                            </AlertDescription>
+                                        </div>
+                                    </Alert>
+                                )}
+
                                 <div className={cn("p-6 rounded-[2rem] border-2 flex flex-col sm:flex-row items-center justify-between gap-4", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-slate-50 border-dashed")}>
                                     <div className="flex items-center gap-4 lg:gap-6"><div className={cn("p-3 rounded-full bg-white shadow-sm", activeClient.checkInTime ? "text-green-600" : "text-slate-950")}><LogIn className="h-6 w-6" /></div><div><h4 className="font-black text-[10px] uppercase text-slate-950 tracking-widest">Hora de Llegada</h4><p className="text-base font-black text-slate-950 uppercase opacity-60">{activeClient.checkInTime || 'Pendiente de marcar...'}</p></div></div>
-                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="w-full sm:auto font-black h-12 px-8 uppercase rounded-2xl shadow-lg" disabled={isJornadaBloqueada || isSaving}>
+                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} className="w-full sm:auto font-black h-12 px-8 uppercase rounded-2xl shadow-lg" disabled={isJornadaBloqueada || isSaving || (!!clientInManagement && clientInManagement.ruc !== activeClient.ruc)}>
                                         {isSaving ? <LoaderCircle className="animate-spin mr-2 h-5 w-5" /> : null}
                                         MARCAR ENTRADA (GPS)
                                     </Button>}
