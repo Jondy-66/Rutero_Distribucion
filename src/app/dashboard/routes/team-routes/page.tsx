@@ -387,10 +387,10 @@ export default function TeamRoutesPage() {
       />
       
       <Card className="border-t-4 border-t-primary shadow-xl">
-        <CardHeader>
+        <CardHeader className="px-4 sm:px-6">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <CardTitle className="font-black text-slate-950 uppercase">Panel de Control de Equipo</CardTitle>
+                    <CardTitle className="font-black text-slate-950 uppercase text-lg sm:text-xl">Panel de Control de Equipo</CardTitle>
                     <CardDescription className="font-bold text-[10px] text-slate-500 uppercase">
                         Viendo {filteredRoutes.length} rutas registradas en el sistema.
                     </CardDescription>
@@ -399,7 +399,7 @@ export default function TeamRoutesPage() {
                     <Button 
                         onClick={handleBulkFinalize} 
                         disabled={isBulkProcessing}
-                        className="bg-primary hover:bg-primary/90 text-white font-black uppercase text-[10px] h-10 px-6 rounded-xl shadow-lg animate-in fade-in slide-in-from-right-4"
+                        className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-white font-black uppercase text-[10px] h-10 px-6 rounded-xl shadow-lg animate-in fade-in slide-in-from-right-4"
                     >
                         {isBulkProcessing ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                         Finalizar {selectedRouteIds.length} Seleccionadas
@@ -407,7 +407,7 @@ export default function TeamRoutesPage() {
                 )}
             </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="px-4 sm:px-6">
             <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center">
                 <Select value={selectedUser} onValueChange={setSelectedUser}>
                     <SelectTrigger className="w-full sm:max-w-xs h-11 border-2 border-slate-200 font-black text-slate-950 rounded-xl bg-white shadow-sm">
@@ -424,216 +424,226 @@ export default function TeamRoutesPage() {
             </div>
 
              <div className="border-2 border-slate-100 rounded-2xl overflow-hidden shadow-inner bg-white">
-                <Table>
-                    <TableHeader className="bg-slate-50">
-                        <TableRow>
-                        {isAdminRole && (
-                            <TableHead className="w-12 text-center h-12">
-                                <Checkbox 
-                                    checked={selectedRouteIds.length === filteredRoutes.length && filteredRoutes.length > 0}
-                                    onCheckedChange={toggleAllVisible}
-                                    className="border-primary"
-                                />
-                            </TableHead>
-                        )}
-                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">#</TableHead>
-                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Nombre de Ruta</TableHead>
-                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Creado por</TableHead>
-                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Fecha</TableHead>
-                        <TableHead className="font-black text-slate-950 uppercase text-[10px]">Estado</TableHead>
-                        <TableHead className="font-black text-slate-950 uppercase text-[10px] text-center">Clientes</TableHead>
-                        <TableHead className="text-right font-black text-slate-950 uppercase text-[10px] pr-6">Acciones</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {isLoading ? (
-                            Array.from({ length: 5 }).map((_, i) => (
-                                <TableRow key={i}>
-                                    {isAdminRole && <TableCell><Skeleton className="h-4 w-4" /></TableCell>}
-                                    <TableCell><Skeleton className="h-5 w-8" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                                    <TableCell><Skeleton className="h-6 w-24" /></TableCell>
-                                    <TableCell><Skeleton className="h-5 w-8" /></TableCell>
-                                    <TableCell className="pr-6"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
-                                </TableRow>
-                            ))
-                        ) : filteredRoutes.length > 0 ? (
-                            filteredRoutes.map((route, index) => {
-                                const canReview = (user?.role === 'Supervisor' || isAdminRole) && route.status === 'Pendiente de Aprobación';
-                                const canDelete = isAdminRole;
-                                const canReactivate = isAdminRole && (route.status === 'Completada' || route.status === 'Rechazada');
-                                const canManageLive = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
-                                const canFinalize = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
-                               
-                                return (
-                                <TableRow key={route.id} className={cn(
-                                    "hover:bg-slate-50/50 transition-colors",
-                                    selectedRouteIds.includes(route.id) && "bg-primary/5"
-                                )}>
-                                    {isAdminRole && (
-                                        <TableCell className="text-center">
-                                            <Checkbox 
-                                                checked={selectedRouteIds.includes(route.id)}
-                                                onCheckedChange={() => toggleRouteSelection(route.id)}
-                                                className="border-primary"
-                                                disabled={route.status === 'Completada'}
-                                            />
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader className="bg-slate-50">
+                            <TableRow>
+                            {isAdminRole && (
+                                <TableHead className="w-10 text-center h-12">
+                                    <Checkbox 
+                                        checked={selectedRouteIds.length === filteredRoutes.length && filteredRoutes.length > 0}
+                                        onCheckedChange={toggleAllVisible}
+                                        className="border-primary"
+                                    />
+                                </TableHead>
+                            )}
+                            <TableHead className="hidden lg:table-cell font-black text-slate-950 uppercase text-[10px] w-12">#</TableHead>
+                            <TableHead className="font-black text-slate-950 uppercase text-[10px]">Ruta / Info</TableHead>
+                            <TableHead className="hidden sm:table-cell font-black text-slate-950 uppercase text-[10px]">Creado por</TableHead>
+                            <TableHead className="hidden md:table-cell font-black text-slate-950 uppercase text-[10px]">Fecha</TableHead>
+                            <TableHead className="font-black text-slate-950 uppercase text-[10px]">Estado</TableHead>
+                            <TableHead className="hidden sm:table-cell font-black text-slate-950 uppercase text-[10px] text-center">Pts</TableHead>
+                            <TableHead className="text-right font-black text-slate-950 uppercase text-[10px] pr-4 sm:pr-6">Acciones</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isLoading ? (
+                                Array.from({ length: 5 }).map((_, i) => (
+                                    <TableRow key={i}>
+                                        {isAdminRole && <TableCell><Skeleton className="h-4 w-4 mx-auto" /></TableCell>}
+                                        <TableCell className="hidden lg:table-cell"><Skeleton className="h-5 w-8" /></TableCell>
+                                        <TableCell><Skeleton className="h-5 w-3/4" /></TableCell>
+                                        <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-24" /></TableCell>
+                                        <TableCell className="hidden md:table-cell"><Skeleton className="h-5 w-24" /></TableCell>
+                                        <TableCell><Skeleton className="h-6 w-24" /></TableCell>
+                                        <TableCell className="hidden sm:table-cell"><Skeleton className="h-5 w-8 mx-auto" /></TableCell>
+                                        <TableCell className="pr-4 sm:pr-6"><Skeleton className="h-8 w-8 ml-auto" /></TableCell>
+                                    </TableRow>
+                                ))
+                            ) : filteredRoutes.length > 0 ? (
+                                filteredRoutes.map((route, index) => {
+                                    const canReview = (user?.role === 'Supervisor' || isAdminRole) && route.status === 'Pendiente de Aprobación';
+                                    const canDelete = isAdminRole;
+                                    const canReactivate = isAdminRole && (route.status === 'Completada' || route.status === 'Rechazada');
+                                    const canManageLive = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
+                                    const canFinalize = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
+                                   
+                                    return (
+                                    <TableRow key={route.id} className={cn(
+                                        "hover:bg-slate-50/50 transition-colors",
+                                        selectedRouteIds.includes(route.id) && "bg-primary/5"
+                                    )}>
+                                        {isAdminRole && (
+                                            <TableCell className="text-center">
+                                                <Checkbox 
+                                                    checked={selectedRouteIds.includes(route.id)}
+                                                    onCheckedChange={() => toggleRouteSelection(route.id)}
+                                                    className="border-primary"
+                                                    disabled={route.status === 'Completada'}
+                                                />
+                                            </TableCell>
+                                        )}
+                                        <TableCell className="hidden lg:table-cell font-black text-slate-950 text-xs">{index + 1}</TableCell>
+                                        <TableCell className="py-4">
+                                            <div className="flex flex-col min-w-[120px]">
+                                                <span className="font-black text-slate-950 text-xs uppercase leading-tight">{route.routeName}</span>
+                                                <div className="flex flex-col sm:hidden mt-1 gap-0.5">
+                                                    <span className="text-[9px] font-bold text-primary uppercase">{getCreatorName(route.createdBy)}</span>
+                                                    <span className="text-[9px] font-bold text-slate-400 uppercase">{getRouteDate(route)}</span>
+                                                </div>
+                                            </div>
                                         </TableCell>
-                                    )}
-                                    <TableCell className="font-black text-slate-950 text-xs">{index + 1}</TableCell>
-                                    <TableCell className="font-black text-slate-950 text-xs uppercase">{route.routeName}</TableCell>
-                                    <TableCell className="font-black text-primary text-xs uppercase">{getCreatorName(route.createdBy)}</TableCell>
-                                    <TableCell className="font-black text-slate-950 text-xs uppercase">{getRouteDate(route)}</TableCell>
-                                    <TableCell>
-                                        <div className="flex flex-col gap-1">
-                                            {getBadgeForStatus(route.status)}
-                                            {route.extendedClosingTime && (
-                                                <span className="text-[8px] font-black text-orange-600 uppercase flex items-center gap-0.5">
-                                                    <Clock className="h-2 w-2" /> Ruta hoy: {route.extendedClosingTime}
-                                                </span>
-                                            )}
+                                        <TableCell className="hidden sm:table-cell font-black text-primary text-[10px] uppercase">{getCreatorName(route.createdBy)}</TableCell>
+                                        <TableCell className="hidden md:table-cell font-black text-slate-950 text-[10px] uppercase whitespace-nowrap">{getRouteDate(route)}</TableCell>
+                                        <TableCell>
+                                            <div className="flex flex-col gap-1 min-w-[100px]">
+                                                {getBadgeForStatus(route.status)}
+                                                {route.extendedClosingTime && (
+                                                    <span className="text-[8px] font-black text-orange-600 uppercase flex items-center gap-0.5 whitespace-nowrap">
+                                                        <Clock className="h-2 w-2" /> Ruta hoy: {route.extendedClosingTime}
+                                                    </span>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                        <TableCell className="hidden sm:table-cell text-center font-black text-slate-950 text-xs">{route.clients?.length || 0}</TableCell>
+                                        <TableCell className="text-right pr-4 sm:pr-6">
+                                            <AlertDialog>
+                                                <DropdownMenu>
+                                                    <DropdownMenuTrigger asChild>
+                                                        <Button aria-haspopup="true" size="icon" variant="ghost" className="rounded-full hover:bg-slate-100 h-9 w-9">
+                                                            <MoreHorizontal className="h-4 w-4 text-slate-950" />
+                                                            <span className="sr-only">Alternar menú</span>
+                                                        </Button>
+                                                    </DropdownMenuTrigger>
+                                                    <DropdownMenuContent align="end" className="w-60 rounded-xl shadow-2xl border-none p-2">
+                                                        <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500 mb-1">Operaciones de Gestión</DropdownMenuLabel>
+                                                        
+                                                        {canRescue && (
+                                                            <DropdownMenuItem 
+                                                                onClick={() => handleRescueRouteData(route.id)} 
+                                                                disabled={isRescuing === route.id}
+                                                                className="font-black text-xs uppercase text-green-700 py-2.5 bg-green-50 rounded-lg mb-1"
+                                                            >
+                                                                {isRescuing === route.id ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                                                                Rescatar Gestiones (Mantenimiento)
+                                                            </DropdownMenuItem>
+                                                        )}
+
+                                                        <DropdownMenuItem onClick={() => handleAction(route.id)} className={cn("font-black text-xs uppercase py-2.5 rounded-lg", canReview && "bg-amber-50 text-amber-700")}>
+                                                            {canReview ? "REVISAR PARA APROBACIÓN" : "Ver Detalles de Ruta"}
+                                                        </DropdownMenuItem>
+                                                        
+                                                        {canManageLive && (
+                                                            <DropdownMenuItem onClick={() => handleManageLive(route.id)} className="font-black text-xs uppercase text-primary py-2.5 bg-primary/5 rounded-lg">
+                                                                <PlayCircle className="mr-2 h-4 w-4" />
+                                                                Gestionar Jornada
+                                                            </DropdownMenuItem>
+                                                        )}
+
+                                                        {canExtend && (
+                                                            <DropdownMenuItem 
+                                                                onClick={() => {
+                                                                    setExtendingRouteId(route.id);
+                                                                    setNewClosingTime(route.extendedClosingTime || '21:00');
+                                                                    setIsExtendClosingDialogOpen(true);
+                                                                }} 
+                                                                className="font-black text-xs uppercase text-orange-600 py-2.5 bg-orange-50 rounded-lg mt-1"
+                                                            >
+                                                                <Clock className="mr-2 h-4 w-4" />
+                                                                Extender Cierre
+                                                            </DropdownMenuItem>
+                                                        )}
+
+                                                        <DropdownMenuSeparator />
+
+                                                        {canFinalize && (
+                                                            <DropdownMenuItem onClick={() => handleFinalize(route.id)} className="font-black text-xs uppercase text-blue-600 py-2.5 rounded-lg">
+                                                                <CheckCircle className="mr-2 h-4 w-4" />
+                                                                Finalizar Ruta Manual
+                                                            </DropdownMenuItem>
+                                                        )}
+
+                                                        {canReactivate && (
+                                                            <DropdownMenuItem onClick={() => handleReactivate(route.id)} className="font-black text-xs uppercase py-2.5 rounded-lg">
+                                                                <RefreshCw className="mr-2 h-4 w-4" />
+                                                                Reactivar (En Progreso)
+                                                            </DropdownMenuItem>
+                                                        )}
+
+                                                        {canDelete && (
+                                                            <>
+                                                                <DropdownMenuSeparator />
+                                                                <AlertDialogTrigger asChild>
+                                                                    <DropdownMenuItem className="text-red-600 font-black text-xs uppercase py-2.5 rounded-lg hover:bg-red-50">
+                                                                        <Trash2 className="mr-2 h-4 w-4" />
+                                                                        Eliminar Definitivamente
+                                                                    </DropdownMenuItem>
+                                                                </AlertDialogTrigger>
+                                                            </>
+                                                        )}
+                                                    </DropdownMenuContent>
+                                                </DropdownMenu>
+                                                <AlertDialogContent className="rounded-2xl border-none shadow-2xl bg-white w-[90vw] max-w-md mx-auto">
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle className="font-black text-slate-950 uppercase text-lg sm:text-xl">¿Confirmar eliminación?</AlertDialogTitle>
+                                                        <AlertDialogDescription className="font-bold text-xs uppercase text-slate-500 leading-relaxed">
+                                                            Esta acción borrará permanentemente la ruta y todas sus gestiones asociadas. No hay recuperación tras este paso.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter className="gap-2 sm:gap-3 flex flex-col sm:flex-row">
+                                                        <AlertDialogCancel className="font-black uppercase border-2 h-11 w-full sm:w-auto">Cancelar</AlertDialogCancel>
+                                                        <AlertDialogAction onClick={() => handleDelete(route.id)} className="bg-destructive hover:bg-destructive/90 font-black uppercase h-11 shadow-lg border-none text-white w-full sm:w-auto">ELIMINAR RUTA</AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </TableCell>
+                                    </TableRow>
+                                    )
+                                })
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={isAdminRole ? 8 : 7} className="text-center h-48 font-black text-slate-950 uppercase text-xs">
+                                        <div className="flex flex-col items-center gap-3 opacity-30">
+                                            <RouteIcon className="h-10 w-10" />
+                                            <span>Sin rutas de equipo disponibles</span>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-center font-black text-slate-950">{route.clients?.length || 0}</TableCell>
-                                    <TableCell className="text-right pr-6">
-                                        <AlertDialog>
-                                            <DropdownMenu>
-                                                <DropdownMenuTrigger asChild>
-                                                    <Button aria-haspopup="true" size="icon" variant="ghost" className="rounded-full hover:bg-slate-100">
-                                                        <MoreHorizontal className="h-4 w-4 text-slate-950" />
-                                                        <span className="sr-only">Alternar menú</span>
-                                                    </Button>
-                                                </DropdownMenuTrigger>
-                                                <DropdownMenuContent align="end" className="w-60 rounded-xl shadow-2xl border-none p-2">
-                                                    <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500 mb-1">Operaciones de Gestión</DropdownMenuLabel>
-                                                    
-                                                    {canRescue && (
-                                                        <DropdownMenuItem 
-                                                            onClick={() => handleRescueRouteData(route.id)} 
-                                                            disabled={isRescuing === route.id}
-                                                            className="font-black text-xs uppercase text-green-700 py-2.5 bg-green-50 rounded-lg mb-1"
-                                                        >
-                                                            {isRescuing === route.id ? <LoaderCircle className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
-                                                            Rescatar Gestiones (Mantenimiento)
-                                                        </DropdownMenuItem>
-                                                    )}
-
-                                                    <DropdownMenuItem onClick={() => handleAction(route.id)} className={cn("font-black text-xs uppercase py-2.5 rounded-lg", canReview && "bg-amber-50 text-amber-700")}>
-                                                        {canReview ? "REVISAR PARA APROBACIÓN" : "Ver Detalles de Ruta"}
-                                                    </DropdownMenuItem>
-                                                    
-                                                    {canManageLive && (
-                                                        <DropdownMenuItem onClick={() => handleManageLive(route.id)} className="font-black text-xs uppercase text-primary py-2.5 bg-primary/5 rounded-lg">
-                                                            <PlayCircle className="mr-2 h-4 w-4" />
-                                                            Gestionar Jornada
-                                                        </DropdownMenuItem>
-                                                    )}
-
-                                                    {canExtend && (
-                                                        <DropdownMenuItem 
-                                                            onClick={() => {
-                                                                setExtendingRouteId(route.id);
-                                                                setNewClosingTime(route.extendedClosingTime || '21:00');
-                                                                setIsExtendClosingDialogOpen(true);
-                                                            }} 
-                                                            className="font-black text-xs uppercase text-orange-600 py-2.5 bg-orange-50 rounded-lg mt-1"
-                                                        >
-                                                            <Clock className="mr-2 h-4 w-4" />
-                                                            Extender Cierre
-                                                        </DropdownMenuItem>
-                                                    )}
-
-                                                    <DropdownMenuSeparator />
-
-                                                    {canFinalize && (
-                                                        <DropdownMenuItem onClick={() => handleFinalize(route.id)} className="font-black text-xs uppercase text-blue-600 py-2.5 rounded-lg">
-                                                            <CheckCircle className="mr-2 h-4 w-4" />
-                                                            Finalizar Ruta Manual
-                                                        </DropdownMenuItem>
-                                                    )}
-
-                                                    {canReactivate && (
-                                                        <DropdownMenuItem onClick={() => handleReactivate(route.id)} className="font-black text-xs uppercase py-2.5 rounded-lg">
-                                                            <RefreshCw className="mr-2 h-4 w-4" />
-                                                            Reactivar (En Progreso)
-                                                        </DropdownMenuItem>
-                                                    )}
-
-                                                    {canDelete && (
-                                                        <>
-                                                            <DropdownMenuSeparator />
-                                                            <AlertDialogTrigger asChild>
-                                                                <DropdownMenuItem className="text-red-600 font-black text-xs uppercase py-2.5 rounded-lg hover:bg-red-50">
-                                                                    <Trash2 className="mr-2 h-4 w-4" />
-                                                                    Eliminar Definitivamente
-                                                                </DropdownMenuItem>
-                                                            </AlertDialogTrigger>
-                                                        </>
-                                                    )}
-                                                </DropdownMenuContent>
-                                            </DropdownMenu>
-                                            <AlertDialogContent className="rounded-2xl border-none shadow-2xl bg-white">
-                                                <AlertDialogHeader>
-                                                    <AlertDialogTitle className="font-black text-slate-950 uppercase text-xl">¿Confirmar eliminación?</AlertDialogTitle>
-                                                    <AlertDialogDescription className="font-bold text-xs uppercase text-slate-500 leading-relaxed">
-                                                        Esta acción borrará permanentemente la ruta y todas sus gestiones asociadas. No hay recuperación tras este paso.
-                                                    </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter className="gap-2">
-                                                    <AlertDialogCancel className="font-black uppercase border-2 h-11">Cancelar</AlertDialogCancel>
-                                                    <AlertDialogAction onClick={() => handleDelete(route.id)} className="bg-destructive hover:bg-destructive/90 font-black uppercase h-11 shadow-lg border-none text-white">ELIMINAR RUTA</AlertDialogAction>
-                                                </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                        </AlertDialog>
-                                    </TableCell>
                                 </TableRow>
-                                )
-                            })
-                        ) : (
-                            <TableRow>
-                                <TableCell colSpan={isAdminRole ? 8 : 7} className="text-center h-32 font-black text-slate-950 uppercase text-xs">
-                                    <div className="flex flex-col items-center gap-2 opacity-30">
-                                        <RouteIcon className="h-8 w-8" />
-                                        <span>Sin rutas de equipo disponibles</span>
-                                    </div>
-                                </TableCell>
-                            </TableRow>
-                        )}
-                    </TableBody>
-                </Table>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
             </div>
         </CardContent>
       </Card>
 
       <Dialog open={isExtendClosingDialogOpen} onOpenChange={setIsExtendClosingDialogOpen}>
-          <DialogContent className="sm:max-w-md rounded-2xl border-none shadow-2xl">
+          <DialogContent className="w-[90vw] sm:max-w-md rounded-2xl border-none shadow-2xl mx-auto">
               <DialogHeader>
-                  <DialogTitle className="font-black uppercase text-slate-950 text-xl">Configurar Extensión Horaria</DialogTitle>
+                  <DialogTitle className="font-black uppercase text-slate-950 text-lg sm:text-xl">Configurar Extensión Horaria</DialogTitle>
                   <DialogDescription className="text-xs font-bold uppercase text-slate-500">
                       Define el alcance y la hora máxima permitida para este usuario.
                   </DialogDescription>
               </DialogHeader>
-              <div className="py-6 space-y-6">
+              <div className="py-4 sm:py-6 space-y-6">
                   <div className="space-y-3">
                       <Label className="font-black uppercase text-[10px] text-slate-500">Alcance de la Extensión</Label>
-                      <RadioGroup value={extensionType} onValueChange={(v: any) => setExtensionType(v)} className="grid grid-cols-2 gap-4">
+                      <RadioGroup value={extensionType} onValueChange={(v: any) => setExtensionType(v)} className="grid grid-cols-2 gap-3 sm:gap-4">
                           <Label className={cn(
-                              "flex flex-col items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all",
+                              "flex flex-col items-center gap-3 p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all",
                               extensionType === 'route' ? "border-primary bg-primary/5 ring-2 ring-primary/10" : "bg-slate-50"
                           )}>
                               <RadioGroupItem value="route" className="sr-only" />
-                              <RouteIcon className="h-6 w-6" />
-                              <span className="text-[10px] font-black uppercase">Solo esta Ruta</span>
+                              <RouteIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+                              <span className="text-[9px] sm:text-[10px] font-black uppercase">Solo esta Ruta</span>
                           </Label>
                           <Label className={cn(
-                              "flex flex-col items-center gap-3 p-4 border-2 rounded-xl cursor-pointer transition-all",
+                              "flex flex-col items-center gap-3 p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all",
                               extensionType === 'weekly' ? "border-primary bg-primary/5 ring-2 ring-primary/10" : "bg-slate-50"
                           )}>
                               <RadioGroupItem value="weekly" className="sr-only" />
-                              <CalendarDays className="h-6 w-6" />
-                              <span className="text-[10px] font-black uppercase">Semana L-V</span>
+                              <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6" />
+                              <span className="text-[9px] sm:text-[10px] font-black uppercase">Semana L-V</span>
                           </Label>
                       </RadioGroup>
                   </div>
@@ -650,12 +660,12 @@ export default function TeamRoutesPage() {
                       <p className="text-[9px] font-bold text-slate-400 uppercase italic text-center">Hora de bloqueo definitiva</p>
                   </div>
               </div>
-              <DialogFooter className="gap-2">
-                  <DialogClose asChild><Button variant="ghost" className="font-black uppercase">Cancelar</Button></DialogClose>
+              <DialogFooter className="gap-2 sm:gap-3 flex flex-col sm:flex-row">
+                  <DialogClose asChild><Button variant="ghost" className="font-black uppercase w-full sm:w-auto">Cancelar</Button></DialogClose>
                   <Button 
                     onClick={handleExtendClosing} 
                     disabled={isExtending}
-                    className="font-black h-11 px-8 uppercase shadow-lg bg-orange-600 hover:bg-orange-700"
+                    className="font-black h-11 px-8 uppercase shadow-lg bg-orange-600 hover:bg-orange-700 w-full sm:w-auto"
                   >
                       {isExtending ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : <Clock className="mr-2 h-4 w-4" />}
                       {extensionType === 'weekly' ? 'Aplicar Semanalmente' : 'Extender hoy'}
@@ -664,15 +674,15 @@ export default function TeamRoutesPage() {
           </DialogContent>
       </Dialog>
 
-      <div className="mt-8 p-6 bg-amber-50 rounded-3xl border-2 border-dashed border-amber-200">
-          <div className="flex gap-4">
+      <div className="mt-8 p-4 sm:p-6 bg-amber-50 rounded-2xl sm:rounded-3xl border-2 border-dashed border-amber-200">
+          <div className="flex flex-col sm:flex-row gap-4">
               <LifeBuoy className="h-8 w-8 text-amber-600 shrink-0" />
               <div>
                   <h4 className="font-black text-amber-900 uppercase text-sm">¿Perdiste datos de gestión?</h4>
                   <p className="text-amber-700 text-xs font-bold uppercase mt-1 leading-relaxed">
                       Si un vendedor indica que terminó su jornada pero no visualizas los "OK", usa la opción 
                       <span className="font-black underline mx-1">Rescatar Gestiones</span> en el menú de la ruta. 
-                      Esto forzará la sincronización y validará cada visita individualmente basándose en evidencia real (check-out u observaciones).
+                      Esto forzará la sincronización y validará cada visita individualmente basándose en evidencia real.
                   </p>
               </div>
           </div>
