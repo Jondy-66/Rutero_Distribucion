@@ -53,6 +53,7 @@ const ensureDate = (d: any): Date => {
 
 /**
  * Sanitiza el array de clientes protegiendo los datos registrados.
+ * Una visita solo se marca como "Completada" si tiene checkOutTime.
  */
 const sanitizeClients = (clients: ClientInRoute[]): any[] => {
     if (!clients) return [];
@@ -164,8 +165,6 @@ function RouteManagementContent() {
       let limitHour = 19;
       let limitMinute = 0;
 
-      // REGLA DE PRIORIDAD PARA EXTENSIÓN:
-      // 1. Extensión específica de la ruta (Prioridad Máxima)
       if (selectedRoute?.extendedClosingTime) {
         const [h, m] = selectedRoute.extendedClosingTime.split(':').map(Number);
         if (!isNaN(h)) {
@@ -173,7 +172,6 @@ function RouteManagementContent() {
             limitMinute = m;
         }
       } 
-      // 2. Extensión semanal del perfil de usuario (Si hoy está habilitado)
       else if (user?.extendedClosingTime && user?.extendedClosingDays?.includes(currentDay)) {
         const [h, m] = user.extendedClosingTime.split(':').map(Number);
         if (!isNaN(h)) {
@@ -228,6 +226,39 @@ function RouteManagementContent() {
           setLocalDevol(activeClient.devoluciones !== undefined && Number(activeClient.devoluciones) !== 0 ? String(activeClient.devoluciones) : '');
       }
   }, [activeOriginalIndex, activeClient?.ruc]);
+
+  // PERSISTENCIA DE BORRADOR (DRAFT) EN TIEMPO REAL
+  useEffect(() => {
+    if (!activeClient || activeOriginalIndex === null || !selectedRoute || isSaving || activeClient.visitStatus === 'Completado' || isExpired && !isAdmin) return;
+    
+    // Solo guardar si hay cambios reales para evitar bucles infinitos con el snapshot
+    const hasChanges = 
+        localVisitObs !== (activeClient.visitObservation || '') ||
+        localCallObs !== (activeClient.callObservation || '') ||
+        parseMoney(localVenta) !== (activeClient.valorVenta || 0) ||
+        parseMoney(localCobro) !== (activeClient.valorCobro || 0) ||
+        parseMoney(localDevol) !== (activeClient.devoluciones || 0);
+
+    if (!hasChanges) return;
+
+    const timer = setTimeout(() => {
+        const nextClients = [...selectedRoute.clients];
+        nextClients[activeOriginalIndex] = {
+            ...nextClients[activeOriginalIndex],
+            visitObservation: localVisitObs,
+            callObservation: localCallObs,
+            valorVenta: parseMoney(localVenta),
+            valorCobro: parseMoney(localCobro),
+            devoluciones: parseMoney(localDevol)
+        };
+        const sanitized = sanitizeClients(nextClients);
+        // Actualización silenciosa (sin toast ni estado de carga para no interrumpir el tipeo)
+        updateRoute(selectedRoute.id, { clients: sanitized })
+            .catch(() => {}); 
+    }, 1500); 
+
+    return () => clearTimeout(timer);
+  }, [localVisitObs, localCallObs, localVenta, localCobro, localDevol, activeOriginalIndex, selectedRoute?.id, activeClient, isSaving, isAdmin, isExpired]);
 
   const clientsLookupMap = useMemo(() => {
     const map = new Map<string, Client>();
