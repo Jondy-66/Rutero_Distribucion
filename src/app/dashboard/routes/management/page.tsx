@@ -217,11 +217,28 @@ function RouteManagementContent() {
         : null;
   }, [activeOriginalIndex, selectedRoute]);
 
-  // Identificar si hay alguna gestión en curso (check-in sin check-out)
+  const clientsLookupMap = useMemo(() => {
+    const map = new Map<string, Client>();
+    availableClients.forEach(c => map.set(String(c.ruc).trim(), c));
+    return map;
+  }, [availableClients]);
+
+  const todaysClients = useMemo(() => {
+    if (!selectedRoute) return [];
+    const today = startOfDay(new Date());
+    return (selectedRoute.clients || [])
+        .map((c, index) => ({ ...c, originalIndex: index, direccion: clientsLookupMap.get(String(c.ruc).trim())?.direccion || 'SIN DIRECCIÓN' }))
+        .filter(c => {
+            if (c.status === 'Eliminado') return false;
+            if (!c.date) return false;
+            return isSameDay(startOfDay(ensureDate(c.date)), today);
+        });
+  }, [selectedRoute, clientsLookupMap]);
+
+  // Identificar si hay alguna gestión en curso (check-in sin check-out) SOLAMENTE PARA HOY
   const clientInManagement = useMemo(() => {
-    if (!selectedRoute) return null;
-    return selectedRoute.clients.find(c => c.checkInTime && !c.checkOutTime && c.status !== 'Eliminado');
-  }, [selectedRoute]);
+    return todaysClients.find(c => c.checkInTime && !c.checkOutTime);
+  }, [todaysClients]);
 
   useEffect(() => {
       if (activeClient) {
@@ -266,24 +283,6 @@ function RouteManagementContent() {
     return () => clearTimeout(timer);
   }, [localVisitObs, localCallObs, localVenta, localCobro, localDevol, activeOriginalIndex, selectedRoute?.id, activeClient, isSaving, isAdmin, isExpired]);
 
-  const clientsLookupMap = useMemo(() => {
-    const map = new Map<string, Client>();
-    availableClients.forEach(c => map.set(String(c.ruc).trim(), c));
-    return map;
-  }, [availableClients]);
-
-  const todaysClients = useMemo(() => {
-    if (!selectedRoute) return [];
-    const today = startOfDay(new Date());
-    return (selectedRoute.clients || [])
-        .map((c, index) => ({ ...c, originalIndex: index, direccion: clientsLookupMap.get(String(c.ruc).trim())?.direccion || 'SIN DIRECCIÓN' }))
-        .filter(c => {
-            if (c.status === 'Eliminado') return false;
-            if (!c.date) return false;
-            return isSameDay(startOfDay(ensureDate(c.date)), today);
-        });
-  }, [selectedRoute, clientsLookupMap]);
-
   const rucCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     todaysClients.forEach(c => { counts[String(c.ruc).trim()] = (counts[String(c.ruc).trim()] || 0) + 1; });
@@ -317,11 +316,11 @@ function RouteManagementContent() {
   const handleCheckIn = () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
     
-    // VALIDACIÓN: No permitir doble check-in
+    // VALIDACIÓN: No permitir doble check-in EN EL MISMO DÍA
     if (clientInManagement) {
         toast({
             title: "Gestión en curso",
-            description: `Ya tienes una visita activa con ${clientInManagement.nombre_comercial}. Debes finalizarla antes de iniciar otra.`,
+            description: `Ya tienes una visita activa con ${clientInManagement.nombre_comercial}. Debes finalizarla antes de iniciar otra hoy.`,
             variant: "destructive"
         });
         return;
