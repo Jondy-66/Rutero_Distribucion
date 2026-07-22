@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -27,7 +26,8 @@ import {
   Clock,
   ShieldCheck,
   RefreshCcw,
-  CalendarCheck
+  CalendarCheck,
+  CalendarDays
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -251,6 +251,12 @@ export function DashboardNav() {
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <SidebarMenuSub className="pl-5 border-l border-white/5 mt-0.5 ml-5 space-y-0.5">
+                  <SidebarMenuSubItem>
+                    <Link href="/dashboard/crm/planning" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/crm/planning' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                      <CalendarDays className={subIconClass} />
+                      Planificación
+                    </Link>
+                  </SidebarMenuSubItem>
                   <SidebarMenuSubItem>
                     <Link href="/dashboard/crm/prediction" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/crm/prediction' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
                       <Wand2 className={subIconClass} />
