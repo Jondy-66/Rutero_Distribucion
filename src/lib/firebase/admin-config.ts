@@ -3,32 +3,40 @@ import 'dotenv/config';
 import { initializeApp, getApps, App } from 'firebase-admin/app';
 import { credential } from 'firebase-admin';
 
-// IMPORTANT: Set these environment variables in your hosting environment (e.g., Vercel, Netlify).
-// Do not hardcode them here.
-const serviceAccount = {
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-};
+/**
+ * Inicializa la instancia administrativa de Firebase.
+ * Intenta usar variables de entorno explícitas o Application Default Credentials (ADC) como respaldo.
+ */
+export function initializeAdminApp(): App | null {
+  // Retornar instancia existente si ya fue creada
+  const existingApp = getApps().find(app => app.name === 'admin');
+  if (existingApp) return existingApp;
 
-let adminApp: App;
+  // Parámetros de configuración (con fallback al ID de proyecto conocido)
+  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || 'rutero-fed';
+  const privateKey = process.env.FIREBASE_PRIVATE_KEY;
+  const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 
-export function initializeAdminApp() {
-  // Check if the app is already initialized
-  if (getApps().some(app => app.name === 'admin')) {
-    return getApps().find(app => app.name === 'admin');
-  }
+  try {
+    // 1. Intentar inicialización con Cuenta de Servicio explícita (Producción externa)
+    if (privateKey && clientEmail) {
+      return initializeApp({
+        credential: credential.cert({
+          projectId,
+          privateKey: privateKey.replace(/\\n/g, '\n'),
+          clientEmail,
+        }),
+      }, 'admin');
+    }
 
-  if (!serviceAccount.projectId || !serviceAccount.privateKey || !serviceAccount.clientEmail) {
-    console.error('Firebase Admin SDK service account credentials are not set in environment variables.');
-    // No lanzar un error aquí para evitar que el servidor falle al construir si las variables no están presentes.
-    // La ruta de la API que lo usa manejará el error si la app no está inicializada.
+    // 2. Intentar inicialización con Credenciales Predeterminadas (ADC)
+    // Esto funciona automáticamente en Google Cloud, Firebase App Hosting, etc.
+    return initializeApp({
+      projectId,
+    }, 'admin');
+    
+  } catch (error) {
+    console.error('Error crítico al inicializar Firebase Admin SDK:', error);
     return null;
   }
-
-  adminApp = initializeApp({
-    credential: credential.cert(serviceAccount),
-  }, 'admin');
-
-  return adminApp;
 }

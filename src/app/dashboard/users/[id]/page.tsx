@@ -15,12 +15,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { updateUser, getUsersBySupervisor } from '@/lib/firebase/firestore';
-import { updateUserPasswordAsAdmin as updateUserPasswordInAuth } from '@/lib/firebase/auth';
+import { updateUserPasswordAsAdmin as updateUserPasswordInAuth, handlePasswordReset } from '@/lib/firebase/auth';
 
 import type { User } from '@/lib/types';
 import { notFound, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, LoaderCircle, Users } from 'lucide-react';
+import { ArrowLeft, LoaderCircle, Users, Mail } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,6 +44,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [isSendingReset, setIsSendingReset] = useState(false);
 
   useEffect(() => {
     if (users.length > 0 && userId) {
@@ -123,9 +124,22 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
           setConfirmPassword('');
       } catch (error: any) {
           console.error("Error changing password:", error);
-          toast({ title: "Error al cambiar contraseña", description: "No se pudo cambiar la contraseña. " + error.message, variant: "destructive" });
+          toast({ title: "Error al cambiar contraseña", description: error.message || "No se pudo cambiar la contraseña.", variant: "destructive" });
       } finally {
           setIsChangingPassword(false);
+      }
+  }
+
+  const sendResetEmail = async () => {
+      if (!user?.email) return;
+      setIsSendingReset(true);
+      try {
+          await handlePasswordReset(user.email);
+          toast({ title: "Correo Enviado", description: `Se ha enviado un enlace de restablecimiento a ${user.email}.` });
+      } catch (error) {
+          toast({ title: "Error", description: "No se pudo enviar el correo de recuperación.", variant: "destructive" });
+      } finally {
+          setIsSendingReset(false);
       }
   }
   
@@ -223,7 +237,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
                             </SelectContent>
                         </Select>
                          {user.status === 'inactive' && user.failedLoginAttempts && user.failedLoginAttempts >= 5 && (
-                           <p className="text-sm text-destructive mt-1">Cuenta bloqueada por {user.failedLoginAttempts} intentos fallidos.</p>
+                           <p className="text-sm text-destructive mt-1 font-bold">Cuenta bloqueada por seguridad (5 intentos fallidos).</p>
                         )}
                     </div>
                     {(user.role === 'Usuario' || user.role === 'Telemercaderista') && (
@@ -245,7 +259,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
                 </CardContent>
                 <CardFooter>
                     <Button type="submit" disabled={isSaving}>
-                        {isSaving && <LoaderCircle className="animate-spin" />}
+                        {isSaving && <LoaderCircle className="animate-spin mr-2" />}
                         Guardar Cambios
                     </Button>
                 </CardFooter>
@@ -253,32 +267,54 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
             </form>
         </div>
 
-        <form onSubmit={handleChangePassword}>
-          <Card>
-            <CardHeader>
-                <CardTitle>Cambiar Contraseña</CardTitle>
-                <CardDescription>
-                Establece una nueva contraseña para este usuario.
-                </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-                <div className="space-y-2">
-                    <Label htmlFor="new-password">Nueva Contraseña</Label>
-                    <PasswordInput id="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={isChangingPassword} />
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="confirm-password">Confirmar Nueva Contraseña</Label>
-                    <PasswordInput id="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} disabled={isChangingPassword} />
-                </div>
-            </CardContent>
-            <CardFooter>
-                <Button type="submit" disabled={isChangingPassword}>
-                    {isChangingPassword && <LoaderCircle className="animate-spin" />}
-                    Actualizar Contraseña
-                </Button>
-            </CardFooter>
-          </Card>
-        </form>
+        <div className="grid md:grid-cols-2 gap-6">
+            <form onSubmit={handleChangePassword}>
+                <Card className="h-full">
+                    <CardHeader>
+                        <CardTitle>Cambio Manual de Contraseña</CardTitle>
+                        <CardDescription>
+                        Establece una nueva contraseña directamente. Requiere conexión activa con el servidor.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="new-password">Nueva Contraseña</Label>
+                            <PasswordInput id="new-password" value={newPassword} onChange={e => setNewPassword(e.target.value)} disabled={isChangingPassword} />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="confirm-password">Confirmar Nueva Contraseña</Label>
+                            <PasswordInput id="confirm-password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} disabled={isChangingPassword} />
+                        </div>
+                    </CardContent>
+                    <CardFooter>
+                        <Button type="submit" disabled={isChangingPassword || !newPassword}>
+                            {isChangingPassword && <LoaderCircle className="animate-spin mr-2" />}
+                            Actualizar Ahora
+                        </Button>
+                    </CardFooter>
+                </Card>
+            </form>
+
+            <Card className="h-full border-dashed border-2">
+                <CardHeader>
+                    <CardTitle>Método Seguro (Recomendado)</CardTitle>
+                    <CardDescription>
+                        Envía un enlace al correo del usuario para que él mismo elija su nueva contraseña de forma segura.
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="flex items-center justify-center py-10">
+                    <div className="bg-primary/5 p-6 rounded-full">
+                        <Mail className="h-16 w-16 text-primary opacity-20" />
+                    </div>
+                </CardContent>
+                <CardFooter>
+                    <Button variant="outline" className="w-full font-bold h-12" onClick={sendResetEmail} disabled={isSendingReset}>
+                        {isSendingReset ? <LoaderCircle className="animate-spin mr-2" /> : <Mail className="mr-2 h-4 w-4" />}
+                        ENVIAR CORREO DE RESTABLECIMIENTO
+                    </Button>
+                </CardFooter>
+            </Card>
+        </div>
 
         {user.role === 'Supervisor' && (
              <Card>
@@ -308,7 +344,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
                                 ) : assignedUsers.length > 0 ? (
                                     assignedUsers.map(assigned => (
                                         <TableRow key={assigned.id}>
-                                            <TableCell>{assigned.name}</TableCell>
+                                            <TableCell className="font-medium">{assigned.name}</TableCell>
                                             <TableCell>{assigned.email}</TableCell>
                                             <TableCell>
                                                 <Badge variant={assigned.status === 'active' ? 'success' : 'destructive'}>
@@ -319,7 +355,7 @@ export default function UserProfilePage({ params }: { params: Promise<{ id: stri
                                     ))
                                 ) : (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="text-center h-24">
+                                        <TableCell colSpan={3} className="text-center h-24 text-muted-foreground font-medium uppercase text-xs">
                                             Este supervisor no tiene usuarios asignados.
                                         </TableCell>
                                     </TableRow>
