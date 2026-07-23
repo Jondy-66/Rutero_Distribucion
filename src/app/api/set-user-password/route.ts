@@ -1,19 +1,20 @@
+
 /**
- * WARNING: This API route uses the Firebase Admin SDK and is designed to be deployed
- * in a trusted server-side environment.
+ * API Route para gestión administrativa de contraseñas.
+ * Utiliza el Admin SDK para realizar cambios que el cliente no tiene permitido por seguridad.
  */
 import { NextResponse } from 'next/server';
 import { getAuth } from 'firebase-admin/auth';
 import { initializeAdminApp } from '@/lib/firebase/admin-config';
 
 export async function POST(request: Request) {
-  // Inicializar dinámicamente para mayor robustez
+  // 1. Validar inicialización del motor administrativo
   const adminApp = initializeAdminApp();
 
   if (!adminApp) {
     return NextResponse.json({ 
-        message: 'Error de configuración del servidor: No se pudo establecer conexión administrativa con Firebase. Verifica las variables de entorno FIREBASE_PRIVATE_KEY y FIREBASE_CLIENT_EMAIL.',
-        details: 'Admin SDK Initialization failed (Check service account)'
+        message: 'ERROR DE SERVIDOR: El sistema administrativo de Firebase no está configurado correctamente.',
+        details: 'Verifica que FIREBASE_PRIVATE_KEY y FIREBASE_CLIENT_EMAIL estén definidas en el entorno de producción.'
     }, { status: 500 });
   }
 
@@ -21,33 +22,45 @@ export async function POST(request: Request) {
     const { uid, password } = await request.json();
 
     if (!uid || !password) {
-      return NextResponse.json({ message: 'UID y contraseña son requeridos.' }, { status: 400 });
+      return NextResponse.json({ message: 'UID y contraseña son requeridos para esta operación.' }, { status: 400 });
     }
 
-    // Actualizar la contraseña vía Admin SDK
-    await getAuth(adminApp).updateUser(uid, {
+    // 2. Ejecutar la actualización en Firebase Auth
+    const authAdmin = getAuth(adminApp);
+    await authAdmin.updateUser(uid, {
       password: password,
     });
 
-    return NextResponse.json({ message: 'Contraseña actualizada correctamente en el sistema.' });
+    return NextResponse.json({ 
+      success: true,
+      message: 'Contraseña actualizada correctamente en los servidores de identidad.' 
+    });
 
   } catch (error: any) {
-    console.error("Error updating password with Admin SDK:", error);
+    console.error("Error en operación Admin Auth:", error);
     
-    let errorMessage = 'Ocurrió un error en el servidor al cambiar la contraseña.';
+    let friendlyMessage = 'Ocurrió un error inesperado al procesar el cambio de contraseña.';
+    
+    // Mapeo de errores comunes para feedback al administrador
     if (error.code) {
         switch (error.code) {
             case 'auth/user-not-found':
-                errorMessage = 'El usuario no fue encontrado en la base de datos de autenticación.';
+                friendlyMessage = 'El usuario ya no existe en el sistema de autenticación.';
                 break;
             case 'auth/invalid-password':
-                errorMessage = 'La contraseña debe tener al menos 6 caracteres.';
+                friendlyMessage = 'La contraseña es demasiado débil o no cumple con el formato de Firebase.';
+                break;
+            case 'app/invalid-credential':
+                friendlyMessage = 'Las credenciales del servidor han expirado o son inválidas (Error de Token).';
                 break;
             default:
-                errorMessage = `Error de Firebase: ${error.message}`;
+                friendlyMessage = `Fallo de Firebase Admin: ${error.message}`;
         }
     }
 
-    return NextResponse.json({ message: errorMessage, details: error.code }, { status: 500 });
+    return NextResponse.json({ 
+      message: friendlyMessage, 
+      details: error.code || 'UNKNOWN_AUTH_ERROR'
+    }, { status: 500 });
   }
 }
