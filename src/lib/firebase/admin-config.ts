@@ -4,10 +4,11 @@ import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 
 /**
  * Inicializa la instancia administrativa de Firebase con máxima robustez.
- * Realiza una limpieza profunda de la llave privada para asegurar compatibilidad PEM.
+ * Realiza una limpieza exhaustiva de la llave privada para asegurar compatibilidad PEM
+ * y maneja múltiples formatos de escape comunes en variables de entorno.
  */
 export function initializeAdminApp(): App | null {
-  // Retornar instancia existente si ya fue creada
+  // Retornar instancia existente si ya fue creada para evitar errores de duplicidad
   const existingApp = getApps().find(app => app.name === 'admin');
   if (existingApp) return existingApp;
 
@@ -15,31 +16,34 @@ export function initializeAdminApp(): App | null {
   const privateKey = process.env.FIREBASE_PRIVATE_KEY;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 
-  // Si no hay variables, no intentamos inicializar para evitar el crash del SDK
+  // Validación de presencia de credenciales
   if (!privateKey || !clientEmail || privateKey === 'undefined' || clientEmail === 'undefined') {
-    console.error('Admin SDK Error: Faltan credenciales en el servidor (FIREBASE_PRIVATE_KEY o FIREBASE_CLIENT_EMAIL).');
+    console.error('Admin SDK Error: Faltan credenciales críticas (FIREBASE_PRIVATE_KEY o FIREBASE_CLIENT_EMAIL).');
     return null;
   }
 
   try {
-    // --- LIMPIEZA PROFUNDA DE LLAVE PRIVADA ---
+    // --- PROCESAMIENTO ROBUSTO DE LA LLAVE PRIVADA ---
     let formattedKey = privateKey.trim();
     
-    // 1. Eliminar comillas externas (dobles o simples) que algunos sistemas de despliegue añaden
-    if ((formattedKey.startsWith('"') && formattedKey.endsWith('"')) || 
-        (formattedKey.startsWith("'") && formattedKey.endsWith("'"))) {
-      formattedKey = formattedKey.substring(1, formattedKey.length - 1);
+    // 1. Si la llave viene envuelta en comillas por el parser de env, las quitamos
+    formattedKey = formattedKey.replace(/^['"]|['"]$/g, '');
+
+    // 2. Si el usuario pegó el JSON entero por error, intentamos extraer la llave
+    if (formattedKey.startsWith('{')) {
+        try {
+            const parsed = JSON.parse(formattedKey);
+            if (parsed.private_key) formattedKey = parsed.private_key;
+        } catch (e) { /* No es JSON, seguimos */ }
     }
-    
-    // 2. Normalizar saltos de línea:
-    // Algunos entornos escapan la barra invertida (\\n), otros no.
-    // Reemplazamos las secuencias literales de "\n" por saltos de línea reales.
+
+    // 3. Normalización de saltos de línea (Fix crítico para Vercel/App Hosting)
+    // Reemplaza '\\n' (texto literal) por '\n' (salto de línea real)
     formattedKey = formattedKey.replace(/\\n/g, '\n');
-    
-    // 3. Verificación final de integridad PEM
+
+    // 4. Verificación de integridad PEM
     if (!formattedKey.includes('-----BEGIN PRIVATE KEY-----')) {
-        // Si no tiene el encabezado, intentamos reconstruirlo si parece una llave base64 (caso raro)
-        console.error('Admin SDK Error: El formato de la llave privada es inválido (Falta encabezado PEM).');
+        console.error('Admin SDK Error: La llave no tiene formato PEM válido.');
         return null;
     }
 
@@ -52,7 +56,7 @@ export function initializeAdminApp(): App | null {
     }, 'admin');
     
   } catch (error: any) {
-    console.error('Fallo crítico al inicializar Admin SDK:', error.message);
+    console.error('Error fatal al inicializar Admin SDK:', error.message);
     return null;
   }
 }

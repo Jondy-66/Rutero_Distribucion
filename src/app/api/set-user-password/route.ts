@@ -8,13 +8,13 @@ import { getAuth } from 'firebase-admin/auth';
 import { initializeAdminApp } from '@/lib/firebase/admin-config';
 
 export async function POST(request: Request) {
-  // 1. Validar inicialización del motor administrativo
+  // Inicializamos el motor administrativo dentro del handler para mayor confiabilidad de env vars
   const adminApp = initializeAdminApp();
 
   if (!adminApp) {
     return NextResponse.json({ 
-        message: 'ERROR DE SERVIDOR: El sistema administrativo no está configurado correctamente.',
-        details: 'Faltan variables de entorno o la llave privada es inválida.'
+        message: 'ERROR DE CONFIGURACIÓN: El servidor no tiene acceso a las llaves maestras.',
+        details: 'Verifica que FIREBASE_PRIVATE_KEY y FIREBASE_CLIENT_EMAIL estén configuradas como Secretos.'
     }, { status: 500 });
   }
 
@@ -25,7 +25,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'UID y contraseña son requeridos.' }, { status: 400 });
     }
 
-    // 2. Ejecutar la actualización en Firebase Auth
+    if (password.length < 6) {
+        return NextResponse.json({ message: 'La contraseña es demasiado corta (mínimo 6).' }, { status: 400 });
+    }
+
+    // Ejecutar la actualización en Firebase Auth usando la instancia 'admin'
     const authAdmin = getAuth(adminApp);
     await authAdmin.updateUser(uid, {
       password: password,
@@ -41,23 +45,13 @@ export async function POST(request: Request) {
     
     let friendlyMessage = 'Error al procesar el cambio de contraseña.';
     
-    // Mapeo de errores para diagnóstico preciso
-    if (error.code) {
-        switch (error.code) {
-            case 'auth/user-not-found':
-                friendlyMessage = 'El usuario ya no existe en los servidores de Google.';
-                break;
-            case 'auth/invalid-password':
-                friendlyMessage = 'La contraseña no cumple con los requisitos mínimos de seguridad (mínimo 6 caracteres).';
-                break;
-            case 'app/invalid-credential':
-                friendlyMessage = 'ERROR DE TOKEN: Las llaves de acceso del servidor son incorrectas. Verifica que FIREBASE_PRIVATE_KEY esté bien configurada.';
-                break;
-            default:
-                friendlyMessage = `Fallo administrativo: ${error.message}`;
-        }
-    } else if (error.message && error.message.includes('credential')) {
-        friendlyMessage = 'ERROR DE TOKEN: Problema de autenticación con Google Cloud.';
+    // Mapeo de errores de autenticación administrativa de Google
+    if (error.code === 'app/invalid-credential' || error.message?.includes('credential')) {
+        friendlyMessage = 'ERROR DE TOKEN: La llave privada configurada en el servidor es rechazada por Google. Por favor, revisa el formato de FIREBASE_PRIVATE_KEY.';
+    } else if (error.code === 'auth/user-not-found') {
+        friendlyMessage = 'El usuario no existe en los registros de autenticación.';
+    } else {
+        friendlyMessage = `Fallo administrativo: ${error.message || 'Error desconocido'}`;
     }
 
     return NextResponse.json({ 
