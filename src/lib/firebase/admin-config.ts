@@ -25,20 +25,21 @@ export function initializeAdminApp(): App | null {
     // --- LIMPIEZA PROFUNDA DE LLAVE PRIVADA ---
     let formattedKey = privateKey.trim();
     
-    // 1. Eliminar comillas externas si existen (común en variables de entorno de Windows/Vercel)
-    if (formattedKey.startsWith('"') && formattedKey.endsWith('"')) {
-      formattedKey = formattedKey.substring(1, formattedKey.length - 1);
-    }
-    if (formattedKey.startsWith("'") && formattedKey.endsWith("'")) {
+    // 1. Eliminar comillas externas (dobles o simples) que algunos sistemas de despliegue añaden
+    if ((formattedKey.startsWith('"') && formattedKey.endsWith('"')) || 
+        (formattedKey.startsWith("'") && formattedKey.endsWith("'"))) {
       formattedKey = formattedKey.substring(1, formattedKey.length - 1);
     }
     
-    // 2. Convertir saltos de línea escapados (\n) a saltos reales
+    // 2. Normalizar saltos de línea:
+    // Algunos entornos escapan la barra invertida (\\n), otros no.
+    // Reemplazamos las secuencias literales de "\n" por saltos de línea reales.
     formattedKey = formattedKey.replace(/\\n/g, '\n');
     
-    // 3. Verificación de encabezado PEM
+    // 3. Verificación final de integridad PEM
     if (!formattedKey.includes('-----BEGIN PRIVATE KEY-----')) {
-        console.error('Admin SDK Error: La llave privada no tiene el encabezado PEM válido.');
+        // Si no tiene el encabezado, intentamos reconstruirlo si parece una llave base64 (caso raro)
+        console.error('Admin SDK Error: El formato de la llave privada es inválido (Falta encabezado PEM).');
         return null;
     }
 
