@@ -13,8 +13,8 @@ export async function POST(request: Request) {
 
   if (!adminApp) {
     return NextResponse.json({ 
-        message: 'ERROR DE SERVIDOR: El sistema administrativo de Firebase no está configurado correctamente.',
-        details: 'Verifica que FIREBASE_PRIVATE_KEY y FIREBASE_CLIENT_EMAIL estén definidas en el entorno de producción.'
+        message: 'ERROR DE SERVIDOR: El sistema administrativo no está configurado.',
+        details: 'Verifica FIREBASE_PRIVATE_KEY y FIREBASE_CLIENT_EMAIL.'
     }, { status: 500 });
   }
 
@@ -22,7 +22,7 @@ export async function POST(request: Request) {
     const { uid, password } = await request.json();
 
     if (!uid || !password) {
-      return NextResponse.json({ message: 'UID y contraseña son requeridos para esta operación.' }, { status: 400 });
+      return NextResponse.json({ message: 'UID y contraseña son requeridos.' }, { status: 400 });
     }
 
     // 2. Ejecutar la actualización en Firebase Auth
@@ -33,28 +33,28 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ 
       success: true,
-      message: 'Contraseña actualizada correctamente en los servidores de identidad.' 
+      message: 'Contraseña actualizada correctamente.' 
     });
 
   } catch (error: any) {
     console.error("Error en operación Admin Auth:", error);
     
-    let friendlyMessage = 'Ocurrió un error inesperado al procesar el cambio de contraseña.';
+    let friendlyMessage = 'Error al procesar el cambio de contraseña.';
     
-    // Mapeo de errores comunes para feedback al administrador
+    // Mapeo de errores para diagnóstico preciso
     if (error.code) {
         switch (error.code) {
             case 'auth/user-not-found':
-                friendlyMessage = 'El usuario ya no existe en el sistema de autenticación.';
+                friendlyMessage = 'El usuario ya no existe en los servidores de Google.';
                 break;
             case 'auth/invalid-password':
-                friendlyMessage = 'La contraseña es demasiado débil o no cumple con el formato de Firebase.';
+                friendlyMessage = 'La contraseña no cumple con los requisitos mínimos de seguridad.';
                 break;
             case 'app/invalid-credential':
-                friendlyMessage = 'Las credenciales del servidor han expirado o son inválidas (Error de Token).';
+                friendlyMessage = 'ERROR DE TOKEN: Las llaves de acceso del servidor son incorrectas o han expirado. Contacta a soporte técnico.';
                 break;
             default:
-                friendlyMessage = `Fallo de Firebase Admin: ${error.message}`;
+                friendlyMessage = `Fallo administrativo: ${error.message}`;
         }
     }
 

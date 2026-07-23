@@ -18,8 +18,13 @@ export function initializeAdminApp(): App | null {
   try {
     // Caso A: Tenemos credenciales explícitas (Cuenta de Servicio)
     if (privateKey && clientEmail && privateKey !== 'undefined' && clientEmail !== 'undefined') {
-      // Limpieza profunda de la llave privada para asegurar el formato PEM correcto
-      const formattedKey = privateKey.replace(/\\n/g, '\n').trim();
+      // 1. Limpieza profunda de la llave privada
+      let formattedKey = privateKey.replace(/\\n/g, '\n').trim();
+      
+      // 2. Eliminar comillas dobles si vienen incluidas en el string de la variable de entorno
+      if (formattedKey.startsWith('"') && formattedKey.endsWith('"')) {
+        formattedKey = formattedKey.substring(1, formattedKey.length - 1);
+      }
       
       return initializeApp({
         credential: cert({
