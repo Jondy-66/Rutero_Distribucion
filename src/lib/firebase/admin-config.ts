@@ -4,10 +4,10 @@ import { initializeApp, getApps, App, cert } from 'firebase-admin/app';
 
 /**
  * Inicializa la instancia administrativa de Firebase con máxima robustez.
- * Prioriza el uso de variables de entorno para la cuenta de servicio.
+ * Realiza una limpieza profunda de la llave privada para asegurar compatibilidad PEM.
  */
 export function initializeAdminApp(): App | null {
-  // Retornar instancia existente si ya fue creada para evitar errores de duplicidad
+  // Retornar instancia existente si ya fue creada
   const existingApp = getApps().find(app => app.name === 'admin');
   if (existingApp) return existingApp;
 
@@ -15,35 +15,43 @@ export function initializeAdminApp(): App | null {
   const privateKey = process.env.FIREBASE_PRIVATE_KEY;
   const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
 
+  // Si no hay variables, no intentamos inicializar para evitar el crash del SDK
+  if (!privateKey || !clientEmail || privateKey === 'undefined' || clientEmail === 'undefined') {
+    console.error('Admin SDK Error: Faltan credenciales en el servidor (FIREBASE_PRIVATE_KEY o FIREBASE_CLIENT_EMAIL).');
+    return null;
+  }
+
   try {
-    // Caso A: Tenemos credenciales explícitas (Cuenta de Servicio)
-    if (privateKey && clientEmail && privateKey !== 'undefined' && clientEmail !== 'undefined') {
-      // 1. Limpieza profunda de la llave privada
-      let formattedKey = privateKey.replace(/\\n/g, '\n').trim();
-      
-      // 2. Eliminar comillas dobles si vienen incluidas en el string de la variable de entorno
-      if (formattedKey.startsWith('"') && formattedKey.endsWith('"')) {
-        formattedKey = formattedKey.substring(1, formattedKey.length - 1);
-      }
-      
-      return initializeApp({
-        credential: cert({
-          projectId,
-          privateKey: formattedKey,
-          clientEmail,
-        }),
-      }, 'admin');
+    // --- LIMPIEZA PROFUNDA DE LLAVE PRIVADA ---
+    let formattedKey = privateKey.trim();
+    
+    // 1. Eliminar comillas externas si existen (común en variables de entorno de Windows/Vercel)
+    if (formattedKey.startsWith('"') && formattedKey.endsWith('"')) {
+      formattedKey = formattedKey.substring(1, formattedKey.length - 1);
+    }
+    if (formattedKey.startsWith("'") && formattedKey.endsWith("'")) {
+      formattedKey = formattedKey.substring(1, formattedKey.length - 1);
+    }
+    
+    // 2. Convertir saltos de línea escapados (\n) a saltos reales
+    formattedKey = formattedKey.replace(/\\n/g, '\n');
+    
+    // 3. Verificación de encabezado PEM
+    if (!formattedKey.includes('-----BEGIN PRIVATE KEY-----')) {
+        console.error('Admin SDK Error: La llave privada no tiene el encabezado PEM válido.');
+        return null;
     }
 
-    // Caso B: Fallback a Credenciales Predeterminadas (ADC)
-    // Esto funciona en Google Cloud Shell, App Hosting o si se configuró GOOGLE_APPLICATION_CREDENTIALS
-    console.warn('Admin SDK: Iniciando sin llaves explícitas. Se requiere entorno con identidad de Google.');
     return initializeApp({
-      projectId,
+      credential: cert({
+        projectId,
+        privateKey: formattedKey,
+        clientEmail,
+      }),
     }, 'admin');
     
   } catch (error: any) {
-    console.error('ERROR CRÍTICO: Fallo al inicializar Firebase Admin SDK:', error.message);
+    console.error('Fallo crítico al inicializar Admin SDK:', error.message);
     return null;
   }
 }

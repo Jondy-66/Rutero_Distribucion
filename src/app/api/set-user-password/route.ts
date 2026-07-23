@@ -13,8 +13,8 @@ export async function POST(request: Request) {
 
   if (!adminApp) {
     return NextResponse.json({ 
-        message: 'ERROR DE SERVIDOR: El sistema administrativo no está configurado.',
-        details: 'Verifica FIREBASE_PRIVATE_KEY y FIREBASE_CLIENT_EMAIL.'
+        message: 'ERROR DE SERVIDOR: El sistema administrativo no está configurado correctamente.',
+        details: 'Faltan variables de entorno o la llave privada es inválida.'
     }, { status: 500 });
   }
 
@@ -48,14 +48,16 @@ export async function POST(request: Request) {
                 friendlyMessage = 'El usuario ya no existe en los servidores de Google.';
                 break;
             case 'auth/invalid-password':
-                friendlyMessage = 'La contraseña no cumple con los requisitos mínimos de seguridad.';
+                friendlyMessage = 'La contraseña no cumple con los requisitos mínimos de seguridad (mínimo 6 caracteres).';
                 break;
             case 'app/invalid-credential':
-                friendlyMessage = 'ERROR DE TOKEN: Las llaves de acceso del servidor son incorrectas o han expirado. Contacta a soporte técnico.';
+                friendlyMessage = 'ERROR DE TOKEN: Las llaves de acceso del servidor son incorrectas. Verifica que FIREBASE_PRIVATE_KEY esté bien configurada.';
                 break;
             default:
                 friendlyMessage = `Fallo administrativo: ${error.message}`;
         }
+    } else if (error.message && error.message.includes('credential')) {
+        friendlyMessage = 'ERROR DE TOKEN: Problema de autenticación con Google Cloud.';
     }
 
     return NextResponse.json({ 
