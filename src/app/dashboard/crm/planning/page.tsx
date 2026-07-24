@@ -66,10 +66,8 @@ export default function CrmPlanningPage() {
     return users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista' || u.id === user?.id);
   }, [users, user, isAdmin]);
 
-  // Simulación de Clientes Banco de Datos (Mezclando PhoneContacts con Metadatos CRM)
+  // Simulación de Clientes Banco de Datos
   const customerBank = useMemo(() => {
-    // En una implementación real, esto vendría de una consulta a crm_customers
-    // Aquí simulamos datos basados en phoneContacts para visualización similar a la foto
     return phoneContacts.map((contact, idx) => ({
       id: contact.id,
       name: contact.nombre_comercial,
@@ -97,7 +95,7 @@ export default function CrmPlanningPage() {
       count: planned.length,
       highPriority,
       totalTicket,
-      duration: planned.length * 15 // 15 min por llamada
+      duration: planned.length * 15 
     };
   }, [plannedCalls]);
 
@@ -138,27 +136,27 @@ export default function CrmPlanningPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
         
         {/* BANCO DE CLIENTES (SIDEBAR) */}
-        <Card className="lg:col-span-1 bg-[#0B0F18] border-none shadow-2xl rounded-3xl flex flex-col h-[85vh]">
+        <Card className="lg:col-span-1 bg-[#F4F6FA] border-2 border-slate-200 shadow-xl rounded-3xl flex flex-col h-[85vh]">
           <CardHeader className="p-6 pb-4">
-            <CardTitle className="text-white font-black uppercase text-sm flex justify-between items-center">
+            <CardTitle className="text-slate-950 font-black uppercase text-sm flex justify-between items-center">
               <span>Banco de Clientes</span>
-              <Badge variant="outline" className="text-[10px] border-[#8CC81F]/30 text-[#8CC81F]">
+              <Badge variant="outline" className="text-[10px] border-primary/30 text-primary bg-primary/5">
                 {customerBank.length} disponibles
               </Badge>
             </CardTitle>
             <div className="mt-4 space-y-3">
               <div className="relative">
-                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
                 <Input 
                   placeholder="Buscar cliente..." 
-                  className="pl-9 h-9 bg-white/5 border-none text-white text-xs rounded-xl focus:ring-1 focus:ring-[#8CC81F]/50"
+                  className="pl-9 h-10 bg-white border-slate-200 text-slate-950 text-xs rounded-xl focus:ring-2 focus:ring-primary/20"
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
               </div>
               <div className="flex gap-2">
                 <Select value={zoneFilter} onValueChange={setZoneFilter}>
-                  <SelectTrigger className="h-8 bg-white/5 border-none text-[10px] text-slate-400 font-bold uppercase rounded-lg">
+                  <SelectTrigger className="h-9 bg-white border-slate-200 text-[10px] text-slate-600 font-bold uppercase rounded-lg">
                     <SelectValue placeholder="Zona" />
                   </SelectTrigger>
                   <SelectContent>
@@ -169,7 +167,7 @@ export default function CrmPlanningPage() {
                   </SelectContent>
                 </Select>
                 <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                  <SelectTrigger className="h-8 bg-white/5 border-none text-[10px] text-slate-400 font-bold uppercase rounded-lg">
+                  <SelectTrigger className="h-9 bg-white border-slate-200 text-[10px] text-slate-600 font-bold uppercase rounded-lg">
                     <SelectValue placeholder="Prioridad" />
                   </SelectTrigger>
                   <SelectContent>
@@ -181,10 +179,10 @@ export default function CrmPlanningPage() {
                 </Select>
               </div>
               <div className="flex justify-between items-center px-1">
-                <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">Ordenar por:</span>
+                <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Ordenar por:</span>
                 <div className="flex gap-2">
-                   <button className="text-[8px] font-black text-[#8CC81F] uppercase hover:underline">Días sin contacto</button>
-                   <button className="text-[8px] font-black text-slate-500 uppercase hover:text-white transition-colors">Ticket</button>
+                   <button className="text-[8px] font-black text-primary uppercase hover:underline">Días sin contacto</button>
+                   <button className="text-[8px] font-black text-slate-400 uppercase hover:text-primary transition-colors">Ticket</button>
                 </div>
               </div>
             </div>
@@ -193,33 +191,33 @@ export default function CrmPlanningPage() {
             <ScrollArea className="h-full px-6">
               <div className="space-y-4 pb-6">
                 {customerBank.map((customer) => (
-                  <div key={customer.id} className="group relative bg-white/5 p-4 rounded-2xl border border-transparent hover:border-[#8CC81F]/30 transition-all cursor-default">
+                  <div key={customer.id} className="group relative bg-white p-4 rounded-2xl border-2 border-slate-100 hover:border-primary/30 transition-all shadow-sm">
                     <div className="flex justify-between items-start">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <h4 className="text-xs font-black text-white uppercase leading-tight">{customer.name}</h4>
-                          {customer.status === 'inactive' && <Badge className="bg-slate-700 text-[8px] h-4 uppercase">Inactivo</Badge>}
+                          <h4 className="text-xs font-black text-slate-950 uppercase leading-tight">{customer.name}</h4>
+                          {customer.status === 'inactive' && <Badge className="bg-slate-200 text-slate-500 text-[8px] h-4 uppercase border-none">Inactivo</Badge>}
                         </div>
                         <div className="flex items-center gap-1.5 text-slate-500">
-                          <MapPin className="h-3 w-3" />
+                          <MapPin className="h-3 w-3 text-primary" />
                           <span className="text-[9px] font-bold uppercase">{customer.zone} • {customer.daysSinceContact}d sin contacto</span>
                         </div>
                       </div>
                       <div className="text-right">
                         <Badge className={cn(
-                          "text-[8px] font-black uppercase border-none",
-                          customer.priority === 'Alta' ? "bg-red-500/20 text-red-500" : 
-                          customer.priority === 'Media' ? "bg-orange-500/20 text-orange-500" : "bg-slate-500/20 text-slate-400"
+                          "text-[8px] font-black uppercase border-none shadow-none",
+                          customer.priority === 'Alta' ? "bg-red-100 text-red-600" : 
+                          customer.priority === 'Media' ? "bg-orange-100 text-orange-600" : "bg-slate-100 text-slate-500"
                         )}>
                           {customer.priority}
                         </Badge>
-                        <p className="text-xs font-black text-white mt-1">${customer.averageTicket.toLocaleString()}</p>
+                        <p className="text-xs font-black text-primary mt-1">${customer.averageTicket.toLocaleString()}</p>
                       </div>
                     </div>
                     <Button 
                       variant="ghost" 
                       size="sm" 
-                      className="w-full mt-3 h-8 bg-[#8CC81F]/5 text-[#8CC81F] hover:bg-[#8CC81F]/20 font-black text-[9px] uppercase rounded-xl border border-[#8CC81F]/10"
+                      className="w-full mt-3 h-9 bg-primary/5 text-primary hover:bg-primary/10 font-black text-[9px] uppercase rounded-xl border-2 border-primary/10"
                       onClick={() => handleAddClientToRoute(customer)}
                     >
                       <Plus className="mr-1 h-3 w-3" /> Añadir a ruta del día
@@ -233,35 +231,35 @@ export default function CrmPlanningPage() {
 
         {/* CONTENIDO PRINCIPAL - RUTA DEL DÍA */}
         <div className="lg:col-span-3 space-y-6">
-          <Card className="bg-[#0B0F18] border-none shadow-2xl rounded-[2.5rem] overflow-hidden">
-            <CardHeader className="bg-white/5 px-8 py-6 flex flex-col md:flex-row justify-between items-center gap-4">
+          <Card className="bg-[#F4F6FA] border-2 border-slate-200 shadow-2xl rounded-[2.5rem] overflow-hidden">
+            <CardHeader className="bg-slate-100/50 px-8 py-6 border-b-2 border-slate-200 flex flex-col md:flex-row justify-between items-center gap-4">
               <div className="flex items-center gap-6">
                 <div>
-                  <h2 className="text-white text-xl font-black uppercase tracking-tighter">Ruta del Día</h2>
+                  <h2 className="text-slate-950 text-xl font-black uppercase tracking-tighter">Ruta del Día</h2>
                   <p className="text-slate-500 text-[10px] font-bold uppercase">{stats.count} llamadas planificadas</p>
                 </div>
                 
-                <div className="h-10 w-[1px] bg-white/10 hidden md:block" />
+                <div className="h-10 w-[1px] bg-slate-200 hidden md:block" />
 
                 <div className="flex gap-4">
                    <Popover>
                     <PopoverTrigger asChild>
-                      <Button variant="ghost" className="h-10 px-3 bg-white/5 text-white font-black text-xs rounded-xl border border-white/10 hover:bg-white/10">
-                        <CalendarIcon className="mr-2 h-4 w-4 text-[#8CC81F]" />
+                      <Button variant="outline" className="h-10 px-3 bg-white text-slate-950 font-black text-xs rounded-xl border-2 border-slate-200 hover:bg-slate-50">
+                        <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
                         {selectedDate ? format(selectedDate, 'dd/MM/yyyy') : 'Fecha'}
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0 bg-[#121722] border-white/10">
+                    <PopoverContent className="w-auto p-0 border-2 shadow-2xl">
                       <Calendar mode="single" selected={selectedDate} onSelect={setSelectedDate} locale={es} />
                     </PopoverContent>
                   </Popover>
 
                   <Select value={selectedAgentId} onValueChange={setSelectedAgentId}>
-                    <SelectTrigger className="h-10 w-[180px] bg-white/5 border-white/10 text-white font-black text-xs rounded-xl">
-                      <UserIcon className="mr-2 h-4 w-4 text-[#8CC81F]" />
+                    <SelectTrigger className="h-10 w-[180px] bg-white border-2 border-slate-200 text-slate-950 font-black text-xs rounded-xl">
+                      <UserIcon className="mr-2 h-4 w-4 text-primary" />
                       <SelectValue placeholder="Agente" />
                     </SelectTrigger>
-                    <SelectContent className="bg-[#121722] border-white/10 text-white">
+                    <SelectContent className="font-black">
                       {managedAgents.map(a => <SelectItem key={a?.id} value={a?.id || ''} className="font-black uppercase text-[10px]">{a?.name}</SelectItem>)}
                     </SelectContent>
                   </Select>
@@ -269,90 +267,90 @@ export default function CrmPlanningPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                <Badge className="bg-red-500/10 text-red-500 border border-red-500/20 px-3 h-8 font-black text-[10px] uppercase">
+                <Badge className="bg-red-50 text-red-600 border-2 border-red-100 px-3 h-8 font-black text-[10px] uppercase shadow-none">
                   Alta: {stats.highPriority}
                 </Badge>
-                <Badge className="bg-[#8CC81F]/10 text-[#8CC81F] border border-[#8CC81F]/20 px-3 h-8 font-black text-[10px] uppercase">
+                <Badge className="bg-primary/5 text-primary border-2 border-primary/10 px-3 h-8 font-black text-[10px] uppercase shadow-none">
                   ${stats.totalTicket.toLocaleString()} estimado
                 </Badge>
-                <Badge className="bg-blue-500/10 text-blue-400 border border-blue-500/20 px-3 h-8 font-black text-[10px] uppercase">
+                <Badge className="bg-blue-50 text-blue-600 border-2 border-blue-100 px-3 h-8 font-black text-[10px] uppercase shadow-none">
                   <Clock className="mr-1.5 h-3 w-3" /> {stats.duration}m est.
                 </Badge>
               </div>
 
               <div className="flex gap-2">
-                  <Button variant="ghost" className="text-white hover:bg-white/5 font-black uppercase text-[10px]" onClick={handleSaveRoute}>
+                  <Button variant="ghost" className="text-slate-600 hover:bg-slate-200 font-black uppercase text-[10px]" onClick={handleSaveRoute}>
                     <Save className="mr-2 h-4 w-4" /> Guardar ruta
                   </Button>
-                  <Button className="bg-[#8CC81F] hover:bg-[#9AD326] text-white font-black uppercase text-[10px] rounded-xl px-6 shadow-xl" onClick={() => toast({ title: "Agenda Enviada" })}>
+                  <Button className="bg-primary hover:bg-primary/90 text-white font-black uppercase text-[10px] rounded-xl px-6 shadow-xl" onClick={() => toast({ title: "Agenda Enviada" })}>
                     <Send className="mr-2 h-4 w-4" /> Enviar a Agenda
                   </Button>
               </div>
             </CardHeader>
-            <CardContent className="p-0">
+            <CardContent className="p-0 bg-white">
               <Table>
-                <TableHeader className="bg-white/2">
-                  <TableRow className="border-white/5 hover:bg-transparent">
-                    <TableHead className="text-slate-500 font-black uppercase text-[9px] pl-10 h-14">Hora</TableHead>
-                    <TableHead className="text-slate-500 font-black uppercase text-[9px]">Cliente</TableHead>
-                    <TableHead className="text-slate-500 font-black uppercase text-[9px]">Zona</TableHead>
-                    <TableHead className="text-slate-500 font-black uppercase text-[9px]">Contacto</TableHead>
-                    <TableHead className="text-slate-500 font-black uppercase text-[9px]">Prioridad</TableHead>
-                    <TableHead className="text-slate-500 font-black uppercase text-[9px]">Ticket</TableHead>
+                <TableHeader className="bg-slate-50 border-b-2 border-slate-100">
+                  <TableRow className="border-slate-100 hover:bg-transparent">
+                    <TableHead className="text-slate-400 font-black uppercase text-[9px] pl-10 h-14">Hora</TableHead>
+                    <TableHead className="text-slate-400 font-black uppercase text-[9px]">Cliente</TableHead>
+                    <TableHead className="text-slate-400 font-black uppercase text-[9px]">Zona</TableHead>
+                    <TableHead className="text-slate-400 font-black uppercase text-[9px]">Contacto</TableHead>
+                    <TableHead className="text-slate-400 font-black uppercase text-[9px]">Prioridad</TableHead>
+                    <TableHead className="text-slate-400 font-black uppercase text-[9px]">Ticket</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {plannedCalls.map((slot) => (
-                    <TableRow key={slot.time} className="border-white/5 hover:bg-white/[0.02] transition-colors group">
+                    <TableRow key={slot.time} className="border-slate-50 hover:bg-slate-50/50 transition-colors group">
                       <TableCell className="pl-10 py-5">
-                        <span className="text-white font-black text-xs">{slot.time}</span>
+                        <span className="text-slate-950 font-black text-xs">{slot.time}</span>
                       </TableCell>
                       <TableCell>
                         {slot.customer ? (
                           <div className="flex items-center gap-3">
-                            <div className="p-2 bg-[#8CC81F]/10 rounded-lg">
-                              <PhoneCall className="h-4 w-4 text-[#8CC81F]" />
+                            <div className="p-2 bg-primary/10 rounded-lg">
+                              <PhoneCall className="h-4 w-4 text-primary" />
                             </div>
                             <div>
-                              <p className="text-white font-black text-xs uppercase leading-none">{slot.customer.name}</p>
-                              <Badge className="mt-1.5 h-3.5 bg-yellow-500/10 text-yellow-500 text-[7px] uppercase font-black border-none">Match</Badge>
+                              <p className="text-slate-950 font-black text-xs uppercase leading-none">{slot.customer.name}</p>
+                              <Badge className="mt-1.5 h-3.5 bg-primary/5 text-primary text-[7px] uppercase font-black border-primary/20 shadow-none">Match</Badge>
                             </div>
                           </div>
                         ) : (
-                          <span className="text-slate-700 font-bold text-[10px] uppercase tracking-widest italic">Espacio disponible...</span>
+                          <span className="text-slate-300 font-bold text-[10px] uppercase tracking-widest italic">Espacio disponible...</span>
                         )}
                       </TableCell>
                       <TableCell>
-                        {slot.customer && <span className="text-slate-400 font-bold text-[10px] uppercase">{(slot.customer as any).zone}</span>}
+                        {slot.customer && <span className="text-slate-500 font-bold text-[10px] uppercase">{(slot.customer as any).zone}</span>}
                       </TableCell>
                       <TableCell>
                         {slot.customer && (
                           <div className="flex flex-col">
-                            <span className="text-white font-black text-[10px] uppercase">{(slot.customer as any).contactPerson}</span>
-                            <span className="text-slate-500 font-mono text-[9px]">{(slot.customer as any).phone}</span>
+                            <span className="text-slate-950 font-black text-[10px] uppercase">{(slot.customer as any).contactPerson}</span>
+                            <span className="text-slate-400 font-mono text-[9px]">{(slot.customer as any).phone}</span>
                           </div>
                         )}
                       </TableCell>
                       <TableCell>
                         {slot.customer && (
                            <Badge variant="outline" className={cn(
-                             "text-[8px] font-black uppercase",
-                             (slot.customer as any).priority === 'Alta' ? "border-red-500/50 text-red-500" : "border-slate-700 text-slate-500"
+                             "text-[8px] font-black uppercase border-2 shadow-none",
+                             (slot.customer as any).priority === 'Alta' ? "border-red-200 text-red-600 bg-red-50" : "border-slate-100 text-slate-400"
                            )}>
                              {(slot.customer as any).priority}
                            </Badge>
                         )}
                       </TableCell>
                       <TableCell>
-                        {slot.customer && <span className="text-[#8CC81F] font-black text-xs">${(slot.customer as any).averageTicket.toLocaleString()}</span>}
+                        {slot.customer && <span className="text-primary font-black text-xs">${(slot.customer as any).averageTicket.toLocaleString()}</span>}
                       </TableCell>
                       <TableCell className="pr-10">
                         {slot.customer && (
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="text-slate-600 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                            className="text-slate-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all h-8 w-8"
                             onClick={() => handleRemoveClient(slot.time)}
                           >
                             <X className="h-4 w-4" />
@@ -368,13 +366,13 @@ export default function CrmPlanningPage() {
 
           {/* FRANJAS DISPONIBLES */}
           <div className="space-y-4">
-            <h3 className="text-white text-xs font-black uppercase tracking-widest flex items-center gap-2 pl-2">
-              <Zap className="h-4 w-4 text-[#8CC81F]" />
+            <h3 className="text-slate-950 text-xs font-black uppercase tracking-widest flex items-center gap-2 pl-2">
+              <Zap className="h-4 w-4 text-primary" />
               {plannedCalls.filter(p => !p.customer).length} Franjas Disponibles
             </h3>
             <div className="flex flex-wrap gap-2">
               {plannedCalls.filter(p => !p.customer).map(p => (
-                <Badge key={p.time} variant="outline" className="bg-[#0B0F18] border-white/10 text-slate-400 font-mono text-[10px] py-1 px-4 hover:border-[#8CC81F]/50 cursor-pointer transition-all">
+                <Badge key={p.time} variant="outline" className="bg-white border-slate-200 text-slate-500 font-mono text-[10px] py-1.5 px-4 hover:border-primary/50 cursor-pointer transition-all shadow-sm">
                   {p.time}
                 </Badge>
               ))}
