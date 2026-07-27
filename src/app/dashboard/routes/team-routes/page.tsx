@@ -322,7 +322,7 @@ export default function TeamRoutesPage() {
   
   const toggleRouteSelection = (routeId: string) => {
       setSelectedRouteIds(prev => 
-        prev.includes(routeId) ? prev.filter(id => id !== routeId) : [...prev, id]
+        prev.includes(routeId) ? prev.filter(id => id !== routeId) : [...prev, routeId]
       );
   };
 
