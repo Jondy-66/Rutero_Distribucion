@@ -144,7 +144,7 @@ export default function LoginPage() {
       </div>
       
       <main className="flex-grow flex items-center justify-center w-full">
-        <Card className="w-full max-w-4xl shadow-2xl overflow-hidden rounded-2xl">
+        <Card className="w-full max-w-4xl shadow-2xl overflow-hidden rounded-2xl border-none">
             <div className="grid grid-cols-1 lg:grid-cols-2">
                 <div className="relative hidden lg:block">
                     <Image
@@ -161,20 +161,21 @@ export default function LoginPage() {
                     </div>
                 </div>
 
-                <div className="flex flex-col justify-center p-8 sm:p-12">
-                    <div className="text-center mb-8 flex flex-col items-center">
+                <div className="flex flex-col justify-center p-8 sm:p-10">
+                    <div className="text-center mb-6 flex flex-col items-center">
                         <Image 
                             src="https://i.ibb.co/JjfktNsS/Routify.png"
                             alt="Logo"
                             width={220}
                             height={80}
-                            className="h-auto w-auto mb-2"
+                            className="h-auto w-auto mb-1"
                         />
-                        <CardDescription>Ingresa tus credenciales para acceder</CardDescription>
+                        <h1 className="text-sm font-black tracking-[0.2em] text-primary uppercase">Rutero | Distribución</h1>
+                        <CardDescription className="mt-3">Ingresa tus credenciales para acceder</CardDescription>
                     </div>
                     
                     <form onSubmit={onSignIn}>
-                        <div className="space-y-6">
+                        <div className="space-y-5">
                         <FloatingLabelInput 
                             id="email" 
                             label="Correo Electrónico" 
@@ -184,7 +185,7 @@ export default function LoginPage() {
                             onChange={e => setEmail(e.target.value)} 
                             disabled={isLoading} 
                         />
-                        <div className="space-y-2">
+                        <div className="space-y-1">
                             <FloatingLabelPasswordInput 
                                 id="password"
                                 label="Contraseña" 
@@ -195,7 +196,7 @@ export default function LoginPage() {
                             />
                         </div>
                         <div className="space-y-2 pt-2">
-                            <Button type="submit" className="w-full h-12" disabled={isLoading}>
+                            <Button type="submit" className="w-full h-11" disabled={isLoading}>
                                 {isLoading ? (
                                     <div className="flex items-center gap-2">
                                         <LoaderCircle className="animate-spin h-5 w-5" />
@@ -206,18 +207,18 @@ export default function LoginPage() {
                                 )}
                             </Button>
                             {isSlowConnection && (
-                                <p className="text-[11px] text-orange-600 font-bold flex items-center justify-center gap-1 mt-2 animate-pulse uppercase">
+                                <p className="text-[10px] text-orange-600 font-bold flex items-center justify-center gap-1 mt-2 animate-pulse uppercase">
                                     <WifiOff className="h-3 w-3" />
-                                    La conexión parece lenta. Esperando respuesta...
+                                    Conexión lenta detectada...
                                 </p>
                             )}
                         </div>
                         </div>
                     </form>
                     
-                    <div className="mt-6 text-center text-sm">
+                    <div className="mt-6 text-center text-xs">
                         ¿No tienes una cuenta?{' '}
-                        <a href="mailto:jdiaza@farmaenlace.com" className="underline font-bold text-primary">
+                        <a href="mailto:jdiaza@farmaenlace.com" className="underline font-black text-primary uppercase">
                         Contactar al Administrador
                         </a>
                     </div>
@@ -225,7 +226,7 @@ export default function LoginPage() {
             </div>
         </Card>
       </main>
-      <footer className="text-center text-sm text-muted-foreground mt-8">
+      <footer className="text-center text-[10px] font-bold text-muted-foreground mt-6 uppercase tracking-widest">
         © 2026 Farmaenlace. Todos los derechos reservados.
       </footer>
     </div>
