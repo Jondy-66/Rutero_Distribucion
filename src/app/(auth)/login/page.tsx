@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
@@ -124,10 +123,14 @@ export default function LoginPage() {
     return (
        <div className="w-full min-h-screen flex items-center justify-center bg-background">
             <div className="flex flex-col items-center gap-4">
-                <div className="inline-block bg-primary text-primary-foreground p-4 rounded-full">
-                    <Route className="h-10 w-10 animate-pulse" />
-                </div>
-                <p className="text-muted-foreground">Cargando Rutero...</p>
+                <Image 
+                    src="https://i.ibb.co/JjfktNsS/Routify.png"
+                    alt="Logo Routify"
+                    width={180}
+                    height={60}
+                    className="h-auto w-auto animate-pulse"
+                />
+                <p className="text-primary font-bold uppercase text-[10px] tracking-[0.2em] animate-pulse">Cargando Routify...</p>
             </div>
       </div>
     )
@@ -161,21 +164,21 @@ export default function LoginPage() {
                     </div>
                 </div>
 
-                <div className="flex flex-col justify-center p-8 sm:p-10">
-                    <div className="text-center mb-6 flex flex-col items-center">
+                <div className="flex flex-col justify-center p-6 sm:p-8">
+                    <div className="text-center mb-4 flex flex-col items-center">
                         <Image 
                             src="https://i.ibb.co/JjfktNsS/Routify.png"
-                            alt="Logo"
+                            alt="Logo Routify"
                             width={220}
                             height={80}
                             className="h-auto w-auto mb-1"
                         />
                         <h1 className="text-sm font-black tracking-[0.2em] text-primary uppercase">Rutero | Distribución</h1>
-                        <CardDescription className="mt-3">Ingresa tus credenciales para acceder</CardDescription>
+                        <CardDescription className="mt-2">Ingresa tus credenciales para acceder</CardDescription>
                     </div>
                     
                     <form onSubmit={onSignIn}>
-                        <div className="space-y-5">
+                        <div className="space-y-4">
                         <FloatingLabelInput 
                             id="email" 
                             label="Correo Electrónico" 
@@ -195,7 +198,7 @@ export default function LoginPage() {
                                 disabled={isLoading}
                             />
                         </div>
-                        <div className="space-y-2 pt-2">
+                        <div className="space-y-2 pt-1">
                             <Button type="submit" className="w-full h-11" disabled={isLoading}>
                                 {isLoading ? (
                                     <div className="flex items-center gap-2">

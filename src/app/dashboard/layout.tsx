@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState } from 'react';
@@ -24,7 +23,7 @@ import { useTracker } from '@/hooks/use-tracker';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import Image from 'next/image';
 
 export default function DashboardLayout({
   children,
@@ -52,11 +51,15 @@ export default function DashboardLayout({
   if (loading || !user) {
     return (
        <div className="w-full min-h-screen flex items-center justify-center bg-[#0B0F18]">
-            <div className="flex flex-col items-center gap-4">
-                <div className="inline-block bg-[#8CC81F] text-white p-4 rounded-full shadow-[0_0_20px_rgba(140,200,31,0.3)]">
-                    <Route className="h-10 w-10 animate-pulse" />
-                </div>
-                <p className="text-[#8F98A8] font-bold uppercase text-xs tracking-widest">Iniciando Ecosistema...</p>
+            <div className="flex flex-col items-center gap-6">
+                <Image 
+                    src="https://i.ibb.co/JjfktNsS/Routify.png"
+                    alt="Logo Routify"
+                    width={220}
+                    height={80}
+                    className="h-auto w-auto animate-pulse"
+                />
+                <p className="text-[#8CC81F] font-black uppercase text-[10px] tracking-[0.4em] animate-pulse">Cargando Routify...</p>
             </div>
       </div>
     );
