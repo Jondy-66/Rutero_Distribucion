@@ -162,11 +162,14 @@ export default function LoginPage() {
                 </div>
 
                 <div className="flex flex-col justify-center p-8 sm:p-12">
-                    <div className="text-center mb-8">
-                        <div className="inline-block bg-primary text-primary-foreground p-3 rounded-full mx-auto">
-                            <Route className="h-8 w-8" />
-                        </div>
-                        <CardTitle className="text-3xl font-bold font-headline mt-4">Bienvenido a Rutero</CardTitle>
+                    <div className="text-center mb-8 flex flex-col items-center">
+                        <Image 
+                            src="https://i.ibb.co/JjfktNsS/Routify.png"
+                            alt="Logo"
+                            width={220}
+                            height={80}
+                            className="h-auto w-auto mb-2"
+                        />
                         <CardDescription>Ingresa tus credenciales para acceder</CardDescription>
                     </div>
                     
@@ -190,11 +193,6 @@ export default function LoginPage() {
                                 onChange={e => setPassword(e.target.value)} 
                                 disabled={isLoading}
                             />
-                            <div className="flex items-center pt-1">
-                            <Link href="/forgot-password" className="ml-auto inline-block text-sm text-primary hover:underline">
-                                ¿Olvidaste tu contraseña?
-                            </Link>
-                            </div>
                         </div>
                         <div className="space-y-2 pt-2">
                             <Button type="submit" className="w-full h-12" disabled={isLoading}>
