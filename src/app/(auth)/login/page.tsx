@@ -1,6 +1,5 @@
 'use client';
 import { useState, useEffect } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -165,16 +164,16 @@ export default function LoginPage() {
                 </div>
 
                 <div className="flex flex-col justify-center p-6 sm:p-8">
-                    <div className="text-center mb-4 flex flex-col items-center">
+                    <div className="text-center mb-6 flex flex-col items-center">
                         <Image 
                             src="https://i.ibb.co/JjfktNsS/Routify.png"
                             alt="Logo Routify"
                             width={220}
                             height={80}
-                            className="h-auto w-auto mb-1"
+                            className="h-auto w-auto -mb-2"
                         />
-                        <h1 className="text-sm font-black tracking-[0.2em] text-primary uppercase">Rutero | Distribución</h1>
-                        <CardDescription className="mt-2">Ingresa tus credenciales para acceder</CardDescription>
+                        <h1 className="text-lg font-black tracking-[0.1em] text-primary uppercase">Rutero | Distribución</h1>
+                        <CardDescription className="mt-1">Ingresa tus credenciales para acceder</CardDescription>
                     </div>
                     
                     <form onSubmit={onSignIn}>
