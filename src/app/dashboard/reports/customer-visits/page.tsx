@@ -23,7 +23,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Users, Calendar as CalendarIcon, Search, History, CheckCircle2 } from 'lucide-react';
+import { Download, Users, Calendar as CalendarIcon, Search, History, CheckCircle2, MapPin, Phone } from 'lucide-react';
 import { format, startOfDay, endOfDay, startOfMonth } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -41,6 +41,7 @@ type VisitDetail = {
     date: Date;
     dayName: string;
     routeName: string;
+    visitType?: string | null;
 };
 
 type CustomerVisitSummary = {
@@ -80,7 +81,6 @@ export default function CustomerVisitsPage() {
     const managedSellerIds = managedSellers.map(s => s.id);
 
     allRoutes.forEach(route => {
-        // Solo considerar rutas de vendedores bajo el mando del usuario actual
         if (!managedSellerIds.includes(route.createdBy)) return;
         if (selectedSellerId !== 'all' && route.createdBy !== selectedSellerId) return;
 
@@ -110,14 +110,14 @@ export default function CustomerVisitsPage() {
             summary.visits.push({
                 date: visitDate,
                 dayName: format(visitDate, 'EEEE', { locale: es }),
-                routeName: route.routeName
+                routeName: route.routeName,
+                visitType: client.visitType
             });
         });
     });
 
     const results = Array.from(visitMap.values());
 
-    // Filtrar por término de búsqueda
     return results.filter(item => {
         const term = searchTerm.toLowerCase();
         return item.ruc.includes(term) || item.name.toLowerCase().includes(term);
@@ -131,22 +131,30 @@ export default function CustomerVisitsPage() {
     }
 
     const dataToExport = customerVisits.flatMap(item => 
-        item.visits.map(v => ({
-            'RUC': item.ruc,
-            'Cliente': item.name,
-            'Ejecutivo': item.executive,
-            'Frecuencia Total': item.frequency,
-            'Fecha de Visita': format(v.date, 'dd/MM/yyyy'),
-            'Día de la Semana': v.dayName.toUpperCase(),
-            'Ruta Origen': v.routeName
-        }))
+        item.visits.map(v => {
+            // Lógica de Franquicia solicitada
+            const isFranquicia = item.name.toLowerCase().includes('farmacia el descuento');
+            const franquiciaLabel = isFranquicia ? 'Farmacia el Descuento' : 'Independientes';
+
+            return {
+                'RUC': item.ruc,
+                'Cliente': item.name,
+                'Franquicia': franquiciaLabel,
+                'Ejecutivo': item.executive,
+                'Frecuencia Real': item.visits.length,
+                'Fecha de Visita': format(v.date, 'dd/MM/yyyy'),
+                'Día de la Semana': v.dayName.toUpperCase(),
+                'Tipo de Visita': v.visitType === 'presencial' ? 'Presencial' : (v.visitType === 'telefonica' ? 'Telefónica' : 'N/A'),
+                'Ruta Origen': v.routeName
+            };
+        })
     );
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Frecuencia de Visitas");
     XLSX.writeFile(workbook, `frecuencia_visitas_clientes.xlsx`);
-    toast({ title: "Reporte Generado", description: "La descarga del Excel ha comenzado." });
+    toast({ title: "Reporte Generado", description: "La descarga del Excel ha comenzado con éxito." });
   };
 
   if (authLoading) {
@@ -259,9 +267,17 @@ export default function CustomerVisitsPage() {
                                     </TableCell>
                                     <TableCell className="pr-8">
                                         <div className="flex flex-wrap gap-2 max-w-md">
-                                            {item.visits.sort((a, b) => b.date.getTime() - a.date.getTime()).map((v, idx) => (
+                                            {/* Orden cronológico ascendente solicitado */}
+                                            {item.visits.sort((a, b) => a.date.getTime() - b.date.getTime()).map((v, idx) => (
                                                 <div key={idx} className="flex flex-col items-center bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200">
-                                                    <span className="text-[8px] font-black uppercase text-slate-500 leading-none">{v.dayName}</span>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="text-[8px] font-black uppercase text-slate-500 leading-none">{v.dayName}</span>
+                                                        {v.visitType === 'presencial' ? (
+                                                            <MapPin className="h-2 w-2 text-blue-600" />
+                                                        ) : v.visitType === 'telefonica' ? (
+                                                            <Phone className="h-2 w-2 text-orange-600" />
+                                                        ) : null}
+                                                    </div>
                                                     <span className="text-[10px] font-black text-slate-950 mt-0.5">{format(v.date, 'dd/MM/yyyy')}</span>
                                                 </div>
                                             ))}
@@ -283,7 +299,13 @@ export default function CustomerVisitsPage() {
                 </Table>
             </CardContent>
             <CardFooter className="bg-slate-50 border-t p-6">
-                <p className="text-[10px] font-black text-slate-500 uppercase">Mostrando {customerVisits.length} clientes auditados en el periodo.</p>
+                <div className="flex flex-col gap-1">
+                    <p className="text-[10px] font-black text-slate-500 uppercase">Mostrando {customerVisits.length} clientes auditados en el periodo.</p>
+                    <div className="flex items-center gap-4 mt-2">
+                        <div className="flex items-center gap-1"><MapPin className="h-3 w-3 text-blue-600" /><span className="text-[8px] font-bold uppercase">Presencial</span></div>
+                        <div className="flex items-center gap-1"><Phone className="h-3 w-3 text-orange-600" /><span className="text-[8px] font-bold uppercase">Telefónica</span></div>
+                    </div>
+                </div>
             </CardFooter>
         </Card>
       </div>
