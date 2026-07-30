@@ -141,7 +141,7 @@ export default function CustomerVisitsPage() {
                 'Cliente': item.name,
                 'Franquicia': franquiciaLabel,
                 'Ejecutivo': item.executive,
-                'Frecuencia Real': item.visits.length,
+                'Frecuencia Real': 1, // Cada fila representa 1 visita
                 'Fecha de Visita': format(v.date, 'dd/MM/yyyy'),
                 'Día de la Semana': v.dayName.toUpperCase(),
                 'Tipo de Visita': v.visitType === 'presencial' ? 'Presencial' : (v.visitType === 'telefonica' ? 'Telefónica' : 'N/A'),
@@ -172,10 +172,10 @@ export default function CustomerVisitsPage() {
         title="Visita Clientes (Frecuencia)"
         description="Analiza cuántas veces y qué días son visitados tus clientes."
       >
-        <Button onClick={handleDownloadExcel} disabled={customerVisits.length === 0} className="font-black">
-          <Download className="mr-2 h-4 w-4" />
+        <button onClick={handleDownloadExcel} disabled={customerVisits.length === 0} className="bg-primary text-primary-foreground px-4 py-2 rounded-md font-black flex items-center gap-2">
+          <Download className="h-4 w-4" />
           Exportar Excel
-        </Button>
+        </button>
       </PageHeader>
       
       <div className="space-y-6">
