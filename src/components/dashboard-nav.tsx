@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import Link from 'link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
@@ -27,7 +27,8 @@ import {
   ShieldCheck,
   RefreshCcw,
   CalendarCheck,
-  CalendarDays
+  CalendarDays,
+  Globe
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -321,6 +322,12 @@ export function DashboardNav() {
                       </Link>
                     </SidebarMenuSubItem>
                   )}
+                  <SidebarMenuSubItem>
+                    <Link href="/dashboard/reports/geolocation" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/reports/geolocation' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                      <Globe className={subIconClass} />
+                      Geolocalización
+                    </Link>
+                  </SidebarMenuSubItem>
                 </SidebarMenuSub>
               </CollapsibleContent>
             </SidebarMenuItem>
