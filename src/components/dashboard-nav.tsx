@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -28,7 +29,8 @@ import {
   RefreshCcw,
   CalendarCheck,
   CalendarDays,
-  Globe
+  Globe,
+  Mail
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -367,6 +369,14 @@ export function DashboardNav() {
                       <Link href="/dashboard/system/cron" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/system/cron' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
                         <Clock className={subIconClass} />
                         Cron Jobs (Keep)
+                      </Link>
+                    </SidebarMenuSubItem>
+                  )}
+                  {user?.role === 'Administrador' && (
+                    <SidebarMenuSubItem>
+                      <Link href="/dashboard/system/email-test" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/system/email-test' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                        <Mail className={subIconClass} />
+                        Configuración Email
                       </Link>
                     </SidebarMenuSubItem>
                   )}
