@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -31,7 +30,8 @@ import {
   CalendarDays,
   Globe,
   Mail,
-  BellRing
+  BellRing,
+  Settings
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -370,6 +370,14 @@ export function DashboardNav() {
                       <Link href="/dashboard/system/notifications" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/system/notifications' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
                         <BellRing className={subIconClass} />
                         Enviar Notificación
+                      </Link>
+                    </SidebarMenuSubItem>
+                  )}
+                  {user?.role === 'Administrador' && (
+                    <SidebarMenuSubItem>
+                      <Link href="/dashboard/system/cc-config" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/system/cc-config' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                        <Settings className={subIconClass} />
+                        Copia de Auditoría
                       </Link>
                     </SidebarMenuSubItem>
                   )}
