@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter, notFound } from 'next/navigation';
@@ -189,7 +188,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         link: `/dashboard/routes/${routeId}`
       });
 
-      // 2. Notificación por Email (Trigger Automático)
+      // 2. Notificación por Email (Trigger Automático con eventKey)
       if (creator?.email) {
           await fetch('/api/notifications/send', {
               method: 'POST',
@@ -199,7 +198,8 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                   subject: `RUTA APROBADA: ${route.routeName}`,
                   title: '¡Plan Aprobado!',
                   message: `Tu supervisor (${currentUser.name}) ha revisado y aprobado tu plan de ruta "${route.routeName}". Ya puedes iniciar tu gestión diaria.`,
-                  type: 'success'
+                  type: 'success',
+                  eventKey: 'route_approved'
               })
           }).catch(e => console.error(e));
       }
@@ -236,7 +236,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         link: `/dashboard/routes/${routeId}`
       });
 
-      // 2. Notificación por Email (Trigger Automático con Observación)
+      // 2. Notificación por Email (Trigger Automático con eventKey y Observación)
       if (creator?.email) {
           await fetch('/api/notifications/send', {
               method: 'POST',
@@ -247,7 +247,8 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                   title: 'Ajustes Requeridos en Plan de Ruta',
                   message: `Tu plan de ruta "${route.routeName}" ha sido rechazado por tu supervisor. Por favor revisa las observaciones y realiza los cambios necesarios.`,
                   details: rejectionReason,
-                  type: 'alert'
+                  type: 'alert',
+                  eventKey: 'route_rejected'
               })
           }).catch(e => console.error(e));
       }

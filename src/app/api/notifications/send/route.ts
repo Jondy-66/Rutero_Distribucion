@@ -1,4 +1,3 @@
-
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 import { getFirestore } from 'firebase-admin/firestore';
@@ -8,25 +7,39 @@ const adminApp = initializeAdminApp();
 
 /**
  * API Route para envío de notificaciones por correo.
- * Soporta destinatario principal, CC manual y CC automático desde configuración de sistema.
+ * Soporta destinatario principal y lógica inteligente de Copia Automática (CC) por eventos.
  */
 export async function POST(request: Request) {
   try {
-    const { to, subject, title, message, details, type, cc: manualCc } = await request.json();
+    const { to, subject, title, message, details, type, eventKey, cc: manualCc } = await request.json();
 
     if (!to || !subject || !message) {
       return NextResponse.json({ success: false, message: 'Faltan campos obligatorios' }, { status: 400 });
     }
 
     // 1. Obtener configuración de copia automática desde Firestore
-    let autoCc = '';
+    let autoCcList: string[] = [];
     if (adminApp) {
         const db = getFirestore(adminApp);
         const configSnap = await db.collection('system_config').doc('notifications').get();
         if (configSnap.exists) {
             const config = configSnap.data();
-            if (config?.enabledCc && config?.ccEmail) {
-                autoCc = config.ccEmail;
+            
+            // Validar si el CC global está activo
+            if (config?.enabledCc) {
+                // Verificar si este evento específico está habilitado para CC
+                // Los eventos son: route_staged, route_approved, route_rejected, manual
+                const key = eventKey || 'manual';
+                const isEventEnabled = config.ccEvents ? config.ccEvents[key] : true;
+
+                if (isEventEnabled) {
+                    // Obtener lista de correos (compatibilidad con array nuevo o string viejo)
+                    if (Array.isArray(config.ccEmails)) {
+                        autoCcList = config.ccEmails;
+                    } else if (config.ccEmail) {
+                        autoCcList = [config.ccEmail];
+                    }
+                }
             }
         }
     }
@@ -41,14 +54,18 @@ export async function POST(request: Request) {
     });
 
     // 3. Preparar lista de CC (Combinar manual y automático)
-    const ccList = [manualCc, autoCc].filter(Boolean).join(', ');
+    const finalCcSet = new Set<string>();
+    if (manualCc) finalCcSet.add(manualCc.trim().toLowerCase());
+    autoCcList.forEach(email => finalCcSet.add(email.trim().toLowerCase()));
+    
+    const ccHeader = Array.from(finalCcSet).filter(Boolean).join(', ');
 
     const themeColor = type === 'alert' ? '#e11d48' : (type === 'success' ? '#16a34a' : '#011688');
 
     const mailOptions = {
       from: `"Routify Sistema" <${process.env.EMAIL_USER}>`,
       to,
-      cc: ccList || undefined,
+      cc: ccHeader || undefined,
       subject,
       html: `
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">

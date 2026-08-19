@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -260,7 +259,7 @@ export default function NewRoutePage() {
                     link: `/dashboard/routes/team-routes`
                 });
 
-                // 2. Notificación por Email (Trigger Automático)
+                // 2. Notificación por Email (Trigger Automático con eventKey)
                 if (supervisor?.email) {
                     await fetch('/api/notifications/send', {
                         method: 'POST',
@@ -271,7 +270,8 @@ export default function NewRoutePage() {
                             title: 'Revisión de Plan Semanal',
                             message: `El ejecutivo ${currentUser?.name} ha finalizado su planificación y requiere tu aprobación para iniciar su gestión.`,
                             details: `Ruta: ${r.routeName} | Clientes: ${r.clients.filter(c => c.status !== 'Eliminado').length}`,
-                            type: 'info'
+                            type: 'info',
+                            eventKey: 'route_staged'
                         })
                     }).catch(err => console.error("Error sending email trigger:", err));
                 }
