@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -11,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/use-auth';
-import { Send, LoaderCircle, Users, Mail, Bell, ShieldInfo } from 'lucide-react';
+import { Send, LoaderCircle, Users, Mail, Bell, ShieldAlert } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 export default function ManualNotificationsPage() {
@@ -213,7 +212,7 @@ export default function ManualNotificationsPage() {
             <Card className="bg-slate-950 text-white border-none shadow-2xl rounded-[2rem] overflow-hidden">
                 <CardHeader className="pb-4 border-b border-white/10">
                     <div className="flex items-center gap-2">
-                        <ShieldInfo className="h-5 w-5 text-primary" />
+                        <ShieldAlert className="h-5 w-5 text-primary" />
                         <CardTitle className="text-xs font-black uppercase text-slate-300 tracking-widest">Protocolo de Notificación</CardTitle>
                     </div>
                 </CardHeader>
