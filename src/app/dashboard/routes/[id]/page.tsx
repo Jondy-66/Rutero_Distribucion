@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useCallback, useMemo, use } from 'react';
 import { useRouter, notFound } from 'next/navigation';
@@ -63,7 +64,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
     
     // Los Usuarios y Telemercaderistas NUNCA pueden editar, solo ver el detalle.
-    // Según requerimiento: "solo deberia poder ver su ruta planificada mas ya no editarla ni modificarla"
     if (currentUser.role === 'Usuario' || currentUser.role === 'Telemercaderista') {
         return false;
     }
@@ -188,12 +188,30 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         supervisorObservation: 'Ruta aprobada.'
       });
       
+      const creator = users.find(u => u.id === route.createdBy);
+
+      // 1. Notificación en App
       await addNotification({
         userId: route.createdBy,
         title: 'Ruta Aprobada',
         message: `Tu ruta "${route.routeName}" ha sido aprobada.`,
         link: `/dashboard/routes/${routeId}`
       });
+
+      // 2. Notificación por Email
+      if (creator?.email) {
+          await fetch('/api/notifications/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  to: creator.email.toLowerCase(),
+                  subject: `RUTA APROBADA: ${route.routeName}`,
+                  title: '¡Plan Aprobado!',
+                  message: `Tu supervisor (${currentUser.name}) ha revisado y aprobado tu plan de ruta "${route.routeName}". Ya puedes iniciar tu gestión diaria.`,
+                  type: 'success'
+              })
+          }).catch(e => console.error(e));
+      }
 
       await refetchData('routes');
       toast({ title: 'Éxito', description: 'La ruta ha sido aprobada y enviada a gestión.' });
@@ -217,12 +235,31 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         supervisorObservation: rejectionReason
       });
 
+      const creator = users.find(u => u.id === route.createdBy);
+
+      // 1. Notificación en App
       await addNotification({
         userId: route.createdBy,
         title: 'Ruta Rechazada',
         message: `Tu ruta "${route.routeName}" ha sido rechazada. Motivo: ${rejectionReason}`,
         link: `/dashboard/routes/${routeId}`
       });
+
+      // 2. Notificación por Email
+      if (creator?.email) {
+          await fetch('/api/notifications/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                  to: creator.email.toLowerCase(),
+                  subject: `ATENCIÓN: RUTA RECHAZADA - ${route.routeName}`,
+                  title: 'Ajustes Requeridos en Plan de Ruta',
+                  message: `Tu plan de ruta "${route.routeName}" ha sido rechazado por tu supervisor. Por favor revisa las observaciones y realiza los cambios necesarios.`,
+                  details: rejectionReason,
+                  type: 'alert'
+              })
+          }).catch(e => console.error(e));
+      }
 
       await refetchData('routes');
       toast({ title: 'Ruta Rechazada', description: 'Se ha enviado la notificación al usuario.' });

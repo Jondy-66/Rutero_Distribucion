@@ -247,16 +247,37 @@ export default function NewUserPage() {
             status: (sendForApproval ? 'Pendiente de Aprobación' : 'Planificada') as RoutePlan['status']
         }));
         await addRoutesBatch(routesToSave);
+        
         if (sendForApproval) {
             for (const r of routesToSave) {
+                const supervisor = users.find(u => u.id === r.supervisorId);
+                
+                // 1. Notificación en App
                 await addNotification({
                     userId: r.supervisorId,
                     title: 'Nueva Ruta para Aprobación',
                     message: `${currentUser?.name} ha enviado la ruta "${r.routeName}" para tu revisión.`,
                     link: `/dashboard/routes/team-routes`
                 });
+
+                // 2. Notificación por Email
+                if (supervisor?.email) {
+                    await fetch('/api/notifications/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            to: supervisor.email.toLowerCase(),
+                            subject: `NUEVA RUTA PENDIENTE: ${r.routeName}`,
+                            title: 'Revisión de Plan Semanal',
+                            message: `El ejecutivo ${currentUser?.name} ha finalizado su planificación y requiere tu aprobación para iniciar su gestión.`,
+                            details: `Ruta: ${r.routeName} | Clientes: ${r.clients.filter(c => c.status !== 'Eliminado').length}`,
+                            type: 'info'
+                        })
+                    }).catch(err => console.error("Error sending email trigger:", err));
+                }
             }
         }
+        
         toast({ title: 'Rutas Guardadas', description: "Tu plan de ruta ha sido registrado con éxito." });
         await refetchData('routes');
         router.push('/dashboard/routes/management');

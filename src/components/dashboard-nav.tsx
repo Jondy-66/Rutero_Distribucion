@@ -30,7 +30,8 @@ import {
   CalendarCheck,
   CalendarDays,
   Globe,
-  Mail
+  Mail,
+  BellRing
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -364,6 +365,14 @@ export function DashboardNav() {
                       Privilegios
                     </Link>
                   </SidebarMenuSubItem>
+                  {user?.role === 'Administrador' && (
+                    <SidebarMenuSubItem>
+                      <Link href="/dashboard/system/notifications" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/system/notifications' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                        <BellRing className={subIconClass} />
+                        Enviar Notificación
+                      </Link>
+                    </SidebarMenuSubItem>
+                  )}
                   {user?.role === 'Administrador' && (
                     <SidebarMenuSubItem>
                       <Link href="/dashboard/system/cron" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/system/cron' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
