@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -28,6 +27,18 @@ export default function EmailTestPage() {
 
   const handleSendTest = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Validar formato de correo electrónico
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.to)) {
+      toast({
+        title: "CORREO INVÁLIDO",
+        description: "Por favor, ingresa una dirección de correo electrónico válida en formato minúsculas.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -94,9 +105,10 @@ export default function EmailTestPage() {
                     placeholder="ejemplo@farmaenlace.com" 
                     required 
                     value={formData.to}
-                    onChange={(e) => setFormData({ ...formData, to: e.target.value })}
-                    className="font-black border-2 h-12 rounded-xl focus:ring-4 focus:ring-primary/5 text-slate-950 uppercase"
+                    onChange={(e) => setFormData({ ...formData, to: e.target.value.toLowerCase() })}
+                    className="font-black border-2 h-12 rounded-xl focus:ring-4 focus:ring-primary/5 text-slate-950"
                   />
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase pl-1">Solo se permiten minúsculas y formato de correo válido.</p>
                 </div>
                 
                 <div className="space-y-2">
