@@ -59,20 +59,11 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
   const canEdit = useMemo(() => {
     if (!currentUser || !route) return false;
-    
-    // El Administrador puede editar cualquier ruta que no esté completada
     if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
-    
-    // Los Usuarios y Telemercaderistas NUNCA pueden editar, solo ver el detalle.
-    if (currentUser.role === 'Usuario' || currentUser.role === 'Telemercaderista') {
-        return false;
-    }
-
-    // Los supervisores pueden editar rutas de su equipo o asignadas a ellos en ciertos estados
+    if (currentUser.role === 'Usuario' || currentUser.role === 'Telemercaderista') return false;
     const isOwner = currentUser.id === route.createdBy;
     const isAssignedSupervisor = currentUser.id === route.supervisorId;
     const isEditableStatus = ['Planificada', 'Rechazada', 'En Progreso', 'Pendiente de Aprobación'].includes(route.status);
-    
     return (isOwner || isAssignedSupervisor) && isEditableStatus;
   }, [currentUser, route]);
 
@@ -198,7 +189,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         link: `/dashboard/routes/${routeId}`
       });
 
-      // 2. Notificación por Email
+      // 2. Notificación por Email (Trigger Automático)
       if (creator?.email) {
           await fetch('/api/notifications/send', {
               method: 'POST',
@@ -245,7 +236,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         link: `/dashboard/routes/${routeId}`
       });
 
-      // 2. Notificación por Email
+      // 2. Notificación por Email (Trigger Automático con Observación)
       if (creator?.email) {
           await fetch('/api/notifications/send', {
               method: 'POST',
@@ -360,16 +351,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
           </Alert>
         )}
 
-        {!canEdit && currentUser?.role === 'Usuario' && (
-            <Alert className="bg-slate-100 border-slate-300">
-                <Info className="h-4 w-4 text-slate-600" />
-                <AlertTitle className="font-black uppercase text-[10px] text-slate-700">Modo Solo Lectura</AlertTitle>
-                <AlertDescription className="text-[9px] font-bold text-slate-500 uppercase">
-                    Como usuario operativo, puedes visualizar tu plan de ruta pero no realizar modificaciones.
-                </AlertDescription>
-            </Alert>
-        )}
-
         <Card>
           <CardHeader><CardTitle className="font-black uppercase text-slate-950">Información General</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -394,96 +375,84 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         <Card>
           <CardHeader>
               <CardTitle className="font-black uppercase text-slate-950">Cronograma de Visitas</CardTitle>
-              <Alert className="bg-primary/5 border-primary/20 py-2 mt-2">
-                <Info className="h-4 w-4 text-primary" />
-                <AlertDescription className="text-[10px] font-bold text-primary uppercase">
-                    Haz clic en los encabezados de cada día para expandir o contraer la lista de clientes.
-                </AlertDescription>
-              </Alert>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {groupedClients.length > 0 ? (
-                groupedClients.map(([date, clientsInGroup]) => (
-                  <Collapsible key={date} defaultOpen={true} className="border-l-4 pl-4 py-2 border-primary/20 bg-muted/5 rounded-r-lg group">
-                    <CollapsibleTrigger asChild>
-                      <div className="flex w-full items-center justify-between p-2 cursor-pointer hover:bg-muted/50 transition-all rounded-lg select-none">
-                        <div className="flex items-center gap-3">
-                          <CalendarIcon className="h-5 w-5 text-primary" />
-                          <div className="flex flex-col">
-                            <h4 className="font-black text-sm uppercase tracking-tighter">
-                                {date === 'Sin Fecha' ? 'Sin Fecha' : format(new Date(date + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: es })}
-                            </h4>
-                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=open]:hidden">Ver clientes</span>
-                            <span className="text-[8px] font-black text-muted-foreground uppercase group-data-[state=closed]:hidden">Contraer lista</span>
-                          </div>
-                          <Badge variant="secondary" className="font-black">{clientsInGroup.length}</Badge>
+              {groupedClients.map(([date, clientsInGroup]) => (
+                <Collapsible key={date} defaultOpen={true} className="border-l-4 pl-4 py-2 border-primary/20 bg-muted/5 rounded-r-lg group">
+                  <CollapsibleTrigger asChild>
+                    <div className="flex w-full items-center justify-between p-2 cursor-pointer hover:bg-muted/50 transition-all rounded-lg select-none">
+                      <div className="flex items-center gap-3">
+                        <CalendarIcon className="h-5 w-5 text-primary" />
+                        <div className="flex flex-col">
+                          <h4 className="font-black text-sm uppercase tracking-tighter">
+                              {date === 'Sin Fecha' ? 'Sin Fecha' : format(new Date(date + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: es })}
+                          </h4>
                         </div>
-                        <ChevronDown className="h-5 w-5 text-slate-400 transition-transform duration-300 group-data-[state=open]:rotate-180" />
+                        <Badge variant="secondary" className="font-black">{clientsInGroup.length}</Badge>
                       </div>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-4 p-2 mt-2 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
-                      {clientsInGroup.map((client, idx) => (
-                        <Card key={`${client.ruc}-${client.originalIndex}`} className="p-4 relative hover:shadow-md border-l-2 border-l-primary/10 bg-white">
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center font-black text-[10px] text-primary shrink-0">
-                                    {idx + 1}
-                                </div>
-                                <div className="space-y-1 min-w-0">
-                                  <p className="font-black text-sm text-primary uppercase leading-tight truncate">{client.nombre_comercial}</p>
-                                  <p className="text-[10px] font-mono font-bold text-slate-400 uppercase">{client.ruc}</p>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-1">
-                                {!isFormDisabled && (
-                                    <div className="flex flex-col gap-0.5 mr-2">
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveClient(client.originalIndex, 'up')} disabled={isFormDisabled || idx === 0}>
-                                            <ArrowUp className="h-3 w-3" />
-                                        </Button>
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveClient(client.originalIndex, 'down')} disabled={isFormDisabled || idx === clientsInGroup.length - 1}>
-                                            <ArrowDown className="h-3 w-3" />
-                                        </Button>
-                                    </div>
-                                )}
-                                <Button type="button" variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.originalIndex)} disabled={isFormDisabled}>
-                                    <Trash2 className="h-4 w-4 text-destructive" />
-                                </Button>
-                            </div>
+                      <ChevronDown className="h-5 w-5 text-slate-400 transition-transform duration-300 group-data-[state=open]:rotate-180" />
+                    </div>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-4 p-2 mt-2">
+                    {clientsInGroup.map((client, idx) => (
+                      <Card key={`${client.ruc}-${client.originalIndex}`} className="p-4 relative hover:shadow-md border-l-2 border-l-primary/10 bg-white">
+                        <div className="flex justify-between items-start">
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center font-black text-[10px] text-primary shrink-0">
+                                  {idx + 1}
+                              </div>
+                              <div className="space-y-1 min-w-0">
+                                <p className="font-black text-sm text-primary uppercase leading-tight truncate">{client.nombre_comercial}</p>
+                                <p className="text-[10px] font-mono font-bold text-slate-400 uppercase">{client.ruc}</p>
+                              </div>
                           </div>
-                          <Separator className="my-3" />
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <div className="space-y-1">
-                              <Label className="text-[9px] uppercase font-black text-slate-500">Fecha de Visita</Label>
-                              <Popover open={calendarOpen[client.originalIndex]} onOpenChange={(o) => setCalendarOpen(p => ({ ...p, [client.originalIndex]: o }))}>
-                                <PopoverTrigger asChild>
-                                  <Button variant="outline" className="w-full justify-start h-9 text-xs font-black uppercase" disabled={isFormDisabled}>
-                                    <CalendarIcon className="mr-2 h-3 w-3" />
-                                    {client.date ? format(ensureDate(client.date), 'dd/MM/yyyy') : 'Sin Fecha'}
+                          {!isFormDisabled && (
+                              <div className="flex items-center gap-1">
+                                  <div className="flex flex-col gap-0.5 mr-2">
+                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveClient(client.originalIndex, 'up')} disabled={isFormDisabled || idx === 0}>
+                                          <ArrowUp className="h-3 w-3" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveClient(client.originalIndex, 'down')} disabled={isFormDisabled || idx === clientsInGroup.length - 1}>
+                                          <ArrowDown className="h-3 w-3" />
+                                      </Button>
+                                  </div>
+                                  <Button type="button" variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.originalIndex)} disabled={isFormDisabled}>
+                                      <Trash2 className="h-4 w-4 text-destructive" />
                                   </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="p-0" align="start">
-                                  <Calendar mode="single" selected={ensureDate(client.date)} onSelect={(d) => handleClientValueChange(client.originalIndex, 'date', d)} locale={es} />
-                                </PopoverContent>
-                              </Popover>
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-[9px] uppercase font-black text-slate-500">Venta Proyectada ($)</Label>
-                              <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.originalIndex, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
-                            </div>
-                            <div className="space-y-1">
-                              <Label className="text-[9px] uppercase font-black text-slate-500">Cobro Proyectado ($)</Label>
-                              <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.originalIndex, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
-                            </div>
+                              </div>
+                          )}
+                        </div>
+                        <Separator className="my-3" />
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="space-y-1">
+                            <Label className="text-[9px] uppercase font-black text-slate-500">Fecha de Visita</Label>
+                            <Popover open={calendarOpen[client.originalIndex]} onOpenChange={(o) => setCalendarOpen(p => ({ ...p, [client.originalIndex]: o }))}>
+                              <PopoverTrigger asChild>
+                                <Button variant="outline" className="w-full justify-start h-9 text-xs font-black uppercase" disabled={isFormDisabled}>
+                                  <CalendarIcon className="mr-2 h-3 w-3" />
+                                  {client.date ? format(ensureDate(client.date), 'dd/MM/yyyy') : 'Sin Fecha'}
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="p-0" align="start">
+                                <Calendar mode="single" selected={ensureDate(client.date)} onSelect={(d) => handleClientValueChange(client.originalIndex, 'date', d)} locale={es} />
+                              </PopoverContent>
+                            </Popover>
                           </div>
-                        </Card>
-                      ))}
-                    </CollapsibleContent>
-                  </Collapsible>
-                ))
-              ) : (
-                <div className="text-center py-12 text-muted-foreground uppercase text-xs font-bold">No hay paradas registradas en esta ruta.</div>
-              )}
+                          <div className="space-y-1">
+                            <Label className="text-[9px] uppercase font-black text-slate-500">Venta Proyectada ($)</Label>
+                            <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.originalIndex, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
+                          </div>
+                          <div className="space-y-1">
+                            <Label className="text-[9px] uppercase font-black text-slate-500">Cobro Proyectado ($)</Label>
+                            <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.originalIndex, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </CollapsibleContent>
+                </Collapsible>
+              ))}
             </div>
           </CardContent>
         </Card>

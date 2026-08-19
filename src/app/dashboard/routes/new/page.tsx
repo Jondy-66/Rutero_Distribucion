@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, AlertCircle, ShieldCheck, ChevronDown, Info, ArrowUp, ArrowDown } from 'lucide-react';
+import { PlusCircle, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, Search, AlertCircle, ShieldCheck, ChevronDown, Info, ArrowUp, ArrowDown, Send } from 'lucide-react';
 import { addRoutesBatch, getUser, addNotification } from '@/lib/firebase/firestore';
 import type { Client, User, RoutePlan, ClientInRoute } from '@/lib/types';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -38,7 +38,7 @@ const ensureDate = (d: any): Date => {
 
 type StagedRoute = Omit<RoutePlan, 'id' | 'createdAt'> & { tempId: number };
 
-export default function NewUserPage() {
+export default function NewRoutePage() {
   const router = useRouter();
   const { toast } = useToast();
   const { user: currentUser, users, clients, loading, refetchData } = useAuth();
@@ -260,7 +260,7 @@ export default function NewUserPage() {
                     link: `/dashboard/routes/team-routes`
                 });
 
-                // 2. Notificación por Email
+                // 2. Notificación por Email (Trigger Automático)
                 if (supervisor?.email) {
                     await fetch('/api/notifications/send', {
                         method: 'POST',
@@ -428,7 +428,7 @@ export default function NewUserPage() {
           <CardFooter>
             {stagedRoutes.length > 0 && (
                 <Button onClick={() => handleSaveAllRoutes(true)} className="w-full h-14 font-black bg-green-600 hover:bg-green-700 text-white text-lg shadow-2xl transition-transform hover:scale-[1.02]" disabled={isSaving}>
-                    {isSaving ? <LoaderCircle className="animate-spin mr-2 h-6 w-6" /> : 'CONFIRMAR Y ENVIAR'}
+                    {isSaving ? <LoaderCircle className="animate-spin mr-2 h-6 w-6" /> : <><Send className="mr-2 h-5 w-5" /> CONFIRMAR Y ENVIAR</>}
                 </Button>
             )}
           </CardFooter>
