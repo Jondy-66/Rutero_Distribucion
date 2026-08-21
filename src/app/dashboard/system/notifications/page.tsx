@@ -27,7 +27,8 @@ export default function ManualNotificationsPage() {
     message: '',
     details: '',
     type: 'info' as 'info' | 'success' | 'alert',
-    cc: ''
+    cc: '',
+    eventKey: 'manual'
   });
 
   const handleSendNotification = async (e: React.FormEvent) => {
@@ -150,7 +151,7 @@ export default function ManualNotificationsPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="cc" className="font-black text-[10px] uppercase text-slate-500 tracking-widest pl-1">Copia Adicional (Opcional)</Label>
+                  <Label htmlFor="cc" className="font-black text-[10px] uppercase text-slate-500 tracking-widest pl-1">Copia Adicional Directa (Opcional)</Label>
                   <Input 
                     id="cc" 
                     placeholder="Otro correo a informar..." 
@@ -158,6 +159,7 @@ export default function ManualNotificationsPage() {
                     onChange={(e) => setFormData({ ...formData, cc: e.target.value.toLowerCase() })}
                     className="font-black border-2 h-12 rounded-xl text-slate-950"
                   />
+                  <p className="text-[9px] font-bold text-muted-foreground uppercase pl-1">Esta copia es adicional a los correos globales configurados en el protocolo CC.</p>
                 </div>
                 
                 <div className="space-y-2">

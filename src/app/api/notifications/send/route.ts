@@ -33,7 +33,7 @@ export async function POST(request: Request) {
                 const isEventEnabled = config.ccEvents ? config.ccEvents[key] : true;
 
                 if (isEventEnabled) {
-                    // Obtener lista de correos (compatibilidad con array nuevo o string viejo)
+                    // Obtener lista de correos
                     if (Array.isArray(config.ccEmails)) {
                         autoCcList = config.ccEmails;
                     } else if (config.ccEmail) {
