@@ -3,11 +3,9 @@ import nodemailer from 'nodemailer';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase/admin-config';
 
-const adminApp = initializeAdminApp();
-
 /**
  * API Route para envío de notificaciones por correo.
- * Soporta destinatario principal y lógica inteligente de Copia Automática (CC) por eventos.
+ * Implementa lógica de auditoría automática basada en la configuración de la base de datos.
  */
 export async function POST(request: Request) {
   try {
@@ -17,34 +15,41 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Faltan campos obligatorios' }, { status: 400 });
     }
 
-    // 1. Obtener configuración de copia automática desde Firestore
+    // 1. Inicializar Admin SDK dentro del handler para asegurar carga de env vars
+    const adminApp = initializeAdminApp();
     let autoCcList: string[] = [];
+
     if (adminApp) {
+      try {
         const db = getFirestore(adminApp);
         const configSnap = await db.collection('system_config').doc('notifications').get();
+        
         if (configSnap.exists) {
-            const config = configSnap.data();
-            
-            // Validar si el CC global está activo
-            if (config?.enabledCc) {
-                // Verificar si este evento específico está habilitado para CC
-                // Los eventos son: route_staged, route_approved, route_rejected, manual
-                const key = eventKey || 'manual';
-                const isEventEnabled = config.ccEvents ? config.ccEvents[key] : true;
+          const config = configSnap.data();
+          
+          // Validar si el protocolo de Copia de Auditoría (CC) está activo globalmente
+          if (config?.enabledCc) {
+            const key = eventKey || 'manual';
+            // Verificar si este tipo de evento específico tiene el "check" de auditoría activado
+            const isEventEnabled = config.ccEvents ? config.ccEvents[key] : true;
 
-                if (isEventEnabled) {
-                    // Obtener lista de correos
-                    if (Array.isArray(config.ccEmails)) {
-                        autoCcList = config.ccEmails;
-                    } else if (config.ccEmail) {
-                        autoCcList = [config.ccEmail];
-                    }
-                }
+            if (isEventEnabled) {
+              // Obtener lista de correos configurada (array o campo único por compatibilidad)
+              if (Array.isArray(config.ccEmails)) {
+                autoCcList = config.ccEmails;
+              } else if (config.ccEmail) {
+                autoCcList = [config.ccEmail];
+              }
             }
+          }
         }
+      } catch (dbError) {
+        console.warn('Advertencia: No se pudo cargar la configuración de CC desde Firestore, procediendo solo con destinatario principal.');
+      }
     }
 
-    // 2. Configurar transporte Nodemailer
+    // 2. Configurar transporte Nodemailer utilizando Gmail
+    // Requiere EMAIL_USER y EMAIL_PASS (Contraseña de Aplicación)
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -53,20 +58,32 @@ export async function POST(request: Request) {
       },
     });
 
-    // 3. Preparar lista de CC (Combinar manual y automático)
+    // 3. Consolidar lista de copias (CC)
+    // Se eliminan duplicados y se asegura que el destinatario principal no esté en el CC
     const finalCcSet = new Set<string>();
-    if (manualCc) finalCcSet.add(manualCc.trim().toLowerCase());
-    autoCcList.forEach(email => finalCcSet.add(email.trim().toLowerCase()));
-    
-    const ccHeader = Array.from(finalCcSet).filter(Boolean).join(', ');
+    const normalizedTo = to.trim().toLowerCase();
 
+    if (manualCc && manualCc.trim().toLowerCase() !== normalizedTo) {
+      finalCcSet.add(manualCc.trim().toLowerCase());
+    }
+
+    autoCcList.forEach(email => {
+      const normalizedEmail = email.trim().toLowerCase();
+      if (normalizedEmail && normalizedEmail !== normalizedTo) {
+        finalCcSet.add(normalizedEmail);
+      }
+    });
+    
+    const ccHeader = Array.from(finalCcSet).join(', ');
+
+    // Definir color del tema según la prioridad de la notificación
     const themeColor = type === 'alert' ? '#e11d48' : (type === 'success' ? '#16a34a' : '#011688');
 
     const mailOptions = {
       from: `"Routify Sistema" <${process.env.EMAIL_USER}>`,
-      to,
+      to: normalizedTo,
       cc: ccHeader || undefined,
-      subject,
+      subject: subject,
       html: `
         <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; background-color: #ffffff;">
           <div style="background-color: ${themeColor}; padding: 30px; text-align: center;">
@@ -93,12 +110,21 @@ export async function POST(request: Request) {
       `,
     };
 
+    // 4. Ejecutar envío
     await transporter.sendMail(mailOptions);
 
-    return NextResponse.json({ success: true, message: 'Notificación procesada correctamente.' });
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Notificación enviada correctamente.',
+      auditCcCount: finalCcSet.size 
+    });
 
   } catch (error: any) {
     console.error('Notification API Error:', error);
-    return NextResponse.json({ success: false, message: 'Error al enviar la notificación.' }, { status: 500 });
+    return NextResponse.json({ 
+      success: false, 
+      message: 'Error al procesar el envío del correo.',
+      error: error.message 
+    }, { status: 500 });
   }
 }
