@@ -245,23 +245,26 @@ export default function NewRoutePage() {
             ...rest,
             status: (sendForApproval ? 'Pendiente de Aprobación' : 'Planificada') as RoutePlan['status']
         }));
+
+        // 1. Guardar primero en Firestore (Operación Crítica)
         await addRoutesBatch(routesToSave);
         
+        // 2. Disparar notificaciones en SEGUNDO PLANO (No bloquean el redireccionamiento)
         if (sendForApproval) {
-            for (const r of routesToSave) {
+            routesToSave.forEach(r => {
                 const supervisor = users.find(u => u.id === r.supervisorId);
                 
-                // 1. Notificación en App
-                await addNotification({
+                // Notificación Interna (Background)
+                addNotification({
                     userId: r.supervisorId,
                     title: 'Nueva Ruta para Aprobación',
                     message: `${currentUser?.name} ha enviado la ruta "${r.routeName}" para tu revisión.`,
                     link: `/dashboard/routes/team-routes`
-                });
+                }).catch(e => console.error("Error notification internal:", e));
 
-                // 2. Notificación por Email (Trigger Automático con eventKey)
+                // Notificación Email (Background)
                 if (supervisor?.email) {
-                    await fetch('/api/notifications/send', {
+                    fetch('/api/notifications/send', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
@@ -273,15 +276,20 @@ export default function NewRoutePage() {
                             type: 'info',
                             eventKey: 'route_staged'
                         })
-                    }).catch(err => console.error("Error sending email trigger:", err));
+                    }).catch(err => console.error("Error email trigger:", err));
                 }
-            }
+            });
         }
         
+        // 3. Respuesta inmediata al usuario
         toast({ title: 'Rutas Guardadas', description: "Tu plan de ruta ha sido registrado con éxito." });
         await refetchData('routes');
         router.push('/dashboard/routes/management');
-    } catch(e) { toast({ title: 'Error', variant: 'destructive' }); } finally { setIsSaving(false); }
+    } catch(e) { 
+        toast({ title: 'Error al guardar', variant: 'destructive' }); 
+    } finally { 
+        setIsSaving(false); 
+    }
   }
 
   const activeClientsWithIndex = useMemo(() => 

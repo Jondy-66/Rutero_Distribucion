@@ -173,6 +173,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     if (!route || !currentUser) return;
     setIsSaving(true);
     try {
+      // 1. Actualizar Firestore
       await updateRoute(routeId, { 
         status: 'Planificada',
         supervisorObservation: 'Ruta aprobada.'
@@ -180,17 +181,16 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       
       const creator = users.find(u => u.id === route.createdBy);
 
-      // 1. Notificación en App
-      await addNotification({
+      // 2. Disparar notificaciones en Background
+      addNotification({
         userId: route.createdBy,
         title: 'Ruta Aprobada',
         message: `Tu ruta "${route.routeName}" ha sido aprobada.`,
         link: `/dashboard/routes/${routeId}`
-      });
+      }).catch(e => console.error(e));
 
-      // 2. Notificación por Email (Trigger Automático con eventKey)
       if (creator?.email) {
-          await fetch('/api/notifications/send', {
+          fetch('/api/notifications/send', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -221,6 +221,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     }
     setIsSaving(true);
     try {
+      // 1. Actualizar Firestore
       await updateRoute(routeId, { 
         status: 'Rechazada',
         supervisorObservation: rejectionReason
@@ -228,17 +229,16 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
       const creator = users.find(u => u.id === route.createdBy);
 
-      // 1. Notificación en App
-      await addNotification({
+      // 2. Disparar notificaciones en Background
+      addNotification({
         userId: route.createdBy,
         title: 'Ruta Rechazada',
         message: `Tu ruta "${route.routeName}" ha sido rechazada. Motivo: ${rejectionReason}`,
         link: `/dashboard/routes/${routeId}`
-      });
+      }).catch(e => console.error(e));
 
-      // 2. Notificación por Email (Trigger Automático con eventKey y Observación)
       if (creator?.email) {
-          await fetch('/api/notifications/send', {
+          fetch('/api/notifications/send', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
