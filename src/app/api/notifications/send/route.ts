@@ -5,17 +5,27 @@ import { initializeAdminApp } from '@/lib/firebase/admin-config';
 
 /**
  * API Route para envío de notificaciones por correo.
- * Implementa lógica de auditoría automática basada en la configuración de la base de datos.
+ * Implementa transporte SMTP robusto y auditoría automática (CC).
  */
 export async function POST(request: Request) {
   try {
-    const { to, subject, title, message, details, type, eventKey, cc: manualCc } = await request.json();
+    const body = await request.json();
+    const { to, subject, title, message, details, type, eventKey, cc: manualCc } = body;
 
     if (!to || !subject || !message) {
       return NextResponse.json({ success: false, message: 'Faltan campos obligatorios' }, { status: 400 });
     }
 
-    // 1. Inicializar Admin SDK dentro del handler para asegurar carga de env vars
+    // 1. Validar Credenciales de Email
+    const userEmail = process.env.EMAIL_USER;
+    const userPass = process.env.EMAIL_PASS;
+
+    if (!userEmail || !userPass) {
+      console.error('Notification Error: EMAIL_USER o EMAIL_PASS no configurados en el servidor.');
+      return NextResponse.json({ success: false, message: 'Configuración de servidor incompleta (Variables de entorno).' }, { status: 500 });
+    }
+
+    // 2. Inicializar Admin SDK para cargar configuración de CC
     const adminApp = initializeAdminApp();
     let autoCcList: string[] = [];
 
@@ -27,14 +37,11 @@ export async function POST(request: Request) {
         if (configSnap.exists) {
           const config = configSnap.data();
           
-          // Validar si el protocolo de Copia de Auditoría (CC) está activo globalmente
           if (config?.enabledCc) {
             const key = eventKey || 'manual';
-            // Verificar si este tipo de evento específico tiene el "check" de auditoría activado
             const isEventEnabled = config.ccEvents ? config.ccEvents[key] : true;
 
             if (isEventEnabled) {
-              // Obtener lista de correos configurada (array o campo único por compatibilidad)
               if (Array.isArray(config.ccEmails)) {
                 autoCcList = config.ccEmails;
               } else if (config.ccEmail) {
@@ -44,29 +51,34 @@ export async function POST(request: Request) {
           }
         }
       } catch (dbError) {
-        console.warn('Advertencia: No se pudo cargar la configuración de CC desde Firestore, procediendo solo con destinatario principal.');
+        console.warn('DB CC Config Warning: No se pudo leer la configuración de Firestore, procediendo solo con destinatario principal.');
       }
     }
 
-    // 2. Configurar transporte Nodemailer utilizando Gmail
-    // Requiere EMAIL_USER y EMAIL_PASS (Contraseña de Aplicación)
+    // 3. Configurar transporte SMTP Robusto (Directo a Gmail)
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true, // SSL
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: userEmail,
+        pass: userPass,
       },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
     });
 
-    // 3. Consolidar lista de copias (CC)
-    // Se eliminan duplicados y se asegura que el destinatario principal no esté en el CC
+    // 4. Consolidar destinatarios de copia (CC)
     const finalCcSet = new Set<string>();
     const normalizedTo = to.trim().toLowerCase();
 
+    // Añadir copia manual si existe y es diferente al principal
     if (manualCc && manualCc.trim().toLowerCase() !== normalizedTo) {
       finalCcSet.add(manualCc.trim().toLowerCase());
     }
 
+    // Añadir copias automáticas de auditoría
     autoCcList.forEach(email => {
       const normalizedEmail = email.trim().toLowerCase();
       if (normalizedEmail && normalizedEmail !== normalizedTo) {
@@ -76,11 +88,11 @@ export async function POST(request: Request) {
     
     const ccHeader = Array.from(finalCcSet).join(', ');
 
-    // Definir color del tema según la prioridad de la notificación
+    // Definir color del tema según la prioridad
     const themeColor = type === 'alert' ? '#e11d48' : (type === 'success' ? '#16a34a' : '#011688');
 
     const mailOptions = {
-      from: `"Routify Sistema" <${process.env.EMAIL_USER}>`,
+      from: `"Routify Sistema" <${userEmail}>`,
       to: normalizedTo,
       cc: ccHeader || undefined,
       subject: subject,
@@ -110,21 +122,29 @@ export async function POST(request: Request) {
       `,
     };
 
-    // 4. Ejecutar envío
-    await transporter.sendMail(mailOptions);
+    // 5. Ejecutar envío con verificación de promesa
+    const info = await transporter.sendMail(mailOptions);
+    console.log('Email sent successfully:', info.messageId);
 
     return NextResponse.json({ 
       success: true, 
       message: 'Notificación enviada correctamente.',
+      messageId: info.messageId,
       auditCcCount: finalCcSet.size 
     });
 
   } catch (error: any) {
-    console.error('Notification API Error:', error);
+    console.error('Critical Notification API Error:', error);
+    
+    let userMsg = 'Error al procesar el envío del correo.';
+    if (error.code === 'EAUTH') userMsg = 'Error de Autenticación: Revisa EMAIL_USER y EMAIL_PASS.';
+    if (error.code === 'ECONNREFUSED') userMsg = 'Error de Conexión: El servidor SMTP de Google rechazó la conexión.';
+
     return NextResponse.json({ 
       success: false, 
-      message: 'Error al procesar el envío del correo.',
-      error: error.message 
+      message: userMsg,
+      error: error.message,
+      code: error.code
     }, { status: 500 });
   }
 }

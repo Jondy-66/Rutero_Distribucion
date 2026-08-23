@@ -1,10 +1,9 @@
-
 import { NextResponse } from 'next/server';
 import nodemailer from 'nodemailer';
 
 /**
- * API Route para envío de correos utilizando Nodemailer y Gmail.
- * Configura el transporte de forma segura mediante variables de entorno.
+ * API Route para envío de correos de prueba.
+ * Utilizada para validar la conectividad SMTP con Gmail.
  */
 export async function POST(request: Request) {
   try {
@@ -14,19 +13,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, message: 'Faltan campos obligatorios' }, { status: 400 });
     }
 
-    // 1. Configurar el transporte usando Gmail y variables de entorno definidas en .env.local
-    // Se utiliza EMAIL_USER para el correo remitente y EMAIL_PASS para la contraseña de aplicación.
+    const userEmail = process.env.EMAIL_USER;
+    const userPass = process.env.EMAIL_PASS;
+
+    if (!userEmail || !userPass) {
+      return NextResponse.json({ success: false, message: 'Configuración faltante: EMAIL_USER o EMAIL_PASS.' }, { status: 500 });
+    }
+
+    // Configuración SMTP Segura
     const transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
+        user: userEmail,
+        pass: userPass,
       },
     });
 
-    // 2. Definir el contenido del correo electrónico
     const mailOptions = {
-      from: `"Administración Routify" <${process.env.EMAIL_USER}>`,
+      from: `"Administración Routify" <${userEmail}>`,
       to,
       subject,
       text,
@@ -45,17 +51,16 @@ export async function POST(request: Request) {
               <p style="margin: 0; color: #333; font-style: italic;">"${text}"</p>
             </div>
             <p style="color: #888; font-size: 12px; margin-top: 30px;">
-              Si has recibido este correo, significa que las variables <strong>EMAIL_USER</strong> y <strong>EMAIL_PASS</strong> están correctamente configuradas en tu servidor.
+              Si has recibido este correo, las variables <strong>EMAIL_USER</strong> y <strong>EMAIL_PASS</strong> están correctamente configuradas.
             </p>
           </div>
           <div style="text-align: center; margin-top: 20px; color: #999; font-size: 11px;">
-            © 2026 Farmaenlace | Rutero Distribución. Todos los derechos reservados.
+            © 2026 Farmaenlace | Rutero Distribución
           </div>
         </div>
       `,
     };
 
-    // 3. Ejecutar el envío
     await transporter.sendMail(mailOptions);
 
     return NextResponse.json({ 
@@ -65,14 +70,8 @@ export async function POST(request: Request) {
 
   } catch (error: any) {
     console.error('Nodemailer Error:', error);
-    
-    let errorMessage = 'Error al procesar el envío del correo.';
-    if (error.code === 'EAUTH') {
-      errorMessage = 'Error de Autenticación: Verifica que EMAIL_USER y EMAIL_PASS sean correctos y que las "Contraseñas de Aplicación" estén activadas.';
-    }
-
     return NextResponse.json(
-      { success: false, message: errorMessage, details: error.message },
+      { success: false, message: 'Fallo al enviar correo: ' + error.message, code: error.code },
       { status: 500 }
     );
   }
