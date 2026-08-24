@@ -75,7 +75,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     if (routeId) fetchRouteData();
   }, [routeId, toast]);
 
-  // Agrupar clientes por día para la visualización solicitada
   const groupedClients = useMemo(() => {
     const active = clientsInRoute.filter(c => c.status !== 'Eliminado');
     const groups: Record<string, ClientInRoute[]> = {};
@@ -108,7 +107,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         link: `/dashboard/routes/${routeId}`
       });
 
-      // Notificación por email en background
       fetch('/api/notifications/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -153,7 +151,6 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         link: `/dashboard/routes/${routeId}`
       });
 
-      // Notificación por email en background
       fetch('/api/notifications/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
