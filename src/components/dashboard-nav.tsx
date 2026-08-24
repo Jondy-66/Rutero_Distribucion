@@ -13,25 +13,24 @@ import {
   List,
   Wand2,
   Users2,
-  GitCommitHorizontal,
   Lock,
   Phone,
   BarChart,
-  Settings2,
   LocateFixed,
   ChevronRight,
   Database,
   FileText,
-  UserCheck,
-  Clock,
   ShieldCheck,
   RefreshCcw,
-  CalendarCheck,
   CalendarDays,
   Globe,
   Mail,
   BellRing,
-  Settings
+  Settings,
+  ShieldAlert,
+  History,
+  Activity,
+  Terminal
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
@@ -54,13 +53,7 @@ export function DashboardNav() {
   const { user } = useAuth();
   
   const [isRoutesOpen, setIsRoutesOpen] = useState(pathname.startsWith('/dashboard/routes'));
-  const [isPlanOpen, setIsPlanOpen] = useState(
-    pathname === '/dashboard/routes/prediction' || 
-    pathname === '/dashboard/routes/optimal-route' || 
-    pathname === '/dashboard/routes/management'
-  );
-  const [isCrmOpen, setIsCrmOpen] = useState(pathname.startsWith('/dashboard/crm'));
-  const [isUsersOpen, setIsUsersOpen] = useState(pathname.startsWith('/dashboard/users') || pathname.startsWith('/dashboard/system'));
+  const [isSystemOpen, setIsSystemOpen] = useState(pathname.startsWith('/dashboard/system') || pathname.startsWith('/dashboard/users'));
   const [isReportsOpen, setIsReportsOpen] = useState(pathname.startsWith('/dashboard/reports'));
 
   const hasPerm = (id: string) => {
@@ -119,7 +112,7 @@ export function DashboardNav() {
         )}
         {hasPerm('clients') && (
           <SidebarMenuItem>
-            <Link href="/dashboard/clients" className={buttonStyles(pathname.startsWith('/dashboard/clients') && !pathname.includes('recover'))}>
+            <Link href="/dashboard/clients" className={buttonStyles(pathname === '/dashboard/clients')}>
               <Briefcase className={iconClass} />
               <span className="text-xs font-semibold">Cartera Clientes</span>
             </Link>
@@ -168,7 +161,7 @@ export function DashboardNav() {
                   <SidebarMenuSubItem>
                     <Link href="/dashboard/routes/management" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/routes/management' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
                       <Route className={subIconClass} />
-                      Gestión Ruta
+                      Gestión Jornada
                     </Link>
                   </SidebarMenuSubItem>
                   <SidebarMenuSubItem>
@@ -192,15 +185,35 @@ export function DashboardNav() {
         )}
       </SidebarMenu>
 
+      <NavGroupHeader title="Mantenimiento" />
+      <SidebarMenu>
+        {hasPerm('recover-clients') && (
+            <SidebarMenuItem>
+                <Link href="/dashboard/clients/recover" className={buttonStyles(pathname === '/dashboard/clients/recover')}>
+                    <RefreshCcw className={iconClass} />
+                    <span className="text-xs font-semibold">Rescate de Cartera</span>
+                </Link>
+            </SidebarMenuItem>
+        )}
+        {hasPerm('locations') && (
+            <SidebarMenuItem>
+                <Link href="/dashboard/locations" className={buttonStyles(pathname === '/dashboard/locations')}>
+                    <MapPin className={iconClass} />
+                    <span className="text-xs font-semibold">Ubicaciones</span>
+                </Link>
+            </SidebarMenuItem>
+        )}
+      </SidebarMenu>
+
       <NavGroupHeader title="Administración" />
       <SidebarMenu>
         {user?.role === 'Administrador' && (
-          <Collapsible open={isUsersOpen} onOpenChange={setIsUsersOpen}>
+          <Collapsible open={isSystemOpen} onOpenChange={setIsSystemOpen}>
             <SidebarMenuItem>
               <CollapsibleTrigger className={buttonStyles(pathname.startsWith('/dashboard/users') || pathname.startsWith('/dashboard/system'))}>
                 <Lock className={iconClass} />
                 <span className="flex-1 text-xs font-semibold text-left">Sistema</span>
-                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-200", isUsersOpen && "rotate-90")} />
+                <ChevronRight className={cn("h-3.5 w-3.5 transition-transform duration-200", isSystemOpen && "rotate-90")} />
               </CollapsibleTrigger>
               <CollapsibleContent>
                 <SidebarMenuSub className="pl-5 border-l border-white/5 mt-0.5 ml-5 space-y-0.5">
@@ -218,8 +231,26 @@ export function DashboardNav() {
                   </SidebarMenuSubItem>
                   <SidebarMenuSubItem>
                     <Link href="/dashboard/system/cc-config" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/system/cc-config' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
-                      <Settings className={subIconClass} />
+                      <ShieldCheck className={subIconClass} />
                       Copia de Auditoría
+                    </Link>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <Link href="/dashboard/system/cron" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/system/cron' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                      <Terminal className={subIconClass} />
+                      Cron Jobs
+                    </Link>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <Link href="/dashboard/system/usage" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/system/usage' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                      <Activity className={subIconClass} />
+                      Uso del Sistema
+                    </Link>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
+                    <Link href="/dashboard/system/email-test" className={cn("flex items-center gap-2 py-1.5 text-[11px] font-medium", pathname === '/dashboard/system/email-test' ? "text-[#8CC81F]" : "text-[#8F98A8] hover:text-[#F4F6FA]")}>
+                      <Mail className={subIconClass} />
+                      Test de Email
                     </Link>
                   </SidebarMenuSubItem>
                 </SidebarMenuSub>
