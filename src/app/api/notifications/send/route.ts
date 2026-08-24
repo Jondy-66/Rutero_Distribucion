@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       }
     }
 
-    // 3. Configurar transporte SMTP Robusto (Directo a Gmail)
+    // 3. Configurar transporte SMTP Robusto
     const transporter = nodemailer.createTransport({
       host: 'smtp.gmail.com',
       port: 465,
@@ -64,16 +64,13 @@ export async function POST(request: Request) {
         user: userEmail,
         pass: userPass,
       },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
     });
 
     // 4. Consolidar destinatarios de copia (CC)
     const finalCcSet = new Set<string>();
     const normalizedTo = to.trim().toLowerCase();
 
-    // Añadir copia manual si existe y es diferente al principal
+    // Añadir copia manual si existe
     if (manualCc && manualCc.trim().toLowerCase() !== normalizedTo) {
       finalCcSet.add(manualCc.trim().toLowerCase());
     }
@@ -122,29 +119,20 @@ export async function POST(request: Request) {
       `,
     };
 
-    // 5. Ejecutar envío con verificación de promesa
-    const info = await transporter.sendMail(mailOptions);
-    console.log('Email sent successfully:', info.messageId);
+    await transporter.sendMail(mailOptions);
 
     return NextResponse.json({ 
       success: true, 
       message: 'Notificación enviada correctamente.',
-      messageId: info.messageId,
       auditCcCount: finalCcSet.size 
     });
 
   } catch (error: any) {
     console.error('Critical Notification API Error:', error);
-    
-    let userMsg = 'Error al procesar el envío del correo.';
-    if (error.code === 'EAUTH') userMsg = 'Error de Autenticación: Revisa EMAIL_USER y EMAIL_PASS.';
-    if (error.code === 'ECONNREFUSED') userMsg = 'Error de Conexión: El servidor SMTP de Google rechazó la conexión.';
-
     return NextResponse.json({ 
       success: false, 
-      message: userMsg,
-      error: error.message,
-      code: error.code
+      message: 'Error al procesar el envío del correo.',
+      error: error.message
     }, { status: 500 });
   }
 }

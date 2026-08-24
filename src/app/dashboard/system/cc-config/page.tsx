@@ -223,12 +223,6 @@ export default function CcConfigPage() {
                                 </Button>
                             </div>
                         ))}
-                        {ccEmails.length === 0 && (
-                            <div className="text-center py-10 border-2 border-dashed rounded-[2rem] opacity-30">
-                                <Mail className="h-10 w-10 mx-auto mb-2" />
-                                <p className="text-[10px] font-black uppercase">Sin correos configurados</p>
-                            </div>
-                        )}
                     </div>
                 </CardContent>
                 <CardFooter className="bg-slate-50 p-8 flex justify-end">
@@ -256,14 +250,6 @@ export default function CcConfigPage() {
                     <div className="flex gap-4">
                         <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0"><CheckCircle2 className="h-4 w-4 text-primary" /></div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase leading-relaxed">Las copias automáticas se envían de forma simultánea a todos los destinatarios configurados.</p>
-                    </div>
-                    <div className="flex gap-4">
-                        <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0"><CheckCircle2 className="h-4 w-4 text-primary" /></div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase leading-relaxed">Si desactivas un check (ej: Aprobaciones), esas notificaciones ya no generarán copias automáticas.</p>
-                    </div>
-                    <div className="flex gap-4">
-                        <div className="h-6 w-6 rounded-full bg-primary/20 flex items-center justify-center shrink-0"><CheckCircle2 className="h-4 w-4 text-primary" /></div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase leading-relaxed">El sistema valida que los correos tengan un formato corporativo válido antes de enviarlos.</p>
                     </div>
                 </CardContent>
             </Card>

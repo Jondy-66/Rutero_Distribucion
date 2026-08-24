@@ -25,7 +25,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const ensureDate = (d: any): Date => {
   if (!d) return new Date();
@@ -49,7 +48,6 @@ export default function NewRoutePage() {
       const day = now.getDay();
       if (day === 6) return addDays(now, 2); 
       if (day === 0) return addDays(now, 1); 
-      if (day === 5 && now.getHours() >= 19) return addDays(now, 3); 
       return now;
   });
 
@@ -94,27 +92,10 @@ export default function NewRoutePage() {
         setIsResolving(false);
         return;
       }
-
-      if (!loading) {
-        try {
-          const directUser = await getUser(sid);
-          if (directUser) {
-            setResolvedSupervisor(directUser);
-            setSelectedSupervisorId(directUser.id);
-          } else {
-            const byName = users.find(u => u.name?.toLowerCase().includes(sid.toLowerCase()));
-            setResolvedSupervisor(byName || null);
-            if (byName) setSelectedSupervisorId(byName.id);
-          }
-        } catch (e) {
-          setResolvedSupervisor(null);
-        } finally {
-          setIsResolving(false);
-        }
-      }
+      setIsResolving(false);
     };
     resolveSupervisor();
-  }, [currentUser?.supervisorId, users, loading, isSellerRole]);
+  }, [currentUser?.supervisorId, users, isSellerRole]);
 
   useEffect(() => {
     const predictionDataStr = localStorage.getItem('predictionRoute');
@@ -140,7 +121,7 @@ export default function NewRoutePage() {
     const term = dialogSearchTerm.toLowerCase();
     return (clients || [])
       .filter(c => c.ejecutivo === currentUser?.name)
-      .filter(c => c.nombre_cliente.toLowerCase().includes(term) || c.nombre_comercial.toLowerCase().includes(term) || c.ruc.includes(term))
+      .filter(c => c.nombre_cliente.toLowerCase().includes(term) || c.ruc.includes(term))
       .filter(c => !selectedClients.some(sc => sc.ruc === c.ruc && sc.status !== 'Eliminado'));
   }, [clients, dialogSearchTerm, selectedClients, currentUser]);
 
@@ -167,34 +148,14 @@ export default function NewRoutePage() {
         return next;
     });
     setIsRemovalDialogOpen(false);
-    setClientIndexToRemove(null);
   };
 
   const handleMoveClient = (index: number, direction: 'up' | 'down') => {
     if (isFormLocked) return;
     setSelectedClients(prev => {
         const next = [...prev];
-        const currentClient = next[index];
-        const targetDate = ensureDate(currentClient.date);
-
-        let swapIndex = -1;
-        if (direction === 'up') {
-            for (let i = index - 1; i >= 0; i--) {
-                if (next[i].status !== 'Eliminado' && isSameDay(ensureDate(next[i].date), targetDate)) {
-                    swapIndex = i;
-                    break;
-                }
-            }
-        } else {
-            for (let i = index + 1; i < next.length; i++) {
-                if (next[i].status !== 'Eliminado' && isSameDay(ensureDate(next[i].date), targetDate)) {
-                    swapIndex = i;
-                    break;
-                }
-            }
-        }
-
-        if (swapIndex !== -1) {
+        const swapIndex = direction === 'up' ? index - 1 : index + 1;
+        if (swapIndex >= 0 && swapIndex < next.length) {
             const temp = next[index];
             next[index] = next[swapIndex];
             next[swapIndex] = temp;
@@ -210,7 +171,6 @@ export default function NewRoutePage() {
       nombre_comercial: c.nombre_comercial,
       date: targetDateForAdd,
       status: 'Activo',
-      origin: 'manual',
       visitStatus: 'Pendiente'
     }));
     setSelectedClients(prev => [...prev, ...newClients]);
@@ -221,7 +181,7 @@ export default function NewRoutePage() {
 
   const handleAddToStage = () => {
     const finalSupervisorId = selectedSupervisorId || resolvedSupervisor?.id;
-    if (!routeName || !finalSupervisorId || selectedClients.filter(c => c.status !== 'Eliminado').length === 0) {
+    if (!routeName || !finalSupervisorId || selectedClients.length === 0) {
       toast({ title: 'Faltan datos', variant: 'destructive' });
       return;
     }
@@ -246,23 +206,19 @@ export default function NewRoutePage() {
             status: (sendForApproval ? 'Pendiente de Aprobación' : 'Planificada') as RoutePlan['status']
         }));
 
-        // 1. Guardar primero en Firestore (Operación Crítica)
         await addRoutesBatch(routesToSave);
         
-        // 2. Disparar notificaciones en SEGUNDO PLANO (No bloquean el redireccionamiento)
         if (sendForApproval) {
             routesToSave.forEach(r => {
                 const supervisor = users.find(u => u.id === r.supervisorId);
                 
-                // Notificación Interna (Background)
                 addNotification({
                     userId: r.supervisorId,
                     title: 'Nueva Ruta para Aprobación',
-                    message: `${currentUser?.name} ha enviado la ruta "${r.routeName}" para tu revisión.`,
+                    message: `${currentUser?.name} ha enviado una ruta para tu revisión.`,
                     link: `/dashboard/routes/team-routes`
-                }).catch(e => console.error("Error notification internal:", e));
+                });
 
-                // Notificación Email (Background)
                 if (supervisor?.email) {
                     fetch('/api/notifications/send', {
                         method: 'POST',
@@ -271,18 +227,17 @@ export default function NewRoutePage() {
                             to: supervisor.email.toLowerCase(),
                             subject: `NUEVA RUTA PENDIENTE: ${r.routeName}`,
                             title: 'Revisión de Plan Semanal',
-                            message: `El ejecutivo ${currentUser?.name} ha finalizado su planificación y requiere tu aprobación para iniciar su gestión.`,
+                            message: `El ejecutivo ${currentUser?.name} ha finalizado su planificación y requiere tu aprobación.`,
                             details: `Ruta: ${r.routeName} | Clientes: ${r.clients.filter(c => c.status !== 'Eliminado').length}`,
                             type: 'info',
                             eventKey: 'route_staged'
                         })
-                    }).catch(err => console.error("Error email trigger:", err));
+                    }).catch(e => console.error(e));
                 }
             });
         }
         
-        // 3. Respuesta inmediata al usuario
-        toast({ title: 'Rutas Guardadas', description: "Tu plan de ruta ha sido registrado con éxito." });
+        toast({ title: 'Rutas Guardadas', description: "Tu plan de ruta ha sido registrado." });
         await refetchData('routes');
         router.push('/dashboard/routes/management');
     } catch(e) { 
@@ -293,7 +248,7 @@ export default function NewRoutePage() {
   }
 
   const activeClientsWithIndex = useMemo(() => 
-    selectedClients.map((c, i) => ({...c, originalIndex: i})).filter(c => c.status !== 'Eliminado').map((c, i) => ({...c, globalIndex: i}))
+    selectedClients.map((c, i) => ({...c, originalIndex: i})).filter(c => c.status !== 'Eliminado')
   , [selectedClients]);
 
   const displayedDays = useMemo(() => {
@@ -305,24 +260,24 @@ export default function NewRoutePage() {
 
   return (
     <>
-      <PageHeader title="Planificación Semanal" description="Organiza tus paradas para los próximos 5 días hábiles." />
+      <PageHeader title="Planificación Semanal" description="Organiza tus paradas." />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className={cn("border-t-4 border-t-primary shadow-xl", isFormLocked && "opacity-60")}>
           <CardHeader>
-            <CardTitle className="font-black text-slate-950 uppercase">Configuración de Ruta</CardTitle>
+            <CardTitle className="font-black text-slate-950 uppercase">Configuración</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
               <Label className="font-black text-[10px] uppercase text-slate-950">Nombre Identificador</Label>
-              <Input placeholder="Ej: Ruta Norte Semana 15" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isFormLocked} className="font-black h-12 text-slate-950" />
+              <Input placeholder="Ej: Ruta Norte" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isFormLocked} className="font-black h-12" />
             </div>
             
             <div className="space-y-2">
                 <Label className="font-black text-[10px] uppercase text-slate-950">Aprobador Asignado</Label>
                 {isSellerRole && (resolvedSupervisor || isResolving) ? (
                     <div className="relative">
-                        <ShieldCheck className={cn("absolute left-3 top-3 h-4 w-4 z-10", isResolving ? "animate-pulse text-muted-foreground" : "text-green-600")} />
-                        <Input value={isResolving ? "Validando..." : resolvedSupervisor?.name || "Pendiente"} className="pl-10 h-10 font-black bg-green-50 text-green-900 border-green-200" disabled />
+                        <ShieldCheck className={cn("absolute left-3 top-3 h-4 w-4 z-10", isResolving ? "animate-pulse" : "text-green-600")} />
+                        <Input value={isResolving ? "Validando..." : resolvedSupervisor?.name || "Pendiente"} className="pl-10 h-10 font-black bg-green-50" disabled />
                     </div>
                 ) : (
                     <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
@@ -335,11 +290,11 @@ export default function NewRoutePage() {
             <Separator />
 
             {!isFromPrediction && (
-                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl border border-slate-200">
+                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl">
                     <h3 className="text-xs font-black uppercase text-primary">Semana de Trabajo</h3>
                     <Popover>
                         <PopoverTrigger asChild>
-                            <Button variant="outline" size="sm" className="font-black h-8" disabled={isFormLocked}>
+                            <Button variant="outline" size="sm" className="font-black" disabled={isFormLocked}>
                                 <CalendarIcon className="mr-2 h-4 w-4" /> ELEGIR FECHA
                             </Button>
                         </PopoverTrigger>
@@ -349,44 +304,30 @@ export default function NewRoutePage() {
             )}
 
             <div className="space-y-4">
-                <Alert className="bg-primary/5 border-primary/20 py-2">
-                    <Info className="h-4 w-4 text-primary" />
-                    <AlertDescription className="text-[10px] font-bold text-primary uppercase">
-                        Haz clic en los encabezados para expandir. Usa las flechas para ordenar las paradas.
-                    </AlertDescription>
-                </Alert>
-
                 {displayedDays.map((day) => {
                     const dayClients = activeClientsWithIndex.filter(c => isSameDay(ensureDate(c.date), day));
                     return (
                         <Collapsible key={day.toISOString()} defaultOpen={dayClients.length > 0} className="border-l-4 pl-4 py-2 border-primary/20 bg-slate-50/50 rounded-r-lg group">
                             <div className="flex w-full items-center justify-between p-2">
                                 <CollapsibleTrigger asChild>
-                                    <div className="flex items-center gap-3 cursor-pointer flex-1 select-none">
+                                    <div className="flex items-center gap-3 cursor-pointer flex-1">
                                         <CalendarIcon className="h-4 w-4 text-primary" />
-                                        <div className="flex flex-col">
-                                            <h4 className="font-black text-xs uppercase text-slate-950">{format(day, 'EEEE dd', { locale: es })}</h4>
-                                        </div>
-                                        <Badge variant="secondary" className="font-black h-5">{dayClients.length}</Badge>
+                                        <h4 className="font-black text-xs uppercase text-slate-950">{format(day, 'EEEE dd', { locale: es })}</h4>
+                                        <Badge variant="secondary" className="font-black">{dayClients.length}</Badge>
                                         <ChevronDown className="h-4 w-4 text-slate-400 transition-transform duration-300 group-data-[state=open]:rotate-180" />
                                     </div>
                                 </CollapsibleTrigger>
-                                <Button variant="ghost" size="sm" className="font-black text-primary hover:bg-primary/10 h-7" onClick={() => handleOpenAddDialog(day)} disabled={isFormLocked}>
+                                <Button variant="ghost" size="sm" className="font-black text-primary" onClick={() => handleOpenAddDialog(day)} disabled={isFormLocked}>
                                     <PlusCircle className="mr-1 h-3.5 w-3.5" /> AÑADIR
                                 </Button>
                             </div>
-                            <CollapsibleContent className="space-y-2 mt-2 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up">
+                            <CollapsibleContent className="space-y-2 mt-2">
                                 {dayClients.length > 0 ? (
                                     dayClients.map((client, groupIdx) => (
-                                        <div key={`${client.ruc}-${client.originalIndex}`} className="p-3 bg-white border-2 rounded-xl flex justify-between items-center shadow-sm group/item">
-                                            <div className="flex items-center gap-3 min-w-0 flex-1">
-                                                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center font-black text-[10px] text-primary shrink-0 border border-primary/20">
-                                                    {groupIdx + 1}
-                                                </div>
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="font-black text-[11px] text-primary uppercase truncate">{client.nombre_comercial}</p>
-                                                    <p className="text-[9px] font-bold text-slate-500 uppercase">{client.ruc}</p>
-                                                </div>
+                                        <div key={`${client.ruc}-${client.originalIndex}`} className="p-3 bg-white border-2 rounded-xl flex justify-between items-center shadow-sm">
+                                            <div className="min-w-0 flex-1">
+                                                <p className="font-black text-[11px] text-primary uppercase truncate">{client.nombre_comercial}</p>
+                                                <p className="text-[9px] font-bold text-slate-500 uppercase">{client.ruc}</p>
                                             </div>
                                             <div className="flex items-center gap-1">
                                                 <div className="flex flex-col gap-0.5">
@@ -413,7 +354,7 @@ export default function NewRoutePage() {
             </div>
           </CardContent>
            <CardFooter>
-            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase shadow-lg" disabled={activeClientsWithIndex.length === 0 || isFormLocked || (!selectedSupervisorId && !resolvedSupervisor)}>Añadir a la Lista</Button>
+            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase shadow-lg" disabled={activeClientsWithIndex.length === 0 || isFormLocked}>Añadir a la Lista</Button>
           </CardFooter>
         </Card>
         
@@ -424,18 +365,15 @@ export default function NewRoutePage() {
                 <div key={r.tempId} className="p-4 flex justify-between items-center bg-slate-50 border-2 border-slate-100 rounded-2xl">
                     <div className="min-w-0 flex-1">
                         <p className="font-black text-primary uppercase text-xs truncate">{r.routeName}</p>
-                        <p className="text-[9px] font-black text-slate-500 uppercase">
-                            {r.clients.filter(c => c.status !== 'Eliminado').length} CLIENTES | RESPONSABLE: {r.supervisorName}
-                        </p>
+                        <p className="text-[9px] font-black text-slate-500 uppercase">{r.clients.length} CLIENTES</p>
                     </div>
                     <Button variant="ghost" size="icon" onClick={() => setStagedRoutes(prev => prev.filter(st => st.tempId !== r.tempId))} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
                 </div>
             ))}
-            {stagedRoutes.length === 0 && <div className="text-center py-10 font-black text-slate-300 uppercase text-xs">Sin rutas en cola</div>}
           </CardContent>
           <CardFooter>
             {stagedRoutes.length > 0 && (
-                <Button onClick={() => handleSaveAllRoutes(true)} className="w-full h-14 font-black bg-green-600 hover:bg-green-700 text-white text-lg shadow-2xl transition-transform hover:scale-[1.02]" disabled={isSaving}>
+                <Button onClick={() => handleSaveAllRoutes(true)} className="w-full h-14 font-black bg-green-600 hover:bg-green-700 text-white text-lg shadow-2xl" disabled={isSaving}>
                     {isSaving ? <LoaderCircle className="animate-spin mr-2 h-6 w-6" /> : <><Send className="mr-2 h-5 w-5" /> CONFIRMAR Y ENVIAR</>}
                 </Button>
             )}
@@ -444,27 +382,24 @@ export default function NewRoutePage() {
       </div>
 
       <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
-        <DialogContent className="w-[95vw] sm:max-w-[600px] p-0 overflow-hidden bg-white rounded-2xl">
+        <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden">
             <DialogHeader className="p-6 pb-2"><DialogTitle className="text-2xl font-black text-primary uppercase">Catálogo de Clientes</DialogTitle></DialogHeader>
-            <div className="flex-1 overflow-hidden flex flex-col p-6 space-y-4">
+            <div className="p-6 space-y-4">
                 <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-slate-950 font-black" />
-                    <Input placeholder="Buscar por RUC o Nombre..." className="pl-10 h-12 border-2 border-slate-200 font-black text-slate-950" value={dialogSearchTerm} onChange={(e) => setDialogSearchTerm(e.target.value)} />
+                    <Input placeholder="Buscar por RUC o Nombre..." className="pl-10 h-12 border-2" value={dialogSearchTerm} onChange={(e) => setDialogSearchTerm(e.target.value)} />
                 </div>
-                <ScrollArea className="h-[50vh] pr-2">
+                <ScrollArea className="h-[40vh] pr-2">
                     <div className="space-y-3">
-                        {filteredDialogClients.map((client) => {
-                            const isSelected = dialogSelectedClients.some(c => c.ruc === client.ruc);
-                            return (
-                                <div key={client.ruc} className={cn("flex items-center space-x-4 p-4 rounded-xl border-2 transition-all cursor-pointer", isSelected ? "bg-primary/5 border-primary" : "bg-slate-50 border-transparent hover:border-slate-200")} onClick={() => isSelected ? setDialogSelectedClients(prev => prev.filter(c => c.ruc !== client.ruc)) : setDialogSelectedClients(prev => [...prev, client])}>
-                                    <Checkbox checked={isSelected} className="h-5 w-5 border-primary" />
-                                    <div className="flex-1">
-                                        <p className="text-sm font-black text-slate-950 uppercase">{client.nombre_comercial}</p>
-                                        <p className="text-[9px] font-black text-slate-500 mt-1">{client.ruc}</p>
-                                    </div>
+                        {filteredDialogClients.map((client) => (
+                            <div key={client.ruc} className={cn("flex items-center space-x-4 p-4 rounded-xl border-2 transition-all cursor-pointer", dialogSelectedClients.some(s => s.ruc === client.ruc) ? "bg-primary/5 border-primary" : "bg-slate-50 border-transparent")} onClick={() => setDialogSelectedClients(prev => prev.some(s => s.ruc === client.ruc) ? prev.filter(c => c.ruc !== client.ruc) : [...prev, client])}>
+                                <Checkbox checked={dialogSelectedClients.some(s => s.ruc === client.ruc)} className="h-5 w-5 border-primary" />
+                                <div className="flex-1">
+                                    <p className="text-sm font-black text-slate-950 uppercase">{client.nombre_comercial}</p>
+                                    <p className="text-[9px] font-black text-slate-500 mt-1">{client.ruc}</p>
                                 </div>
-                            );
-                        })}
+                            </div>
+                        ))}
                     </div>
                 </ScrollArea>
             </div>
@@ -483,7 +418,7 @@ export default function NewRoutePage() {
           <DialogHeader><DialogTitle className="font-black uppercase text-destructive">Indicar motivo de eliminación</DialogTitle></DialogHeader>
           <div className="py-4 space-y-2">
             <Label className="font-black uppercase text-[10px] text-slate-950">Observación obligatoria</Label>
-            <Textarea value={removalReason} onChange={(e) => setRemovalReason(e.target.value)} placeholder="Ej: Local cerrado, cliente cambió cita..." className="font-black text-sm h-32 border-2 text-slate-950" />
+            <Textarea value={removalReason} onChange={(e) => setRemovalReason(e.target.value)} placeholder="Ej: Local cerrado..." className="font-black text-sm h-32 border-2" />
           </div>
           <DialogFooter>
             <DialogClose asChild><Button variant="ghost" className="font-black">CANCELAR</Button></DialogClose>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { PageHeader } from '@/components/page-header';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,6 @@ export default function ManualNotificationsPage() {
   const [loading, setLoading] = useState(false);
   const [targetType, setType] = useState<'user' | 'external'>('user');
   
-  // Estado para envío manual
   const [formData, setFormData] = useState({
     to: '',
     subject: '',
@@ -159,7 +158,6 @@ export default function ManualNotificationsPage() {
                     onChange={(e) => setFormData({ ...formData, cc: e.target.value.toLowerCase() })}
                     className="font-black border-2 h-12 rounded-xl text-slate-950"
                   />
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase pl-1">Esta copia es adicional a los correos globales configurados en el protocolo CC.</p>
                 </div>
                 
                 <div className="space-y-2">
@@ -170,17 +168,6 @@ export default function ManualNotificationsPage() {
                     placeholder="Ej: Mantenimiento Programado del Sistema"
                     value={formData.subject}
                     onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
-                    className="font-black border-2 h-12 rounded-xl text-slate-950"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="title" className="font-black text-[10px] uppercase text-slate-500 tracking-widest pl-1">Título del Mensaje</Label>
-                  <Input 
-                    id="title" 
-                    placeholder="Ej: Atención: Actualización Crítica"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                     className="font-black border-2 h-12 rounded-xl text-slate-950"
                   />
                 </div>
@@ -197,23 +184,12 @@ export default function ManualNotificationsPage() {
                     className="font-black border-2 rounded-2xl text-slate-950 text-sm"
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="details" className="font-black text-[10px] uppercase text-slate-500 tracking-widest pl-1">Cuadro de Detalles (Opcional)</Label>
-                  <Textarea 
-                    id="details" 
-                    placeholder="Información técnica o resaltada..."
-                    value={formData.details}
-                    onChange={(e) => setFormData({ ...formData, details: e.target.value })}
-                    className="font-black border-2 rounded-2xl text-slate-950 text-sm bg-slate-50"
-                  />
-                </div>
               </CardContent>
               <CardFooter className="bg-slate-50 p-8 flex justify-end">
                 <Button 
                     type="submit" 
                     disabled={loading} 
-                    className="font-black px-12 h-14 rounded-2xl shadow-xl uppercase transition-all hover:scale-[1.02] tracking-tighter"
+                    className="font-black px-12 h-14 rounded-2xl shadow-xl uppercase transition-all hover:scale-[1.02]"
                 >
                   {loading ? <LoaderCircle className="animate-spin mr-2 h-5 w-5" /> : <Send className="mr-2 h-5 w-5" />}
                   DESPACHAR NOTIFICACIÓN
@@ -235,10 +211,6 @@ export default function ManualNotificationsPage() {
                     <div className="flex gap-3">
                         <div className="h-5 w-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0"><CheckCircle2 className="h-3 w-3 text-primary" /></div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase leading-relaxed">Los correos son enviados desde el servidor seguro para evitar bloqueos de SPAM.</p>
-                    </div>
-                    <div className="flex gap-3">
-                        <div className="h-5 w-5 rounded-full bg-primary/20 flex items-center justify-center shrink-0"><CheckCircle2 className="h-3 w-3 text-primary" /></div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase leading-relaxed">Recuerda que el destinatario externo debe tener un formato válido.</p>
                     </div>
                 </CardContent>
             </Card>

@@ -70,24 +70,14 @@ export default function PrediccionesPage() {
     const selectedDate = parseISO(val);
     const today = startOfDay(new Date());
 
-    // 1. Validar que no sea menor a hoy
     if (isBefore(startOfDay(selectedDate), today)) {
-        toast({
-            title: "Fecha Inválida",
-            description: "La fecha de inicio no puede ser menor a la fecha de hoy.",
-            variant: "destructive"
-        });
+        toast({ title: "Fecha Inválida", description: "La fecha de inicio no puede ser menor a hoy.", variant: "destructive" });
         return;
     }
 
-    // 2. Validar que no sea sábado (6) o domingo (0)
     const day = getDay(selectedDate);
     if (day === 6 || day === 0) {
-        toast({
-            title: "Día no Laboral",
-            description: "La fecha de inicio no puede ser Sábado o Domingo.",
-            variant: "destructive"
-        });
+        toast({ title: "Día no Laboral", description: "La fecha de inicio no puede ser Sábado o Domingo.", variant: "destructive" });
         return;
     }
 
@@ -95,11 +85,10 @@ export default function PrediccionesPage() {
   };
 
   const obtenerPredicciones = async () => {
-    // Re-validar antes de ejecutar por seguridad
     const selectedDate = parseISO(fechaInicio);
     const day = getDay(selectedDate);
     if (day === 6 || day === 0 || isBefore(startOfDay(selectedDate), startOfDay(new Date()))) {
-        toast({ title: "Atención", description: "La fecha seleccionada no es válida para iniciar una predicción.", variant: "destructive" });
+        toast({ title: "Atención", description: "La fecha seleccionada no es válida.", variant: "destructive" });
         return;
     }
 
@@ -111,13 +100,6 @@ export default function PrediccionesPage() {
       if (selectedEjecutivo !== 'todos') params.ejecutivo = selectedEjecutivo;
       const data = await getPredicciones(params);
       setPredicciones(data);
-      if (data.length === 0) {
-          toast({ 
-            title: "Sin Resultados", 
-            description: "No se encontraron predicciones en este momento. Por favor, intenta de nuevo.",
-            variant: "destructive"
-          });
-      }
     } catch (error: any) {
        toast({ title: "Error de API", description: error.message || "No se pudieron obtener las predicciones.", variant: "destructive" });
     }
@@ -136,9 +118,13 @@ export default function PrediccionesPage() {
     list = list.filter(p => {
         const ruc = String((p as any).cliente_id || (p as any).RUC || (p as any).ruc || '').trim();
         const clientInCatalog = clients.find(c => String(c.ruc).trim() === ruc);
-        if (clientInCatalog && clientInCatalog.status === 'inactive') {
-            return false;
-        }
+        
+        // REQUISITO: Solo mostrar si el cliente existe en el panel autorizado del usuario
+        if (!clientInCatalog) return false;
+        
+        // REQUISITO: Omitir clientes inactivos
+        if (clientInCatalog.status === 'inactive') return false;
+
         return true;
     });
 
@@ -157,11 +143,7 @@ export default function PrediccionesPage() {
         }
 
         const round = (val: any) => Math.round((parseFloat(String(val || 0)) || 0) * 100) / 100;
-        
-        const executiveUser = availableEjecutivos.find(u => 
-            u.name && u.name.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase()
-        );
-        
+        const executiveUser = availableEjecutivos.find(u => u.name && u.name.trim().toLowerCase() === selectedEjecutivo.trim().toLowerCase());
         const supervisorId = executiveUser?.supervisorId || (currentUser?.role === 'Supervisor' ? currentUser.id : undefined);
         
         const routeClients: ClientInRoute[] = [];
@@ -172,10 +154,7 @@ export default function PrediccionesPage() {
             
             const dateStr = String(data.fecha_predicha || data.fecha || '');
             let dateObj = parseISO(dateStr);
-            if (!isValid(dateObj)) {
-                dateObj = new Date(dateStr);
-            }
-            
+            if (!isValid(dateObj)) dateObj = new Date(dateStr);
             if (!isValid(dateObj)) continue;
 
             const clientInCatalog = clients.find(c => String(c.ruc).trim() === ruc);
@@ -192,30 +171,18 @@ export default function PrediccionesPage() {
             });
         }
         
-        if (routeClients.length === 0) {
-            toast({title: "Error de Datos", description: "No se encontraron clientes con información válida para procesar.", variant: "destructive"});
-            return;
-        }
+        if (routeClients.length === 0) return;
 
         routeClients.sort((a, b) => (a.date?.getTime() || 0) - (b.date?.getTime() || 0));
-        
-        try {
-            localStorage.setItem('predictionRoute', JSON.stringify({
-                routeName: `Plan de Ruta - ${selectedEjecutivo}`,
-                supervisorId: supervisorId,
-                clients: routeClients.map(c => ({...c, date: c.date?.toISOString()})),
-            }));
-            router.push('/dashboard/routes/new');
-        } catch (storageError) {
-            toast({ title: "Error de Memoria", description: "La lista es demasiado grande para el navegador. Intente predecir menos días.", variant: "destructive" });
-        }
+        localStorage.setItem('predictionRoute', JSON.stringify({
+            routeName: `Plan de Ruta - ${selectedEjecutivo}`,
+            supervisorId: supervisorId,
+            clients: routeClients.map(c => ({...c, date: c.date?.toISOString()})),
+        }));
+        router.push('/dashboard/routes/new');
     } catch (error: any) {
-        console.error("Critical error in prediction planning:", error);
-        toast({ 
-            title: "Error Crítico", 
-            description: error.message || "Ocurrió un fallo inesperado al preparar la planificación.", 
-            variant: "destructive" 
-        });
+        console.error(error);
+        toast({ title: "Error", description: "Ocurrió un fallo al preparar la planificación.", variant: "destructive" });
     }
   }
 
@@ -223,26 +190,15 @@ export default function PrediccionesPage() {
     if (isFinite(prediction.LatitudTrz) && isFinite(prediction.LongitudTrz)) {
       setSelectedLocation({ lat: prediction.LatitudTrz, lng: prediction.LongitudTrz });
       setIsMapOpen(true);
-    } else {
-      toast({ title: 'Sin ubicación', variant: 'destructive' });
     }
-  };
-
-  const handleViewOptimizedRoute = () => {
-    const predictedRucs = new Set(filteredPredicciones.map(p => String((p as any).ruc || (p as any).RUC || (p as any).cliente_id || '').trim()));
-    const clientsFromRucs = clients.filter(client => predictedRucs.has(String(client.ruc).trim()) && isFinite(client.latitud) && isFinite(client.longitud));
-    if (clientsFromRucs.length === 0) return toast({ title: "Mapa vacío" });
-    setClientsForMap(clientsFromRucs);
-    setIsMapOpen(true); 
   };
 
   const handleDownloadExcel = () => {
     const dataToExport = filteredPredicciones.map(p => {
         const data: any = p;
-        const clientId = data.cliente_id || data.RUC || data.ruc;
         return {
             'Ejecutivo': data.Ejecutivo || data.ejecutivo || '',
-            'ID Cliente': clientId,
+            'ID Cliente': data.cliente_id || data.RUC || data.ruc,
             'Probabilidad': (data.probabilidad_visita * 100).toFixed(2) + '%',
             'Ventas Est.': Math.round((parseFloat(data.ventas) || 0) * 100) / 100,
             'Cobros Est.': Math.round((parseFloat(data.cobros) || 0) * 100) / 100,
@@ -258,8 +214,6 @@ export default function PrediccionesPage() {
     const num = Math.round((parseFloat(String(value || 0)) || 0) * 100) / 100;
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
   };
-
-  const todayStr = format(new Date(), 'yyyy-MM-dd');
 
   return (
     <>
@@ -281,12 +235,7 @@ export default function PrediccionesPage() {
                     </div>
                     <div className="space-y-2">
                         <Label>Fecha Inicio</Label>
-                        <Input 
-                            type="date" 
-                            value={fechaInicio} 
-                            onChange={handleDateChange} 
-                            min={todayStr}
-                        />
+                        <Input type="date" value={fechaInicio} onChange={handleDateChange} min={format(new Date(), 'yyyy-MM-dd')} />
                         <p className="text-[10px] text-muted-foreground font-bold uppercase mt-1">Lunes a Viernes únicamente.</p>
                     </div>
                     <div className="space-y-2"><Label>Días</Label><Input type="number" value={dias} onChange={(e) => setDias(e.target.value === '' ? '' : parseInt(e.target.value))} min="1" /></div>
@@ -296,19 +245,13 @@ export default function PrediccionesPage() {
         </Card>
 
         {hasAttempted && !loading && filteredPredicciones.length === 0 && (
-            <div className="p-8 text-center bg-amber-50 border-2 border-dashed border-amber-200 rounded-[2rem] animate-in fade-in slide-in-from-top-4 shadow-sm">
+            <div className="p-8 text-center bg-amber-50 border-2 border-dashed border-amber-200 rounded-[2rem] shadow-sm">
                 <AlertCircle className="mx-auto h-12 w-12 text-amber-500 mb-4" />
                 <h3 className="font-black text-amber-900 uppercase text-lg">Sin resultados obtenidos</h3>
                 <p className="text-amber-700 text-xs font-bold uppercase mt-2 max-w-md mx-auto leading-relaxed">
-                    LA API NO HA DEVUELTO DATOS O TODOS LOS CLIENTES PREDICHOS ESTÁN <span className="text-amber-900 underline">INACTIVOS</span>. POR FAVOR, <span className="text-amber-900 underline underline-offset-2 decoration-2">INTÉNTALO DE NUEVO</span> PULSANDO EL BOTÓN.
+                    LA API NO HA DEVUELTO DATOS O TODOS LOS CLIENTES PREDICHOS ESTÁN <span className="text-amber-900 underline">INACTIVOS</span>.
                 </p>
-                <Button 
-                    variant="outline" 
-                    className="mt-6 font-black uppercase text-[10px] border-amber-300 text-amber-800 hover:bg-amber-100 hover:border-amber-400 transition-all rounded-xl" 
-                    onClick={obtenerPredicciones}
-                >
-                    Intentar de nuevo ahora
-                </Button>
+                <Button variant="outline" className="mt-6 font-black uppercase text-[10px]" onClick={obtenerPredicciones}>Intentar de nuevo</Button>
             </div>
         )}
 
@@ -350,7 +293,6 @@ export default function PrediccionesPage() {
             </CardContent>
             <CardFooter className="flex flex-col sm:flex-row gap-3">
                  <Button onClick={handlePlanPredictionRoute} disabled={loading || selectedEjecutivo === 'todos' || filteredPredicciones.length === 0} className="w-full sm:w-auto font-black"><Save className="mr-2 h-4 w-4" /> PLANIFICAR RUTA</Button>
-                 <Button onClick={handleViewOptimizedRoute} variant="outline" disabled={loading || filteredPredicciones.length === 0} className="w-full sm:w-auto font-bold"><Route className="mr-2 h-4 w-4" /> VER EN MAPA</Button>
                  <Button onClick={handleDownloadExcel} variant="ghost" disabled={loading || filteredPredicciones.length === 0} className="w-full sm:w-auto font-bold"><Download className="mr-2 h-4 w-4" /> EXCEL</Button>
             </CardFooter>
         </Card>

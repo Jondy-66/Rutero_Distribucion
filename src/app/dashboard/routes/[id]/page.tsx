@@ -6,12 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, LifeBuoy, AlertTriangle, CheckCircle, XCircle, MessageSquare, Info, ChevronDown, ShieldCheck, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Users, LoaderCircle, Trash2, ThumbsDown, ShieldCheck, CheckCircle, XCircle } from 'lucide-react';
 import { getRoute, updateRoute, addNotification } from '@/lib/firebase/firestore';
 import type { User, RoutePlan, ClientInRoute } from '@/lib/types';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { format, isSameDay } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
 import { Timestamp } from 'firebase/firestore';
@@ -19,8 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import Link from 'next/link';
 import { useAuth } from '@/hooks/use-auth';
-import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible';
-import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -47,24 +43,8 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   
-  const [calendarOpen, setCalendarOpen] = useState<{[key: number]: boolean}>({});
-
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
   const [rejectionReason, setRejectionReason] = useState('');
-
-  const [isRemovalDialogOpen, setIsRemovalDialogOpen] = useState(false);
-  const [removalReason, setRemovalReason] = useState('');
-  const [clientIndexToRemove, setClientIndexToRemove] = useState<number | null>(null);
-
-  const canEdit = useMemo(() => {
-    if (!currentUser || !route) return false;
-    if (currentUser.role === 'Administrador' && route.status !== 'Completada') return true;
-    if (currentUser.role === 'Usuario' || currentUser.role === 'Telemercaderista') return false;
-    const isOwner = currentUser.id === route.createdBy;
-    const isAssignedSupervisor = currentUser.id === route.supervisorId;
-    const isEditableStatus = ['Planificada', 'Rechazada', 'En Progreso', 'Pendiente de Aprobación'].includes(route.status);
-    return (isOwner || isAssignedSupervisor) && isEditableStatus;
-  }, [currentUser, route]);
 
   const canApprove = useMemo(() => {
      if (!currentUser || !route) return false;
@@ -99,81 +79,10 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       if (users) setSupervisors(users.filter(u => u.role === 'Supervisor' || u.role === 'Administrador'));
   }, [users]);
 
-  const handleInputChange = <K extends keyof RoutePlan>(field: K, value: RoutePlan[K]) => {
-    setRoute(prev => (prev ? { ...prev, [field]: value } : null));
-  };
-  
-  const handleClientValueChange = useCallback((index: number, field: keyof Omit<ClientInRoute, 'ruc' | 'nombre_comercial'>, value: any) => {
-      setClientsInRoute(prev => {
-          const next = [...prev];
-          if (next[index]) {
-              next[index] = { ...next[index], [field]: value };
-          }
-          return next;
-      });
-  }, []);
-
-  const handleMoveClient = (index: number, direction: 'up' | 'down') => {
-    if (!canEdit) return;
-    setClientsInRoute(prev => {
-        const next = [...prev];
-        const currentClient = next[index];
-        const targetDate = ensureDate(currentClient.date);
-
-        let swapIndex = -1;
-        if (direction === 'up') {
-            for (let i = index - 1; i >= 0; i--) {
-                if (next[i].status !== 'Eliminado' && isSameDay(ensureDate(next[i].date), targetDate)) {
-                    swapIndex = i;
-                    break;
-                }
-            }
-        } else {
-            for (let i = index + 1; i < next.length; i++) {
-                if (next[i].status !== 'Eliminado' && isSameDay(ensureDate(next[i].date), targetDate)) {
-                    swapIndex = i;
-                    break;
-                }
-            }
-        }
-
-        if (swapIndex !== -1) {
-            const temp = next[index];
-            next[index] = next[swapIndex];
-            next[swapIndex] = temp;
-        }
-        return next;
-    });
-  };
-
-  const handleOpenRemovalDialog = (index: number) => {
-    setClientIndexToRemove(index);
-    setRemovalReason('');
-    setIsRemovalDialogOpen(true);
-  };
-
-  const confirmRemoval = () => {
-    if (clientIndexToRemove === null || !removalReason.trim()) {
-        toast({ title: "Motivo requerido", description: "Debes indicar por qué eliminas este cliente.", variant: "destructive" });
-        return;
-    }
-    setClientsInRoute(prev => {
-        const next = [...prev];
-        if (next[clientIndexToRemove]) {
-            next[clientIndexToRemove] = { ...next[clientIndexToRemove], status: 'Eliminado', removalObservation: removalReason };
-        }
-        return next;
-    });
-    setIsRemovalDialogOpen(false);
-    setClientIndexToRemove(null);
-    toast({ title: "Cliente eliminado", description: "Se ha registrado el motivo de la eliminación." });
-  };
-
   const handleApprove = async () => {
     if (!route || !currentUser) return;
     setIsSaving(true);
     try {
-      // 1. Actualizar Firestore
       await updateRoute(routeId, { 
         status: 'Planificada',
         supervisorObservation: 'Ruta aprobada.'
@@ -181,13 +90,12 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       
       const creator = users.find(u => u.id === route.createdBy);
 
-      // 2. Disparar notificaciones en Background
       addNotification({
         userId: route.createdBy,
         title: 'Ruta Aprobada',
         message: `Tu ruta "${route.routeName}" ha sido aprobada.`,
         link: `/dashboard/routes/${routeId}`
-      }).catch(e => console.error(e));
+      });
 
       if (creator?.email) {
           fetch('/api/notifications/send', {
@@ -197,7 +105,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                   to: creator.email.toLowerCase(),
                   subject: `RUTA APROBADA: ${route.routeName}`,
                   title: '¡Plan Aprobado!',
-                  message: `Tu supervisor (${currentUser.name}) ha revisado y aprobado tu plan de ruta "${route.routeName}". Ya puedes iniciar tu gestión diaria.`,
+                  message: `Tu supervisor (${currentUser.name}) ha revisado y aprobado tu plan de ruta.`,
                   type: 'success',
                   eventKey: 'route_approved'
               })
@@ -205,8 +113,8 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       }
 
       await refetchData('routes');
-      toast({ title: 'Éxito', description: 'La ruta ha sido aprobada y enviada a gestión.' });
-      router.push('/dashboard/routes/management');
+      toast({ title: 'Éxito', description: 'La ruta ha sido aprobada.' });
+      router.push('/dashboard/routes/team-routes');
     } catch (error) {
       toast({ title: 'Error al aprobar', variant: 'destructive' });
     } finally {
@@ -216,12 +124,11 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
   const handleReject = async () => {
     if (!route || !currentUser || !rejectionReason.trim()) {
-        toast({ title: "Motivo requerido", description: "Por favor indica por qué rechazas la ruta.", variant: "destructive" });
+        toast({ title: "Motivo requerido", variant: "destructive" });
         return;
     }
     setIsSaving(true);
     try {
-      // 1. Actualizar Firestore
       await updateRoute(routeId, { 
         status: 'Rechazada',
         supervisorObservation: rejectionReason
@@ -229,13 +136,12 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
       const creator = users.find(u => u.id === route.createdBy);
 
-      // 2. Disparar notificaciones en Background
       addNotification({
         userId: route.createdBy,
         title: 'Ruta Rechazada',
-        message: `Tu ruta "${route.routeName}" ha sido rechazada. Motivo: ${rejectionReason}`,
+        message: `Tu ruta "${route.routeName}" ha sido rechazada.`,
         link: `/dashboard/routes/${routeId}`
-      }).catch(e => console.error(e));
+      });
 
       if (creator?.email) {
           fetch('/api/notifications/send', {
@@ -245,7 +151,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                   to: creator.email.toLowerCase(),
                   subject: `ATENCIÓN: RUTA RECHAZADA - ${route.routeName}`,
                   title: 'Ajustes Requeridos en Plan de Ruta',
-                  message: `Tu plan de ruta "${route.routeName}" ha sido rechazado por tu supervisor. Por favor revisa las observaciones y realiza los cambios necesarios.`,
+                  message: `Tu plan de ruta ha sido rechazado por el supervisor.`,
                   details: rejectionReason,
                   type: 'alert',
                   eventKey: 'route_rejected'
@@ -254,7 +160,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
       }
 
       await refetchData('routes');
-      toast({ title: 'Ruta Rechazada', description: 'Se ha enviado la notificación al usuario.' });
+      toast({ title: 'Ruta Rechazada' });
       setIsRejectDialogOpen(false);
       router.push('/dashboard/routes/team-routes');
     } catch (error) {
@@ -264,68 +170,12 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
     }
   };
 
-  const handleUpdateRoute = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!route || !currentUser) return;
-    setIsSaving(true);
-    try {
-      const supervisor = supervisors.find(s => s.id === route.supervisorId);
-      const sanitizedClients = clientsInRoute.map(c => ({
-        ...c,
-        valorVenta: parseFloat(String(c.valorVenta)) || 0,
-        valorCobro: parseFloat(String(c.valorCobro)) || 0,
-        date: c.date ? Timestamp.fromDate(ensureDate(c.date)) : null
-      }));
-
-      await updateRoute(routeId, {
-        ...route,
-        supervisorName: supervisor?.name || route.supervisorName,
-        clients: sanitizedClients,
-        date: Timestamp.fromDate(ensureDate(route.date)),
-      });
-      await refetchData('routes');
-      toast({ title: 'Éxito', description: `Ruta actualizada correctamente.` });
-      router.push('/dashboard/routes/management');
-    } catch (error) {
-      toast({ title: 'Error al actualizar', variant: 'destructive' });
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const activeClientsWithIndex = useMemo(() => 
-    clientsInRoute
-      .map((c, i) => ({...c, originalIndex: i})) 
-      .filter(c => c.status !== 'Eliminado')
-      .map((c, i) => ({...c, globalIndex: i}))
-  , [clientsInRoute]);
-
-  const groupedClients = useMemo(() => {
-    const groups: { [date: string]: typeof activeClientsWithIndex } = {};
-    activeClientsWithIndex.forEach(client => {
-        const dateObj = ensureDate(client.date);
-        const key = dateObj && !isNaN(dateObj.getTime()) ? format(dateObj, 'yyyy-MM-dd') : 'Sin Fecha';
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(client);
-    });
-    return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
-  }, [activeClientsWithIndex]);
-
   if (loading || authLoading) return <div className="p-8"><Skeleton className="h-96 w-full" /></div>;
   if (!route) return notFound();
   
-  const isFormDisabled = isSaving || !canEdit;
-  
   return (
     <div className="flex flex-col space-y-6">
-      <PageHeader 
-        title={canApprove ? "Revisión de Plan de Ruta" : "Detalles de la Ruta"} 
-        description={canEdit ? "Gestión de paradas y cronograma semanal." : "Vista de solo lectura del plan de ruta."}
-      >
-        <Link href="/dashboard/routes/team-routes">
-          <Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" /> Volver al Listado</Button>
-        </Link>
-      </PageHeader>
+      <PageHeader title="Revisión de Plan de Ruta" description="Detalles y aprobación." />
 
       <div className="space-y-6">
         {canApprove && (
@@ -333,215 +183,60 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                 <ShieldCheck className="h-5 w-5 text-amber-600" />
                 <AlertTitle className="text-amber-800 font-black uppercase">Ruta en Espera de Aprobación</AlertTitle>
                 <AlertDescription className="text-amber-700 font-bold text-xs">
-                    ESTE PLAN HA SIDO ENVIADO PARA TU REVISIÓN. PUEDES EDITAR LAS PARADAS O VALORES ANTES DE APROBAR.
+                    REVISA LAS PARADAS Y VALORES ANTES DE APROBAR EL PLAN.
                 </AlertDescription>
             </Alert>
-        )}
-
-        {route.status === 'Rechazada' && (
-          <Alert variant="destructive" className="mb-6 bg-red-50 border-red-200">
-            <ThumbsDown className="h-4 w-4 text-red-600" />
-            <AlertTitle className="font-black uppercase text-red-800">Ruta Rechazada</AlertTitle>
-            <AlertDescription className="font-bold text-red-700">
-                {route.supervisorObservation ? (
-                    <div className="mt-1 p-3 bg-white rounded-lg border border-red-100 italic">
-                        "{route.supervisorObservation}"
-                    </div>
-                ) : 'Sin observaciones del supervisor.'}
-            </AlertDescription>
-          </Alert>
         )}
 
         <Card>
           <CardHeader><CardTitle className="font-black uppercase text-slate-950">Información General</CardTitle></CardHeader>
           <CardContent className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="space-y-2 sm:col-span-2">
-              <Label className="font-bold uppercase text-[10px]">Nombre de la Ruta</Label>
-              <Input value={route.routeName} onChange={(e) => handleInputChange('routeName', e.target.value)} disabled={isFormDisabled} className="font-black text-slate-950" />
+            <div className="space-y-2">
+              <Label className="font-bold uppercase text-[10px]">Nombre</Label>
+              <Input value={route.routeName} disabled className="font-black" />
             </div>
             <div className="space-y-2">
-              <Label className="font-bold uppercase text-[10px]">Supervisor Asignado</Label>
-              <Select value={route.supervisorId} onValueChange={(v) => handleInputChange('supervisorId', v)} disabled={isFormDisabled}>
-                <SelectTrigger className="font-black"><Users className="mr-2 h-4 w-4 text-primary" /><SelectValue placeholder="Asignar supervisor" /></SelectTrigger>
-                <SelectContent>{supervisors.map(s => (<SelectItem key={s.id} value={s.id} className="font-black">{s.name}</SelectItem>))}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label className="font-bold uppercase text-[10px]">Estado del Plan</Label>
-              <Badge variant="outline" className="h-10 w-full flex items-center justify-center font-black uppercase border-2 border-primary/20 text-primary bg-primary/5">{route.status}</Badge>
+              <Label className="font-bold uppercase text-[10px]">Estado</Label>
+              <Badge variant="outline" className="h-10 w-full flex items-center justify-center font-black uppercase">{route.status}</Badge>
             </div>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader>
-              <CardTitle className="font-black uppercase text-slate-950">Cronograma de Visitas</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {groupedClients.map(([date, clientsInGroup]) => (
-                <Collapsible key={date} defaultOpen={true} className="border-l-4 pl-4 py-2 border-primary/20 bg-muted/5 rounded-r-lg group">
-                  <CollapsibleTrigger asChild>
-                    <div className="flex w-full items-center justify-between p-2 cursor-pointer hover:bg-muted/50 transition-all rounded-lg select-none">
-                      <div className="flex items-center gap-3">
-                        <CalendarIcon className="h-5 w-5 text-primary" />
-                        <div className="flex flex-col">
-                          <h4 className="font-black text-sm uppercase tracking-tighter">
-                              {date === 'Sin Fecha' ? 'Sin Fecha' : format(new Date(date + 'T00:00:00'), "EEEE, dd 'de' MMMM", { locale: es })}
-                          </h4>
-                        </div>
-                        <Badge variant="secondary" className="font-black">{clientsInGroup.length}</Badge>
+          <CardHeader><CardTitle className="font-black uppercase text-slate-950">Clientes en Ruta</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+              {clientsInRoute.filter(c => c.status !== 'Eliminado').map((client, idx) => (
+                  <div key={idx} className="p-4 border-2 rounded-xl flex justify-between items-center">
+                      <div>
+                          <p className="font-black text-primary uppercase text-xs">{client.nombre_comercial}</p>
+                          <p className="text-[9px] font-bold text-slate-500 uppercase">{format(ensureDate(client.date), 'dd/MM/yyyy')}</p>
                       </div>
-                      <ChevronDown className="h-5 w-5 text-slate-400 transition-transform duration-300 group-data-[state=open]:rotate-180" />
-                    </div>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="space-y-4 p-2 mt-2">
-                    {clientsInGroup.map((client, idx) => (
-                      <Card key={`${client.ruc}-${client.originalIndex}`} className="p-4 relative hover:shadow-md border-l-2 border-l-primary/10 bg-white">
-                        <div className="flex justify-between items-start">
-                          <div className="flex items-center gap-3 min-w-0 flex-1">
-                              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center font-black text-[10px] text-primary shrink-0">
-                                  {idx + 1}
-                              </div>
-                              <div className="space-y-1 min-w-0">
-                                <p className="font-black text-sm text-primary uppercase leading-tight truncate">{client.nombre_comercial}</p>
-                                <p className="text-[10px] font-mono font-bold text-slate-400 uppercase">{client.ruc}</p>
-                              </div>
-                          </div>
-                          {!isFormDisabled && (
-                              <div className="flex items-center gap-1">
-                                  <div className="flex flex-col gap-0.5 mr-2">
-                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveClient(client.originalIndex, 'up')} disabled={isFormDisabled || idx === 0}>
-                                          <ArrowUp className="h-3 w-3" />
-                                      </Button>
-                                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleMoveClient(client.originalIndex, 'down')} disabled={isFormDisabled || idx === clientsInGroup.length - 1}>
-                                          <ArrowDown className="h-3 w-3" />
-                                      </Button>
-                                  </div>
-                                  <Button type="button" variant="ghost" size="icon" onClick={() => handleOpenRemovalDialog(client.originalIndex)} disabled={isFormDisabled}>
-                                      <Trash2 className="h-4 w-4 text-destructive" />
-                                  </Button>
-                              </div>
-                          )}
-                        </div>
-                        <Separator className="my-3" />
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="space-y-1">
-                            <Label className="text-[9px] uppercase font-black text-slate-500">Fecha de Visita</Label>
-                            <Popover open={calendarOpen[client.originalIndex]} onOpenChange={(o) => setCalendarOpen(p => ({ ...p, [client.originalIndex]: o }))}>
-                              <PopoverTrigger asChild>
-                                <Button variant="outline" className="w-full justify-start h-9 text-xs font-black uppercase" disabled={isFormDisabled}>
-                                  <CalendarIcon className="mr-2 h-3 w-3" />
-                                  {client.date ? format(ensureDate(client.date), 'dd/MM/yyyy') : 'Sin Fecha'}
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent className="p-0" align="start">
-                                <Calendar mode="single" selected={ensureDate(client.date)} onSelect={(d) => handleClientValueChange(client.originalIndex, 'date', d)} locale={es} />
-                              </PopoverContent>
-                            </Popover>
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-[9px] uppercase font-black text-slate-500">Venta Proyectada ($)</Label>
-                            <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorVenta ?? ''} onChange={(e) => handleClientValueChange(client.originalIndex, 'valorVenta', e.target.value)} disabled={isFormDisabled} />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-[9px] uppercase font-black text-slate-500">Cobro Proyectado ($)</Label>
-                            <Input type="text" className="h-9 text-xs font-black text-slate-950" value={client.valorCobro ?? ''} onChange={(e) => handleClientValueChange(client.originalIndex, 'valorCobro', e.target.value)} disabled={isFormDisabled} />
-                          </div>
-                        </div>
-                      </Card>
-                    ))}
-                  </CollapsibleContent>
-                </Collapsible>
+                      <Badge variant="secondary" className="font-black text-[10px]">${client.valorVenta || 0}</Badge>
+                  </div>
               ))}
-            </div>
           </CardContent>
         </Card>
 
-        <div className="flex flex-col sm:flex-row justify-end p-4 bg-background sticky bottom-0 border-t z-10 shadow-[0_-4px_15px_-3px_rgba(0,0,0,0.1)] gap-3">
-          {canEdit && (
-            <Button type="button" onClick={handleUpdateRoute} disabled={isFormDisabled} className="font-black px-10 h-12 shadow-lg"> 
-              {isSaving && <LoaderCircle className="animate-spin mr-2" />} GUARDAR CAMBIOS
-            </Button>
-          )}
+        <div className="flex justify-end gap-3 p-4 bg-background sticky bottom-0 border-t z-10">
           {canApprove && (
-            <div className="flex flex-col sm:flex-row gap-3">
-              <Button 
-                variant="destructive" 
-                onClick={() => setIsRejectDialogOpen(true)}
-                disabled={isSaving}
-                className="font-black h-12 px-8 shadow-lg uppercase"
-              >
-                <XCircle className="mr-2 h-5 w-5" /> RECHAZAR PLAN
-              </Button>
-              <Button 
-                onClick={handleApprove}
-                disabled={isSaving}
-                className="bg-green-600 hover:bg-green-700 font-black text-white h-12 px-12 shadow-lg uppercase"
-              >
-                <CheckCircle className="mr-2 h-5 w-5" /> APROBAR PLAN DE RUTA
-              </Button>
-            </div>
+            <>
+              <Button variant="destructive" onClick={() => setIsRejectDialogOpen(true)} disabled={isSaving} className="font-black">RECHAZAR PLAN</Button>
+              <Button onClick={handleApprove} disabled={isSaving} className="bg-green-600 hover:bg-green-700 font-black text-white px-8">APROBAR PLAN DE RUTA</Button>
+            </>
           )}
         </div>
       </div>
 
       <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
-        <DialogContent className="rounded-2xl border-none shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-black uppercase text-red-600 text-xl">Rechazar Plan de Ruta</DialogTitle>
-            <DialogDescription className="text-xs font-bold uppercase text-slate-500 leading-relaxed">Indica el motivo del rechazo para que el ejecutivo pueda realizar las correcciones necesarias.</DialogDescription>
-          </DialogHeader>
+        <DialogContent className="rounded-2xl">
+          <DialogHeader><DialogTitle className="font-black uppercase text-red-600">Rechazar Plan</DialogTitle></DialogHeader>
           <div className="py-6">
-            <Label className="font-black uppercase text-[10px] text-slate-950">Observación del Supervisor (Obligatorio)</Label>
-            <Textarea 
-              value={rejectionReason} 
-              onChange={(e) => setRejectionReason(e.target.value)}
-              placeholder="Ej: Ruta con clientes fuera de zona, valores incorrectos..."
-              className="mt-2 font-black text-sm h-32 border-2 focus:ring-4 focus:ring-destructive/10"
-            />
+            <Label className="font-black uppercase text-[10px]">Observación (Obligatorio)</Label>
+            <Textarea value={rejectionReason} onChange={(e) => setRejectionReason(e.target.value)} placeholder="Motivo del rechazo..." className="mt-2 h-32" />
           </div>
-          <DialogFooter className="gap-2">
-            <DialogClose asChild><Button variant="ghost" className="font-black uppercase">Cancelar</Button></DialogClose>
-            <Button 
-              variant="destructive" 
-              onClick={handleReject} 
-              disabled={isSaving || !rejectionReason.trim()}
-              className="font-black uppercase h-11 shadow-lg"
-            >
-              {isSaving ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : 'CONFIRMAR RECHAZO'}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={isRemovalDialogOpen} onOpenChange={setIsRemovalDialogOpen}>
-        <DialogContent className="rounded-2xl border-none shadow-2xl">
-          <DialogHeader>
-            <DialogTitle className="font-black uppercase text-destructive flex items-center gap-2 text-xl">
-                <Trash2 className="h-6 w-6" /> Eliminar Parada
-            </DialogTitle>
-            <DialogDescription className="text-xs font-bold uppercase text-slate-500 leading-relaxed">Debes indicar el motivo por el cual este cliente no será visitado en este plan.</DialogDescription>
-          </DialogHeader>
-          <div className="py-6">
-            <Label className="font-black uppercase text-[10px] text-slate-950">Motivo de la Eliminación</Label>
-            <Textarea 
-              value={removalReason} 
-              onChange={(e) => setRemovalReason(e.target.value)}
-              placeholder="Ej: Local cerrado permanentemente, cliente canceló cita..."
-              className="mt-2 font-black text-sm h-32 border-2 focus:ring-4 focus:ring-destructive/10"
-            />
-          </div>
-          <DialogFooter className="gap-2">
-            <DialogClose asChild><Button variant="ghost" className="font-black uppercase">Cancelar</Button></DialogClose>
-            <Button 
-              variant="destructive" 
-              onClick={confirmRemoval} 
-              disabled={!removalReason.trim()}
-              className="font-black uppercase h-11 shadow-lg"
-            >
-              ELIMINAR CLIENTE
-            </Button>
+          <DialogFooter>
+            <DialogClose asChild><Button variant="ghost" className="font-black">Cancelar</Button></DialogClose>
+            <Button variant="destructive" onClick={handleReject} disabled={isSaving || !rejectionReason.trim()} className="font-black">CONFIRMAR RECHAZO</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
