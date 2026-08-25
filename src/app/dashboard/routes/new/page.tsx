@@ -42,7 +42,6 @@ export default function NewRoutePage() {
   const { user: currentUser, users, clients, loading, refetchData } = useAuth();
   
   const [routeName, setRouteName] = useState('');
-  
   const [routeDate, setRouteDate] = useState<Date | undefined>(() => {
       const now = new Date();
       const day = now.getDay();
@@ -227,17 +226,17 @@ export default function NewRoutePage() {
                             to: supervisor.email.toLowerCase(),
                             subject: `NUEVA RUTA PENDIENTE: ${r.routeName}`,
                             title: 'Revisión de Plan Semanal',
-                            message: `El ejecutivo ${currentUser?.name} ha finalizado su planificación y requiere tu aprobación.`,
+                            message: `El ejecutivo ${currentUser?.name} ha finalizado su planificación y requiere tu aprobación inmediata.`,
                             details: `Ruta: ${r.routeName} | Clientes: ${r.clients.filter(c => c.status !== 'Eliminado').length}`,
                             type: 'info',
                             eventKey: 'route_staged'
                         })
-                    }).catch(e => console.error(e));
+                    }).catch(e => console.error('Email trigger error:', e));
                 }
             });
         }
         
-        toast({ title: 'Rutas Guardadas', description: "Tu plan de ruta ha sido registrado." });
+        toast({ title: 'Rutas Guardadas', description: "Tu plan de ruta ha sido registrado correctamente." });
         await refetchData('routes');
         router.push('/dashboard/routes/management');
     } catch(e) { 
@@ -260,15 +259,15 @@ export default function NewRoutePage() {
 
   return (
     <>
-      <PageHeader title="Planificación Semanal" description="Organiza tus paradas." />
+      <PageHeader title="Planificación Semanal" description="Organiza tus paradas por día." />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <Card className={cn("border-t-4 border-t-primary shadow-xl", isFormLocked && "opacity-60")}>
           <CardHeader>
-            <CardTitle className="font-black text-slate-950 uppercase">Configuración</CardTitle>
+            <CardTitle className="font-black text-slate-950 uppercase">Configuración de Ruta</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="space-y-2">
-              <Label className="font-black text-[10px] uppercase text-slate-950">Nombre Identificador</Label>
+              <Label className="font-black text-[10px] uppercase text-slate-950">Nombre del Plan</Label>
               <Input placeholder="Ej: Ruta Norte" value={routeName} onChange={(e) => setRouteName(e.target.value)} disabled={isFormLocked} className="font-black h-12" />
             </div>
             
@@ -277,7 +276,7 @@ export default function NewRoutePage() {
                 {isSellerRole && (resolvedSupervisor || isResolving) ? (
                     <div className="relative">
                         <ShieldCheck className={cn("absolute left-3 top-3 h-4 w-4 z-10", isResolving ? "animate-pulse" : "text-green-600")} />
-                        <Input value={isResolving ? "Validando..." : resolvedSupervisor?.name || "Pendiente"} className="pl-10 h-10 font-black bg-green-50" disabled />
+                        <Input value={isResolving ? "Validando supervisor..." : resolvedSupervisor?.name || "Pendiente"} className="pl-10 h-10 font-black bg-green-50" disabled />
                     </div>
                 ) : (
                     <Select value={selectedSupervisorId} onValueChange={setSelectedSupervisorId} disabled={isFormLocked}>
@@ -354,18 +353,18 @@ export default function NewRoutePage() {
             </div>
           </CardContent>
            <CardFooter>
-            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase shadow-lg" disabled={activeClientsWithIndex.length === 0 || isFormLocked}>Añadir a la Lista</Button>
+            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase shadow-lg" disabled={activeClientsWithIndex.length === 0 || isFormLocked}>Guardar Cambios de la Ruta</Button>
           </CardFooter>
         </Card>
         
         <Card className="border-t-4 border-t-green-600 shadow-xl bg-white">
-          <CardHeader><CardTitle className="font-black text-slate-950 uppercase">Rutas en Cola</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="font-black text-slate-950 uppercase">Rutas Listas para Enviar</CardTitle></CardHeader>
           <CardContent className="space-y-3">
             {stagedRoutes.map(r => (
                 <div key={r.tempId} className="p-4 flex justify-between items-center bg-slate-50 border-2 border-slate-100 rounded-2xl">
                     <div className="min-w-0 flex-1">
                         <p className="font-black text-primary uppercase text-xs truncate">{r.routeName}</p>
-                        <p className="text-[9px] font-black text-slate-500 uppercase">{r.clients.length} CLIENTES</p>
+                        <p className="text-[9px] font-black text-slate-500 uppercase">{r.clients.length} CLIENTES CONFIGURADOS</p>
                     </div>
                     <Button variant="ghost" size="icon" onClick={() => setStagedRoutes(prev => prev.filter(st => st.tempId !== r.tempId))} className="text-destructive"><Trash2 className="h-4 w-4" /></Button>
                 </div>
@@ -374,7 +373,7 @@ export default function NewRoutePage() {
           <CardFooter>
             {stagedRoutes.length > 0 && (
                 <Button onClick={() => handleSaveAllRoutes(true)} className="w-full h-14 font-black bg-green-600 hover:bg-green-700 text-white text-lg shadow-2xl" disabled={isSaving}>
-                    {isSaving ? <LoaderCircle className="animate-spin mr-2 h-6 w-6" /> : <><Send className="mr-2 h-5 w-5" /> CONFIRMAR Y ENVIAR</>}
+                    {isSaving ? <LoaderCircle className="animate-spin mr-2 h-6 w-6" /> : <><Send className="mr-2 h-5 w-5" /> CONFIRMAR Y ENVIAR AL SUPERVISOR</>}
                 </Button>
             )}
           </CardFooter>
@@ -383,7 +382,7 @@ export default function NewRoutePage() {
 
       <Dialog open={isClientDialogOpen} onOpenChange={setIsClientDialogOpen}>
         <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden">
-            <DialogHeader className="p-6 pb-2"><DialogTitle className="text-2xl font-black text-primary uppercase">Catálogo de Clientes</DialogTitle></DialogHeader>
+            <DialogHeader className="p-6 pb-2"><DialogTitle className="text-2xl font-black text-primary uppercase">Buscador de Clientes</DialogTitle></DialogHeader>
             <div className="p-6 space-y-4">
                 <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-slate-950 font-black" />
@@ -415,14 +414,14 @@ export default function NewRoutePage() {
 
       <Dialog open={isRemovalDialogOpen} onOpenChange={setIsRemovalDialogOpen}>
         <DialogContent className="bg-white rounded-2xl">
-          <DialogHeader><DialogTitle className="font-black uppercase text-destructive">Indicar motivo de eliminación</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="font-black uppercase text-destructive">Justificación de Eliminación</DialogTitle></DialogHeader>
           <div className="py-4 space-y-2">
             <Label className="font-black uppercase text-[10px] text-slate-950">Observación obligatoria</Label>
-            <Textarea value={removalReason} onChange={(e) => setRemovalReason(e.target.value)} placeholder="Ej: Local cerrado..." className="font-black text-sm h-32 border-2" />
+            <Textarea value={removalReason} onChange={(e) => setRemovalReason(e.target.value)} placeholder="Ej: Cliente solicitó reprogramación..." className="font-black text-sm h-32 border-2" />
           </div>
           <DialogFooter>
             <DialogClose asChild><Button variant="ghost" className="font-black">CANCELAR</Button></DialogClose>
-            <Button variant="destructive" onClick={confirmRemoval} disabled={!removalReason.trim()} className="font-black shadow-lg">ELIMINAR CLIENTE</Button>
+            <Button variant="destructive" onClick={confirmRemoval} disabled={!removalReason.trim()} className="font-black shadow-lg">ELIMINAR PARADA</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

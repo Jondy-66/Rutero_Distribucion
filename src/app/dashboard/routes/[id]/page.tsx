@@ -107,21 +107,22 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         link: `/dashboard/routes/${routeId}`
       });
 
+      // Disparo de correo en segundo plano
       fetch('/api/notifications/send', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
               to: creator?.email.toLowerCase(),
               subject: `RUTA APROBADA: ${route.routeName}`,
-              title: '¡Plan Aprobado!',
-              message: `Tu supervisor (${currentUser.name}) ha revisado y aprobado tu plan de ruta.`,
+              title: '¡Tu Plan Semanal ha sido Aprobado!',
+              message: `Tu supervisor (${currentUser.name}) ha revisado y aprobado tu planificación. Ya puedes iniciar tus gestiones según el cronograma.`,
               type: 'success',
               eventKey: 'route_approved'
           })
-      }).catch(e => console.error(e));
+      }).catch(e => console.error('Email error:', e));
 
       await refetchData('routes');
-      toast({ title: 'Éxito', description: 'La ruta ha sido aprobada.' });
+      toast({ title: 'Éxito', description: 'La ruta ha sido aprobada y el vendedor notificado.' });
       router.push('/dashboard/routes/team-routes');
     } catch (error) {
       toast({ title: 'Error al aprobar', variant: 'destructive' });
@@ -157,13 +158,13 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
           body: JSON.stringify({
               to: creator?.email.toLowerCase(),
               subject: `ATENCIÓN: RUTA RECHAZADA - ${route.routeName}`,
-              title: 'Ajustes Requeridos en Plan de Ruta',
-              message: `Tu plan de ruta ha sido rechazado por el supervisor.`,
+              title: 'Correcciones requeridas en tu Plan de Ruta',
+              message: `Tu plan de ruta ha sido devuelto para ajustes. Revisa las observaciones técnicas del supervisor.`,
               details: rejectionReason,
               type: 'alert',
               eventKey: 'route_rejected'
           })
-      }).catch(e => console.error(e));
+      }).catch(e => console.error('Email error:', e));
 
       await refetchData('routes');
       toast({ title: 'Ruta Rechazada' });
@@ -181,15 +182,15 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
   
   return (
     <div className="flex flex-col space-y-6">
-      <PageHeader title="Detalle de Plan de Ruta" description="Revisión cronológica de paradas." />
+      <PageHeader title="Revisión de Plan Semanal" description="Auditoría cronológica de paradas planificadas." />
 
       <div className="space-y-6">
         {canApprove && (
             <Alert className="border-amber-500 bg-amber-50 shadow-md">
                 <ShieldCheck className="h-5 w-5 text-amber-600" />
-                <AlertTitle className="text-amber-800 font-black uppercase">Ruta en Espera de Aprobación</AlertTitle>
+                <AlertTitle className="text-amber-800 font-black uppercase">Plan Pendiente de Validación</AlertTitle>
                 <AlertDescription className="text-amber-700 font-bold text-xs uppercase">
-                    REVISA LAS PARADAS POR DÍA ANTES DE APROBAR EL PLAN.
+                    REVISA EL DESGLOSE DIARIO ANTES DE EMITIR TU APROBACIÓN TÉCNICA.
                 </AlertDescription>
             </Alert>
         )}
@@ -197,18 +198,18 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-1 space-y-6">
                 <Card className="border-t-4 border-t-primary shadow-lg">
-                    <CardHeader><CardTitle className="font-black uppercase text-slate-950 text-sm">Información General</CardTitle></CardHeader>
+                    <CardHeader><CardTitle className="font-black uppercase text-slate-950 text-sm">Resumen del Plan</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
                         <div className="space-y-1">
-                            <Label className="font-black text-[8px] uppercase text-slate-400">Nombre del Plan</Label>
+                            <Label className="font-black text-[8px] uppercase text-slate-400">Identificador</Label>
                             <p className="font-black text-slate-950 uppercase">{route.routeName}</p>
                         </div>
                         <div className="space-y-1">
-                            <Label className="font-black text-[8px] uppercase text-slate-400">Estado Actual</Label>
-                            <div>{route.status === 'Pendiente de Aprobación' ? <Badge variant="outline" className="border-amber-500 text-amber-600 font-black uppercase">Pendiente</Badge> : <Badge className="font-black uppercase">{route.status}</Badge>}</div>
+                            <Label className="font-black text-[8px] uppercase text-slate-400">Estatus</Label>
+                            <div>{route.status === 'Pendiente de Aprobación' ? <Badge variant="outline" className="border-amber-500 text-amber-600 font-black uppercase">En Revisión</Badge> : <Badge className="font-black uppercase">{route.status}</Badge>}</div>
                         </div>
                         <div className="space-y-1">
-                            <Label className="font-black text-[8px] uppercase text-slate-400">Vendedor</Label>
+                            <Label className="font-black text-[8px] uppercase text-slate-400">Responsable</Label>
                             <p className="font-black text-primary uppercase text-xs">{users.find(u => u.id === route.createdBy)?.name || 'Desconocido'}</p>
                         </div>
                     </CardContent>
@@ -216,7 +217,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
 
                 {route.supervisorObservation && (
                     <Card className="border-t-4 border-t-red-500 bg-red-50/30">
-                        <CardHeader><CardTitle className="font-black uppercase text-red-600 text-[10px]">Observación de Auditoría</CardTitle></CardHeader>
+                        <CardHeader><CardTitle className="font-black uppercase text-red-600 text-[10px]">Nota de Auditoría</CardTitle></CardHeader>
                         <CardContent><p className="text-xs font-bold text-slate-700 italic">"{route.supervisorObservation}"</p></CardContent>
                     </Card>
                 )}
@@ -225,7 +226,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
             <div className="lg:col-span-2 space-y-6">
                 <h3 className="font-black text-slate-950 uppercase text-lg flex items-center gap-2">
                     <CalendarIcon className="h-5 w-5 text-primary" />
-                    Cronograma de Visitas
+                    Cronograma por Día
                 </h3>
                 
                 {groupedClients.map(([dateStr, clients]) => (
@@ -237,7 +238,7 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                                     {format(new Date(dateStr + 'T00:00:00'), 'EEEE dd MMMM', { locale: es })}
                                 </h4>
                             </div>
-                            <Badge variant="secondary" className="font-black">{clients.length} Paradas</Badge>
+                            <Badge variant="secondary" className="font-black">{clients.length} Visitas</Badge>
                         </CardHeader>
                         <CardContent className="p-0">
                             <div className="divide-y divide-slate-100">
@@ -249,13 +250,13 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
                                                 <p className="font-black text-xs text-slate-950 uppercase truncate leading-tight">{client.nombre_comercial}</p>
                                                 <div className="flex items-center gap-2 mt-1">
                                                     <span className="text-[9px] font-mono font-bold text-slate-400">RUC: {client.ruc}</span>
-                                                    {client.visitStatus === 'Completado' && <Badge variant="success" className="h-4 text-[8px] uppercase">Gestionado</Badge>}
+                                                    {client.visitStatus === 'Completado' && <Badge variant="success" className="h-4 text-[8px] uppercase">OK</Badge>}
                                                 </div>
                                             </div>
                                         </div>
                                         <div className="text-right">
                                             <p className="text-[10px] font-black text-primary uppercase">${client.valorVenta?.toFixed(2) || '0.00'}</p>
-                                            <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">Venta Est.</p>
+                                            <p className="text-[8px] font-bold text-slate-400 uppercase mt-0.5">Venta Proyectada</p>
                                         </div>
                                     </div>
                                 ))}
@@ -293,13 +294,13 @@ export default function EditRoutePage({ params }: { params: Promise<{ id: string
             <Textarea 
                 value={rejectionReason} 
                 onChange={(e) => setRejectionReason(e.target.value)} 
-                placeholder="Ej: Valores de venta inconsistentes o paradas fuera de zona..." 
+                placeholder="Ej: Ajustar valores de venta o reprogramar visitas de Lunes..." 
                 className="h-32 font-medium border-2 focus:border-red-500" 
             />
           </div>
           <DialogFooter className="p-8 pt-0 gap-2">
             <DialogClose asChild><Button variant="ghost" className="font-black uppercase">Cancelar</Button></DialogClose>
-            <Button variant="destructive" onClick={handleReject} disabled={isSaving || !rejectionReason.trim()} className="font-black uppercase px-8 h-12 shadow-xl">CONFIRMAR RECHAZO</Button>
+            <Button variant="destructive" onClick={handleReject} disabled={isSaving || !rejectionReason.trim()} className="font-black uppercase px-8 h-12 shadow-xl">ENVIAR RECHAZO</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

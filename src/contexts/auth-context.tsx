@@ -1,5 +1,6 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales con sincronización total en tiempo real para todos los roles.
+ * @fileoverview Gestión de estado de autenticación y datos globales con sincronización total en tiempo real.
+ * Optimizado para una carga inicial ultra rápida.
  */
 
 'use client';
@@ -39,17 +40,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [routes, setRoutes] = useState<RoutePlan[]>([]);
   const [phoneContacts, setPhoneContacts] = useState<PhoneContact[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [dataLoading, setDataLoading] = useState(false);
   
-  const isDataInitialized = useRef<string | null>(null);
+  // 'loading' solo bloquea hasta resolver la IDENTIDAD
+  const [loading, setLoading] = useState(true);
+  // 'dataLoading' maneja las colecciones pesadas en segundo plano
+  const [dataLoading, setDataLoading] = useState(false);
 
-  /**
-   * Refetch manual para datos que no están en snapshot (si aplica).
-   */
   const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'phoneContacts') => {
-      // Nota: Con snapshots en tiempo real, refetch suele ser innecesario para clients/users,
-      // pero se mantiene para compatibilidad con componentes que lo invocan.
       if (dataType === 'phoneContacts') {
           const res = await getPhoneContacts();
           setPhoneContacts(res);
@@ -72,12 +69,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (fbUser) {
         const userDocRef = doc(db, 'users', fbUser.uid);
         
-        // Listener del perfil del usuario actual
+        // Listener del perfil del usuario actual (Prioridad Alta)
         const unsubscribeUser = onSnapshot(userDocRef, 
           (docSnap) => {
             if (docSnap.exists()) {
               const userData = { id: fbUser.uid, ...docSnap.data() } as User;
               setUser(userData);
+              // Una vez tenemos el perfil, permitimos entrar al app inmediatamente
               setLoading(false);
             } else {
               setLoading(false);
@@ -89,70 +87,38 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               path: userDocRef.path,
               operation: 'get'
             }));
+            setLoading(false);
           }
         );
 
-        // --- SINCRONIZACIÓN DE USUARIOS EN TIEMPO REAL (COLECCIÓN) ---
-        const usersQuery = query(collection(db, 'users'));
-        const unsubscribeUsers = onSnapshot(usersQuery, (snapshot) => {
-            const usersData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as User));
-            setUsers(usersData);
-        }, (error) => {
-            console.error("Error real-time users:", error);
+        // --- CARGA DE DATOS EN SEGUNDO PLANO (No bloquean el splash screen) ---
+        setDataLoading(true);
+
+        // Usuarios
+        const unsubscribeUsers = onSnapshot(query(collection(db, 'users')), (snapshot) => {
+            setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
         });
 
-        // --- SINCRONIZACIÓN DE RUTAS EN TIEMPO REAL ---
-        const routesQuery = query(collection(db, 'routes')); 
-        const unsubscribeRoutes = onSnapshot(routesQuery, (snapshot) => {
-            const routesData = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as any)) as RoutePlan[];
-            
-            setRoutes(routesData.sort((a, b) => {
-                const getMillis = (ts: any) => {
-                    if (ts instanceof Timestamp) return ts.toMillis();
-                    if (ts?.seconds) return ts.seconds * 1000 + (ts.nanoseconds / 1000000 || 0);
-                    if (ts instanceof Date) return ts.getTime();
-                    return 0;
-                };
-                return getMillis(b.createdAt) - getMillis(a.createdAt);
-            }));
-        }, (error) => {
-            console.error("Error real-time routes:", error);
-        });
+        // Rutas
+        const unsubscribeRoutes = onSnapshot(query(collection(db, 'routes'), orderBy('createdAt', 'desc')), (snapshot) => {
+            setRoutes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+            setDataLoading(false);
+        }, () => setDataLoading(false));
 
-        // --- SINCRONIZACIÓN DE NOTIFICACIONES EN TIEMPO REAL ---
-        const notificationsQuery = query(
-            collection(db, 'notifications'), 
-            where('userId', '==', fbUser.uid)
-        );
-        const unsubscribeNotifications = onSnapshot(notificationsQuery, 
-          (snapshot) => {
-            const notificationsData = snapshot.docs.map(doc => ({
+        // Notificaciones
+        const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', fbUser.uid));
+        const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
+            const data = snapshot.docs.map(doc => ({
                 id: doc.id,
                 ...doc.data(),
                 createdAt: doc.data().createdAt instanceof Timestamp ? doc.data().createdAt.toDate() : null,
             } as Notification))
-            .sort((a, b) => {
-                const dateA = a.createdAt?.getTime() || 0;
-                const dateB = b.createdAt?.getTime() || 0;
-                return dateB - dateA; 
-            })
+            .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0))
             .slice(0, 15);
-            
-            setNotifications(notificationsData);
-          },
-          (error) => {
-            console.error("Error real-time notifications:", error);
-          }
-        );
+            setNotifications(data);
+        });
 
-        // Carga inicial de PhoneContacts (estático por ahora)
-        getPhoneContacts().then(setPhoneContacts).catch(console.error);
+        getPhoneContacts().then(setPhoneContacts).catch(() => {});
 
         return () => {
             unsubscribeUser();
@@ -167,33 +133,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setRoutes([]);
         setPhoneContacts([]);
         setNotifications([]);
-        isDataInitialized.current = null;
         setLoading(false);
+        setDataLoading(false);
       }
     });
 
     return () => unsubscribeAuth();
   }, []);
 
-  // Effect para manejar la sincronización de Clientes basada en el rol del usuario cargado
+  // Sync de clientes basado en rol
   useEffect(() => {
     if (!user) return;
-
     const isSourcingAll = user.role === 'Administrador' || user.role === 'Supervisor' || user.role === 'Auditor';
     const clientsQuery = isSourcingAll 
         ? query(collection(db, 'clients')) 
         : query(collection(db, 'clients'), where('ejecutivo', '==', user.name.trim()));
 
     const unsubscribeClients = onSnapshot(clientsQuery, (snapshot) => {
-        const clientsData = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-        } as Client));
-        setClients(clientsData);
-    }, (error) => {
-        console.error("Error real-time clients:", error);
+        setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
     });
-
     return () => unsubscribeClients();
   }, [user?.role, user?.name]);
 
