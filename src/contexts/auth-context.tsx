@@ -1,11 +1,11 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales con sincronización total en tiempo real.
- * Optimizado para una carga inicial ultra rápida.
+ * @fileoverview Gestión de estado de autenticación y datos globales con sincronización optimizada.
+ * Se separa la resolución de identidad de la carga de datos masivos para acelerar el inicio.
  */
 
 'use client';
 
-import React, { createContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import React, { createContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { User as FirebaseAuthUser, onAuthStateChanged, signOut } from 'firebase/auth';
 import { db, auth } from '@/lib/firebase/config';
 import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
@@ -41,7 +41,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [phoneContacts, setPhoneContacts] = useState<PhoneContact[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
-  // 'loading' solo bloquea hasta resolver la IDENTIDAD
+  // 'loading' solo bloquea hasta resolver la IDENTIDAD básica
   const [loading, setLoading] = useState(true);
   // 'dataLoading' maneja las colecciones pesadas en segundo plano
   const [dataLoading, setDataLoading] = useState(false);
@@ -66,67 +66,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribeAuth = onAuthStateChanged(auth, (fbUser) => {
       setFirebaseUser(fbUser);
       
-      if (fbUser) {
-        const userDocRef = doc(db, 'users', fbUser.uid);
-        
-        // Listener del perfil del usuario actual (Prioridad Alta)
-        const unsubscribeUser = onSnapshot(userDocRef, 
-          (docSnap) => {
-            if (docSnap.exists()) {
-              const userData = { id: fbUser.uid, ...docSnap.data() } as User;
-              setUser(userData);
-              // Una vez tenemos el perfil, permitimos entrar al app inmediatamente
-              setLoading(false);
-            } else {
-              setLoading(false);
-              signOut(auth);
-            }
-          },
-          async (serverError) => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-              path: userDocRef.path,
-              operation: 'get'
-            }));
-            setLoading(false);
-          }
-        );
-
-        // --- CARGA DE DATOS EN SEGUNDO PLANO (No bloquean el splash screen) ---
-        setDataLoading(true);
-
-        // Usuarios
-        const unsubscribeUsers = onSnapshot(query(collection(db, 'users')), (snapshot) => {
-            setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
-        });
-
-        // Rutas
-        const unsubscribeRoutes = onSnapshot(query(collection(db, 'routes'), orderBy('createdAt', 'desc')), (snapshot) => {
-            setRoutes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
-            setDataLoading(false);
-        }, () => setDataLoading(false));
-
-        // Notificaciones
-        const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', fbUser.uid));
-        const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-                createdAt: doc.data().createdAt instanceof Timestamp ? doc.data().createdAt.toDate() : null,
-            } as Notification))
-            .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0))
-            .slice(0, 15);
-            setNotifications(data);
-        });
-
-        getPhoneContacts().then(setPhoneContacts).catch(() => {});
-
-        return () => {
-            unsubscribeUser();
-            unsubscribeUsers();
-            unsubscribeRoutes();
-            unsubscribeNotifications();
-        };
-      } else {
+      if (!fbUser) {
         setUser(null);
         setClients([]);
         setUsers([]);
@@ -135,15 +75,62 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setNotifications([]);
         setLoading(false);
         setDataLoading(false);
+        return;
       }
+
+      // 1. Obtener perfil de usuario inmediatamente (PRIORIDAD ALTA)
+      const userDocRef = doc(db, 'users', fbUser.uid);
+      const unsubscribeUser = onSnapshot(userDocRef, 
+        (docSnap) => {
+          if (docSnap.exists()) {
+            setUser({ id: fbUser.uid, ...docSnap.data() } as User);
+            setLoading(false); // Resolvemos la pantalla de carga apenas tenemos el perfil
+          } else {
+            setLoading(false);
+            signOut(auth);
+          }
+        },
+        () => setLoading(false)
+      );
+
+      return () => unsubscribeUser();
     });
 
     return () => unsubscribeAuth();
   }, []);
 
-  // Sync de clientes basado en rol
+  // 2. Carga de datos operativos en segundo plano (Una vez que el usuario está listo)
   useEffect(() => {
-    if (!user) return;
+    if (!user || !firebaseUser) return;
+
+    setDataLoading(true);
+
+    // Usuarios (Auditoría)
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+        setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
+    });
+
+    // Rutas
+    const routesQuery = query(collection(db, 'routes'), orderBy('createdAt', 'desc'));
+    const unsubscribeRoutes = onSnapshot(routesQuery, (snapshot) => {
+        setRoutes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
+        setDataLoading(false);
+    }, () => setDataLoading(false));
+
+    // Notificaciones
+    const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', firebaseUser.uid));
+    const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
+        const data = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().createdAt instanceof Timestamp ? doc.data().createdAt.toDate() : null,
+        } as Notification))
+        .sort((a, b) => (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0))
+        .slice(0, 15);
+        setNotifications(data);
+    });
+
+    // Clientes basado en Rol (Catálogo)
     const isSourcingAll = user.role === 'Administrador' || user.role === 'Supervisor' || user.role === 'Auditor';
     const clientsQuery = isSourcingAll 
         ? query(collection(db, 'clients')) 
@@ -152,8 +139,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const unsubscribeClients = onSnapshot(clientsQuery, (snapshot) => {
         setClients(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Client)));
     });
-    return () => unsubscribeClients();
-  }, [user?.role, user?.name]);
+
+    getPhoneContacts().then(setPhoneContacts).catch(() => {});
+
+    return () => {
+        unsubscribeUsers();
+        unsubscribeRoutes();
+        unsubscribeNotifications();
+        unsubscribeClients();
+    };
+  }, [user?.id, firebaseUser?.uid]);
 
   return (
     <AuthContext.Provider value={{ 
