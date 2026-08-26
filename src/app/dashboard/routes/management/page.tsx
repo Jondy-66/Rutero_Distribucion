@@ -250,7 +250,7 @@ function RouteManagementContent() {
       }
   }, [activeOriginalIndex, activeClient?.ruc]);
 
-  // PERSISTENCIA DE BORRADOR (DRAFT) EN TIEMPO REAL
+  // PERSISTENCIA DE BORRADOR (DRAFT) EN TIEMRE REAL
   useEffect(() => {
     if (!activeClient || activeOriginalIndex === null || !selectedRoute || isSaving || activeClient.visitStatus === 'Completado' || isExpired && !isAdmin) return;
     
@@ -292,6 +292,16 @@ function RouteManagementContent() {
   const isTodayFinished = useMemo(() => todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado'), [todaysClients]);
   const isJornadaBloqueada = isExpired && !isAdmin;
   const isEditingActiveClientDisabled = (activeClient?.visitStatus === 'Completado' || isJornadaBloqueada) && !isAdmin;
+
+  // Validación de motivo obligatorio para visitas presenciales sin valores
+  const isPresencialMissingObs = useMemo(() => {
+    if (!activeClient || activeClient.visitType !== 'presencial') return false;
+    const v = parseMoney(localVenta);
+    const c = parseMoney(localCobro);
+    const d = parseMoney(localDevol);
+    // Si todos los valores son 0 y no hay observación, falta el requisito
+    return v === 0 && c === 0 && d === 0 && !localVisitObs.trim();
+  }, [activeClient, localVenta, localCobro, localDevol, localVisitObs]);
 
   const handleRemoveClient = (originalIndex: number) => {
     if (!selectedRoute || isSaving) return;
@@ -366,9 +376,21 @@ function RouteManagementContent() {
 
   const handleCheckOut = () => {
     if (!selectedRoute || activeOriginalIndex === null || isSaving || isEditingActiveClientDisabled) return;
+    
+    // Validar Llamada Telefónica
     if (activeClient?.visitType === 'telefonica' && !localCallObs.trim()) { 
         toast({title: "Resumen de llamada requerido", variant: "destructive"}); 
         return; 
+    }
+
+    // Validar Visita Presencial sin valores (REQUISITO: Observación Obligatoria)
+    if (isPresencialMissingObs) {
+        toast({
+            title: "Observación Obligatoria",
+            description: "Debes registrar el motivo detallado de por qué no hubo venta, cobro ni devoluciones en esta visita presencial.",
+            variant: "destructive"
+        });
+        return;
     }
     
     setIsSaving(true);
@@ -572,9 +594,9 @@ function RouteManagementContent() {
                                 </div>
                                 <div className={cn("space-y-6 transition-all duration-500", !activeClient.checkInTime && !isManager && "opacity-20 pointer-events-none blur-[2px]")}>
                                     <div className="space-y-4"><Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Tipo de Gestión Realizada</Label><RadioGroup onValueChange={v => { if (selectedRoute && activeOriginalIndex !== null) { const next = [...selectedRoute.clients]; next[activeOriginalIndex] = { ...next[activeOriginalIndex], visitType: v as any }; updateRoute(selectedRoute.id, { clients: sanitizeClients(next) }); } }} value={activeClient.visitType || undefined} className="grid grid-cols-2 gap-4" disabled={isEditingActiveClientDisabled || isSaving}><Label className={cn("flex flex-col items-center gap-3 border-2 p-4 rounded-[2rem] cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "bg-slate-50 hover:bg-slate-100")}><RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-8 w-8 text-primary" /><span className="text-[10px] font-black uppercase">Presencial</span></Label><Label className={cn("flex flex-col items-center gap-3 border-2 p-4 rounded-[2rem] cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-4 ring-primary/10" : "bg-slate-50 hover:bg-slate-100")}><RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-8 w-8 text-primary" /><span className="text-[10px] font-black uppercase">Telefónica</span></Label></RadioGroup></div>
-                                    <div className="space-y-6"><div className="space-y-2"><Label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Observaciones Generales</Label><Textarea className="font-black text-sm border-2 rounded-2xl text-slate-950 h-24" value={localVisitObs} onChange={e => setLocalVisitObs(e.target.value)} disabled={isEditingActiveClientDisabled || isSaving} placeholder="Escribe aquí los detalles de la visita..." /></div>{activeClient.visitType === 'telefonica' && (<div className="space-y-2"><Label className="text-[10px] font-black uppercase text-primary tracking-widest">Resumen de Llamada (Obligatorio)</Label><Textarea className="font-black text-sm border-2 rounded-2xl text-slate-950 h-20" value={localCallObs} onChange={e => setLocalCallObs(e.target.value)} disabled={isEditingActiveClientDisabled || isSaving} placeholder="Registra lo acordado en la llamada..." /></div>)}</div>
+                                    <div className="space-y-6"><div className="space-y-2"><Label className={cn("text-[10px] font-black uppercase tracking-widest", isPresencialMissingObs ? "text-red-600 animate-pulse" : "text-slate-500")}>Observaciones Generales {isPresencialMissingObs && "(OBLIGATORIA SI NO HAY VALORES)"}</Label><Textarea className={cn("font-black text-sm border-2 rounded-2xl text-slate-950 h-24", isPresencialMissingObs && "border-red-500 bg-red-50/50")} value={localVisitObs} onChange={e => setLocalVisitObs(e.target.value)} disabled={isEditingActiveClientDisabled || isSaving} placeholder="Escribe aquí los detalles de la visita..." /></div>{activeClient.visitType === 'telefonica' && (<div className="space-y-2"><Label className="text-[10px] font-black uppercase text-primary tracking-widest">Resumen de Llamada (Obligatorio)</Label><Textarea className="font-black text-sm border-2 rounded-2xl text-slate-950 h-20" value={localCallObs} onChange={e => setLocalCallObs(e.target.value)} disabled={isEditingActiveClientDisabled || isSaving} placeholder="Registra lo acordado en la llamada..." /></div>)}</div>
                                     <div className="grid grid-cols-3 gap-4"><div className="space-y-1"><Label className="text-[8px] font-black uppercase text-slate-500 tracking-widest text-center block">VENTA ($)</Label><Input type="text" className="h-12 text-lg font-black text-primary border-2 rounded-xl text-center text-slate-950 bg-slate-50/50" value={localVenta} onChange={e => setLocalVenta(e.target.value)} disabled={isEditingActiveClientDisabled || isSaving} placeholder="0.00" /></div><div className="space-y-1"><Label className="text-[8px] font-black uppercase text-slate-500 tracking-widest text-center block">COBRO ($)</Label><Input type="text" className="h-12 text-lg font-black text-primary border-2 rounded-xl text-center text-slate-950 bg-slate-50/50" value={localCobro} onChange={e => setLocalCobro(e.target.value)} disabled={isEditingActiveClientDisabled || isSaving} placeholder="0.00" /></div><div className="space-y-1"><Label className="text-[8px] font-black uppercase text-slate-500 tracking-widest text-center block">DEVOL ($)</Label><Input type="text" className="h-12 text-lg font-black text-primary border-2 rounded-xl text-center text-slate-950 bg-slate-50/50" value={localDevol} onChange={e => setLocalDevol(e.target.value)} disabled={isEditingActiveClientDisabled || isSaving} placeholder="0.00" /></div></div>
-                                    <Button onClick={handleCheckOut} className="w-full h-16 text-xl font-black rounded-2xl shadow-2xl uppercase transition-transform hover:scale-[1.01]" disabled={isSaving || isEditingActiveClientDisabled || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !localCallObs.trim())}>{isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : <><LogOut className="mr-2 h-6 w-6" /> FINALIZAR GESTIÓN</>}</Button>
+                                    <Button onClick={handleCheckOut} className="w-full h-16 text-xl font-black rounded-2xl shadow-2xl uppercase transition-transform hover:scale-[1.01]" disabled={isSaving || isEditingActiveClientDisabled || !activeClient.visitType || (activeClient.visitType === 'telefonica' && !localCallObs.trim()) || isPresencialMissingObs}>{isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : <><LogOut className="mr-2 h-6 w-6" /> FINALIZAR GESTIÓN</>}</Button>
                                 </div>
                             </div>
                         ) : null}
