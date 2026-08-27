@@ -201,13 +201,14 @@ function RouteManagementContent() {
     else proceed();
   };
 
-  // Lógica de Re-adición
+  // Lógica de Re-adición: Solo muestra clientes del usuario actual
   const filteredCatalog = useMemo(() => {
       const term = reAddSearchTerm.toLowerCase();
       return (catalogClients || [])
+          .filter(c => c.ejecutivo === user?.name) // Restricción por ejecutivo
           .filter(c => c.nombre_cliente.toLowerCase().includes(term) || c.ruc.includes(term))
           .filter(c => !todaysClients.some(tc => tc.ruc === c.ruc));
-  }, [catalogClients, reAddSearchTerm, todaysClients]);
+  }, [catalogClients, reAddSearchTerm, todaysClients, user?.name]);
 
   const handleConfirmReAdd = async () => {
       if (!selectedRoute || !tempSelectedClient || !reAddJustification.trim()) return;
@@ -274,7 +275,11 @@ function RouteManagementContent() {
             </CardContent></Card>
         ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className={cn("shadow-xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white flex flex-col", activeOriginalIndex !== null && "hidden lg:flex")}>
+                {/* LISTA DE PARADAS - Ocultar en móvil si hay un cliente seleccionado */}
+                <Card className={cn(
+                    "shadow-xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white flex flex-col transition-all",
+                    activeOriginalIndex !== null ? "hidden lg:flex" : "flex"
+                )}>
                     <CardHeader className="bg-slate-50 border-b p-6 flex flex-row justify-between items-center">
                         <div>
                             <h2 className="text-lg font-black uppercase text-primary tracking-tighter">{selectedRoute.routeName}</h2>
@@ -321,31 +326,47 @@ function RouteManagementContent() {
                     </CardContent>
                 </Card>
 
-                <Card className={cn("lg:col-span-2 shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white", activeOriginalIndex === null && "hidden lg:block")}>
+                {/* PANEL DE GESTIÓN - Ocultar en móvil si no hay cliente seleccionado */}
+                <Card className={cn(
+                    "lg:col-span-2 shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white transition-all",
+                    activeOriginalIndex === null ? "hidden lg:block" : "block"
+                )}>
                     <CardHeader className="bg-slate-50 border-b p-6 flex flex-row items-center gap-4">
-                        {activeOriginalIndex !== null && <Button variant="ghost" size="icon" className="lg:hidden rounded-full h-10 w-10 hover:bg-slate-200" onClick={() => setActiveOriginalIndex(null)}><ArrowLeft className="h-6 w-6" /></Button>}
+                        {/* Botón de regreso para móvil */}
+                        {activeOriginalIndex !== null && (
+                            <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="lg:hidden rounded-full h-10 w-10 hover:bg-slate-200" 
+                                onClick={() => setActiveOriginalIndex(null)}
+                            >
+                                <ArrowLeft className="h-6 w-6" />
+                            </Button>
+                        )}
                         <div className="flex-1 min-w-0">
-                            <CardTitle className="uppercase text-primary font-black tracking-tighter truncate text-xl">{activeClient?.nombre_comercial || "Selecciona un cliente"}</CardTitle>
+                            <CardTitle className="uppercase text-primary font-black tracking-tighter truncate text-xl">
+                                {activeClient?.nombre_comercial || "Selecciona un cliente"}
+                            </CardTitle>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{activeClient?.ruc || "Para ver el panel de gestión"}</p>
                         </div>
-                        {activeClient?.isReadded && <Badge className="bg-orange-500 text-white font-black px-3 uppercase text-[10px]">CLIENTE RE-ADICIONADO</Badge>}
+                        {activeClient?.isReadded && <Badge className="bg-orange-500 text-white font-black px-3 uppercase text-[10px] hidden sm:inline-flex">CLIENTE RE-ADICIONADO</Badge>}
                     </CardHeader>
-                    <CardContent className="p-8">
+                    <CardContent className="p-4 sm:p-8">
                         {activeClient ? (
                             <div className="space-y-8 animate-in fade-in duration-300">
                                 <div className={cn(
-                                    "p-8 rounded-[2rem] border-2 flex items-center justify-between shadow-inner transition-all",
+                                    "p-6 sm:p-8 rounded-[2rem] border-2 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-inner transition-all",
                                     activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-slate-50 border-dashed border-slate-200"
                                 )}>
-                                    <div>
+                                    <div className="text-center sm:text-left">
                                         <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Hora de Ingreso</p>
-                                        <p className="text-4xl font-black text-slate-950 tracking-tighter">{activeClient.checkInTime || "--:--:--"}</p>
+                                        <p className="text-3xl sm:text-4xl font-black text-slate-950 tracking-tighter">{activeClient.checkInTime || "--:--:--"}</p>
                                     </div>
                                     {!activeClient.checkInTime && (
                                         <Button 
                                             onClick={handleCheckIn} 
                                             disabled={isSaving || !!clientInManagement || isEditDisabled} 
-                                            className="font-black h-16 px-10 uppercase text-lg rounded-2xl shadow-xl hover:scale-105 transition-transform"
+                                            className="w-full sm:w-auto font-black h-14 sm:h-16 px-10 uppercase text-base sm:text-lg rounded-2xl shadow-xl hover:scale-105 transition-transform"
                                         >
                                             <LogIn className="mr-2 h-6 w-6" /> Marcar Entrada (GPS)
                                         </Button>
@@ -364,53 +385,53 @@ function RouteManagementContent() {
                                                 next[activeOriginalIndex!].visitType = v as any;
                                                 updateRoute(selectedRoute.id, { clients: sanitizeClients(next) });
                                             }} 
-                                            className="grid grid-cols-2 gap-6"
+                                            className="grid grid-cols-2 gap-4 sm:gap-6"
                                             disabled={isEditDisabled}
                                         >
                                             <Label className={cn(
-                                                "flex flex-col items-center p-6 border-2 rounded-[2rem] cursor-pointer transition-all",
+                                                "flex flex-col items-center p-4 sm:p-6 border-2 rounded-[2rem] cursor-pointer transition-all",
                                                 activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "bg-slate-50 border-slate-100 hover:border-slate-200"
                                             )}>
                                                 <RadioGroupItem value="presencial" className="sr-only" />
-                                                <MapPin className={cn("h-10 w-10 mb-3", activeClient.visitType === 'presencial' ? "text-primary" : "text-slate-300")} />
-                                                <span className="text-xs font-black uppercase">Presencial</span>
+                                                <MapPin className={cn("h-8 w-8 sm:h-10 sm:w-10 mb-3", activeClient.visitType === 'presencial' ? "text-primary" : "text-slate-300")} />
+                                                <span className="text-[10px] sm:text-xs font-black uppercase">Presencial</span>
                                             </Label>
                                             <Label className={cn(
-                                                "flex flex-col items-center p-6 border-2 rounded-[2rem] cursor-pointer transition-all",
+                                                "flex flex-col items-center p-4 sm:p-6 border-2 rounded-[2rem] cursor-pointer transition-all",
                                                 activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "bg-slate-50 border-slate-100 hover:border-slate-200"
                                             )}>
                                                 <RadioGroupItem value="telefonica" className="sr-only" />
-                                                <Phone className={cn("h-10 w-10 mb-3", activeClient.visitType === 'telefonica' ? "text-primary" : "text-slate-300")} />
-                                                <span className="text-xs font-black uppercase">Telefónica</span>
+                                                <Phone className={cn("h-8 w-8 sm:h-10 sm:w-10 mb-3", activeClient.visitType === 'telefonica' ? "text-primary" : "text-slate-300")} />
+                                                <span className="text-[10px] sm:text-xs font-black uppercase">Telefónica</span>
                                             </Label>
                                         </RadioGroup>
                                     </div>
 
                                     <div className="space-y-6">
-                                        <div className="grid grid-cols-3 gap-6">
+                                        <div className="grid grid-cols-3 gap-3 sm:gap-6">
                                             <div className="space-y-2">
-                                                <Label className="text-[9px] font-black text-center block uppercase text-slate-500">Venta ($)</Label>
-                                                <Input value={localVenta} onChange={e => setLocalVenta(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" />
+                                                <Label className="text-[8px] sm:text-[9px] font-black text-center block uppercase text-slate-500">Venta ($)</Label>
+                                                <Input value={localVenta} onChange={e => setLocalVenta(e.target.value)} disabled={isEditDisabled} className="h-12 sm:h-14 font-black text-center text-primary text-lg sm:text-xl border-2 rounded-2xl" placeholder="0.00" />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label className="text-[9px] font-black text-center block uppercase text-slate-500">Cobro ($)</Label>
-                                                <Input value={localCobro} onChange={e => setLocalCobro(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" />
+                                                <Label className="text-[8px] sm:text-[9px] font-black text-center block uppercase text-slate-500">Cobro ($)</Label>
+                                                <Input value={localCobro} onChange={e => setLocalCobro(e.target.value)} disabled={isEditDisabled} className="h-12 sm:h-14 font-black text-center text-primary text-lg sm:text-xl border-2 rounded-2xl" placeholder="0.00" />
                                             </div>
                                             <div className="space-y-2">
-                                                <Label className="text-[9px] font-black text-center block uppercase text-slate-500">Devolución ($)</Label>
-                                                <Input value={localDevol} onChange={e => setLocalDevol(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" />
+                                                <Label className="text-[8px] sm:text-[9px] font-black text-center block uppercase text-slate-500">Devol. ($)</Label>
+                                                <Input value={localDevol} onChange={e => setLocalDevol(e.target.value)} disabled={isEditDisabled} className="h-12 sm:h-14 font-black text-center text-primary text-lg sm:text-xl border-2 rounded-2xl" placeholder="0.00" />
                                             </div>
                                         </div>
 
                                         <div className="space-y-2">
-                                            <Label className={cn("text-[11px] font-black uppercase pl-1 transition-colors", isPresencialMissingObs ? "text-red-600" : "text-slate-500")}>
+                                            <Label className={cn("text-[10px] sm:text-[11px] font-black uppercase pl-1 transition-colors", isPresencialMissingObs ? "text-red-600" : "text-slate-500")}>
                                                 Observaciones de Gestión {isPresencialMissingObs && "(OBLIGATORIA SI VALORES SON $0)"}
                                             </Label>
                                             <Textarea 
                                                 value={localVisitObs} 
                                                 onChange={e => setLocalVisitObs(e.target.value)} 
                                                 disabled={isEditDisabled}
-                                                className={cn("border-2 rounded-[1.5rem] p-4 text-base font-bold min-h-[120px] transition-all", isPresencialMissingObs && "border-red-500 bg-red-50 focus:ring-red-100")} 
+                                                className={cn("border-2 rounded-[1.5rem] p-4 text-sm sm:text-base font-bold min-h-[120px] transition-all", isPresencialMissingObs && "border-red-500 bg-red-50 focus:ring-red-100")} 
                                                 placeholder="Describe el resultado de la visita o llamada..." 
                                             />
                                         </div>
@@ -420,23 +441,23 @@ function RouteManagementContent() {
                                         <Button 
                                             onClick={handleCheckOut} 
                                             disabled={isSaving || isPresencialMissingObs || !activeClient.visitType || isEditDisabled} 
-                                            className="w-full h-20 text-2xl font-black uppercase shadow-2xl rounded-[1.5rem] bg-slate-950 hover:bg-slate-900 transition-all hover:scale-[1.01]"
+                                            className="w-full h-16 sm:h-20 text-xl sm:text-2xl font-black uppercase shadow-2xl rounded-[1.5rem] bg-slate-950 hover:bg-slate-900 transition-all hover:scale-[1.01]"
                                         >
-                                            {isSaving ? <LoaderCircle className="animate-spin h-8 w-8" /> : <><LogOut className="mr-3 h-8 w-8" /> Finalizar Gestión</>}
+                                            {isSaving ? <LoaderCircle className="animate-spin h-8 w-8" /> : <><LogOut className="mr-3 h-6 w-6 sm:h-8 sm:w-8" /> Finalizar Gestión</>}
                                         </Button>
                                     ) : (
-                                        <div className="p-8 bg-green-50 border-2 border-green-200 rounded-[2rem] text-center">
-                                            <CheckCircle2 className="h-12 w-12 text-green-600 mx-auto mb-3" />
-                                            <p className="text-xl font-black text-green-900 uppercase tracking-tighter">Gestión Finalizada</p>
-                                            <p className="text-xs font-bold text-green-700 uppercase mt-1">Sincronizado con éxito: {activeClient.checkOutTime}</p>
+                                        <div className="p-6 sm:p-8 bg-green-50 border-2 border-green-200 rounded-[2rem] text-center">
+                                            <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 text-green-600 mx-auto mb-3" />
+                                            <p className="text-lg sm:text-xl font-black text-green-900 uppercase tracking-tighter">Gestión Finalizada</p>
+                                            <p className="text-[10px] sm:text-xs font-bold text-green-700 uppercase mt-1">Sincronizado con éxito: {activeClient.checkOutTime}</p>
                                         </div>
                                     )}
                                 </div>
                             </div>
                         ) : (
-                            <div className="text-center py-32 flex flex-col items-center gap-6 opacity-30 select-none">
-                                <Image src="https://i.ibb.co/JjfktNsS/Routify.png" alt="Routify" width={200} height={70} className="grayscale" />
-                                <p className="font-black text-2xl uppercase tracking-widest text-slate-400">Selecciona un cliente de la lista</p>
+                            <div className="text-center py-24 sm:py-32 flex flex-col items-center gap-6 opacity-30 select-none">
+                                <Image src="https://i.ibb.co/JjfktNsS/Routify.png" alt="Routify" width={180} height={60} className="grayscale" />
+                                <p className="font-black text-xl sm:text-2xl uppercase tracking-widest text-slate-400">Selecciona un cliente de la lista</p>
                             </div>
                         )}
                     </CardContent>
@@ -448,7 +469,7 @@ function RouteManagementContent() {
             <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden rounded-[2.5rem]">
                 <DialogHeader className="p-8 pb-4 bg-slate-50 border-b">
                     <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">Añadir Cliente Extra</DialogTitle>
-                    <DialogDescription className="text-xs font-bold uppercase text-slate-500">Busca en tu catálogo y justifica la visita extraordinaria.</DialogDescription>
+                    <DialogDescription className="text-xs font-bold uppercase text-slate-500">Solo visualizas clientes de tu propio panel asignado.</DialogDescription>
                 </DialogHeader>
                 <div className="p-8 space-y-6">
                     <div className="relative">
@@ -481,7 +502,7 @@ function RouteManagementContent() {
                                     </div>
                                 </div>
                             )) : (
-                                <div className="p-10 text-center opacity-30 font-black uppercase text-[10px] tracking-widest">Sin resultados en tu catálogo</div>
+                                <div className="p-10 text-center opacity-30 font-black uppercase text-[10px] tracking-widest">Sin resultados en tu catálogo autorizado</div>
                             )}
                         </div>
                     </ScrollArea>
@@ -498,7 +519,7 @@ function RouteManagementContent() {
                         </div>
                     )}
                 </div>
-                <DialogFooter className="p-8 bg-slate-50 border-t flex items-center justify-between">
+                <DialogFooter className="p-8 bg-slate-50 border-t flex items-center justify-between gap-4">
                     <Button variant="ghost" className="font-black uppercase" onClick={() => setIsReAddDialogOpen(false)}>CANCELAR</Button>
                     <Button 
                         disabled={!tempSelectedClient || !reAddJustification.trim() || isSaving}
