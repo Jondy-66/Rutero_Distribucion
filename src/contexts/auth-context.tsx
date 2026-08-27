@@ -1,6 +1,5 @@
 /**
  * @fileoverview Gestión de estado de autenticación y datos globales con sincronización optimizada.
- * Se separa la resolución de identidad de la carga de datos masivos para acelerar el inicio.
  */
 
 'use client';
@@ -11,8 +10,6 @@ import { db, auth } from '@/lib/firebase/config';
 import type { User, Client, Notification, RoutePlan, PhoneContact } from '@/lib/types';
 import { collection, doc, onSnapshot, query, where, Timestamp, orderBy } from 'firebase/firestore';
 import { getPhoneContacts, markNotificationAsRead as markAsReadFirestore, markAllNotificationsAsRead as markAllAsReadFirestore } from '@/lib/firebase/firestore';
-import { errorEmitter } from '@/firebase/error-emitter';
-import { FirestorePermissionError } from '@/firebase/errors';
 
 interface AuthContextType {
   user: User | null;
@@ -41,9 +38,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [phoneContacts, setPhoneContacts] = useState<PhoneContact[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   
-  // 'loading' solo bloquea hasta resolver la IDENTIDAD básica
   const [loading, setLoading] = useState(true);
-  // 'dataLoading' maneja las colecciones pesadas en segundo plano
   const [dataLoading, setDataLoading] = useState(false);
 
   const refetchData = useCallback(async (dataType: 'clients' | 'users' | 'phoneContacts') => {
@@ -78,13 +73,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      // 1. Obtener perfil de usuario inmediatamente (PRIORIDAD ALTA)
+      // Obtener perfil inmediatamente
       const userDocRef = doc(db, 'users', fbUser.uid);
       const unsubscribeUser = onSnapshot(userDocRef, 
         (docSnap) => {
           if (docSnap.exists()) {
             setUser({ id: fbUser.uid, ...docSnap.data() } as User);
-            setLoading(false); // Resolvemos la pantalla de carga apenas tenemos el perfil
+            // RESOLVEMOS LOADING AQUÍ PARA CARGA RÁPIDA
+            setLoading(false);
           } else {
             setLoading(false);
             signOut(auth);
@@ -99,25 +95,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return () => unsubscribeAuth();
   }, []);
 
-  // 2. Carga de datos operativos en segundo plano (Una vez que el usuario está listo)
   useEffect(() => {
     if (!user || !firebaseUser) return;
 
     setDataLoading(true);
 
-    // Usuarios (Auditoría)
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
         setUsers(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as User)));
     });
 
-    // Rutas
     const routesQuery = query(collection(db, 'routes'), orderBy('createdAt', 'desc'));
     const unsubscribeRoutes = onSnapshot(routesQuery, (snapshot) => {
         setRoutes(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as any)));
         setDataLoading(false);
     }, () => setDataLoading(false));
 
-    // Notificaciones
     const notificationsQuery = query(collection(db, 'notifications'), where('userId', '==', firebaseUser.uid));
     const unsubscribeNotifications = onSnapshot(notificationsQuery, (snapshot) => {
         const data = snapshot.docs.map(doc => ({
@@ -130,7 +122,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setNotifications(data);
     });
 
-    // Clientes basado en Rol (Catálogo)
     const isSourcingAll = user.role === 'Administrador' || user.role === 'Supervisor' || user.role === 'Auditor';
     const clientsQuery = isSourcingAll 
         ? query(collection(db, 'clients')) 

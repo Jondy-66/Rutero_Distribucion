@@ -17,9 +17,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuth } from "@/hooks/use-auth";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { MapView } from "@/components/map-view";
-import * as XLSX from 'xlsx';
-import { isFinite } from "lodash";
-import { cn } from "@/lib/utils";
 
 export default function PrediccionesPage() {
   const router = useRouter();
@@ -65,18 +62,30 @@ export default function PrediccionesPage() {
     return predicciones.filter(p => {
         const ruc = String(p.cliente_id || (p as any).RUC || (p as any).ruc || '').trim();
         const clientInCatalog = clients.find(c => String(c.ruc).trim() === ruc);
-        // Filtrar por panel propio y estado activo
+        
+        // REGLA: Debe pertenecer al panel del usuario actual y estar activo
         if (!clientInCatalog || clientInCatalog.status === 'inactive') return false;
+        
+        // Si no es admin, solo sus propios clientes (ya filtrados en el AuthContext.clients)
+        if (!isSupervisorOrAdmin) {
+            return clientInCatalog.ejecutivo === currentUser?.name;
+        }
+
         if (isSupervisorOrAdmin && searchTerm) {
             const exec = (p as any).Ejecutivo || (p as any).ejecutivo || '';
             return String(exec).toLowerCase().includes(searchTerm.toLowerCase());
         }
         return true;
     });
-  }, [predicciones, searchTerm, isSupervisorOrAdmin, clients]);
+  }, [predicciones, searchTerm, isSupervisorOrAdmin, clients, currentUser]);
 
   const handlePlanRoute = () => {
-    if (selectedEjecutivo === 'todos' || filteredPredicciones.length === 0) return;
+    if (selectedEjecutivo === 'todos' && isSupervisorOrAdmin) {
+        toast({ title: "Atención", description: "Selecciona un ejecutivo específico para planificar su ruta.", variant: "destructive" });
+        return;
+    }
+    if (filteredPredicciones.length === 0) return;
+    
     const routeClients: ClientInRoute[] = filteredPredicciones.map(p => {
         const ruc = String(p.cliente_id || (p as any).RUC || '').trim();
         const catalog = clients.find(c => String(c.ruc).trim() === ruc);
@@ -93,21 +102,21 @@ export default function PrediccionesPage() {
 
   return (
     <>
-      <PageHeader title="Predicciones IA" description="Cálculo inteligente de visitas." />
+      <PageHeader title="IA Predicción Ruta" description="Cálculo inteligente de visitas basado en probabilidad y panel autorizado." />
       <div className="grid gap-6">
-        <Card><CardHeader><CardTitle>Parámetros</CardTitle></CardHeader><CardContent className="grid sm:grid-cols-3 gap-4">
-            <div className="space-y-2"><Label>Ejecutivo</Label><Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo} disabled={!isSupervisorOrAdmin}><SelectTrigger><Users className="mr-2 h-4 w-4" /><SelectValue /></SelectTrigger><SelectContent>{isSupervisorOrAdmin && <SelectItem value="todos">Todos</SelectItem>}{users.filter(u => ['Usuario', 'Telemercaderista'].includes(u.role)).map(e => <SelectItem key={e.id} value={e.name}>{e.name}</SelectItem>)}</SelectContent></Select></div>
-            <div className="space-y-2"><Label>Fecha Inicio</Label><Input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} /></div>
-            <div className="space-y-2"><Label>Días</Label><Input type="number" value={dias} onChange={e => setDias(e.target.value === '' ? '' : parseInt(e.target.value))} /></div>
-        </CardContent><CardFooter><Button onClick={obtenerPredicciones} disabled={loading} className="font-black">{loading ? "Calculando..." : "Obtener Predicciones"}</Button></CardFooter></Card>
+        <Card className="border-t-4 border-t-primary shadow-xl rounded-3xl overflow-hidden"><CardHeader className="bg-slate-50 border-b p-6"><CardTitle className="font-black uppercase text-primary tracking-tighter">Parámetros de Consulta</CardTitle></CardHeader><CardContent className="grid sm:grid-cols-3 gap-6 p-8">
+            <div className="space-y-2"><Label className="font-black text-[10px] uppercase text-slate-500">Panel Ejecutivo</Label><Select value={selectedEjecutivo} onValueChange={setSelectedEjecutivo} disabled={!isSupervisorOrAdmin}><SelectTrigger className="h-12 border-2 font-black"><Users className="mr-2 h-4 w-4 text-primary" /><SelectValue /></SelectTrigger><SelectContent className="font-black">{isSupervisorOrAdmin && <SelectItem value="todos">Todos</SelectItem>}{users.filter(u => ['Usuario', 'Telemercaderista'].includes(u.role)).map(e => <SelectItem key={e.id} value={e.name} className="font-black">{e.name}</SelectItem>)}</SelectContent></Select></div>
+            <div className="space-y-2"><Label className="font-black text-[10px] uppercase text-slate-500">Fecha de Inicio</Label><Input type="date" value={fechaInicio} onChange={e => setFechaInicio(e.target.value)} className="h-12 border-2 font-black" /></div>
+            <div className="space-y-2"><Label className="font-black text-[10px] uppercase text-slate-500">Días a Predecir</Label><Input type="number" value={dias} onChange={e => setDias(e.target.value === '' ? '' : parseInt(e.target.value))} className="h-12 border-2 font-black" /></div>
+        </CardContent><CardFooter className="bg-slate-50 p-6 flex justify-end"><Button onClick={obtenerPredicciones} disabled={loading} className="font-black h-12 px-10 shadow-lg">{loading ? <><LoaderCircle className="animate-spin mr-2" /> Calculando...</> : "Obtener Predicciones"}</Button></CardFooter></Card>
 
-        <Card><CardHeader><CardTitle>Resultados</CardTitle></CardHeader><CardContent><div className="border rounded-xl overflow-x-auto"><Table><TableHeader><TableRow><TableHead>Cliente</TableHead><TableHead className="text-right">Probabilidad</TableHead><TableHead className="text-right">Venta Est.</TableHead><TableHead>Mapa</TableHead></TableRow></TableHeader><TableBody>
-            {loading ? <TableRow><TableCell colSpan={4} className="text-center p-10"><LoaderCircle className="animate-spin mx-auto" /></TableCell></TableRow> : filteredPredicciones.length > 0 ? filteredPredicciones.map((p, i) => (
-                <TableRow key={i}><TableCell className="font-black text-xs uppercase">{p.Cliente}</TableCell><TableCell className="text-right font-black text-primary">{(p.probabilidad_visita * 100).toFixed(1)}%</TableCell><TableCell className="text-right font-mono text-xs">${p.ventas.toFixed(2)}</TableCell><TableCell><Button variant="ghost" size="icon" onClick={() => { setSelectedLocation({ lat: p.LatitudTrz, lng: p.LongitudTrz }); setIsMapOpen(true); }}><MapPin className="h-4 w-4" /></Button></TableCell></TableRow>
-            )) : <TableRow><TableCell colSpan={4} className="text-center py-10 opacity-30 uppercase font-black text-xs">Sin resultados activos para tu panel</TableCell></TableRow>}
-        </TableBody></Table></div></CardContent><CardFooter><Button onClick={handlePlanRoute} disabled={filteredPredicciones.length === 0} className="font-black"><Save className="mr-2 h-4 w-4" /> PLANIFICAR RUTA</Button></CardFooter></Card>
+        <Card className="border-t-4 border-t-primary shadow-xl rounded-3xl overflow-hidden"><CardHeader className="bg-slate-50 border-b p-6"><CardTitle className="font-black uppercase text-primary tracking-tighter">Resultados de IA</CardTitle><CardDescription className="text-[10px] font-bold uppercase">Solo visualizas clientes activos de tu panel.</CardDescription></CardHeader><CardContent className="p-0"><div className="overflow-x-auto"><Table><TableHeader className="bg-slate-100/50"><TableRow><TableHead className="font-black uppercase text-[10px] h-12 pl-8">Cliente Sugerido</TableHead><TableHead className="text-right font-black uppercase text-[10px]">Probabilidad</TableHead><TableHead className="text-right font-black uppercase text-[10px]">Venta Est.</TableHead><TableHead className="text-center font-black uppercase text-[10px] pr-8">Mapa</TableHead></TableRow></TableHeader><TableBody>
+            {loading ? <TableRow><TableCell colSpan={4} className="text-center p-20"><LoaderCircle className="animate-spin mx-auto h-10 w-10 text-primary" /></TableCell></TableRow> : filteredPredicciones.length > 0 ? filteredPredicciones.map((p, i) => (
+                <TableRow key={i} className="hover:bg-slate-50 transition-colors"><TableCell className="font-black text-xs uppercase pl-8 py-5">{p.Cliente}</TableCell><TableCell className="text-right font-black text-primary">{(p.probabilidad_visita * 100).toFixed(1)}%</TableCell><TableCell className="text-right font-mono text-xs font-bold">${p.ventas.toFixed(2)}</TableCell><TableCell className="text-center pr-8"><Button variant="ghost" size="icon" className="rounded-full hover:bg-primary/5" onClick={() => { setSelectedLocation({ lat: p.LatitudTrz, lng: p.LongitudTrz }); setIsMapOpen(true); }}><MapPin className="h-4 w-4 text-primary" /></Button></TableCell></TableRow>
+            )) : <TableRow><TableCell colSpan={4} className="text-center py-20 opacity-30 uppercase font-black text-xs tracking-widest flex flex-col items-center gap-4"><AlertCircle className="h-10 w-10" /><span>Sin predicciones activas para tu catálogo</span></TableCell></TableRow>}
+        </TableBody></Table></div></CardContent><CardFooter className="bg-slate-50 p-6 flex justify-end"><Button onClick={handlePlanRoute} disabled={filteredPredicciones.length === 0} className="font-black h-12 px-10 shadow-xl"><Save className="mr-2 h-4 w-4" /> PLANIFICAR RUTA</Button></CardFooter></Card>
       </div>
-      <Dialog open={isMapOpen} onOpenChange={setIsMapOpen}><DialogContent className="max-w-3xl h-[60vh]">{selectedLocation && <MapView center={selectedLocation} markerPosition={selectedLocation} containerClassName="h-full w-full rounded-2xl" />}</DialogContent></Dialog>
+      <Dialog open={isMapOpen} onOpenChange={setIsMapOpen}><DialogContent className="max-w-3xl h-[60vh] rounded-3xl border-none shadow-2xl p-0 overflow-hidden">{selectedLocation && <MapView center={selectedLocation} markerPosition={selectedLocation} containerClassName="h-full w-full" />}</DialogContent></Dialog>
     </>
   );
 }
