@@ -237,7 +237,7 @@ function RouteManagementContent() {
           .filter(c => 
               (c.nombre_cliente || '').toLowerCase().includes(term) || 
               (c.nombre_comercial || '').toLowerCase().includes(term) || 
-              (c.ruc || '').includes(term)
+              String(c.ruc || '').includes(term)
           )
           .filter(c => !todaysClients.some(tc => tc.ruc === c.ruc));
   }, [catalogClients, reAddSearchTerm, todaysClients, user?.name, isAdmin, allUsers, selectedRoute?.createdBy]);
