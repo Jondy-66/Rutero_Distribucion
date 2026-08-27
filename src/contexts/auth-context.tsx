@@ -1,5 +1,5 @@
 /**
- * @fileoverview Gestión de estado de autenticación y datos globales con sincronización optimizada.
+ * @fileoverview Gestión de estado de autenticación y datos globales con sincronización optimizada para carga instantánea.
  */
 
 'use client';
@@ -73,13 +73,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         return;
       }
 
-      // Obtener perfil inmediatamente
+      // Obtener perfil inmediatamente para resolver el estado 'loading' rápido
       const userDocRef = doc(db, 'users', fbUser.uid);
       const unsubscribeUser = onSnapshot(userDocRef, 
         (docSnap) => {
           if (docSnap.exists()) {
             setUser({ id: fbUser.uid, ...docSnap.data() } as User);
-            // RESOLVEMOS LOADING AQUÍ PARA CARGA RÁPIDA
+            // RESOLVEMOS LOADING AQUÍ: La interfaz principal aparece apenas se identifica al usuario
             setLoading(false);
           } else {
             setLoading(false);
@@ -98,6 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!user || !firebaseUser) return;
 
+    // Los datos operativos pesados se cargan en segundo plano
     setDataLoading(true);
 
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
@@ -122,6 +123,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         setNotifications(data);
     });
 
+    // Filtrado automático de clientes según rol y ejecutivo asignado
     const isSourcingAll = user.role === 'Administrador' || user.role === 'Supervisor' || user.role === 'Auditor';
     const clientsQuery = isSourcingAll 
         ? query(collection(db, 'clients')) 

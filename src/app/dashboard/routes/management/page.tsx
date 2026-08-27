@@ -171,7 +171,12 @@ function RouteManagementContent() {
   }, [isAdmin, isExpired, activeClient]);
 
   const handleCheckIn = () => {
-    if (!selectedRoute || activeOriginalIndex === null || clientInManagement || isEditDisabled) return;
+    if (!selectedRoute || activeOriginalIndex === null || clientInManagement || isEditDisabled) {
+        if (clientInManagement) {
+            toast({ title: "Gestión en curso", description: "Debes finalizar la gestión actual antes de iniciar otra.", variant: "destructive" });
+        }
+        return;
+    }
     setIsSaving(true);
     const timeStr = format(new Date(), 'HH:mm:ss');
     const proceed = (coords?: {lat: number, lng: number}) => {
@@ -184,7 +189,12 @@ function RouteManagementContent() {
   };
 
   const handleCheckOut = () => {
-    if (!selectedRoute || activeOriginalIndex === null || isPresencialMissingObs || isEditDisabled) return;
+    if (!selectedRoute || activeOriginalIndex === null || isPresencialMissingObs || isEditDisabled) {
+        if (isPresencialMissingObs) {
+            toast({ title: "Observación requerida", description: "Debes justificar por qué los valores son $0.", variant: "destructive" });
+        }
+        return;
+    }
     setIsSaving(true);
     const timeStr = format(new Date(), 'HH:mm:ss');
     const proceed = (coords?: {lat: number, lng: number}) => {
@@ -201,12 +211,15 @@ function RouteManagementContent() {
     else proceed();
   };
 
-  // Lógica de Re-adición: Solo muestra clientes del usuario actual
   const filteredCatalog = useMemo(() => {
-      const term = reAddSearchTerm.toLowerCase();
+      const term = reAddSearchTerm.toLowerCase().trim();
       return (catalogClients || [])
-          .filter(c => c.ejecutivo === user?.name) // Restricción por ejecutivo
-          .filter(c => c.nombre_cliente.toLowerCase().includes(term) || c.ruc.includes(term))
+          .filter(c => c.ejecutivo?.trim() === user?.name?.trim())
+          .filter(c => 
+              (c.nombre_cliente || '').toLowerCase().includes(term) || 
+              (c.nombre_comercial || '').toLowerCase().includes(term) || 
+              (c.ruc || '').includes(term)
+          )
           .filter(c => !todaysClients.some(tc => tc.ruc === c.ruc));
   }, [catalogClients, reAddSearchTerm, todaysClients, user?.name]);
 
@@ -290,7 +303,7 @@ function RouteManagementContent() {
                             size="sm" 
                             className="font-black text-[9px] uppercase border-primary text-primary rounded-xl"
                             onClick={() => setIsReAddDialogOpen(true)}
-                            disabled={isEditDisabled}
+                            disabled={isExpired && !isAdmin}
                         >
                             <PlusCircle className="mr-1 h-3.5 w-3.5" /> Cliente Extra
                         </Button>
