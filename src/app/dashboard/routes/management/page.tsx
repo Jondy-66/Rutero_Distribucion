@@ -184,8 +184,15 @@ function RouteManagementContent() {
         next[activeOriginalIndex] = { ...next[activeOriginalIndex], checkInTime: timeStr, checkInLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null };
         updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: 'En Progreso' }).finally(() => setIsSaving(false));
     };
-    if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), () => proceed());
-    else proceed();
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), 
+            () => proceed(),
+            { timeout: 8000, enableHighAccuracy: true } // Timeout de 8s para evitar bloqueos
+        );
+    } else {
+        proceed();
+    }
   };
 
   const handleCheckOut = () => {
@@ -207,14 +214,21 @@ function RouteManagementContent() {
         const allDone = sanitizeClients(next).filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
         updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: allDone ? 'Completada' : 'En Progreso' }).finally(() => { setActiveOriginalIndex(null); setIsSaving(false); });
     };
-    if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), () => proceed());
-    else proceed();
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), 
+            () => proceed(),
+            { timeout: 8000, enableHighAccuracy: true }
+        );
+    } else {
+        proceed();
+    }
   };
 
   const filteredCatalog = useMemo(() => {
       const term = reAddSearchTerm.toLowerCase().trim();
       return (catalogClients || [])
-          .filter(c => c.ejecutivo?.trim() === user?.name?.trim())
+          .filter(c => c.ejecutivo?.trim().toLowerCase() === user?.name?.trim().toLowerCase())
           .filter(c => 
               (c.nombre_cliente || '').toLowerCase().includes(term) || 
               (c.nombre_comercial || '').toLowerCase().includes(term) || 
@@ -324,7 +338,8 @@ function RouteManagementContent() {
                                                 <p className={cn("font-black text-xs uppercase leading-tight flex-1", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-950")}>{c.nombre_comercial}</p>
                                                 {c.visitStatus === 'Completado' && <Badge variant="success" className="text-[8px] font-black h-4 px-1.5 border-none uppercase">OK</Badge>}
                                                 {c.isReadded && <Badge className="bg-orange-100 text-orange-700 text-[7px] font-black h-3.5 px-1 uppercase border-none">Extra</Badge>}
-                                                {isBeingManaged && <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_hsl(var(--primary))]" />}
+                                                {/* Reemplazo del punto azul por texto EN CURSO */}
+                                                {isBeingManaged && <span className="text-[8px] font-black text-primary animate-pulse uppercase tracking-tighter shadow-[0_0_8px_hsl(var(--primary)/0.2)]">EN CURSO</span>}
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Badge variant="outline" className="text-[8px] font-bold border-slate-200">{c.ruc}</Badge>
