@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -8,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, AlertTriangle, ThumbsUp, Users as UsersIcon, Clock, Sparkles, MessageSquare, Trash2, ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { Route, MapPin, LoaderCircle, LogIn, LogOut, Phone, AlertTriangle, ThumbsUp, Users as UsersIcon, Clock, Sparkles, MessageSquare, Trash2, ArrowLeft, CheckCircle2, PlusCircle, Search } from 'lucide-react';
 import { updateRoute } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -24,6 +23,8 @@ import { Timestamp, GeoPoint, onSnapshot, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/config';
 import { cn } from '@/lib/utils';
 import Image from 'next/image';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 
 const parseMoney = (val: any): number => {
     if (typeof val === 'number') return isNaN(val) ? 0 : val;
@@ -74,7 +75,7 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
 };
 
 function RouteManagementContent() {
-  const { user, routes: allRoutes, loading: authLoading } = useAuth();
+  const { user, routes: allRoutes, clients: catalogClients, loading: authLoading } = useAuth();
   const { toast } = useToast();
   const searchParams = useSearchParams();
   
@@ -83,6 +84,12 @@ function RouteManagementContent() {
   const [activeOriginalIndex, setActiveOriginalIndex] = useState<number | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
+
+  // Estados para re-adición
+  const [isReAddDialogOpen, setIsReAddDialogOpen] = useState(false);
+  const [reAddSearchTerm, setReAddSearchTerm] = useState('');
+  const [reAddJustification, setReAddJustification] = useState('');
+  const [tempSelectedClient, setTempSelectedClient] = useState<Client | null>(null);
 
   const [localVisitObs, setLocalVisitObs] = useState('');
   const [localCallObs, setLocalCallObs] = useState('');
@@ -194,6 +201,41 @@ function RouteManagementContent() {
     else proceed();
   };
 
+  // Lógica de Re-adición
+  const filteredCatalog = useMemo(() => {
+      const term = reAddSearchTerm.toLowerCase();
+      return (catalogClients || [])
+          .filter(c => c.nombre_cliente.toLowerCase().includes(term) || c.ruc.includes(term))
+          .filter(c => !todaysClients.some(tc => tc.ruc === c.ruc));
+  }, [catalogClients, reAddSearchTerm, todaysClients]);
+
+  const handleConfirmReAdd = async () => {
+      if (!selectedRoute || !tempSelectedClient || !reAddJustification.trim()) return;
+      setIsSaving(true);
+      try {
+          const newClient: ClientInRoute = {
+              ruc: tempSelectedClient.ruc,
+              nombre_comercial: tempSelectedClient.nombre_comercial,
+              date: Timestamp.now(),
+              status: 'Activo',
+              visitStatus: 'Pendiente',
+              isReadded: true,
+              reAdditionObservation: reAddJustification
+          };
+          const nextClients = [...selectedRoute.clients, newClient];
+          await updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) });
+          toast({ title: "Cliente Añadido", description: `${tempSelectedClient.nombre_comercial} se agregó a tu ruta de hoy.` });
+          setIsReAddDialogOpen(false);
+          setTempSelectedClient(null);
+          setReAddJustification('');
+          setReAddSearchTerm('');
+      } catch (e) {
+          toast({ title: "Error", description: "No se pudo re-adicionar el cliente.", variant: "destructive" });
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
   if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-10 mx-auto" /></div>;
 
   if (allTodayFinished && !activeOriginalIndex) {
@@ -218,7 +260,12 @@ function RouteManagementContent() {
   return (
     <div className="flex flex-col gap-6">
         <PageHeader title="Gestión de Jornada" />
-        {isExpired && !isAdmin && <Alert variant="destructive" className="mb-4"><AlertTriangle /><AlertTitle>Jornada Bloqueada</AlertTitle><AlertDescription>El horario de edición ha concluido para el día de hoy.</AlertDescription></Alert>}
+        {isExpired && !isAdmin && (
+            <div className="bg-destructive/10 border-2 border-destructive text-destructive p-4 rounded-2xl flex items-center gap-3 animate-pulse">
+                <AlertTriangle className="h-6 w-6" />
+                <span className="font-black uppercase text-sm">Jornada Bloqueada: El horario de edición ha concluido (19:00).</span>
+            </div>
+        )}
         
         {!selectedRoute ? (
             <Card className="max-w-md mx-auto border-t-4 border-t-primary shadow-2xl rounded-[2.5rem] overflow-hidden"><CardHeader className="bg-slate-50 border-b p-8"><CardTitle className="text-center uppercase text-primary font-black">Activar mi Jornada</CardTitle></CardHeader><CardContent className="space-y-4 p-8">
@@ -227,33 +274,51 @@ function RouteManagementContent() {
             </CardContent></Card>
         ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className={cn("shadow-xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white", activeOriginalIndex !== null && "hidden lg:block")}>
-                    <CardHeader className="bg-slate-50 border-b p-6"><h2 className="text-lg font-black uppercase text-primary tracking-tighter">{selectedRoute.routeName}</h2><p className="text-[10px] font-bold text-slate-400 uppercase">Lista de paradas para hoy</p></CardHeader>
-                    <CardContent className="p-4"><ScrollArea className="h-[60vh] pr-2"><div className="space-y-3">
-                        {todaysClients.map(c => {
-                            const isBeingManaged = clientInManagement?.originalIndex === c.originalIndex;
-                            const isWaiting = !clientInManagement && c.visitStatus === 'Pendiente';
-                            
-                            return (
-                                <div key={c.originalIndex} onClick={() => setActiveOriginalIndex(c.originalIndex)} className={cn(
-                                    "p-5 border-2 rounded-2xl cursor-pointer transition-all relative overflow-hidden group",
-                                    activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-slate-100 bg-white",
-                                    c.visitStatus === 'Completado' && "opacity-80"
-                                )}>
-                                    <div className="flex justify-between items-start mb-2">
-                                        <p className={cn("font-black text-xs uppercase leading-tight flex-1", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-950")}>{c.nombre_comercial}</p>
-                                        {c.visitStatus === 'Completado' && <Badge variant="success" className="text-[8px] font-black h-4 px-1.5 border-none uppercase">OK</Badge>}
-                                        {isBeingManaged && <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_hsl(var(--primary))]" />}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <Badge variant="outline" className="text-[8px] font-bold border-slate-200">{c.ruc}</Badge>
-                                        {c.checkInTime && <span className="text-[9px] font-black text-slate-400 uppercase">{c.checkInTime}</span>}
-                                    </div>
-                                    {isBeingManaged && <div className="absolute bottom-0 left-0 h-1 bg-primary animate-progress-loop w-full" />}
-                                </div>
-                            );
-                        })}
-                    </div></ScrollArea></CardContent>
+                <Card className={cn("shadow-xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white flex flex-col", activeOriginalIndex !== null && "hidden lg:flex")}>
+                    <CardHeader className="bg-slate-50 border-b p-6 flex flex-row justify-between items-center">
+                        <div>
+                            <h2 className="text-lg font-black uppercase text-primary tracking-tighter">{selectedRoute.routeName}</h2>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Lista de paradas para hoy</p>
+                        </div>
+                        <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="font-black text-[9px] uppercase border-primary text-primary rounded-xl"
+                            onClick={() => setIsReAddDialogOpen(true)}
+                            disabled={isEditDisabled}
+                        >
+                            <PlusCircle className="mr-1 h-3.5 w-3.5" /> Cliente Extra
+                        </Button>
+                    </CardHeader>
+                    <CardContent className="p-4 flex-1 overflow-hidden">
+                        <ScrollArea className="h-[60vh] pr-2">
+                            <div className="space-y-3">
+                                {todaysClients.map(c => {
+                                    const isBeingManaged = clientInManagement?.originalIndex === c.originalIndex;
+                                    
+                                    return (
+                                        <div key={c.originalIndex} onClick={() => setActiveOriginalIndex(c.originalIndex)} className={cn(
+                                            "p-5 border-2 rounded-2xl cursor-pointer transition-all relative overflow-hidden group",
+                                            activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-slate-100 bg-white",
+                                            c.visitStatus === 'Completado' && "opacity-80"
+                                        )}>
+                                            <div className="flex justify-between items-start mb-2">
+                                                <p className={cn("font-black text-xs uppercase leading-tight flex-1", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-950")}>{c.nombre_comercial}</p>
+                                                {c.visitStatus === 'Completado' && <Badge variant="success" className="text-[8px] font-black h-4 px-1.5 border-none uppercase">OK</Badge>}
+                                                {c.isReadded && <Badge className="bg-orange-100 text-orange-700 text-[7px] font-black h-3.5 px-1 uppercase border-none">Extra</Badge>}
+                                                {isBeingManaged && <div className="h-2 w-2 rounded-full bg-primary animate-pulse shadow-[0_0_8px_hsl(var(--primary))]" />}
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Badge variant="outline" className="text-[8px] font-bold border-slate-200">{c.ruc}</Badge>
+                                                {c.checkInTime && <span className="text-[9px] font-black text-slate-400 uppercase">{c.checkInTime}</span>}
+                                            </div>
+                                            {isBeingManaged && <div className="absolute bottom-0 left-0 h-1 bg-primary animate-progress-loop w-full" />}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </ScrollArea>
+                    </CardContent>
                 </Card>
 
                 <Card className={cn("lg:col-span-2 shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white", activeOriginalIndex === null && "hidden lg:block")}>
@@ -263,6 +328,7 @@ function RouteManagementContent() {
                             <CardTitle className="uppercase text-primary font-black tracking-tighter truncate text-xl">{activeClient?.nombre_comercial || "Selecciona un cliente"}</CardTitle>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{activeClient?.ruc || "Para ver el panel de gestión"}</p>
                         </div>
+                        {activeClient?.isReadded && <Badge className="bg-orange-500 text-white font-black px-3 uppercase text-[10px]">CLIENTE RE-ADICIONADO</Badge>}
                     </CardHeader>
                     <CardContent className="p-8">
                         {activeClient ? (
@@ -377,6 +443,73 @@ function RouteManagementContent() {
                 </Card>
             </div>
         )}
+
+        <Dialog open={isReAddDialogOpen} onOpenChange={setIsReAddDialogOpen}>
+            <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden rounded-[2.5rem]">
+                <DialogHeader className="p-8 pb-4 bg-slate-50 border-b">
+                    <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">Añadir Cliente Extra</DialogTitle>
+                    <DialogDescription className="text-xs font-bold uppercase text-slate-500">Busca en tu catálogo y justifica la visita extraordinaria.</DialogDescription>
+                </DialogHeader>
+                <div className="p-8 space-y-6">
+                    <div className="relative">
+                        <Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-400" />
+                        <Input 
+                            placeholder="BUSCAR POR NOMBRE O RUC..." 
+                            className="pl-12 h-12 border-2 rounded-2xl font-black uppercase text-xs" 
+                            value={reAddSearchTerm} 
+                            onChange={(e) => setReAddSearchTerm(e.target.value)} 
+                        />
+                    </div>
+
+                    <ScrollArea className="h-[30vh] border-2 border-slate-100 rounded-2xl p-2 bg-slate-50/50">
+                        <div className="space-y-2">
+                            {filteredCatalog.length > 0 ? filteredCatalog.slice(0, 15).map((client) => (
+                                <div 
+                                    key={client.ruc} 
+                                    className={cn(
+                                        "flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border-2",
+                                        tempSelectedClient?.ruc === client.ruc ? "bg-primary/5 border-primary shadow-sm" : "bg-white border-transparent hover:border-slate-200"
+                                    )}
+                                    onClick={() => setTempSelectedClient(client)}
+                                >
+                                    <div className={cn("h-5 w-5 rounded-full border-2 flex items-center justify-center", tempSelectedClient?.ruc === client.ruc ? "border-primary bg-primary" : "border-slate-300")}>
+                                        {tempSelectedClient?.ruc === client.ruc && <div className="h-2 w-2 rounded-full bg-white" />}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-black text-slate-950 uppercase truncate">{client.nombre_comercial}</p>
+                                        <p className="text-[9px] font-mono text-slate-400 font-bold uppercase">{client.ruc}</p>
+                                    </div>
+                                </div>
+                            )) : (
+                                <div className="p-10 text-center opacity-30 font-black uppercase text-[10px] tracking-widest">Sin resultados en tu catálogo</div>
+                            )}
+                        </div>
+                    </ScrollArea>
+
+                    {tempSelectedClient && (
+                        <div className="space-y-3 animate-in slide-in-from-bottom-2">
+                            <Label className="text-[10px] font-black uppercase text-primary tracking-widest pl-1">Justificación Obligatoria</Label>
+                            <Textarea 
+                                placeholder="Escribe el motivo de esta visita extra..." 
+                                className="border-2 rounded-2xl h-24 font-bold text-sm"
+                                value={reAddJustification}
+                                onChange={e => setReAddJustification(e.target.value)}
+                            />
+                        </div>
+                    )}
+                </div>
+                <DialogFooter className="p-8 bg-slate-50 border-t flex items-center justify-between">
+                    <Button variant="ghost" className="font-black uppercase" onClick={() => setIsReAddDialogOpen(false)}>CANCELAR</Button>
+                    <Button 
+                        disabled={!tempSelectedClient || !reAddJustification.trim() || isSaving}
+                        onClick={handleConfirmReAdd}
+                        className="font-black px-8 h-12 shadow-xl uppercase rounded-xl"
+                    >
+                        {isSaving ? <LoaderCircle className="animate-spin" /> : "Confirmar Adición"}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     </div>
   );
 }
