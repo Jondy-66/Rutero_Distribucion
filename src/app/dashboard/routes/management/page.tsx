@@ -75,7 +75,7 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
 };
 
 function RouteManagementContent() {
-  const { user, routes: allRoutes, clients: catalogClients, loading: authLoading } = useAuth();
+  const { user, routes: allRoutes, clients: catalogClients, loading: authLoading, users: allUsers } = useAuth();
   const { toast } = useToast();
   const searchParams = useSearchParams();
   
@@ -188,7 +188,7 @@ function RouteManagementContent() {
         navigator.geolocation.getCurrentPosition(
             p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), 
             () => proceed(),
-            { timeout: 8000, enableHighAccuracy: true } // Timeout de 8s para evitar bloqueos
+            { timeout: 8000, enableHighAccuracy: true } 
         );
     } else {
         proceed();
@@ -227,15 +227,20 @@ function RouteManagementContent() {
 
   const filteredCatalog = useMemo(() => {
       const term = reAddSearchTerm.toLowerCase().trim();
+      
+      // Lógica de Admin: Buscar clientes del dueño de la ruta, no los propios.
+      const routeOwner = allUsers.find(u => u.id === selectedRoute?.createdBy);
+      const targetExecutive = (isAdmin && routeOwner) ? routeOwner.name : user?.name;
+
       return (catalogClients || [])
-          .filter(c => c.ejecutivo?.trim().toLowerCase() === user?.name?.trim().toLowerCase())
+          .filter(c => c.ejecutivo?.trim().toLowerCase() === targetExecutive?.trim().toLowerCase())
           .filter(c => 
               (c.nombre_cliente || '').toLowerCase().includes(term) || 
               (c.nombre_comercial || '').toLowerCase().includes(term) || 
               (c.ruc || '').includes(term)
           )
           .filter(c => !todaysClients.some(tc => tc.ruc === c.ruc));
-  }, [catalogClients, reAddSearchTerm, todaysClients, user?.name]);
+  }, [catalogClients, reAddSearchTerm, todaysClients, user?.name, isAdmin, allUsers, selectedRoute?.createdBy]);
 
   const handleConfirmReAdd = async () => {
       if (!selectedRoute || !tempSelectedClient || !reAddJustification.trim()) return;
@@ -252,7 +257,7 @@ function RouteManagementContent() {
           };
           const nextClients = [...selectedRoute.clients, newClient];
           await updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) });
-          toast({ title: "Cliente Añadido", description: `${tempSelectedClient.nombre_comercial} se agregó a tu ruta de hoy.` });
+          toast({ title: "Cliente Añadido", description: `${tempSelectedClient.nombre_comercial} se agregó a la ruta.` });
           setIsReAddDialogOpen(false);
           setTempSelectedClient(null);
           setReAddJustification('');
@@ -266,7 +271,8 @@ function RouteManagementContent() {
 
   if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-10 mx-auto" /></div>;
 
-  if (allTodayFinished && !activeOriginalIndex) {
+  // Pantalla de felicitación (Bypass para Administradores solicitado)
+  if (allTodayFinished && !activeOriginalIndex && !isAdmin) {
       return (
           <div className="flex flex-col items-center justify-center min-h-[70vh] text-center p-6 animate-in zoom-in duration-500">
               <div className="relative mb-8">
@@ -287,7 +293,7 @@ function RouteManagementContent() {
 
   return (
     <div className="flex flex-col gap-6">
-        <PageHeader title="Gestión de Jornada" />
+        <PageHeader title={isAdmin ? "Supervisión de Jornada" : "Gestión de Jornada"} />
         {isExpired && !isAdmin && (
             <div className="bg-destructive/10 border-2 border-destructive text-destructive p-4 rounded-2xl flex items-center gap-3 animate-pulse">
                 <AlertTriangle className="h-6 w-6" />
@@ -302,7 +308,7 @@ function RouteManagementContent() {
             </CardContent></Card>
         ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* LISTA DE PARADAS - Ocultar en móvil si hay un cliente seleccionado */}
+                {/* LISTA DE PARADAS */}
                 <Card className={cn(
                     "shadow-xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white flex flex-col transition-all",
                     activeOriginalIndex !== null ? "hidden lg:flex" : "flex"
@@ -338,7 +344,6 @@ function RouteManagementContent() {
                                                 <p className={cn("font-black text-xs uppercase leading-tight flex-1", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-950")}>{c.nombre_comercial}</p>
                                                 {c.visitStatus === 'Completado' && <Badge variant="success" className="text-[8px] font-black h-4 px-1.5 border-none uppercase">OK</Badge>}
                                                 {c.isReadded && <Badge className="bg-orange-100 text-orange-700 text-[7px] font-black h-3.5 px-1 uppercase border-none">Extra</Badge>}
-                                                {/* Reemplazo del punto azul por texto EN CURSO */}
                                                 {isBeingManaged && <span className="text-[8px] font-black text-primary animate-pulse uppercase tracking-tighter shadow-[0_0_8px_hsl(var(--primary)/0.2)]">EN CURSO</span>}
                                             </div>
                                             <div className="flex items-center gap-2">
@@ -354,13 +359,12 @@ function RouteManagementContent() {
                     </CardContent>
                 </Card>
 
-                {/* PANEL DE GESTIÓN - Ocultar en móvil si no hay cliente seleccionado */}
+                {/* PANEL DE GESTIÓN */}
                 <Card className={cn(
                     "lg:col-span-2 shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white transition-all",
                     activeOriginalIndex === null ? "hidden lg:block" : "block"
                 )}>
                     <CardHeader className="bg-slate-50 border-b p-6 flex flex-row items-center gap-4">
-                        {/* Botón de regreso para móvil */}
                         {activeOriginalIndex !== null && (
                             <Button 
                                 variant="ghost" 
@@ -478,6 +482,13 @@ function RouteManagementContent() {
                                             <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 text-green-600 mx-auto mb-3" />
                                             <p className="text-lg sm:text-xl font-black text-green-900 uppercase tracking-tighter">Gestión Finalizada</p>
                                             <p className="text-[10px] sm:text-xs font-bold text-green-700 uppercase mt-1">Sincronizado con éxito: {activeClient.checkOutTime}</p>
+                                            {isAdmin && (
+                                                <Button variant="outline" className="mt-4 font-black uppercase text-[10px] border-primary text-primary" onClick={() => {
+                                                    const next = [...selectedRoute.clients];
+                                                    next[activeOriginalIndex!].visitStatus = 'Pendiente';
+                                                    updateRoute(selectedRoute.id, { clients: sanitizeClients(next) });
+                                                }}>Reabrir para Corrección (Admin)</Button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
@@ -497,7 +508,7 @@ function RouteManagementContent() {
             <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden rounded-[2.5rem]">
                 <DialogHeader className="p-8 pb-4 bg-slate-50 border-b">
                     <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">Añadir Cliente Extra</DialogTitle>
-                    <DialogDescription className="text-xs font-bold uppercase text-slate-500">Solo visualizas clientes de tu propio panel asignado.</DialogDescription>
+                    <DialogDescription className="text-xs font-bold uppercase text-slate-500">Visualizando catálogo autorizado para esta ruta.</DialogDescription>
                 </DialogHeader>
                 <div className="p-8 space-y-6">
                     <div className="relative">
@@ -530,7 +541,7 @@ function RouteManagementContent() {
                                     </div>
                                 </div>
                             )) : (
-                                <div className="p-10 text-center opacity-30 font-black uppercase text-[10px] tracking-widest">Sin resultados en tu catálogo autorizado</div>
+                                <div className="p-10 text-center opacity-30 font-black uppercase text-[10px] tracking-widest">Sin resultados autorizados</div>
                             )}
                         </div>
                     </ScrollArea>
@@ -539,7 +550,7 @@ function RouteManagementContent() {
                         <div className="space-y-3 animate-in slide-in-from-bottom-2">
                             <Label className="text-[10px] font-black uppercase text-primary tracking-widest pl-1">Justificación Obligatoria</Label>
                             <Textarea 
-                                placeholder="Escribe el motivo de esta visita extra..." 
+                                placeholder="Escribe el motivo de esta adición..." 
                                 className="border-2 rounded-2xl h-24 font-bold text-sm"
                                 value={reAddJustification}
                                 onChange={e => setReAddJustification(e.target.value)}
