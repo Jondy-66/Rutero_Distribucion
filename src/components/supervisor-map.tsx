@@ -8,7 +8,7 @@ import { db } from '@/lib/firebase/config';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { getRecentHistory, saveZone } from '@/lib/firebase/firestore';
 import { Button } from '@/components/ui/button';
-import { LoaderCircle } from 'lucide-react';
+import { LoaderCircle, Navigation, ExternalLink, Satellite, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
 
@@ -17,18 +17,78 @@ if (typeof window !== 'undefined') {
     require('@geoman-io/leaflet-geoman-free');
 }
 
-// Iconos de alta visibilidad para supervisión
-const blueIcon = typeof window !== 'undefined' ? new L.Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-blue.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-}) : null;
+// Estilos CSS para marcadores animados
+const markerStyles = `
+  .user-marker-container {
+    position: relative;
+    width: 30px;
+    height: 30px;
+  }
+  .user-marker-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 50% 50% 50% 0;
+    background: #011688;
+    position: absolute;
+    transform: rotate(-45deg);
+    left: 50%;
+    top: 50%;
+    margin: -15px 0 0 -15px;
+    border: 3px solid #fff;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .user-marker-icon::after {
+    content: '';
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border-radius: 50%;
+  }
+  .user-marker-pulse {
+    position: absolute;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(129, 175, 17, 0.4);
+    left: 50%;
+    top: 50%;
+    margin: -20px 0 0 -20px;
+    animation: marker-pulse 2s infinite;
+    z-index: 1;
+  }
+  .user-marker-pulse.out-of-route {
+    background: rgba(225, 29, 72, 0.4);
+  }
+  .user-marker-icon.out-of-route {
+    background: #e11d48;
+  }
+  @keyframes marker-pulse {
+    0% { transform: scale(0.5); opacity: 1; }
+    100% { transform: scale(1.5); opacity: 0; }
+  }
+`;
 
-const redIcon = typeof window !== 'undefined' ? new L.Icon({
-    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-2x-red.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
-    iconSize: [25, 41], iconAnchor: [12, 41], popupAnchor: [1, -34], shadowSize: [41, 41]
-}) : null;
+/**
+ * Crea un icono de Leaflet personalizado y estético para los usuarios.
+ */
+const createUserIcon = (isOutOfRoute: boolean) => {
+    return L.divIcon({
+        className: 'custom-div-icon',
+        html: `
+            <div class="user-marker-container">
+                <div class="user-marker-pulse ${isOutOfRoute ? 'out-of-route' : ''}"></div>
+                <div class="user-marker-icon ${isOutOfRoute ? 'out-of-route' : ''}"></div>
+            </div>
+        `,
+        iconSize: [30, 30],
+        iconAnchor: [15, 30],
+        popupAnchor: [0, -35]
+    });
+};
 
 function MapViewController({ center }: { center: [number, number] | null }) {
     const map = useMap();
@@ -72,13 +132,42 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
 
 function SmoothMarker({ location }: { location: ActiveLocation }) {
     if (!isFinite(location.lat) || !isFinite(location.lng)) return null;
+    
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}`;
+
     return (
-        <Marker position={[location.lat, location.lng]} icon={(location.is_out_of_route ? redIcon : blueIcon) || undefined}>
-            <Popup>
-                <div className="font-black uppercase text-[10px] text-slate-950">
-                    <p className="font-black text-xs text-primary">{location.userName}</p>
-                    {location.is_out_of_route && <p className="text-red-600 mt-1 font-black">ALERTA: FUERA DE RUTA</p>}
-                    <p className="text-slate-500 mt-0.5 font-bold">Precisión: {location.accuracy?.toFixed(1)}m</p>
+        <Marker position={[location.lat, location.lng]} icon={createUserIcon(!!location.is_out_of_route)}>
+            <Popup className="custom-popup">
+                <div className="p-3 flex flex-col gap-3 min-w-[220px]">
+                    <div className="space-y-1">
+                        <div className="flex justify-between items-start gap-2">
+                            <h3 className="font-black text-sm uppercase text-slate-950 leading-tight truncate">{location.userName}</h3>
+                            {location.is_out_of_route && (
+                                <span className="bg-red-100 text-red-600 text-[8px] font-black px-1.5 py-0.5 rounded-full animate-pulse">FUERA RUTA</span>
+                            )}
+                        </div>
+                        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1">
+                            <Satellite className="h-2.5 w-2.5" />
+                            Precisión: {location.accuracy?.toFixed(1) || '0'}m
+                        </p>
+                    </div>
+                    
+                    <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1.5">
+                        <p className="text-[9px] font-black uppercase text-slate-500">Ubicación Actual</p>
+                        <p className="text-[10px] font-bold text-slate-600 leading-tight line-clamp-2 italic">
+                            {location.address_text || 'Dirección no reportada...'}
+                        </p>
+                    </div>
+
+                    <Button 
+                        size="sm" 
+                        className="h-10 w-full bg-slate-950 hover:bg-slate-900 text-white font-black uppercase text-[10px] rounded-xl shadow-xl flex items-center justify-center gap-2 group transition-all active:scale-95"
+                        onClick={() => window.open(googleMapsUrl, '_blank')}
+                    >
+                        <Navigation className="h-3.5 w-3.5" />
+                        Iniciar Navegación
+                        <ExternalLink className="h-3 w-3 ml-auto opacity-50 group-hover:opacity-100" />
+                    </Button>
                 </div>
             </Popup>
         </Marker>
@@ -155,6 +244,8 @@ export function SupervisorMap() {
 
   return (
     <div className="flex flex-col h-full gap-4">
+        <style dangerouslySetInnerHTML={{ __html: markerStyles }} />
+        
         <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 scrollbar-hide">
             {activeLocations.length > 0 ? (
                 activeLocations.map(loc => (
@@ -162,8 +253,8 @@ export function SupervisorMap() {
                         key={loc.userId} 
                         variant={selectedUserId === loc.userId ? "default" : "outline"}
                         className={cn(
-                            "font-black uppercase text-[9px] h-9 border-2 shrink-0 rounded-xl text-slate-950 px-4",
-                            selectedUserId === loc.userId ? "bg-primary text-white" : "bg-white"
+                            "font-black uppercase text-[9px] h-9 border-2 shrink-0 rounded-xl px-4 transition-all",
+                            selectedUserId === loc.userId ? "bg-primary text-white border-primary shadow-lg" : "bg-white text-slate-950 border-slate-100"
                         )}
                         onClick={() => fetchUserHistory(loc.userId)}
                     >
