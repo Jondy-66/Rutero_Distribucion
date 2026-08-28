@@ -120,17 +120,30 @@ function RouteManagementContent() {
       const now = new Date();
       let limitHour = 19;
       let limitMinute = 0;
+
+      // REGLA DE PRIORIDAD PARA EXTENSIÓN:
+      // 1. Extensión específica de la ruta (prioridad alta)
       if (selectedRoute?.extendedClosingTime) {
         const [h, m] = selectedRoute.extendedClosingTime.split(':').map(Number);
-        limitHour = h; limitMinute = m;
+        if (!isNaN(h)) { limitHour = h; limitMinute = m; }
       } 
+      // 2. Extensión semanal del perfil del dueño de la ruta
+      else {
+        const routeOwner = allUsers.find(u => u.id === selectedRoute?.createdBy);
+        const userToCheck = routeOwner || user;
+        if (userToCheck?.extendedClosingTime && userToCheck?.extendedClosingDays?.includes(now.getDay())) {
+            const [h, m] = userToCheck.extendedClosingTime.split(':').map(Number);
+            if (!isNaN(h)) { limitHour = h; limitMinute = m; }
+        }
+      }
+
       const currentMin = now.getHours() * 60 + now.getMinutes();
       setIsExpired(currentMin >= (limitHour * 60 + limitMinute));
     };
     check();
     const t = setInterval(check, 60000);
     return () => clearInterval(t);
-  }, [isAdmin, selectedRoute?.extendedClosingTime]);
+  }, [isAdmin, selectedRoute, allUsers, user]);
 
   const todaysClients = useMemo(() => {
     if (!selectedRoute) return [];
@@ -228,7 +241,6 @@ function RouteManagementContent() {
   const filteredCatalog = useMemo(() => {
       const term = reAddSearchTerm.toLowerCase().trim();
       
-      // Lógica de Admin: Buscar clientes del dueño de la ruta, no los propios.
       const routeOwner = allUsers.find(u => u.id === selectedRoute?.createdBy);
       const targetExecutive = (isAdmin && routeOwner) ? routeOwner.name : user?.name;
 
@@ -271,7 +283,6 @@ function RouteManagementContent() {
 
   if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-10 mx-auto" /></div>;
 
-  // Pantalla de felicitación (Bypass para Administradores solicitado)
   if (allTodayFinished && !activeOriginalIndex && !isAdmin) {
       return (
           <div className="flex flex-col items-center justify-center min-h-[70vh] text-center p-6 animate-in zoom-in duration-500">
@@ -297,7 +308,7 @@ function RouteManagementContent() {
         {isExpired && !isAdmin && (
             <div className="bg-destructive/10 border-2 border-destructive text-destructive p-4 rounded-2xl flex items-center gap-3 animate-pulse">
                 <AlertTriangle className="h-6 w-6" />
-                <span className="font-black uppercase text-sm">Jornada Bloqueada: El horario de edición ha concluido (19:00).</span>
+                <span className="font-black uppercase text-sm">Jornada Bloqueada: El horario de edición ha concluido.</span>
             </div>
         )}
         
@@ -308,7 +319,6 @@ function RouteManagementContent() {
             </CardContent></Card>
         ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* LISTA DE PARADAS */}
                 <Card className={cn(
                     "shadow-xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white flex flex-col transition-all",
                     activeOriginalIndex !== null ? "hidden lg:flex" : "flex"
@@ -344,7 +354,7 @@ function RouteManagementContent() {
                                                 <p className={cn("font-black text-xs uppercase leading-tight flex-1", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-950")}>{c.nombre_comercial}</p>
                                                 {c.visitStatus === 'Completado' && <Badge variant="success" className="text-[8px] font-black h-4 px-1.5 border-none uppercase">OK</Badge>}
                                                 {c.isReadded && <Badge className="bg-orange-100 text-orange-700 text-[7px] font-black h-3.5 px-1 uppercase border-none">Extra</Badge>}
-                                                {isBeingManaged && <span className="text-[8px] font-black text-primary animate-pulse uppercase tracking-tighter shadow-[0_0_8px_hsl(var(--primary)/0.2)]">EN CURSO</span>}
+                                                {isBeingManaged && <span className="text-[8px] font-black text-primary animate-pulse uppercase tracking-tighter">EN CURSO</span>}
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 <Badge variant="outline" className="text-[8px] font-bold border-slate-200">{c.ruc}</Badge>
@@ -359,7 +369,6 @@ function RouteManagementContent() {
                     </CardContent>
                 </Card>
 
-                {/* PANEL DE GESTIÓN */}
                 <Card className={cn(
                     "lg:col-span-2 shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white transition-all",
                     activeOriginalIndex === null ? "hidden lg:block" : "block"

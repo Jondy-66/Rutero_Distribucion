@@ -203,32 +203,24 @@ export default function TeamRoutesPage() {
 
         const isNowFinished = repairedClients.filter(r => r.status !== 'Eliminado').every(r => r.visitStatus === 'Completado');
 
-        updateRoute(routeId, { 
+        await updateRoute(routeId, { 
             clients: repairedClients,
             status: freshData.status === 'Completada' ? 'Completada' : (isNowFinished ? 'Completada' : 'En Progreso')
-        })
-        .then(() => {
-            toast({ 
-                title: "MANTENIMIENTO FINALIZADO", 
-                description: `Se han depurado los estados de gestión basados en evidencia real.`,
-                className: "bg-green-600 text-white font-black"
-            });
-            refetchData('routes');
-        })
-        .catch(async (error) => {
-            errorEmitter.emit('permission-error', new FirestorePermissionError({
-                path: routeRef.path,
-                operation: 'update',
-                requestResourceData: { clients: repairedClients }
-            }));
-        })
-        .finally(() => {
-            setIsRescuing(null);
         });
 
-    } catch (error) {
-        console.error("Rescue process error:", error);
-        toast({ title: "Error en Rescate", description: "Ocurrió un fallo al intentar acceder a los datos.", variant: "destructive" });
+        toast({ 
+            title: "MANTENIMIENTO FINALIZADO", 
+            description: `Se han depurado los estados de gestión basados en evidencia real.`,
+            className: "bg-green-600 text-white font-black"
+        });
+        await refetchData('routes');
+
+    } catch (error: any) {
+        errorEmitter.emit('permission-error', new FirestorePermissionError({
+            path: 'routes/' + routeId,
+            operation: 'update'
+        }));
+    } finally {
         setIsRescuing(null);
     }
   };
@@ -289,7 +281,6 @@ export default function TeamRoutesPage() {
         if (!route) throw new Error("Ruta no encontrada");
 
         if (extensionType === 'weekly') {
-            // Extender de Lunes a Viernes para el Usuario (Permanente)
             await updateUser(route.createdBy, {
                 extendedClosingTime: newClosingTime,
                 extendedClosingDays: [1, 2, 3, 4, 5]
@@ -300,7 +291,6 @@ export default function TeamRoutesPage() {
                 className: "bg-blue-600 text-white font-black"
             });
         } else {
-            // Extender solo la Ruta Actual
             await updateRoute(extendingRouteId, { extendedClosingTime: newClosingTime });
             toast({ 
                 title: "CIERRE EXTENDIDO (SOLO HOY)", 
@@ -322,7 +312,7 @@ export default function TeamRoutesPage() {
   
   const toggleRouteSelection = (routeId: string) => {
       setSelectedRouteIds(prev => 
-        prev.includes(routeId) ? prev.filter(id => id !== routeId) : [...prev, routeId]
+        prev.includes(routeId) ? prev.filter(id => id !== routeId) : [...prev, id]
       );
   };
 
@@ -348,12 +338,8 @@ export default function TeamRoutesPage() {
   const getRouteDate = (route: RoutePlan) => {
     if (route.date) {
       const date = route.date;
-      if (date instanceof Timestamp) {
-        return format(date.toDate(), 'PPP', { locale: es });
-      }
-      if (date instanceof Date && !isNaN(date.getTime())) {
-          return format(date, 'PPP', { locale: es });
-      }
+      if (date instanceof Timestamp) return format(date.toDate(), 'PPP', { locale: es });
+      if (date instanceof Date && !isNaN(date.getTime())) return format(date, 'PPP', { locale: es });
       try {
           return format(new Date(date as any), 'PPP', { locale: es });
       } catch (e) {
@@ -365,17 +351,12 @@ export default function TeamRoutesPage() {
 
   const isLoading = authLoading || (dataLoading && globalRoutes.length === 0);
 
-  if (authLoading) {
-      return <PageHeader title="Rutas de Equipo" description="Cargando..." />
-  }
-
   if (user?.role !== 'Administrador' && user?.role !== 'Supervisor') {
       return (
           <PageHeader title="Acceso Denegado" description="Esta página solo está disponible para supervisores y administradores." />
       );
   }
 
-  // Lógica de permisos granulares
   const canRescue = isAdminRole || user?.permissions?.includes('rescue-gestiones');
   const canExtend = isAdminRole || user?.permissions?.includes('extend-closing');
 
@@ -399,7 +380,7 @@ export default function TeamRoutesPage() {
                     <Button 
                         onClick={handleBulkFinalize} 
                         disabled={isBulkProcessing}
-                        className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-white font-black uppercase text-[10px] h-10 px-6 rounded-xl shadow-lg animate-in fade-in slide-in-from-right-4"
+                        className="w-full sm:w-auto bg-primary hover:bg-primary/90 text-white font-black uppercase text-[10px] h-10 px-6 rounded-xl shadow-lg"
                     >
                         {isBulkProcessing ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : <CheckCircle className="mr-2 h-4 w-4" />}
                         Finalizar {selectedRouteIds.length} Seleccionadas
@@ -465,7 +446,7 @@ export default function TeamRoutesPage() {
                                     const canReview = (user?.role === 'Supervisor' || isAdminRole) && route.status === 'Pendiente de Aprobación';
                                     const canDelete = isAdminRole;
                                     const canReactivate = isAdminRole && (route.status === 'Completada' || route.status === 'Rechazada');
-                                    const canManageLive = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
+                                    const canManageLive = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada' || route.status === 'Completada');
                                     const canFinalize = isAdminRole && (route.status === 'En Progreso' || route.status === 'Planificada');
                                    
                                     return (
@@ -586,8 +567,8 @@ export default function TeamRoutesPage() {
                                                 <AlertDialogContent className="rounded-2xl border-none shadow-2xl bg-white w-[90vw] max-w-md mx-auto">
                                                     <AlertDialogHeader>
                                                         <AlertDialogTitle className="font-black text-slate-950 uppercase text-lg sm:text-xl">¿Confirmar eliminación?</AlertDialogTitle>
-                                                        <AlertDialogDescription className="font-bold text-xs uppercase text-slate-500 leading-relaxed">
-                                                            Esta acción borrará permanentemente la ruta y todas sus gestiones asociadas. No hay recuperación tras este paso.
+                                                        <AlertDialogDescription className="font-bold text-xs uppercase text-slate-500">
+                                                            Esta acción borrará permanentemente la ruta y todas sus gestiones asociadas.
                                                         </AlertDialogDescription>
                                                     </AlertDialogHeader>
                                                     <AlertDialogFooter className="gap-2 sm:gap-3 flex flex-col sm:flex-row">
@@ -657,7 +638,6 @@ export default function TeamRoutesPage() {
                         onChange={(e) => setNewClosingTime(e.target.value)} 
                         className="h-12 border-2 border-slate-200 font-black text-primary text-2xl rounded-xl text-center"
                       />
-                      <p className="text-[9px] font-bold text-slate-400 uppercase italic text-center">Hora de bloqueo definitiva</p>
                   </div>
               </div>
               <DialogFooter className="gap-2 sm:gap-3 flex flex-col sm:flex-row">
@@ -682,7 +662,6 @@ export default function TeamRoutesPage() {
                   <p className="text-amber-700 text-xs font-bold uppercase mt-1 leading-relaxed">
                       Si un vendedor indica que terminó su jornada pero no visualizas los "OK", usa la opción 
                       <span className="font-black underline mx-1">Rescatar Gestiones</span> en el menú de la ruta. 
-                      Esto forzará la sincronización y validará cada visita individualmente basándose en evidencia real.
                   </p>
               </div>
           </div>
