@@ -59,7 +59,7 @@ type ClientCsvData = {
 const ITEMS_PER_PAGE = 10;
 
 export default function ClientsPage() {
-  const { user, clients, loading, refetchData } = useAuth();
+  const { user, users, clients, loading, refetchData } = useAuth();
   const [filter, setFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedEjecutivo, setSelectedEjecutivo] = useState('all');
@@ -414,9 +414,13 @@ export default function ClientsPage() {
   };
 
   const uniqueEjecutivos = useMemo(() => {
-    const ejecutivos = new Set(clients.map(c => c.ejecutivo).filter(Boolean));
-    return ['all', ...Array.from(ejecutivos)];
-  }, [clients]);
+    const fromUsers = users
+      .filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista')
+      .map(u => u.name);
+    const fromClients = clients.map(c => c.ejecutivo).filter(Boolean);
+    const combined = new Set([...fromUsers, ...fromClients]);
+    return ['all', ...Array.from(combined).sort((a, b) => a.localeCompare(b))];
+  }, [users, clients]);
 
   const executivesForMigration = useMemo(() => {
     return uniqueEjecutivos.filter(e => e !== 'all');
@@ -686,7 +690,8 @@ export default function ClientsPage() {
                       <TableCell className="text-right">
                         <AlertDialog>
                           <DropdownMenu>
-                            <DropdownMenuTrigger asChild><Button size="icon" variant="ghost" className="hover:bg-slate-100 rounded-full"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" className="hover:bg-slate-100 rounded-full"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-40">
                               <DropdownMenuLabel className="font-black text-[10px] uppercase text-slate-500">Opciones</DropdownMenuLabel>
                               <DropdownMenuItem onClick={() => handleEdit(client.id)} className="font-black text-xs uppercase">Editar Ficha</DropdownMenuItem>
