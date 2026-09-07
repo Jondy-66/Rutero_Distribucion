@@ -121,13 +121,10 @@ function RouteManagementContent() {
       let limitHour = 19;
       let limitMinute = 0;
 
-      // REGLA DE PRIORIDAD PARA EXTENSIÓN:
-      // 1. Extensión específica de la ruta (prioridad alta)
       if (selectedRoute?.extendedClosingTime) {
         const [h, m] = selectedRoute.extendedClosingTime.split(':').map(Number);
         if (!isNaN(h)) { limitHour = h; limitMinute = m; }
       } 
-      // 2. Extensión semanal del perfil del dueño de la ruta
       else {
         const routeOwner = allUsers.find(u => u.id === selectedRoute?.createdBy);
         const userToCheck = routeOwner || user;
@@ -192,16 +189,19 @@ function RouteManagementContent() {
     }
     setIsSaving(true);
     const timeStr = format(new Date(), 'HH:mm:ss');
+    
     const proceed = (coords?: {lat: number, lng: number}) => {
         const next = [...selectedRoute.clients];
         next[activeOriginalIndex] = { ...next[activeOriginalIndex], checkInTime: timeStr, checkInLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null };
-        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: 'En Progreso' }).finally(() => setIsSaving(false));
+        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: 'En Progreso' })
+            .finally(() => setIsSaving(false));
     };
+
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), 
             () => proceed(),
-            { timeout: 8000, enableHighAccuracy: true } 
+            { timeout: 4000, enableHighAccuracy: true, maximumAge: 0 } 
         );
     } else {
         proceed();
@@ -231,7 +231,7 @@ function RouteManagementContent() {
         navigator.geolocation.getCurrentPosition(
             p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), 
             () => proceed(),
-            { timeout: 8000, enableHighAccuracy: true }
+            { timeout: 4000, enableHighAccuracy: true, maximumAge: 0 }
         );
     } else {
         proceed();
@@ -409,7 +409,7 @@ function RouteManagementContent() {
                                             disabled={isSaving || !!clientInManagement || isEditDisabled} 
                                             className="w-full sm:w-auto font-black h-14 sm:h-16 px-10 uppercase text-base sm:text-lg rounded-2xl shadow-xl hover:scale-105 transition-transform"
                                         >
-                                            <LogIn className="mr-2 h-6 w-6" /> Marcar Entrada (GPS)
+                                            {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : <><LogIn className="mr-2 h-6 w-6" /> Marcar Entrada (GPS)</>}
                                         </Button>
                                     )}
                                     {activeClient.checkInTime && <CheckCircle2 className="h-10 w-10 text-green-500" />}
@@ -522,9 +522,9 @@ function RouteManagementContent() {
                 <div className="p-8 space-y-6">
                     <div className="relative">
                         <Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-400" />
-                        <Input 
+                        <input 
                             placeholder="BUSCAR POR NOMBRE O RUC..." 
-                            className="pl-12 h-12 border-2 rounded-2xl font-black uppercase text-xs" 
+                            className="pl-12 h-12 w-full border-2 rounded-2xl font-black uppercase text-xs focus:ring-4 focus:ring-primary/5 outline-none" 
                             value={reAddSearchTerm} 
                             onChange={(e) => setReAddSearchTerm(e.target.value)} 
                         />
