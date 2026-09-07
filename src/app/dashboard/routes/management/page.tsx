@@ -201,7 +201,7 @@ function RouteManagementContent() {
         navigator.geolocation.getCurrentPosition(
             p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), 
             () => proceed(),
-            { timeout: 4000, enableHighAccuracy: true, maximumAge: 0 } 
+            { timeout: 8000, enableHighAccuracy: true, maximumAge: 0 } 
         );
     } else {
         proceed();
@@ -231,7 +231,7 @@ function RouteManagementContent() {
         navigator.geolocation.getCurrentPosition(
             p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), 
             () => proceed(),
-            { timeout: 4000, enableHighAccuracy: true, maximumAge: 0 }
+            { timeout: 8000, enableHighAccuracy: true, maximumAge: 0 }
         );
     } else {
         proceed();
