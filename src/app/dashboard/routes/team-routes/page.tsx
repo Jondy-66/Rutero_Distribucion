@@ -1,6 +1,6 @@
 'use client';
 import { useState, useMemo } from 'react';
-import { useRouter } from 'navigation';
+import { useRouter } from 'next/navigation';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -312,7 +312,7 @@ export default function TeamRoutesPage() {
   
   const toggleRouteSelection = (routeId: string) => {
       setSelectedRouteIds(prev => 
-        prev.includes(routeId) ? prev.filter(rid => rid !== routeId) : [...prev, routeId]
+        prev.includes(routeId) ? prev.filter(id => id !== routeId) : [...prev, routeId]
       );
   };
 
