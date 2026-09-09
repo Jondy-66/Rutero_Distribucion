@@ -173,18 +173,15 @@ function RouteManagementContent() {
 
   const todaysClients = useMemo(() => {
     if (!selectedRoute) return [];
-    const today = startOfDay(new Date());
+    
+    // Eliminamos el filtrado por fecha para asegurar que siempre se vean los clientes del plan seleccionado.
+    // Esto soluciona que los clientes "desaparezcan" al cambiar de día o en planes semanales.
     const allMappedClients = (selectedRoute.clients || []).map((c, index) => ({ ...c, originalIndex: index }));
     
-    // FIX FOTO: Si es Admin o se cargó por ID específico, mostrar TODOS los clientes para evitar lista vacía
-    if (isAdmin || searchParams.get('routeId')) {
-        return allMappedClients.filter(c => c.status !== 'Eliminado');
-    }
+    return allMappedClients.filter(c => c.status !== 'Eliminado');
+  }, [selectedRoute]);
 
-    return allMappedClients.filter(c => c.status !== 'Eliminado' && isSameDay(startOfDay(ensureDate(c.date)), today));
-  }, [selectedRoute, isAdmin, searchParams]);
-
-  const allTodayFinished = useMemo(() => {
+  const allRouteFinished = useMemo(() => {
     if (isAdmin) return false;
     return todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado');
   }, [todaysClients, isAdmin]);
@@ -311,7 +308,7 @@ function RouteManagementContent() {
 
   if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-10 mx-auto" /></div>;
 
-  if (allTodayFinished && !activeOriginalIndex && !isAdmin) {
+  if (allRouteFinished && !activeOriginalIndex && !isAdmin) {
       return (
           <div className="flex flex-col items-center justify-center min-h-[70vh] text-center p-6 animate-in zoom-in duration-500">
               <div className="bg-white p-8 rounded-[3rem] shadow-2xl relative border-4 border-primary">
@@ -345,7 +342,7 @@ function RouteManagementContent() {
                     <CardHeader className="bg-slate-50 border-b p-6 flex flex-row justify-between items-center">
                         <div>
                             <h2 className="text-lg font-black uppercase text-primary tracking-tighter">{selectedRoute.routeName}</h2>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Lista de paradas para hoy</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Lista de paradas asignadas</p>
                         </div>
                         <Button variant="outline" size="sm" className="font-black text-[9px] uppercase border-primary text-primary rounded-xl" onClick={() => setIsReAddDialogOpen(true)} disabled={isExpired && !isAdmin}><PlusCircle className="mr-1 h-3.5 w-3.5" /> Cliente Extra</Button>
                     </CardHeader>
