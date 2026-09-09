@@ -174,11 +174,15 @@ function RouteManagementContent() {
   const todaysClients = useMemo(() => {
     if (!selectedRoute) return [];
     
-    // Eliminamos el filtrado por fecha para asegurar que siempre se vean los clientes del plan seleccionado.
-    // Esto soluciona que los clientes "desaparezcan" al cambiar de día o en planes semanales.
+    const now = new Date();
+    // Mapeamos los clientes con su índice original para persistencia
     const allMappedClients = (selectedRoute.clients || []).map((c, index) => ({ ...c, originalIndex: index }));
     
-    return allMappedClients.filter(c => c.status !== 'Eliminado');
+    return allMappedClients.filter(c => {
+        if (c.status === 'Eliminado') return false;
+        // Filtramos para mostrar únicamente los clientes programados para el día de hoy
+        return isSameDay(ensureDate(c.date), now);
+    });
   }, [selectedRoute]);
 
   const allRouteFinished = useMemo(() => {
@@ -342,7 +346,7 @@ function RouteManagementContent() {
                     <CardHeader className="bg-slate-50 border-b p-6 flex flex-row justify-between items-center">
                         <div>
                             <h2 className="text-lg font-black uppercase text-primary tracking-tighter">{selectedRoute.routeName}</h2>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase">Lista de paradas asignadas</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase">Lista de paradas para hoy</p>
                         </div>
                         <Button variant="outline" size="sm" className="font-black text-[9px] uppercase border-primary text-primary rounded-xl" onClick={() => setIsReAddDialogOpen(true)} disabled={isExpired && !isAdmin}><PlusCircle className="mr-1 h-3.5 w-3.5" /> Cliente Extra</Button>
                     </CardHeader>
