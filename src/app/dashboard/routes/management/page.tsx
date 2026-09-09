@@ -80,7 +80,6 @@ function RouteManagementContent() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
   
-  // Inicialización inteligente con persistencia local
   const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>(() => {
       if (typeof window !== 'undefined') {
           return searchParams.get('routeId') || localStorage.getItem('activeRouteId') || undefined;
@@ -101,7 +100,6 @@ function RouteManagementContent() {
   const [isSaving, setIsSaving] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
 
-  // Estados para re-adición
   const [isReAddDialogOpen, setIsReAddDialogOpen] = useState(false);
   const [reAddSearchTerm, setReAddSearchTerm] = useState('');
   const [reAddJustification, setReAddJustification] = useState('');
@@ -115,7 +113,6 @@ function RouteManagementContent() {
 
   const isAdmin = user?.role === 'Administrador';
 
-  // Guardar estado en localStorage para evitar pérdida de progreso al recargar
   useEffect(() => {
     if (selectedRouteId) {
         localStorage.setItem('activeRouteId', selectedRouteId);
@@ -173,10 +170,15 @@ function RouteManagementContent() {
   const todaysClients = useMemo(() => {
     if (!selectedRoute) return [];
     const today = startOfDay(new Date());
-    return (selectedRoute.clients || [])
-        .map((c, index) => ({ ...c, originalIndex: index }))
-        .filter(c => c.status !== 'Eliminado' && isSameDay(startOfDay(ensureDate(c.date)), today));
-  }, [selectedRoute]);
+    const allMappedClients = (selectedRoute.clients || []).map((c, index) => ({ ...c, originalIndex: index }));
+    
+    // FIX: Si es Admin o se cargó por ID específico, mostrar TODOS los clientes para evitar lista vacía
+    if (isAdmin || searchParams.get('routeId')) {
+        return allMappedClients.filter(c => c.status !== 'Eliminado');
+    }
+
+    return allMappedClients.filter(c => c.status !== 'Eliminado' && isSameDay(startOfDay(ensureDate(c.date)), today));
+  }, [selectedRoute, isAdmin, searchParams]);
 
   const allTodayFinished = useMemo(() => {
     if (isAdmin) return false;
@@ -210,12 +212,7 @@ function RouteManagementContent() {
   }, [isAdmin, isExpired, activeClient]);
 
   const handleCheckIn = () => {
-    if (!selectedRoute || activeOriginalIndex === null || clientInManagement || isEditDisabled) {
-        if (clientInManagement) {
-            toast({ title: "Gestión en curso", description: "Debes finalizar la gestión actual antes de iniciar otra.", variant: "destructive" });
-        }
-        return;
-    }
+    if (!selectedRoute || activeOriginalIndex === null || clientInManagement || isEditDisabled) return;
     
     setIsSaving(true);
     const timeStr = format(new Date(), 'HH:mm:ss');
@@ -223,10 +220,7 @@ function RouteManagementContent() {
     const proceed = (coords?: {lat: number, lng: number}) => {
         const next = [...selectedRoute.clients];
         next[activeOriginalIndex] = { ...next[activeOriginalIndex], checkInTime: timeStr, checkInLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null };
-        
-        // No bloqueamos el hilo principal con await para que la UI responda instantáneamente
-        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: 'En Progreso' })
-            .finally(() => setIsSaving(false));
+        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: 'En Progreso' }).finally(() => setIsSaving(false));
     };
 
     if (navigator.geolocation) {
@@ -241,12 +235,7 @@ function RouteManagementContent() {
   };
 
   const handleCheckOut = () => {
-    if (!selectedRoute || activeOriginalIndex === null || isPresencialMissingObs || isEditDisabled) {
-        if (isPresencialMissingObs) {
-            toast({ title: "Observación requerida", description: "Debes justificar por qué los valores son $0.", variant: "destructive" });
-        }
-        return;
-    }
+    if (!selectedRoute || activeOriginalIndex === null || isPresencialMissingObs || isEditDisabled) return;
     
     setIsSaving(true);
     const timeStr = format(new Date(), 'HH:mm:ss');
@@ -259,12 +248,8 @@ function RouteManagementContent() {
             checkOutTime: timeStr, visitStatus: 'Completado', checkOutLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null
         };
         const allDone = sanitizeClients(next).filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
-        
-        // Actualización optimista: cerramos el panel de edición de inmediato
         setActiveOriginalIndex(null);
-        
-        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: allDone ? 'Completada' : 'En Progreso' })
-            .finally(() => setIsSaving(false));
+        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: allDone ? 'Completada' : 'En Progreso' }).finally(() => setIsSaving(false));
     };
 
     if (navigator.geolocation) {
@@ -280,7 +265,6 @@ function RouteManagementContent() {
 
   const filteredCatalog = useMemo(() => {
       const term = reAddSearchTerm.toLowerCase().trim();
-      
       const routeOwner = allUsers.find(u => u.id === selectedRoute?.createdBy);
       const targetExecutive = (isAdmin && routeOwner) ? routeOwner.name : user?.name;
 
@@ -309,13 +293,13 @@ function RouteManagementContent() {
           };
           const nextClients = [...selectedRoute.clients, newClient];
           await updateRoute(selectedRoute.id, { clients: sanitizeClients(nextClients) });
-          toast({ title: "Cliente Añadido", description: `${tempSelectedClient.nombre_comercial} se agregó a la ruta.` });
+          toast({ title: "Cliente Añadido" });
           setIsReAddDialogOpen(false);
           setTempSelectedClient(null);
           setReAddJustification('');
           setReAddSearchTerm('');
       } catch (e) {
-          toast({ title: "Error", description: "No se pudo re-adicionar el cliente.", variant: "destructive" });
+          toast({ title: "Error", variant: "destructive" });
       } finally {
           setIsSaving(false);
       }
@@ -323,21 +307,15 @@ function RouteManagementContent() {
 
   if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-10 mx-auto" /></div>;
 
-  if (allTodayFinished && !activeOriginalIndex) {
+  if (allTodayFinished && !activeOriginalIndex && !isAdmin) {
       return (
           <div className="flex flex-col items-center justify-center min-h-[70vh] text-center p-6 animate-in zoom-in duration-500">
-              <div className="relative mb-8">
-                  <div className="absolute inset-0 bg-primary/20 blur-3xl rounded-full scale-150 animate-pulse" />
-                  <div className="bg-white p-8 rounded-[3rem] shadow-2xl relative border-4 border-primary">
-                    <ThumbsUp className="h-24 w-24 text-primary mx-auto animate-bounce" />
-                  </div>
+              <div className="bg-white p-8 rounded-[3rem] shadow-2xl relative border-4 border-primary">
+                <ThumbsUp className="h-24 w-24 text-primary mx-auto animate-bounce" />
               </div>
-              <h1 className="text-5xl font-black text-slate-950 uppercase tracking-tighter mb-4">¡LO LOGRASTE!</h1>
-              <p className="text-xl font-bold text-slate-500 uppercase max-w-md">Has completado todas tus paradas programadas para el día de hoy.</p>
-              <div className="mt-10 flex gap-4">
-                  <Button variant="outline" className="font-black h-12 px-8 uppercase" onClick={() => { localStorage.removeItem('activeRouteId'); setSelectedRouteId(undefined); }}>CAMBIAR RUTA</Button>
-                  <Button className="font-black h-12 px-8 uppercase" onClick={() => window.location.reload()}>VER RESUMEN</Button>
-              </div>
+              <h1 className="text-5xl font-black text-slate-950 uppercase tracking-tighter mt-8 mb-4">¡LO LOGRASTE!</h1>
+              <p className="text-xl font-bold text-slate-500 uppercase">Jornada completada con éxito.</p>
+              <Button className="mt-10 font-black h-12 px-8 uppercase" onClick={() => { localStorage.removeItem('activeRouteId'); setSelectedRouteId(undefined); }}>CAMBIAR RUTA</Button>
           </div>
       );
   }
@@ -348,7 +326,7 @@ function RouteManagementContent() {
         {isExpired && !isAdmin && (
             <div className="bg-destructive/10 border-2 border-destructive text-destructive p-4 rounded-2xl flex items-center gap-3 animate-pulse">
                 <AlertTriangle className="h-6 w-6" />
-                <span className="font-black uppercase text-sm">Jornada Bloqueada: El horario de edición ha concluido.</span>
+                <span className="font-black uppercase text-sm">Jornada Bloqueada (19:00+)</span>
             </div>
         )}
         
@@ -359,48 +337,28 @@ function RouteManagementContent() {
             </CardContent></Card>
         ) : (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <Card className={cn(
-                    "shadow-xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white flex flex-col transition-all",
-                    activeOriginalIndex !== null ? "hidden lg:flex" : "flex"
-                )}>
+                <Card className={cn("shadow-xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white flex flex-col", activeOriginalIndex !== null ? "hidden lg:flex" : "flex")}>
                     <CardHeader className="bg-slate-50 border-b p-6 flex flex-row justify-between items-center">
                         <div>
                             <h2 className="text-lg font-black uppercase text-primary tracking-tighter">{selectedRoute.routeName}</h2>
                             <p className="text-[10px] font-bold text-slate-400 uppercase">Lista de paradas para hoy</p>
                         </div>
-                        <Button 
-                            variant="outline" 
-                            size="sm" 
-                            className="font-black text-[9px] uppercase border-primary text-primary rounded-xl"
-                            onClick={() => setIsReAddDialogOpen(true)}
-                            disabled={isExpired && !isAdmin}
-                        >
-                            <PlusCircle className="mr-1 h-3.5 w-3.5" /> Cliente Extra
-                        </Button>
+                        <Button variant="outline" size="sm" className="font-black text-[9px] uppercase border-primary text-primary rounded-xl" onClick={() => setIsReAddDialogOpen(true)} disabled={isExpired && !isAdmin}><PlusCircle className="mr-1 h-3.5 w-3.5" /> Cliente Extra</Button>
                     </CardHeader>
                     <CardContent className="p-4 flex-1 overflow-hidden">
                         <ScrollArea className="h-[60vh] pr-2">
                             <div className="space-y-3">
                                 {todaysClients.map(c => {
                                     const isBeingManaged = clientInManagement?.originalIndex === c.originalIndex;
-                                    
                                     return (
-                                        <div key={c.originalIndex} onClick={() => setActiveOriginalIndex(c.originalIndex)} className={cn(
-                                            "p-5 border-2 rounded-2xl cursor-pointer transition-all relative overflow-hidden group",
-                                            activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md scale-[1.02]" : "border-slate-100 bg-white",
-                                            c.visitStatus === 'Completado' && "opacity-80"
-                                        )}>
+                                        <div key={c.originalIndex} onClick={() => setActiveOriginalIndex(c.originalIndex)} className={cn("p-5 border-2 rounded-2xl cursor-pointer transition-all relative overflow-hidden", activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md" : "border-slate-100 bg-white")}>
                                             <div className="flex justify-between items-start mb-2">
                                                 <p className={cn("font-black text-xs uppercase leading-tight flex-1", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-950")}>{c.nombre_comercial}</p>
-                                                {c.visitStatus === 'Completado' && <Badge variant="success" className="text-[8px] font-black h-4 px-1.5 border-none uppercase">OK</Badge>}
-                                                {c.isReadded && <Badge className="bg-orange-100 text-orange-700 text-[7px] font-black h-3.5 px-1 uppercase border-none">Extra</Badge>}
-                                                {isBeingManaged && <span className="text-[8px] font-black text-primary animate-pulse uppercase tracking-tighter">EN CURSO</span>}
+                                                {c.visitStatus === 'Completado' && <Badge variant="success" className="text-[8px] font-black uppercase border-none">OK</Badge>}
+                                                {isBeingManaged && <span className="text-[8px] font-black text-primary animate-pulse uppercase">EN CURSO</span>}
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <Badge variant="outline" className="text-[8px] font-bold border-slate-200">{c.ruc}</Badge>
-                                                {c.checkInTime && <span className="text-[9px] font-black text-slate-400 uppercase">{c.checkInTime}</span>}
-                                            </div>
-                                            {isBeingManaged && <div className="absolute bottom-0 left-0 h-1 bg-primary animate-progress-loop w-full" />}
+                                            <div className="flex items-center gap-2"><Badge variant="outline" className="text-[8px] font-bold border-slate-200">{c.ruc}</Badge>{c.checkInTime && <span className="text-[9px] font-black text-slate-400 uppercase">{c.checkInTime}</span>}</div>
+                                            {isBeingManaged && <div className="absolute bottom-0 left-0 h-1 bg-primary animate-pulse w-full" />}
                                         </div>
                                     );
                                 })}
@@ -409,144 +367,49 @@ function RouteManagementContent() {
                     </CardContent>
                 </Card>
 
-                <Card className={cn(
-                    "lg:col-span-2 shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white transition-all",
-                    activeOriginalIndex === null ? "hidden lg:block" : "block"
-                )}>
+                <Card className={cn("lg:col-span-2 shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white", activeOriginalIndex === null ? "hidden lg:block" : "block")}>
                     <CardHeader className="bg-slate-50 border-b p-6 flex flex-row items-center gap-4">
-                        {activeOriginalIndex !== null && (
-                            <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="lg:hidden rounded-full h-10 w-10 hover:bg-slate-200" 
-                                onClick={() => setActiveOriginalIndex(null)}
-                            >
-                                <ArrowLeft className="h-6 w-6" />
-                            </Button>
-                        )}
-                        <div className="flex-1 min-w-0">
-                            <CardTitle className="uppercase text-primary font-black tracking-tighter truncate text-xl">
-                                {activeClient?.nombre_comercial || "Selecciona un cliente"}
-                            </CardTitle>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{activeClient?.ruc || "Para ver el panel de gestión"}</p>
-                        </div>
-                        {activeClient?.isReadded && <Badge className="bg-orange-500 text-white font-black px-3 uppercase text-[10px] hidden sm:inline-flex">CLIENTE RE-ADICIONADO</Badge>}
+                        <Button variant="ghost" size="icon" className="lg:hidden rounded-full h-10 w-10" onClick={() => setActiveOriginalIndex(null)}><ArrowLeft className="h-6 w-6" /></Button>
+                        <div className="flex-1 min-w-0"><CardTitle className="uppercase text-primary font-black tracking-tighter truncate text-xl">{activeClient?.nombre_comercial || "Selecciona un cliente"}</CardTitle></div>
                     </CardHeader>
                     <CardContent className="p-4 sm:p-8">
                         {activeClient ? (
-                            <div className="space-y-8 animate-in fade-in duration-300">
-                                <div className={cn(
-                                    "p-6 sm:p-8 rounded-[2rem] border-2 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-inner transition-all",
-                                    activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-slate-50 border-dashed border-slate-200"
-                                )}>
-                                    <div className="text-center sm:text-left">
-                                        <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Hora de Ingreso</p>
-                                        <p className="text-3xl sm:text-4xl font-black text-slate-950 tracking-tighter">{activeClient.checkInTime || "--:--:--"}</p>
-                                    </div>
-                                    {!activeClient.checkInTime && (
-                                        <Button 
-                                            onClick={handleCheckIn} 
-                                            disabled={isSaving || !!clientInManagement || isEditDisabled} 
-                                            className="w-full sm:w-auto font-black h-14 sm:h-16 px-10 uppercase text-base sm:text-lg rounded-2xl shadow-xl hover:scale-105 transition-transform"
-                                        >
-                                            {isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : <><LogIn className="mr-2 h-6 w-6" /> Marcar Entrada (GPS)</>}
-                                        </Button>
-                                    )}
-                                    {activeClient.checkInTime && <CheckCircle2 className="h-10 w-10 text-green-500" />}
+                            <div className="space-y-8">
+                                <div className={cn("p-6 rounded-[2rem] border-2 flex items-center justify-between", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-slate-50 border-dashed border-slate-200")}>
+                                    <div><p className="text-[10px] font-black uppercase text-slate-400">Hora de Ingreso</p><p className="text-3xl font-black text-slate-950">{activeClient.checkInTime || "--:--:--"}</p></div>
+                                    {!activeClient.checkInTime && <Button onClick={handleCheckIn} disabled={isSaving || !!clientInManagement || isEditDisabled} className="font-black h-14 px-10 uppercase rounded-2xl shadow-xl">{isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : "Marcar Entrada (GPS)"}</Button>}
                                 </div>
 
-                                <div className={cn("space-y-8 transition-all duration-500", !activeClient.checkInTime && "opacity-20 pointer-events-none")}>
+                                <div className={cn("space-y-8", !activeClient.checkInTime && "opacity-20 pointer-events-none")}>
                                     <div className="space-y-4">
-                                        <Label className="text-[11px] font-black uppercase text-slate-500 tracking-widest pl-1">Tipo de Gestión</Label>
-                                        <RadioGroup 
-                                            value={activeClient.visitType || undefined} 
-                                            onValueChange={v => {
-                                                if (isEditDisabled) return;
-                                                const next = [...selectedRoute.clients];
-                                                next[activeOriginalIndex!].visitType = v as any;
-                                                updateRoute(selectedRoute.id, { clients: sanitizeClients(next) });
-                                            }} 
-                                            className="grid grid-cols-2 gap-4 sm:gap-6"
-                                            disabled={isEditDisabled}
-                                        >
-                                            <Label className={cn(
-                                                "flex flex-col items-center p-4 sm:p-6 border-2 rounded-[2rem] cursor-pointer transition-all",
-                                                activeClient.visitType === 'presencial' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "bg-slate-50 border-slate-100 hover:border-slate-200"
-                                            )}>
-                                                <RadioGroupItem value="presencial" className="sr-only" />
-                                                <MapPin className={cn("h-8 w-8 sm:h-10 sm:w-10 mb-3", activeClient.visitType === 'presencial' ? "text-primary" : "text-slate-300")} />
-                                                <span className="text-[10px] sm:text-xs font-black uppercase">Presencial</span>
+                                        <Label className="text-[11px] font-black uppercase text-slate-500">Tipo de Gestión</Label>
+                                        <RadioGroup value={activeClient.visitType || undefined} onValueChange={v => { if (!isEditDisabled) { const next = [...selectedRoute.clients]; next[activeOriginalIndex!].visitType = v as any; updateRoute(selectedRoute.id, { clients: sanitizeClients(next) }); } }} className="grid grid-cols-2 gap-4">
+                                            <Label className={cn("flex flex-col items-center p-6 border-2 rounded-[2rem] cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5" : "bg-slate-50")}>
+                                                <RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-8 w-8 mb-3" /><span className="text-xs font-black uppercase">Presencial</span>
                                             </Label>
-                                            <Label className={cn(
-                                                "flex flex-col items-center p-4 sm:p-6 border-2 rounded-[2rem] cursor-pointer transition-all",
-                                                activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5 ring-4 ring-primary/5" : "bg-slate-50 border-slate-100 hover:border-slate-200"
-                                            )}>
-                                                <RadioGroupItem value="telefonica" className="sr-only" />
-                                                <Phone className={cn("h-8 w-8 sm:h-10 sm:w-10 mb-3", activeClient.visitType === 'telefonica' ? "text-primary" : "text-slate-300")} />
-                                                <span className="text-[10px] sm:text-xs font-black uppercase">Telefónica</span>
+                                            <Label className={cn("flex flex-col items-center p-6 border-2 rounded-[2rem] cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5" : "bg-slate-50")}>
+                                                <RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-8 w-8 mb-3" /><span className="text-xs font-black uppercase">Telefónica</span>
                                             </Label>
                                         </RadioGroup>
                                     </div>
 
-                                    <div className="space-y-6">
-                                        <div className="grid grid-cols-3 gap-3 sm:gap-6">
-                                            <div className="space-y-2">
-                                                <Label className="text-[8px] sm:text-[9px] font-black text-center block uppercase text-slate-500">Venta ($)</Label>
-                                                <Input value={localVenta} onChange={e => setLocalVenta(e.target.value)} disabled={isEditDisabled} className="h-12 sm:h-14 font-black text-center text-primary text-lg sm:text-xl border-2 rounded-2xl" placeholder="0.00" />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label className="text-[8px] sm:text-[9px] font-black text-center block uppercase text-slate-500">Cobro ($)</Label>
-                                                <Input value={localCobro} onChange={e => setLocalCobro(e.target.value)} disabled={isEditDisabled} className="h-12 sm:h-14 font-black text-center text-primary text-lg sm:text-xl border-2 rounded-2xl" placeholder="0.00" />
-                                            </div>
-                                            <div className="space-y-2">
-                                                <Label className="text-[8px] sm:text-[9px] font-black text-center block uppercase text-slate-500">Devol. ($)</Label>
-                                                <Input value={localDevol} onChange={e => setLocalDevol(e.target.value)} disabled={isEditDisabled} className="h-12 sm:h-14 font-black text-center text-primary text-lg sm:text-xl border-2 rounded-2xl" placeholder="0.00" />
-                                            </div>
-                                        </div>
-
-                                        <div className="space-y-2">
-                                            <Label className={cn("text-[10px] sm:text-[11px] font-black uppercase pl-1 transition-colors", isPresencialMissingObs ? "text-red-600" : "text-slate-500")}>
-                                                Observaciones de Gestión {isPresencialMissingObs && "(OBLIGATORIA SI VALORES SON $0)"}
-                                            </Label>
-                                            <Textarea 
-                                                value={localVisitObs} 
-                                                onChange={e => setLocalVisitObs(e.target.value)} 
-                                                disabled={isEditDisabled}
-                                                className={cn("border-2 rounded-[1.5rem] p-4 text-sm sm:text-base font-bold min-h-[120px] transition-all", isPresencialMissingObs && "border-red-500 bg-red-50 focus:ring-red-100")} 
-                                                placeholder="Describe el resultado de la visita o llamada..." 
-                                            />
-                                        </div>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="space-y-2"><Label className="text-[8px] font-black text-center block uppercase">Venta ($)</Label><Input value={localVenta} onChange={e => setLocalVenta(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" /></div>
+                                        <div className="space-y-2"><Label className="text-[8px] font-black text-center block uppercase">Cobro ($)</Label><Input value={localCobro} onChange={e => setLocalCobro(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" /></div>
+                                        <div className="space-y-2"><Label className="text-[8px] font-black text-center block uppercase">Devol. ($)</Label><Input value={localDevol} onChange={e => setLocalDevol(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" /></div>
                                     </div>
 
+                                    <div className="space-y-2"><Label className={cn("text-[10px] font-black uppercase", isPresencialMissingObs && "text-red-600")}>Observaciones de Gestión {isPresencialMissingObs && "(OBLIGATORIA SI VALORES SON $0)"}</Label><Textarea value={localVisitObs} onChange={e => setLocalVisitObs(e.target.value)} disabled={isEditDisabled} className="border-2 rounded-[1.5rem] p-4 text-base font-bold min-h-[120px]" placeholder="Resultado de la gestión..." /></div>
+
                                     {activeClient.visitStatus !== 'Completado' ? (
-                                        <Button 
-                                            onClick={handleCheckOut} 
-                                            disabled={isSaving || isPresencialMissingObs || !activeClient.visitType || isEditDisabled} 
-                                            className="w-full h-16 sm:h-20 text-xl sm:text-2xl font-black uppercase shadow-2xl rounded-[1.5rem] bg-slate-950 hover:bg-slate-900 transition-all hover:scale-[1.01]"
-                                        >
-                                            {isSaving ? <LoaderCircle className="animate-spin h-8 w-8" /> : <><LogOut className="mr-3 h-6 w-6 sm:h-8 sm:w-8" /> Finalizar Gestión</>}
-                                        </Button>
+                                        <Button onClick={handleCheckOut} disabled={isSaving || isPresencialMissingObs || !activeClient.visitType || isEditDisabled} className="w-full h-16 text-xl font-black uppercase shadow-2xl rounded-[1.5rem] bg-slate-950 hover:bg-slate-900">{isSaving ? <LoaderCircle className="animate-spin h-8 w-8" /> : "Finalizar Gestión"}</Button>
                                     ) : (
-                                        <div className="p-6 sm:p-8 bg-green-50 border-2 border-green-200 rounded-[2rem] text-center">
-                                            <CheckCircle2 className="h-10 w-10 sm:h-12 sm:w-12 text-green-600 mx-auto mb-3" />
-                                            <p className="text-lg sm:text-xl font-black text-green-900 uppercase tracking-tighter">Gestión Finalizada</p>
-                                            <p className="text-[10px] sm:text-xs font-bold text-green-700 uppercase mt-1">Sincronizado con éxito: {activeClient.checkOutTime}</p>
-                                            {isAdmin && (
-                                                <Button variant="outline" className="mt-4 font-black uppercase text-[10px] border-primary text-primary" onClick={() => {
-                                                    const next = [...selectedRoute.clients];
-                                                    next[activeOriginalIndex!].visitStatus = 'Pendiente';
-                                                    updateRoute(selectedRoute.id, { clients: sanitizeClients(next) });
-                                                }}>Reabrir para Corrección (Admin)</Button>
-                                            )}
-                                        </div>
+                                        <div className="p-8 bg-green-50 border-2 border-green-200 rounded-[2rem] text-center"><CheckCircle2 className="h-10 w-10 text-green-600 mx-auto mb-3" /><p className="text-xl font-black text-green-900 uppercase">Gestión Finalizada</p></div>
                                     )}
                                 </div>
                             </div>
                         ) : (
-                            <div className="text-center py-24 sm:py-32 flex flex-col items-center gap-6 opacity-30 select-none">
-                                <Image src="https://i.ibb.co/JjfktNsS/Routify.png" alt="Routify" width={180} height={60} className="grayscale" />
-                                <p className="font-black text-xl sm:text-2xl uppercase tracking-widest text-slate-400">Selecciona un cliente de la lista</p>
-                            </div>
+                            <div className="text-center py-24 flex flex-col items-center gap-6 opacity-30"><UsersIcon className="h-20 w-20" /><p className="font-black text-2xl uppercase tracking-widest">Selecciona un cliente de la lista</p></div>
                         )}
                     </CardContent>
                 </Card>
@@ -555,68 +418,19 @@ function RouteManagementContent() {
 
         <Dialog open={isReAddDialogOpen} onOpenChange={setIsReAddDialogOpen}>
             <DialogContent className="sm:max-w-[600px] p-0 overflow-hidden rounded-[2.5rem]">
-                <DialogHeader className="p-8 pb-4 bg-slate-50 border-b">
-                    <DialogTitle className="text-2xl font-black text-primary uppercase tracking-tighter">Añadir Cliente Extra</DialogTitle>
-                    <DialogDescription className="text-xs font-bold uppercase text-slate-500">Visualizando catálogo autorizado para esta ruta.</DialogDescription>
-                </DialogHeader>
+                <DialogHeader className="p-8 pb-4 bg-slate-50 border-b"><DialogTitle className="text-2xl font-black text-primary uppercase">Añadir Cliente Extra</DialogTitle></DialogHeader>
                 <div className="p-8 space-y-6">
-                    <div className="relative">
-                        <Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-400" />
-                        <input 
-                            placeholder="BUSCAR POR NOMBRE O RUC..." 
-                            className="pl-12 h-12 w-full border-2 rounded-2xl font-black uppercase text-xs focus:ring-4 focus:ring-primary/5 outline-none" 
-                            value={reAddSearchTerm} 
-                            onChange={(e) => setReAddSearchTerm(e.target.value)} 
-                        />
-                    </div>
-
+                    <div className="relative"><Search className="absolute left-4 top-3.5 h-5 w-5 text-slate-400" /><input placeholder="BUSCAR POR NOMBRE O RUC..." className="pl-12 h-12 w-full border-2 rounded-2xl font-black uppercase text-xs outline-none" value={reAddSearchTerm} onChange={(e) => setReAddSearchTerm(e.target.value)} /></div>
                     <ScrollArea className="h-[30vh] border-2 border-slate-100 rounded-2xl p-2 bg-slate-50/50">
-                        <div className="space-y-2">
-                            {filteredCatalog.length > 0 ? filteredCatalog.slice(0, 15).map((client) => (
-                                <div 
-                                    key={client.ruc} 
-                                    className={cn(
-                                        "flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border-2",
-                                        tempSelectedClient?.ruc === client.ruc ? "bg-primary/5 border-primary shadow-sm" : "bg-white border-transparent hover:border-slate-200"
-                                    )}
-                                    onClick={() => setTempSelectedClient(client)}
-                                >
-                                    <div className={cn("h-5 w-5 rounded-full border-2 flex items-center justify-center", tempSelectedClient?.ruc === client.ruc ? "border-primary bg-primary" : "border-slate-300")}>
-                                        {tempSelectedClient?.ruc === client.ruc && <div className="h-2 w-2 rounded-full bg-white" />}
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-xs font-black text-slate-950 uppercase truncate">{client.nombre_comercial}</p>
-                                        <p className="text-[9px] font-mono text-slate-400 font-bold uppercase">{client.ruc}</p>
-                                    </div>
-                                </div>
-                            )) : (
-                                <div className="p-10 text-center opacity-30 font-black uppercase text-[10px] tracking-widest">Sin resultados autorizados</div>
-                            )}
-                        </div>
+                        {filteredCatalog.slice(0, 15).map((client) => (
+                            <div key={client.ruc} className={cn("flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-all border-2 mb-2", tempSelectedClient?.ruc === client.ruc ? "bg-primary/5 border-primary" : "bg-white border-transparent")} onClick={() => setTempSelectedClient(client)}>
+                                <div className="flex-1"><p className="text-xs font-black text-slate-950 uppercase">{client.nombre_comercial}</p><p className="text-[9px] font-mono text-slate-400 font-bold uppercase">{client.ruc}</p></div>
+                            </div>
+                        ))}
                     </ScrollArea>
-
-                    {tempSelectedClient && (
-                        <div className="space-y-3 animate-in slide-in-from-bottom-2">
-                            <Label className="text-[10px] font-black uppercase text-primary tracking-widest pl-1">Justificación Obligatoria</Label>
-                            <Textarea 
-                                placeholder="Escribe el motivo de esta adición..." 
-                                className="border-2 rounded-2xl h-24 font-bold text-sm"
-                                value={reAddJustification}
-                                onChange={e => setReAddJustification(e.target.value)}
-                            />
-                        </div>
-                    )}
+                    {tempSelectedClient && <div className="space-y-3"><Label className="text-[10px] font-black uppercase text-primary">Justificación Obligatoria</Label><Textarea placeholder="Escribe el motivo..." className="border-2 rounded-2xl h-24" value={reAddJustification} onChange={e => setReAddJustification(e.target.value)} /></div>}
                 </div>
-                <DialogFooter className="p-8 bg-slate-50 border-t flex items-center justify-between gap-4">
-                    <Button variant="ghost" className="font-black uppercase" onClick={() => setIsReAddDialogOpen(false)}>CANCELAR</Button>
-                    <Button 
-                        disabled={!tempSelectedClient || !reAddJustification.trim() || isSaving}
-                        onClick={handleConfirmReAdd}
-                        className="font-black px-8 h-12 shadow-xl uppercase rounded-xl"
-                    >
-                        {isSaving ? <LoaderCircle className="animate-spin" /> : "Confirmar Adición"}
-                    </Button>
-                </DialogFooter>
+                <DialogFooter className="p-8 bg-slate-50 border-t flex justify-end gap-4"><Button variant="ghost" className="font-black uppercase" onClick={() => setIsReAddDialogOpen(false)}>CANCELAR</Button><Button disabled={!tempSelectedClient || !reAddJustification.trim() || isSaving} onClick={handleConfirmReAdd} className="font-black px-8 h-12 shadow-xl uppercase rounded-xl">Confirmar Adición</Button></DialogFooter>
             </DialogContent>
         </Dialog>
     </div>
