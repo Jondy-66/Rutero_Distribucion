@@ -80,22 +80,9 @@ function RouteManagementContent() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
   
-  const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>(() => {
-      if (typeof window !== 'undefined') {
-          return searchParams.get('routeId') || localStorage.getItem('activeRouteId') || undefined;
-      }
-      return undefined;
-  });
-
+  const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>();
   const [routeOverride, setRouteOverride] = useState<RoutePlan | null>(null);
-  
-  const [activeOriginalIndex, setActiveOriginalIndex] = useState<number | null>(() => {
-      if (typeof window !== 'undefined') {
-          const saved = localStorage.getItem('activeClientIndex');
-          return saved ? parseInt(saved) : null;
-      }
-      return null;
-  });
+  const [activeOriginalIndex, setActiveOriginalIndex] = useState<number | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
@@ -113,16 +100,33 @@ function RouteManagementContent() {
 
   const isAdmin = user?.role === 'Administrador';
 
+  // PERSISTENCIA POR USUARIO: Restaurar ruta al cargar
   useEffect(() => {
-    if (selectedRouteId) {
-        localStorage.setItem('activeRouteId', selectedRouteId);
+    if (user?.id) {
+        const urlId = searchParams.get('routeId');
+        const savedId = localStorage.getItem(`activeRouteId_${user.id}`);
+        const savedIndex = localStorage.getItem(`activeClientIndex_${user.id}`);
+        
+        if (urlId) {
+            setSelectedRouteId(urlId);
+        } else if (savedId) {
+            setSelectedRouteId(savedId);
+            if (savedIndex) setActiveOriginalIndex(parseInt(savedIndex));
+        }
     }
-    if (activeOriginalIndex !== null) {
-        localStorage.setItem('activeClientIndex', String(activeOriginalIndex));
-    } else {
-        localStorage.removeItem('activeClientIndex');
+  }, [user?.id, searchParams]);
+
+  // PERSISTENCIA POR USUARIO: Guardar estado al cambiar
+  useEffect(() => {
+    if (user?.id && selectedRouteId) {
+        localStorage.setItem(`activeRouteId_${user.id}`, selectedRouteId);
     }
-  }, [selectedRouteId, activeOriginalIndex]);
+    if (user?.id && activeOriginalIndex !== null) {
+        localStorage.setItem(`activeClientIndex_${user.id}`, String(activeOriginalIndex));
+    } else if (user?.id) {
+        localStorage.removeItem(`activeClientIndex_${user.id}`);
+    }
+  }, [selectedRouteId, activeOriginalIndex, user?.id]);
 
   useEffect(() => {
     const rid = selectedRouteId || searchParams.get('routeId');
@@ -172,7 +176,7 @@ function RouteManagementContent() {
     const today = startOfDay(new Date());
     const allMappedClients = (selectedRoute.clients || []).map((c, index) => ({ ...c, originalIndex: index }));
     
-    // FIX: Si es Admin o se cargó por ID específico, mostrar TODOS los clientes para evitar lista vacía
+    // FIX FOTO: Si es Admin o se cargó por ID específico, mostrar TODOS los clientes para evitar lista vacía
     if (isAdmin || searchParams.get('routeId')) {
         return allMappedClients.filter(c => c.status !== 'Eliminado');
     }
@@ -315,7 +319,7 @@ function RouteManagementContent() {
               </div>
               <h1 className="text-5xl font-black text-slate-950 uppercase tracking-tighter mt-8 mb-4">¡LO LOGRASTE!</h1>
               <p className="text-xl font-bold text-slate-500 uppercase">Jornada completada con éxito.</p>
-              <Button className="mt-10 font-black h-12 px-8 uppercase" onClick={() => { localStorage.removeItem('activeRouteId'); setSelectedRouteId(undefined); }}>CAMBIAR RUTA</Button>
+              <Button className="mt-10 font-black h-12 px-8 uppercase" onClick={() => { if(user?.id) localStorage.removeItem(`activeRouteId_${user.id}`); setSelectedRouteId(undefined); }}>CAMBIAR RUTA</Button>
           </div>
       );
   }
