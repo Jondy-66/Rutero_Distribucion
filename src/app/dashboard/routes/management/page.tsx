@@ -225,14 +225,18 @@ function RouteManagementContent() {
     const proceed = (coords?: {lat: number, lng: number}) => {
         const next = [...selectedRoute.clients];
         next[activeOriginalIndex] = { ...next[activeOriginalIndex], checkInTime: timeStr, checkInLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null };
-        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: 'En Progreso' }).finally(() => setIsSaving(false));
+        
+        // Operación optimista: No esperamos al servidor para desbloquear la UI
+        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: 'En Progreso' });
+        setIsSaving(false);
     };
 
     if (navigator.geolocation) {
+        // Reducción de timeout para respuesta instantánea (4s)
         navigator.geolocation.getCurrentPosition(
             p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), 
             () => proceed(),
-            { timeout: 8000, enableHighAccuracy: true, maximumAge: 0 } 
+            { timeout: 4000, enableHighAccuracy: true, maximumAge: 0 } 
         );
     } else {
         proceed();
@@ -253,15 +257,18 @@ function RouteManagementContent() {
             checkOutTime: timeStr, visitStatus: 'Completado', checkOutLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null
         };
         const allDone = sanitizeClients(next).filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
+        
+        // Operación optimista
         setActiveOriginalIndex(null);
-        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: allDone ? 'Completada' : 'En Progreso' }).finally(() => setIsSaving(false));
+        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: allDone ? 'Completada' : 'En Progreso' });
+        setIsSaving(false);
     };
 
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), 
             () => proceed(),
-            { timeout: 8000, enableHighAccuracy: true, maximumAge: 0 }
+            { timeout: 4000, enableHighAccuracy: true, maximumAge: 0 }
         );
     } else {
         proceed();
@@ -278,7 +285,7 @@ function RouteManagementContent() {
           .filter(c => 
               (c.nombre_cliente || '').toLowerCase().includes(term) || 
               (c.nombre_comercial || '').toLowerCase().includes(term) || 
-              String(c.ruc || '').includes(term)
+              String(c.ruc || '').includes(term) // Fix: Asegurar RUC como texto
           )
           .filter(c => !todaysClients.some(tc => tc.ruc === c.ruc));
   }, [catalogClients, reAddSearchTerm, todaysClients, user?.name, isAdmin, allUsers, selectedRoute?.createdBy]);
@@ -354,13 +361,17 @@ function RouteManagementContent() {
                         <ScrollArea className="h-[60vh] pr-2">
                             <div className="space-y-3">
                                 {todaysClients.map(c => {
-                                    const isBeingManaged = clientInManagement?.originalIndex === c.originalIndex;
+                                    const isBeingManaged = !!c.checkInTime && !c.checkOutTime;
                                     return (
                                         <div key={c.originalIndex} onClick={() => setActiveOriginalIndex(c.originalIndex)} className={cn("p-5 border-2 rounded-2xl cursor-pointer transition-all relative overflow-hidden", activeOriginalIndex === c.originalIndex ? "border-primary bg-primary/5 shadow-md" : "border-slate-100 bg-white")}>
                                             <div className="flex justify-between items-start mb-2">
                                                 <p className={cn("font-black text-xs uppercase leading-tight flex-1", activeOriginalIndex === c.originalIndex ? "text-primary" : "text-slate-950")}>{c.nombre_comercial}</p>
                                                 {c.visitStatus === 'Completado' && <Badge variant="success" className="text-[8px] font-black uppercase border-none">OK</Badge>}
-                                                {isBeingManaged && <span className="text-[8px] font-black text-primary animate-pulse uppercase">EN CURSO</span>}
+                                                {isBeingManaged && (
+                                                    <Badge variant="outline" className="text-[8px] font-black text-primary border-primary animate-pulse uppercase">
+                                                        EN CURSO
+                                                    </Badge>
+                                                )}
                                             </div>
                                             <div className="flex items-center gap-2"><Badge variant="outline" className="text-[8px] font-bold border-slate-200">{c.ruc}</Badge>{c.checkInTime && <span className="text-[9px] font-black text-slate-400 uppercase">{c.checkInTime}</span>}</div>
                                             {isBeingManaged && <div className="absolute bottom-0 left-0 h-1 bg-primary animate-pulse w-full" />}
