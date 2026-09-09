@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -242,8 +243,8 @@ export default function TeamRoutesPage() {
     setIsBulkProcessing(true);
     try {
         const batch = writeBatch(db);
-        selectedRouteIds.forEach(id => {
-            const routeRef = doc(db, 'routes', id);
+        selectedRouteIds.forEach(routeId => {
+            const routeRef = doc(db, 'routes', routeId);
             batch.update(routeRef, { status: 'Completada' });
         });
         
@@ -312,7 +313,7 @@ export default function TeamRoutesPage() {
   
   const toggleRouteSelection = (routeId: string) => {
       setSelectedRouteIds(prev => 
-        prev.includes(routeId) ? prev.filter(id => id !== routeId) : [...prev, routeId]
+        prev.includes(routeId) ? prev.filter(rid => rid !== routeId) : [...prev, routeId]
       );
   };
 
