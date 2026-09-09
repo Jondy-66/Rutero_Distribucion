@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -79,9 +80,24 @@ function RouteManagementContent() {
   const { toast } = useToast();
   const searchParams = useSearchParams();
   
-  const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>(searchParams.get('routeId') || undefined);
+  // Inicialización inteligente con persistencia local
+  const [selectedRouteId, setSelectedRouteId] = useState<string | undefined>(() => {
+      if (typeof window !== 'undefined') {
+          return searchParams.get('routeId') || localStorage.getItem('activeRouteId') || undefined;
+      }
+      return undefined;
+  });
+
   const [routeOverride, setRouteOverride] = useState<RoutePlan | null>(null);
-  const [activeOriginalIndex, setActiveOriginalIndex] = useState<number | null>(null);
+  
+  const [activeOriginalIndex, setActiveOriginalIndex] = useState<number | null>(() => {
+      if (typeof window !== 'undefined') {
+          const saved = localStorage.getItem('activeClientIndex');
+          return saved ? parseInt(saved) : null;
+      }
+      return null;
+  });
+
   const [isSaving, setIsSaving] = useState(false);
   const [isExpired, setIsExpired] = useState(false);
 
@@ -98,6 +114,18 @@ function RouteManagementContent() {
   const [localDevol, setLocalDevol] = useState('');
 
   const isAdmin = user?.role === 'Administrador';
+
+  // Guardar estado en localStorage para evitar pérdida de progreso al recargar
+  useEffect(() => {
+    if (selectedRouteId) {
+        localStorage.setItem('activeRouteId', selectedRouteId);
+    }
+    if (activeOriginalIndex !== null) {
+        localStorage.setItem('activeClientIndex', String(activeOriginalIndex));
+    } else {
+        localStorage.removeItem('activeClientIndex');
+    }
+  }, [selectedRouteId, activeOriginalIndex]);
 
   useEffect(() => {
     const rid = selectedRouteId || searchParams.get('routeId');
@@ -151,8 +179,9 @@ function RouteManagementContent() {
   }, [selectedRoute]);
 
   const allTodayFinished = useMemo(() => {
+    if (isAdmin) return false;
     return todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado');
-  }, [todaysClients]);
+  }, [todaysClients, isAdmin]);
 
   const activeClient = useMemo(() => activeOriginalIndex !== null ? selectedRoute?.clients[activeOriginalIndex] : null, [activeOriginalIndex, selectedRoute]);
   const clientInManagement = useMemo(() => todaysClients.find(c => c.checkInTime && !c.checkOutTime), [todaysClients]);
@@ -187,12 +216,15 @@ function RouteManagementContent() {
         }
         return;
     }
+    
     setIsSaving(true);
     const timeStr = format(new Date(), 'HH:mm:ss');
     
     const proceed = (coords?: {lat: number, lng: number}) => {
         const next = [...selectedRoute.clients];
         next[activeOriginalIndex] = { ...next[activeOriginalIndex], checkInTime: timeStr, checkInLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null };
+        
+        // No bloqueamos el hilo principal con await para que la UI responda instantáneamente
         updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: 'En Progreso' })
             .finally(() => setIsSaving(false));
     };
@@ -215,8 +247,10 @@ function RouteManagementContent() {
         }
         return;
     }
+    
     setIsSaving(true);
     const timeStr = format(new Date(), 'HH:mm:ss');
+    
     const proceed = (coords?: {lat: number, lng: number}) => {
         const next = [...selectedRoute.clients];
         next[activeOriginalIndex] = { 
@@ -225,8 +259,14 @@ function RouteManagementContent() {
             checkOutTime: timeStr, visitStatus: 'Completado', checkOutLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null
         };
         const allDone = sanitizeClients(next).filter(c => c.status !== 'Eliminado').every(c => c.visitStatus === 'Completado');
-        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: allDone ? 'Completada' : 'En Progreso' }).finally(() => { setActiveOriginalIndex(null); setIsSaving(false); });
+        
+        // Actualización optimista: cerramos el panel de edición de inmediato
+        setActiveOriginalIndex(null);
+        
+        updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: allDone ? 'Completada' : 'En Progreso' })
+            .finally(() => setIsSaving(false));
     };
+
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             p => proceed({ lat: p.coords.latitude, lng: p.coords.longitude }), 
@@ -283,7 +323,7 @@ function RouteManagementContent() {
 
   if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-10 mx-auto" /></div>;
 
-  if (allTodayFinished && !activeOriginalIndex && !isAdmin) {
+  if (allTodayFinished && !activeOriginalIndex) {
       return (
           <div className="flex flex-col items-center justify-center min-h-[70vh] text-center p-6 animate-in zoom-in duration-500">
               <div className="relative mb-8">
@@ -295,7 +335,7 @@ function RouteManagementContent() {
               <h1 className="text-5xl font-black text-slate-950 uppercase tracking-tighter mb-4">¡LO LOGRASTE!</h1>
               <p className="text-xl font-bold text-slate-500 uppercase max-w-md">Has completado todas tus paradas programadas para el día de hoy.</p>
               <div className="mt-10 flex gap-4">
-                  <Button variant="outline" className="font-black h-12 px-8 uppercase" onClick={() => setSelectedRouteId(undefined)}>CAMBIAR RUTA</Button>
+                  <Button variant="outline" className="font-black h-12 px-8 uppercase" onClick={() => { localStorage.removeItem('activeRouteId'); setSelectedRouteId(undefined); }}>CAMBIAR RUTA</Button>
                   <Button className="font-black h-12 px-8 uppercase" onClick={() => window.location.reload()}>VER RESUMEN</Button>
               </div>
           </div>

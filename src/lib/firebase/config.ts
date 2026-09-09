@@ -4,7 +4,7 @@
  */
 
 import { initializeApp, getApps, getApp, deleteApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
@@ -23,10 +23,13 @@ export const createSecondaryApp = (appName: string) => initializeApp(firebaseCon
 export const deleteSecondaryApp = (appInstance: any) => deleteApp(appInstance);
 
 /**
- * Inicialización simplificada de Firestore para evitar bloqueos de lease en múltiples pestañas
- * que causan que las promesas de escritura se queden colgadas.
+ * Inicialización avanzada de Firestore con persistencia local.
+ * Esto permite el funcionamiento offline y sincronización en segundo plano.
  */
-const db = getFirestore(app);
+const db = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() })
+});
+
 const auth = getAuth(app);
 
 export { app, db, auth };
