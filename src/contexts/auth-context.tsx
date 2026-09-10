@@ -98,7 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     if (!user || !firebaseUser) return;
 
-    // Los datos operativos pesados se cargan en segundo plano
+    // Los datos operativos pesados se cargan en segundo plano para no demorar el inicio
     setDataLoading(true);
 
     const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {

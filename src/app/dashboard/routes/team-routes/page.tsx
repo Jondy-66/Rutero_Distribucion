@@ -1,4 +1,3 @@
-
 'use client';
 import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -479,7 +478,7 @@ export default function TeamRoutesPage() {
                                         <TableCell className="hidden md:table-cell font-black text-slate-950 text-[10px] uppercase whitespace-nowrap">{getRouteDate(route)}</TableCell>
                                         <TableCell>
                                             <div className="flex flex-col gap-1 min-w-[100px]">
-                                                {getBadgeForStatus(route.status)}
+                                                {getBadgeForStatus(status)}
                                                 {route.extendedClosingTime && (
                                                     <span className="text-[8px] font-black text-orange-600 uppercase flex items-center gap-0.5 whitespace-nowrap">
                                                         <Clock className="h-2 w-2" /> Ruta hoy: {route.extendedClosingTime}
