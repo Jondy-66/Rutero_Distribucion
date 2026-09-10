@@ -325,13 +325,14 @@ export default function TeamRoutesPage() {
   };
 
   const getBadgeForStatus = (status: string) => {
-    switch (status) {
-        case 'Planificada': return <Badge variant="secondary" className="font-black border-none uppercase text-[9px]"><CheckCircle2 className="mr-1 h-3 w-3"/>{status}</Badge>;
-        case 'En Progreso': return <Badge variant="default" className="font-black border-none uppercase text-[9px]"><Clock className="mr-1 h-3 w-3"/>{status}</Badge>;
-        case 'Completada': return <Badge variant="success" className="font-black border-none uppercase text-[9px]"><CheckCircle2 className="mr-1 h-3 w-3"/>{status}</Badge>;
+    const s = status || 'Planificada';
+    switch (s) {
+        case 'Planificada': return <Badge variant="secondary" className="font-black border-none uppercase text-[9px]"><CheckCircle2 className="mr-1 h-3 w-3"/>{s}</Badge>;
+        case 'En Progreso': return <Badge variant="default" className="font-black border-none uppercase text-[9px]"><Clock className="mr-1 h-3 w-3"/>{s}</Badge>;
+        case 'Completada': return <Badge variant="success" className="font-black border-none uppercase text-[9px]"><CheckCircle2 className="mr-1 h-3 w-3"/>{s}</Badge>;
         case 'Pendiente de Aprobación': return <Badge variant="outline" className="text-amber-600 border-amber-500 font-black uppercase text-[9px]"><AlertCircle className="mr-1 h-3 w-3"/>Pendiente</Badge>;
-        case 'Rechazada': return <Badge variant="destructive" className="font-black border-none uppercase text-[9px]"><XCircle className="mr-1 h-3 w-3"/>{status}</Badge>;
-        default: return <Badge variant="outline" className="font-black uppercase text-[9px]">{status}</Badge>;
+        case 'Rechazada': return <Badge variant="destructive" className="font-black border-none uppercase text-[9px]"><XCircle className="mr-1 h-3 w-3"/>{s}</Badge>;
+        default: return <Badge variant="outline" className="font-black uppercase text-[9px]">{s}</Badge>;
     }
   }
 
@@ -361,7 +362,7 @@ export default function TeamRoutesPage() {
   const canExtend = isAdminRole || user?.permissions?.includes('extend-closing');
 
   return (
-    <>
+    <div className="flex flex-col gap-6">
       <PageHeader
         title="Rutas de Equipo"
         description="Revisa, aprueba o restaura gestiones planificadas por tu equipo."
@@ -478,7 +479,7 @@ export default function TeamRoutesPage() {
                                         <TableCell className="hidden md:table-cell font-black text-slate-950 text-[10px] uppercase whitespace-nowrap">{getRouteDate(route)}</TableCell>
                                         <TableCell>
                                             <div className="flex flex-col gap-1 min-w-[100px]">
-                                                {getBadgeForStatus(status)}
+                                                {getBadgeForStatus(route.status)}
                                                 {route.extendedClosingTime && (
                                                     <span className="text-[8px] font-black text-orange-600 uppercase flex items-center gap-0.5 whitespace-nowrap">
                                                         <Clock className="h-2 w-2" /> Ruta hoy: {route.extendedClosingTime}
@@ -579,7 +580,7 @@ export default function TeamRoutesPage() {
                                             </AlertDialog>
                                         </TableCell>
                                     </TableRow>
-                                    )
+                                    );
                                 })
                             ) : (
                                 <TableRow>
@@ -598,74 +599,74 @@ export default function TeamRoutesPage() {
         </CardContent>
       </Card>
 
-      <Dialog open={isExtendClosingDialogOpen} onOpenChange={setIsExtendClosingDialogOpen}>
-          <DialogContent className="w-[90vw] sm:max-w-md rounded-2xl border-none shadow-2xl mx-auto">
-              <DialogHeader>
-                  <DialogTitle className="font-black uppercase text-slate-950 text-lg sm:text-xl">Configurar Extensión Horaria</DialogTitle>
-                  <DialogDescription className="text-xs font-bold uppercase text-slate-500">
-                      Define el alcance y la hora máxima permitida para este usuario.
-                  </DialogDescription>
-              </DialogHeader>
-              <div className="py-4 sm:py-6 space-y-6">
-                  <div className="space-y-3">
-                      <Label className="font-black uppercase text-[10px] text-slate-500">Alcance de la Extensión</Label>
-                      <RadioGroup value={extensionType} onValueChange={(v: any) => setExtensionType(v)} className="grid grid-cols-2 gap-3 sm:gap-4">
-                          <Label className={cn(
-                              "flex flex-col items-center gap-3 p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all",
-                              extensionType === 'route' ? "border-primary bg-primary/5 ring-2 ring-primary/10" : "bg-slate-50"
-                          )}>
-                              <RadioGroupItem value="route" className="sr-only" />
-                              <RouteIcon className="h-5 w-5 sm:h-6 sm:w-6" />
-                              <span className="text-[9px] sm:text-[10px] font-black uppercase">Solo esta Ruta</span>
-                          </Label>
-                          <Label className={cn(
-                              "flex flex-col items-center gap-3 p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all",
-                              extensionType === 'weekly' ? "border-primary bg-primary/5 ring-2 ring-primary/10" : "bg-slate-50"
-                          )}>
-                              <RadioGroupItem value="weekly" className="sr-only" />
-                              <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6" />
-                              <span className="text-[9px] sm:text-[10px] font-black uppercase">Semana L-V</span>
-                          </Label>
-                      </RadioGroup>
-                  </div>
+        <Dialog open={isExtendClosingDialogOpen} onOpenChange={setIsExtendClosingDialogOpen}>
+            <DialogContent className="w-[90vw] sm:max-w-md rounded-2xl border-none shadow-2xl mx-auto">
+                <DialogHeader>
+                    <DialogTitle className="font-black uppercase text-slate-950 text-lg sm:text-xl">Configurar Extensión Horaria</DialogTitle>
+                    <DialogDescription className="text-xs font-bold uppercase text-slate-500">
+                        Define el alcance y la hora máxima permitida para este usuario.
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="py-4 sm:py-6 space-y-6">
+                    <div className="space-y-3">
+                        <Label className="font-black uppercase text-[10px] text-slate-500">Alcance de la Extensión</Label>
+                        <RadioGroup value={extensionType} onValueChange={(v: any) => setExtensionType(v)} className="grid grid-cols-2 gap-3 sm:gap-4">
+                            <Label className={cn(
+                                "flex flex-col items-center gap-3 p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all",
+                                extensionType === 'route' ? "border-primary bg-primary/5 ring-2 ring-primary/10" : "bg-slate-50"
+                            )}>
+                                <RadioGroupItem value="route" className="sr-only" />
+                                <RouteIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+                                <span className="text-[9px] sm:text-[10px] font-black uppercase">Solo esta Ruta</span>
+                            </Label>
+                            <Label className={cn(
+                                "flex flex-col items-center gap-3 p-3 sm:p-4 border-2 rounded-xl cursor-pointer transition-all",
+                                extensionType === 'weekly' ? "border-primary bg-primary/5 ring-2 ring-primary/10" : "bg-slate-50"
+                            )}>
+                                <RadioGroupItem value="weekly" className="sr-only" />
+                                <CalendarDays className="h-5 w-5 sm:h-6 sm:w-6" />
+                                <span className="text-[9px] sm:text-[10px] font-black uppercase">Semana L-V</span>
+                            </Label>
+                        </RadioGroup>
+                    </div>
 
-                  <div className="space-y-2">
-                      <Label htmlFor="closing-time" className="font-black uppercase text-[10px] text-slate-500">Nueva Hora Máxima (24h)</Label>
-                      <Input 
-                        id="closing-time" 
-                        type="time" 
-                        value={newClosingTime} 
-                        onChange={(e) => setNewClosingTime(e.target.value)} 
-                        className="h-12 border-2 border-slate-200 font-black text-primary text-2xl rounded-xl text-center"
-                      />
-                  </div>
-              </div>
-              <DialogFooter className="gap-2 sm:gap-3 flex flex-col sm:flex-row">
-                  <DialogClose asChild><Button variant="ghost" className="font-black uppercase w-full sm:w-auto">Cancelar</Button></DialogClose>
-                  <Button 
-                    onClick={handleExtendClosing} 
-                    disabled={isExtending}
-                    className="font-black h-11 px-8 uppercase shadow-lg bg-orange-600 hover:bg-orange-700 w-full sm:w-auto"
-                  >
-                      {isExtending ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : <Clock className="mr-2 h-4 w-4" />}
-                      {extensionType === 'weekly' ? 'Aplicar Semanalmente' : 'Extender hoy'}
-                  </Button>
-              </DialogFooter>
-          </DialogContent>
-      </Dialog>
+                    <div className="space-y-2">
+                        <Label htmlFor="closing-time" className="font-black uppercase text-[10px] text-slate-500">Nueva Hora Máxima (24h)</Label>
+                        <Input 
+                            id="closing-time" 
+                            type="time" 
+                            value={newClosingTime} 
+                            onChange={(e) => setNewClosingTime(e.target.value)} 
+                            className="h-12 border-2 border-slate-200 font-black text-primary text-2xl rounded-xl text-center"
+                        />
+                    </div>
+                </div>
+                <DialogFooter className="gap-2 sm:gap-3 flex flex-col sm:flex-row">
+                    <DialogClose asChild><Button variant="ghost" className="font-black uppercase w-full sm:w-auto">Cancelar</Button></DialogClose>
+                    <Button 
+                        onClick={handleExtendClosing} 
+                        disabled={isExtending}
+                        className="font-black h-11 px-8 uppercase shadow-lg bg-orange-600 hover:bg-orange-700 w-full sm:w-auto"
+                    >
+                        {isExtending ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : <Clock className="mr-2 h-4 w-4" />}
+                        {extensionType === 'weekly' ? 'Aplicar Semanalmente' : 'Extender hoy'}
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
 
-      <div className="mt-8 p-4 sm:p-6 bg-amber-50 rounded-2xl sm:rounded-3xl border-2 border-dashed border-amber-200">
-          <div className="flex flex-col sm:flex-row gap-4">
-              <LifeBuoy className="h-8 w-8 text-amber-600 shrink-0" />
-              <div>
-                  <h4 className="font-black text-amber-900 uppercase text-sm">¿Perdiste datos de gestión?</h4>
-                  <p className="text-amber-700 text-xs font-bold uppercase mt-1 leading-relaxed">
-                      Si un vendedor indica que terminó su jornada pero no visualizas los "OK", usa la opción 
-                      <span className="font-black underline mx-1">Rescatar Gestiones</span> en el menú de la ruta. 
-                  </p>
-              </div>
-          </div>
-      </div>
-    </>
+        <div className="mt-8 p-4 sm:p-6 bg-amber-50 rounded-2xl sm:rounded-3xl border-2 border-dashed border-amber-200">
+            <div className="flex flex-col sm:flex-row gap-4">
+                <LifeBuoy className="h-8 w-8 text-amber-600 shrink-0" />
+                <div>
+                    <h4 className="font-black text-amber-900 uppercase text-sm">¿Perdiste datos de gestión?</h4>
+                    <p className="text-amber-700 text-xs font-bold uppercase mt-1 leading-relaxed">
+                        Si un vendedor indica que terminó su jornada pero no visualizas los "OK", usa la opción 
+                        <span className="font-black underline mx-1">Rescatar Gestiones</span> en el menú de la ruta. 
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
   );
 }
