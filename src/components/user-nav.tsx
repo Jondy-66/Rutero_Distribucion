@@ -19,7 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
-import { User, Settings, LogOut, Bell, CheckCheck, Wifi, WifiOff, Satellite, MapPinOff, AlertTriangle } from 'lucide-react';
+import { User, Settings, LogOut, Bell, CheckCheck, Wifi, WifiOff, Satellite, MapPinOff, AlertTriangle, RefreshCw } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 import { handleSignOut } from '@/lib/firebase/auth';
 import { useRouter } from 'next/navigation';
@@ -70,6 +70,11 @@ export function UserNav() {
     router.push('/login');
   };
 
+  const handleClearCache = () => {
+    localStorage.clear();
+    window.location.reload();
+  };
+
   if (!user) return null;
   
   const handleNotificationClick = (notification: Notification) => {
@@ -90,6 +95,17 @@ export function UserNav() {
           <div className={cn("h-1.5 w-1.5 rounded-full", isOnline ? "bg-green-600 animate-pulse" : "bg-red-600")} />
           <span className="hidden xs:inline-block">{isOnline ? 'Red OK' : 'Sin Internet'}</span>
         </div>
+
+        {/* Botón Borrar Caché */}
+        <Button 
+            variant="ghost" 
+            size="icon" 
+            className="h-7 w-7 rounded-md hover:bg-slate-100 text-slate-400"
+            title="Borrar Caché y Refrescar"
+            onClick={handleClearCache}
+        >
+            <RefreshCw className="h-3 w-3" />
+        </Button>
 
         {/* Indicador de GPS Inteligente */}
         <div className={cn(
