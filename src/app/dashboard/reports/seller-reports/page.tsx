@@ -218,12 +218,12 @@ export default function SellerReportsPage() {
                 'Hora de Check-out': client.checkOutTime || 'N/A',
                 'Ubicación Check-out': formatLoc(client.checkOutLocation),
                 'Tipo de Visita': client.visitType === 'presencial' ? 'Presencial' : (client.visitType === 'telefonica' ? 'Telefónica' : 'N/A'),
-                'Observación Llamada': client.callObservation || '',
+                'Observación Gestión': client.visitObservation || client.callObservation || '',
+                'Justificación Adición': client.reAdditionObservation || '',
                 'Valor Venta ($)': client.valorVenta || 0,
                 'Valor Cobro ($)': client.valorCobro || 0,
                 'Devoluciones ($)': client.devoluciones || 0,
-                'Es Re-adición': client.isReadded ? 'SÍ' : 'NO',
-                'Observación Re-adición': client.reAdditionObservation || ''
+                'Es Re-adición': client.isReadded ? 'SÍ' : 'NO'
             });
         }
     }
@@ -283,17 +283,18 @@ export default function SellerReportsPage() {
         </Button>
       </PageHeader>
       
-      <Card className="border-t-4 border-t-primary shadow-xl">
-        <CardHeader>
-            <CardTitle className="font-black text-slate-950 uppercase">Gestiones Diarias por Vendedor</CardTitle>
-            <CardDescription className="font-bold text-[10px] text-slate-500 uppercase">
-                Selecciona un vendedor y un rango de fechas para auditar el detalle de sus jornadas.
-            </CardDescription>
-        </CardHeader>
-        <CardContent>
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+      <div className="space-y-6">
+        <Card className="border-t-4 border-t-primary shadow-xl">
+            <CardHeader>
+                <CardTitle className="font-black text-slate-950 uppercase">Gestiones Diarias por Vendedor</CardTitle>
+                <CardDescription className="font-bold text-[10px] text-slate-500 uppercase">
+                    Selecciona un vendedor y un rango de fechas para auditar el detalle de sus jornadas.
+                </CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="flex flex-col sm:flex-row gap-4 mb-6">
                  <Select value={selectedSellerId} onValueChange={setSelectedSellerId}>
-                    <SelectTrigger className="w-full sm:max-w-xs h-12 border-2 border-slate-200 font-black text-slate-950 rounded-xl">
+                    <SelectTrigger className="w-full sm:max-w-xs h-12 border-2 border-slate-200 font-black text-slate-950 rounded-xl bg-white shadow-sm">
                         <Users className="mr-2 h-4 w-4 text-primary" />
                         <SelectValue placeholder="Seleccionar vendedor" />
                     </SelectTrigger>
@@ -478,9 +479,17 @@ export default function SellerReportsPage() {
                                         <div className="col-span-2 space-y-1 pt-2 border-t border-slate-200">
                                             <p className="text-[8px] font-black uppercase text-slate-400 tracking-tighter">Observación de Visita</p>
                                             <p className="text-[10px] font-bold text-slate-600 leading-tight italic">
-                                                {client.visitType === 'telefonica' ? `[TELEFÓNICA] ${client.callObservation}` : (client.visitObservation || 'Sin observaciones registradas.')}
+                                                {client.visitObservation || client.callObservation || 'Sin observaciones registradas.'}
                                             </p>
                                         </div>
+                                        {client.isReadded && (
+                                            <div className="col-span-2 space-y-1 pt-2 border-t border-dashed border-slate-200">
+                                                <p className="text-[8px] font-black uppercase text-orange-600 tracking-tighter">Justificación Adición Extra</p>
+                                                <p className="text-[10px] font-bold text-slate-600 italic">
+                                                    {client.reAdditionObservation || 'N/A'}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
                                 ) : (
                                     <div className="mt-2 p-3 bg-red-50/50 rounded-xl border border-red-100">

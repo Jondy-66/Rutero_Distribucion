@@ -193,10 +193,14 @@ function RouteManagementContent() {
       }
   }, [activeOriginalIndex, activeClient?.ruc]);
 
-  const isPresencialMissingObs = useMemo(() => {
-    if (!activeClient || activeClient.visitType !== 'presencial') return false;
-    const v = parseMoney(localVenta), c = parseMoney(localCobro), d = parseMoney(localDevol);
-    return v === 0 && c === 0 && d === 0 && !localVisitObs.trim();
+  const isObservationMissing = useMemo(() => {
+    if (!activeClient) return false;
+    if (activeClient.visitType === 'telefonica') return !localVisitObs.trim();
+    if (activeClient.visitType === 'presencial') {
+        const v = parseMoney(localVenta), c = parseMoney(localCobro), d = parseMoney(localDevol);
+        return v === 0 && c === 0 && d === 0 && !localVisitObs.trim();
+    }
+    return false;
   }, [activeClient, localVenta, localCobro, localDevol, localVisitObs]);
 
   const isEditDisabled = useMemo(() => {
@@ -226,7 +230,7 @@ function RouteManagementContent() {
   };
 
   const handleCheckOut = () => {
-    if (!selectedRoute || activeOriginalIndex === null || isPresencialMissingObs || isEditDisabled) return;
+    if (!selectedRoute || activeOriginalIndex === null || isObservationMissing || isEditDisabled) return;
     setIsSaving(true);
     const timeStr = format(new Date(), 'HH:mm:ss');
     const proceed = (coords?: {lat: number, lng: number}) => {
@@ -256,9 +260,8 @@ function RouteManagementContent() {
       const targetExecutive = (isAdmin && routeOwner) ? routeOwner.name : user?.name;
       return (catalogClients || [])
           .filter(c => c.ejecutivo?.trim().toLowerCase() === targetExecutive?.trim().toLowerCase())
-          .filter(c => (c.nombre_cliente || '').toLowerCase().includes(term) || (c.nombre_comercial || '').toLowerCase().includes(term) || String(c.ruc || '').includes(term))
-          .filter(c => !todaysClients.some(tc => tc.ruc === c.ruc));
-  }, [catalogClients, reAddSearchTerm, todaysClients, user?.name, isAdmin, allUsers, selectedRoute?.createdBy]);
+          .filter(c => (c.nombre_cliente || '').toLowerCase().includes(term) || (c.nombre_comercial || '').toLowerCase().includes(term) || String(c.ruc || '').includes(term));
+  }, [catalogClients, reAddSearchTerm, user?.name, isAdmin, allUsers, selectedRoute?.createdBy]);
 
   const handleConfirmReAdd = async () => {
       if (!selectedRoute || !tempSelectedClient || !reAddJustification.trim()) return;
@@ -357,8 +360,8 @@ function RouteManagementContent() {
                                 <div className={cn("space-y-8", !activeClient.checkInTime && "opacity-20 pointer-events-none")}>
                                     <div className="space-y-4"><Label className="text-[11px] font-black uppercase text-slate-500">Tipo de Gestión</Label><RadioGroup value={activeClient.visitType || undefined} onValueChange={v => { if (!isEditDisabled) { const next = [...selectedRoute.clients]; next[activeOriginalIndex!].visitType = v as any; updateRoute(selectedRoute.id, { clients: sanitizeClients(next) }); } }} className="grid grid-cols-2 gap-4"><Label className={cn("flex flex-col items-center p-6 border-2 rounded-[2rem] cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5" : "bg-slate-50")}><RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-8 w-8 mb-3" /><span className="text-xs font-black uppercase">Presencial</span></Label><Label className={cn("flex flex-col items-center p-6 border-2 rounded-[2rem] cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5" : "bg-slate-50")}><RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-8 w-8 mb-3" /><span className="text-xs font-black uppercase">Telefónica</span></Label></RadioGroup></div>
                                     <div className="grid grid-cols-3 gap-3"><div className="space-y-2"><Label className="text-[8px] font-black text-center block uppercase">Venta ($)</Label><Input value={localVenta} onChange={e => setLocalVenta(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" /></div><div className="space-y-2"><Label className="text-[8px] font-black text-center block uppercase">Cobro ($)</Label><Input value={localCobro} onChange={e => setLocalCobro(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" /></div><div className="space-y-2"><Label className="text-[8px] font-black text-center block uppercase">Devol. ($)</Label><Input value={localDevol} onChange={e => setLocalDevol(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" /></div></div>
-                                    <div className="space-y-2"><Label className={cn("text-[10px] font-black uppercase", isPresencialMissingObs && "text-red-600")}>Observaciones de Gestión {isPresencialMissingObs && "(OBLIGATORIA SI VALORES SON $0)"}</Label><Textarea value={localVisitObs} onChange={e => setLocalVisitObs(e.target.value)} disabled={isEditDisabled} className="border-2 rounded-[1.5rem] p-4 text-base font-bold min-h-[120px]" placeholder="Resultado de la gestión..." /></div>
-                                    {activeClient.visitStatus !== 'Completado' ? <Button onClick={handleCheckOut} disabled={isSaving || isPresencialMissingObs || !activeClient.visitType || isEditDisabled} className="w-full h-16 text-xl font-black uppercase shadow-2xl rounded-[1.5rem] bg-slate-950 hover:bg-slate-900">{isSaving ? <LoaderCircle className="animate-spin h-8 w-8" /> : "Finalizar Gestión"}</Button> : <div className="p-8 bg-green-50 border-2 border-green-200 rounded-[2rem] text-center"><CheckCircle2 className="h-10 w-10 text-green-600 mx-auto mb-3" /><p className="text-xl font-black text-green-900 uppercase">Gestión Finalizada</p></div>}
+                                    <div className="space-y-2"><Label className={cn("text-[10px] font-black uppercase", isObservationMissing && "text-red-600")}>Observaciones de Gestión {isObservationMissing && "(OBLIGATORIA)"}</Label><Textarea value={localVisitObs} onChange={e => setLocalVisitObs(e.target.value)} disabled={isEditDisabled} className="border-2 rounded-[1.5rem] p-4 text-base font-bold min-h-[120px]" placeholder="Resultado de la gestión..." /></div>
+                                    {activeClient.visitStatus !== 'Completado' ? <Button onClick={handleCheckOut} disabled={isSaving || isObservationMissing || !activeClient.visitType || isEditDisabled} className="w-full h-16 text-xl font-black uppercase shadow-2xl rounded-[1.5rem] bg-slate-950 hover:bg-slate-900">{isSaving ? <LoaderCircle className="animate-spin h-8 w-8" /> : "Finalizar Gestión"}</Button> : <div className="p-8 bg-green-50 border-2 border-green-200 rounded-[2rem] text-center"><CheckCircle2 className="h-10 w-10 text-green-600 mx-auto mb-3" /><p className="text-xl font-black text-green-900 uppercase">Gestión Finalizada</p></div>}
                                 </div>
                             </div>
                         ) : <div className="text-center py-24 flex flex-col items-center gap-6 opacity-30"><UsersIcon className="h-20 w-20" /><p className="font-black text-2xl uppercase tracking-widest">Selecciona un cliente de la lista</p></div>}
