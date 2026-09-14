@@ -3,8 +3,6 @@ import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase/admin-config';
 
-const adminApp = initializeAdminApp();
-
 /**
  * Endpoint de seguridad para gestionar estados de usuario sin requerir sesión activa en el cliente.
  * GET: Verifica si un usuario existe y su estado.
@@ -13,6 +11,9 @@ const adminApp = initializeAdminApp();
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const rawEmail = searchParams.get('email');
+  
+  // Inicialización bajo demanda
+  const adminApp = initializeAdminApp();
 
   if (!rawEmail || !adminApp) {
     return NextResponse.json({ error: 'Email requerido o error de configuración' }, { status: 400 });
@@ -42,6 +43,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const adminApp = initializeAdminApp();
   if (!adminApp) return NextResponse.json({ error: 'Admin SDK no inicializado' }, { status: 500 });
 
   try {

@@ -3,8 +3,6 @@ import { NextResponse } from 'next/server';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase/admin-config';
 
-const adminApp = initializeAdminApp();
-
 /**
  * @fileoverview Endpoint de sincronización forzada para Cron Jobs.
  * OBJETIVO PRINCIPAL: Evitar hibernación de la API de Render (Keep-Alive)
@@ -20,6 +18,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
   }
 
+  // Inicialización bajo demanda
+  const adminApp = initializeAdminApp();
   if (!adminApp) {
     return NextResponse.json({ error: 'Admin SDK no inicializado' }, { status: 500 });
   }
