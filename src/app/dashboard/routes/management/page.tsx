@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Route, MapPin, LoaderCircle, Phone, AlertTriangle, ThumbsUp, Users as UsersIcon, Clock, Sparkles, CheckCircle2, PlusCircle, Search, ArrowLeft } from 'lucide-react';
-import { updateRoute } from '@/lib/firebase/firestore';
+import { updateRoute, addNotification } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { format, isSameDay, startOfWeek, isBefore, startOfDay } from 'date-fns';
@@ -97,7 +97,6 @@ function RouteManagementContent() {
 
   const isAdmin = user?.role === 'Administrador';
 
-  // PERSISTENCIA POR USUARIO: Restaurar ruta al cargar
   useEffect(() => {
     if (user?.id) {
         const urlId = searchParams.get('routeId');
@@ -113,7 +112,6 @@ function RouteManagementContent() {
     }
   }, [user?.id, searchParams]);
 
-  // PERSISTENCIA POR USUARIO: Guardar estado al cambiar
   useEffect(() => {
     if (user?.id && selectedRouteId) {
         localStorage.setItem(`activeRouteId_${user.id}`, selectedRouteId);
@@ -172,7 +170,6 @@ function RouteManagementContent() {
     if (!selectedRoute) return [];
     const now = new Date();
     const allMappedClients = (selectedRoute.clients || []).map((c, index) => ({ ...c, originalIndex: index }));
-    // Filtro estricto para mostrar solo los clientes asignados al día de hoy en la interfaz de gestión
     return allMappedClients.filter(c => c.status !== 'Eliminado' && isSameDay(ensureDate(c.date), now));
   }, [selectedRoute]);
 
@@ -217,7 +214,7 @@ function RouteManagementContent() {
     const timeStr = format(new Date(), 'HH:mm:ss');
     const proceed = (coords?: {lat: number, lng: number}) => {
         const next = [...selectedRoute.clients];
-        next[activeOriginalIndex] = { ...next[activeOriginalIndex], checkInTime: timeStr, checkInLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null };
+        next[activeOriginalIndex!] = { ...next[activeOriginalIndex!], checkInTime: timeStr, checkInLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null };
         updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: 'En Progreso' });
         setIsSaving(false);
     };
@@ -236,8 +233,8 @@ function RouteManagementContent() {
     const timeStr = format(new Date(), 'HH:mm:ss');
     const proceed = (coords?: {lat: number, lng: number}) => {
         const next = [...selectedRoute.clients];
-        next[activeOriginalIndex] = { 
-            ...next[activeOriginalIndex], visitObservation: localVisitObs, callObservation: localCallObs,
+        next[activeOriginalIndex!] = { 
+            ...next[activeOriginalIndex!], visitObservation: localVisitObs, callObservation: localCallObs,
             valorVenta: parseMoney(localVenta), valorCobro: parseMoney(localCobro), devoluciones: parseMoney(localDevol),
             checkOutTime: timeStr, visitStatus: 'Completado', checkOutLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null
         };
@@ -285,15 +282,9 @@ function RouteManagementContent() {
       return allRoutes.filter(r => {
           const isOwn = isAdmin || r.createdBy === user?.id;
           if (!isOwn) return false;
-
-          // REQUERIMIENTO: Solo mostrar rutas de la semana en curso (L-D). 
-          // Se ocultan rutas pasadas incluso si quedaron en progreso.
           const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
           const isFromThisWeekOrFuture = !isBefore(startOfDay(rDate), mondayOfCurrentWeek);
-          
           if (!isFromThisWeekOrFuture) return false;
-
-          // Mostrar únicamente si está Planificada o En Progreso (vigentes)
           return r.status === 'En Progreso' || r.status === 'Planificada';
       });
   }, [allRoutes, user?.id, isAdmin, mondayOfCurrentWeek]);
@@ -387,7 +378,17 @@ function RouteManagementContent() {
                             </div>
                         ))}
                     </ScrollArea>
-                    {tempSelectedClient && <div className="space-y-3"><Label className="text-[10px] font-black uppercase text-primary">Justificación Obligatoria</Label><Textarea placeholder="Escribe el motivo..." className="border-2 rounded-2xl h-24" value={reAddJustification} onChange={e => setLocalVisitObs(e.target.value)} /></div>}
+                    {tempSelectedClient && (
+                        <div className="space-y-3">
+                            <Label className="text-[10px] font-black uppercase text-primary">Justificación Obligatoria</Label>
+                            <Textarea 
+                                placeholder="Escribe el motivo..." 
+                                className="border-2 rounded-2xl h-24" 
+                                value={reAddJustification} 
+                                onChange={e => setReAddJustification(e.target.value)} 
+                            />
+                        </div>
+                    )}
                 </div>
                 <DialogFooter className="p-8 bg-slate-50 border-t flex justify-end gap-4"><Button variant="ghost" className="font-black uppercase" onClick={() => setIsReAddDialogOpen(false)}>CANCELAR</Button><Button disabled={!tempSelectedClient || !reAddJustification.trim() || isSaving} onClick={handleConfirmReAdd} className="font-black px-8 h-12 shadow-xl uppercase rounded-xl">Confirmar Adición</Button></DialogFooter>
             </DialogContent>
