@@ -8,6 +8,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from '@/components/ui/card';
 import {
   Table,
@@ -44,6 +45,8 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 type DailyLog = {
     id: string;
@@ -236,8 +239,10 @@ export default function SellerReportsPage() {
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Auditoría de Gestiones");
+    
     const seller = allUsers.find(u => u.id === selectedSellerId);
     const sellerName = selectedSellerId === 'all' ? 'todos' : (seller?.name || 'desconocido').replace(/ /g, '_');
+    
     XLSX.writeFile(workbook, `auditoria_vendedores_${sellerName}.xlsx`);
     toast({ title: "Descarga Iniciada", description: "El reporte de auditoría se está descargando." });
 };
