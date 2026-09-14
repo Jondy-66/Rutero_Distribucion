@@ -20,7 +20,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
-import type { RoutePlan, ClientInRoute, User } from '@/lib/types';
+import type { RoutePlan, ClientInRoute } from '@/lib/types';
 import { Download, Users, MoreHorizontal, Eye, Calendar as CalendarIcon, ClipboardCheck, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
 import { format, startOfDay, endOfDay, startOfMonth, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -58,6 +58,18 @@ type DailyLog = {
     clients: ClientInRoute[];
 };
 
+/**
+ * Función auxiliar de agrupación definida fuera del componente para evitar 
+ * errores de sintaxis JSX con los caracteres genéricos <T, K>.
+ */
+function groupBy<T, K extends string | number | symbol>(list: T[], getKey: (item: T) => K) {
+  return list.reduce((previous, currentItem) => {
+    const group = getKey(currentItem);
+    if (!previous[group]) previous[group] = [];
+    previous[group].push(currentItem);
+    return previous;
+  }, {} as Record<K, T[]>);
+}
 
 export default function SellerReportsPage() {
   const { user: currentUser, users: allUsers, routes: allRoutes, loading: authLoading } = useAuth();
@@ -106,14 +118,6 @@ export default function SellerReportsPage() {
 
   const dailyReports = useMemo(() => {
     if (!currentUser || !allRoutes || !allUsers) return [];
-
-    const groupBy = <T, K extends keyof any>(list: T[], getKey: (item: T) => K) =>
-      list.reduce((previous, currentItem) => {
-        const group = getKey(currentItem);
-        if (!previous[group]) previous[group] = [];
-        previous[group].push(currentItem);
-        return previous;
-      }, {} as Record<K, T[]>);
 
     const managedSellerIds = managedSellers.map(s => s.id);
     const relevantStatuses: RoutePlan['status'][] = ['En Progreso', 'Completada', 'Planificada'];
@@ -177,7 +181,6 @@ export default function SellerReportsPage() {
         });
     });
     
-    // UI: Mostrar los más recientes primero
     return logs.sort((a, b) => b.date.getTime() - a.date.getTime());
   }, [selectedSellerId, allRoutes, managedSellers, currentUser, dateRange, allUsers]);
   
@@ -191,13 +194,10 @@ export default function SellerReportsPage() {
         return;
     }
 
-    // EXCEL: Ordenar cronológicamente ascendente (p.ej: 1 jun, 2 jun, 3 jun...)
     const chronologicalReports = [...dailyReports].sort((a, b) => a.date.getTime() - b.date.getTime());
-
     const dataToExport = [];
 
     for (const dailyLog of chronologicalReports) {
-        // Ordenar clientes por hora de ingreso para este log diario (orden cronológico del día)
         const sortedClients = [...dailyLog.clients].sort((a, b) => {
             const timeA = a.checkInTime || '99:99:99';
             const timeB = b.checkInTime || '99:99:99';
@@ -229,20 +229,17 @@ export default function SellerReportsPage() {
     }
     
     if (dataToExport.length === 0) {
-        toast({
-            title: "Sin Datos",
-            description: "No se encontraron clientes para exportar.",
-            variant: "destructive"
-        });
+        toast({ title: "Sin Datos", description: "No se encontraron clientes para exportar.", variant: "destructive" });
         return;
     }
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Auditoría de Gestiones");
-    const sellerName = selectedSellerId === 'all' ? 'todos' : allUsers.find(u=>u.id === selectedSellerId)?.name.replace(/ /g, '_');
+    const seller = allUsers.find(u => u.id === selectedSellerId);
+    const sellerName = selectedSellerId === 'all' ? 'todos' : (seller?.name || 'desconocido').replace(/ /g, '_');
     XLSX.writeFile(workbook, `auditoria_vendedores_${sellerName}.xlsx`);
-    toast({ title: "Descarga Iniciada", description: "El reporte de auditoría se está descargando en orden cronológico." });
+    toast({ title: "Descarga Iniciada", description: "El reporte de auditoría se está descargando." });
 };
 
   const handleViewDetails = (routeId: string) => {
@@ -318,9 +315,7 @@ export default function SellerReportsPage() {
                         <CalendarIcon className="mr-2 h-4 w-4 text-primary" />
                         {dateRange?.from ? (
                         dateRange.to ? (
-                            <>
-                            {format(dateRange.from, "LLL dd", {locale: es})} - {format(dateRange.to, "LLL dd", {locale: es})}
-                            </>
+                            <>{format(dateRange.from, "LLL dd", {locale: es})} - {format(dateRange.to, "LLL dd", {locale: es})}</>
                         ) : (
                             format(dateRange.from, "LLL dd", {locale: es})
                         )
