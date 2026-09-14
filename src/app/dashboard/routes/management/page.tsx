@@ -172,6 +172,7 @@ function RouteManagementContent() {
     if (!selectedRoute) return [];
     const now = new Date();
     const allMappedClients = (selectedRoute.clients || []).map((c, index) => ({ ...c, originalIndex: index }));
+    // Filtro estricto para mostrar solo los clientes asignados al día de hoy en la interfaz de gestión
     return allMappedClients.filter(c => c.status !== 'Eliminado' && isSameDay(ensureDate(c.date), now));
   }, [selectedRoute]);
 
@@ -284,12 +285,16 @@ function RouteManagementContent() {
       return allRoutes.filter(r => {
           const isOwn = isAdmin || r.createdBy === user?.id;
           if (!isOwn) return false;
-          if (r.status === 'En Progreso') return true;
-          if (r.status === 'Planificada') {
-              const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
-              return !isBefore(startOfDay(rDate), mondayOfCurrentWeek);
-          }
-          return false;
+
+          // REQUERIMIENTO: Solo mostrar rutas de la semana en curso (L-D). 
+          // Se ocultan rutas pasadas incluso si quedaron en progreso.
+          const rDate = r.date instanceof Timestamp ? r.date.toDate() : new Date(r.date as any);
+          const isFromThisWeekOrFuture = !isBefore(startOfDay(rDate), mondayOfCurrentWeek);
+          
+          if (!isFromThisWeekOrFuture) return false;
+
+          // Mostrar únicamente si está Planificada o En Progreso (vigentes)
+          return r.status === 'En Progreso' || r.status === 'Planificada';
       });
   }, [allRoutes, user?.id, isAdmin, mondayOfCurrentWeek]);
 
@@ -382,7 +387,7 @@ function RouteManagementContent() {
                             </div>
                         ))}
                     </ScrollArea>
-                    {tempSelectedClient && <div className="space-y-3"><Label className="text-[10px] font-black uppercase text-primary">Justificación Obligatoria</Label><Textarea placeholder="Escribe el motivo..." className="border-2 rounded-2xl h-24" value={reAddJustification} onChange={e => setReAddJustification(e.target.value)} /></div>}
+                    {tempSelectedClient && <div className="space-y-3"><Label className="text-[10px] font-black uppercase text-primary">Justificación Obligatoria</Label><Textarea placeholder="Escribe el motivo..." className="border-2 rounded-2xl h-24" value={reAddJustification} onChange={e => setLocalVisitObs(e.target.value)} /></div>}
                 </div>
                 <DialogFooter className="p-8 bg-slate-50 border-t flex justify-end gap-4"><Button variant="ghost" className="font-black uppercase" onClick={() => setIsReAddDialogOpen(false)}>CANCELAR</Button><Button disabled={!tempSelectedClient || !reAddJustification.trim() || isSaving} onClick={handleConfirmReAdd} className="font-black px-8 h-12 shadow-xl uppercase rounded-xl">Confirmar Adición</Button></DialogFooter>
             </DialogContent>
