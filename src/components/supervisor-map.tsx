@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { LoaderCircle, Navigation, ExternalLink, Satellite, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Timestamp } from 'firebase/firestore';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 // Solo importar Geoman si estamos en el cliente
 if (typeof window !== 'undefined') {
@@ -200,6 +202,7 @@ export function SupervisorMap() {
     return () => { 
         unsubLocs(); 
         unsubZones();
+        setIsMounted(false);
     };
   }, []);
 
@@ -234,7 +237,7 @@ export function SupervisorMap() {
       return null;
   }, [selectedUserId, activeLocations]);
 
-  if (!isMounted) {
+  if (!isMounted || typeof window === 'undefined') {
     return (
         <div className="h-full w-full bg-slate-50 flex items-center justify-center rounded-[2.5rem] border-4 border-slate-100">
             <LoaderCircle className="animate-spin text-primary h-10 w-10" />
@@ -269,7 +272,7 @@ export function SupervisorMap() {
 
         <div className="flex-1 rounded-[1.5rem] lg:rounded-[2.5rem] overflow-hidden border-2 lg:border-4 border-slate-100 shadow-2xl relative bg-slate-50">
             <MapContainer 
-                key={`supervisor-map-container-${selectedUserId || 'main'}`}
+                key={`supervisor-map-instance-${selectedUserId || 'main'}`}
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}

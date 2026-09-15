@@ -4,20 +4,9 @@ import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Client } from '@/lib/types';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Button } from './ui/button';
 import { MapPin, Navigation, ExternalLink, LoaderCircle } from 'lucide-react';
-
-// Pharmacy Icon (Open Source version)
-const pharmacyIcon = L.divIcon({
-  className: 'custom-pharmacy-icon',
-  html: `<div style="background-color: #011688; border: 2px solid white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 8px rgba(0,0,0,0.4); transform: scale(1);">
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-  </div>`,
-  iconSize: [32, 32],
-  iconAnchor: [16, 16],
-  popupAnchor: [0, -16],
-});
 
 function MapController({ center, zoom }: { center: [number, number]; zoom: number }) {
   const map = useMap();
@@ -36,6 +25,9 @@ export function OpenMapView({ clients }: { clients: Client[] }) {
 
   useEffect(() => {
     setIsMounted(true);
+    return () => {
+      setIsMounted(false);
+    };
   }, []);
 
   useEffect(() => {
@@ -47,7 +39,21 @@ export function OpenMapView({ clients }: { clients: Client[] }) {
     }
   }, [clients]);
 
-  if (!isMounted) {
+  // Define icon inside useMemo to ensure it's client-side only and stable
+  const pharmacyIcon = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return L.divIcon({
+      className: 'custom-pharmacy-icon',
+      html: `<div style="background-color: #011688; border: 2px solid white; border-radius: 50%; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; box-shadow: 0 3px 8px rgba(0,0,0,0.4); transform: scale(1);">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+      </div>`,
+      iconSize: [32, 32],
+      iconAnchor: [16, 16],
+      popupAnchor: [0, -16],
+    });
+  }, []);
+
+  if (!isMounted || typeof window === 'undefined') {
     return (
       <div className="h-full w-full bg-slate-50 flex items-center justify-center rounded-[2rem]">
         <LoaderCircle className="animate-spin text-primary h-8 w-8" />
@@ -58,7 +64,7 @@ export function OpenMapView({ clients }: { clients: Client[] }) {
   return (
     <div className="h-full w-full relative z-0">
       <MapContainer 
-        key="open-map-view-container"
+        key="open-map-view-instance"
         center={viewState.center} 
         zoom={viewState.zoom} 
         style={{ height: '100%', width: '100%' }} 
@@ -71,7 +77,7 @@ export function OpenMapView({ clients }: { clients: Client[] }) {
         <MapController center={viewState.center} zoom={viewState.zoom} />
         {clients.map((client) => (
           isFinite(client.latitud) && isFinite(client.longitud) && (
-            <Marker key={client.id} position={[client.latitud, client.longitud]} icon={pharmacyIcon}>
+            <Marker key={client.id} position={[client.latitud, client.longitud]} icon={pharmacyIcon || undefined}>
               <Popup className="custom-leaflet-popup">
                 <div className="p-2 flex flex-col gap-3 min-w-[220px]">
                   <div className="space-y-1">
