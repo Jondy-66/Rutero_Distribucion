@@ -32,6 +32,13 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+
+  const availableExecutives = useMemo(() => {
+    if (!currentUser || !users) return [];
+    if (currentUser.role === 'Administrador') return users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
+    if (currentUser.role === 'Supervisor') return users.filter(u => u.supervisorId === currentUser.id);
+    return [];
+  }, [currentUser, users]);
   
   useEffect(() => {
     const fetchClient = async () => {
@@ -103,22 +110,57 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
       <form onSubmit={handleUpdateClient}>
         <div className="grid gap-6">
           <Card className="shadow-lg border-t-4 border-t-primary">
-            <CardHeader><CardTitle className="flex items-center gap-2"><UserCircle className="h-5 w-5 text-primary" />Información Matriz</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2 font-black uppercase text-sm"><UserCircle className="h-5 w-5 text-primary" />Información Matriz</CardTitle></CardHeader>
             <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="font-black uppercase text-[10px] text-slate-500">Ejecutivo Asignado</Label>
+                {currentUser?.role === 'Usuario' || currentUser?.role === 'Telemercaderista' ? (
+                  <Input value={client.ejecutivo} disabled className="bg-muted font-black uppercase h-11" />
+                ) : (
+                  <Select value={client.ejecutivo} onValueChange={(v) => setClient(p => p ? ({...p, ejecutivo: v}) : null)}>
+                    <SelectTrigger className="h-11 font-black"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                    <SelectContent>{availableExecutives.map(e => <SelectItem key={e.id} value={e.name} className="font-bold">{e.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ruc" className="font-black uppercase text-[10px] text-slate-500">RUC / Identificación</Label>
+                <Input id="ruc" value={client.ruc} onChange={handleInputChange} required className="h-11 font-mono font-bold" />
+              </div>
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="nombre_cliente" className="font-black uppercase text-[10px] text-slate-950">Nombre / Razón Social</Label>
+                <Label htmlFor="nombre_cliente" className="font-black uppercase text-[10px] text-slate-500">Nombre o Razón Social</Label>
                 <Input id="nombre_cliente" value={client.nombre_cliente} onChange={handleInputChange} required className="h-11 font-black uppercase" />
               </div>
               <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="direccion" className="font-black uppercase text-[10px] text-slate-950">Dirección Matriz</Label>
+                <Label htmlFor="nombre_comercial" className="font-black uppercase text-[10px] text-slate-500">Nombre Comercial</Label>
+                <Input id="nombre_comercial" value={client.nombre_comercial} onChange={handleInputChange} className="h-11 font-black uppercase" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="provincia" className="font-black uppercase text-[10px] text-slate-500">Provincia</Label>
+                <Input id="provincia" value={client.provincia} onChange={handleInputChange} className="h-11 font-bold uppercase" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="canton" className="font-black uppercase text-[10px] text-slate-500">Cantón</Label>
+                <Input id="canton" value={client.canton} onChange={handleInputChange} className="h-11 font-bold uppercase" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="direccion" className="font-black uppercase text-[10px] text-slate-500">Dirección Exacta</Label>
                 <Input id="direccion" value={client.direccion} onChange={handleInputChange} className="h-11 font-bold" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="latitud" className="font-black uppercase text-[10px] text-slate-500">Latitud (GPS)</Label>
+                <Input id="latitud" value={client.latitud} onChange={handleInputChange} className="h-11 font-mono font-bold" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="longitud" className="font-black uppercase text-[10px] text-slate-500">Longitud (GPS)</Label>
+                <Input id="longitud" value={client.longitud} onChange={handleInputChange} className="h-11 font-mono font-bold" />
               </div>
             </CardContent>
           </Card>
 
           <Card className="shadow-lg border-t-4 border-t-accent">
             <CardHeader className="flex flex-row items-center justify-between">
-              <div><CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-accent" />Sucursales Adicionales</CardTitle></div>
+              <div><CardTitle className="flex items-center gap-2 font-black uppercase text-sm"><MapPin className="h-5 w-5 text-accent" />Sucursales Adicionales</CardTitle></div>
               <Button type="button" onClick={handleAddBranch} variant="outline" className="font-black border-accent text-accent"><Plus className="mr-1 h-4 w-4" /> Añadir</Button>
             </CardHeader>
             <CardContent className="space-y-4">
