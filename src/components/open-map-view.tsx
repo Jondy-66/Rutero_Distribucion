@@ -6,7 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import type { Client } from '@/lib/types';
 import { useEffect, useState } from 'react';
 import { Button } from './ui/button';
-import { MapPin, Navigation, ExternalLink } from 'lucide-react';
+import { MapPin, Navigation, ExternalLink, LoaderCircle } from 'lucide-react';
 
 // Pharmacy Icon (Open Source version)
 const pharmacyIcon = L.divIcon({
@@ -30,8 +30,13 @@ function MapController({ center, zoom }: { center: [number, number]; zoom: numbe
 }
 
 export function OpenMapView({ clients }: { clients: Client[] }) {
+  const [isMounted, setIsMounted] = useState(false);
   const defaultCenter: [number, number] = [-1.8312, -78.1834]; // Ecuador
   const [viewState, setViewState] = useState({ center: defaultCenter, zoom: 7 });
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (clients && clients.length > 0) {
@@ -42,9 +47,18 @@ export function OpenMapView({ clients }: { clients: Client[] }) {
     }
   }, [clients]);
 
+  if (!isMounted) {
+    return (
+      <div className="h-full w-full bg-slate-50 flex items-center justify-center rounded-[2rem]">
+        <LoaderCircle className="animate-spin text-primary h-8 w-8" />
+      </div>
+    );
+  }
+
   return (
     <div className="h-full w-full relative z-0">
       <MapContainer 
+        key="open-map-view-container"
         center={viewState.center} 
         zoom={viewState.zoom} 
         style={{ height: '100%', width: '100%' }} 
