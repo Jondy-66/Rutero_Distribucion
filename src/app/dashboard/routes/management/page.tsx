@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -167,9 +166,9 @@ function RouteManagementContent() {
   }, [selectedRoute]);
 
   const allRouteFinished = useMemo(() => {
-    if (isAdmin) return false;
+    if (isAdmin || !selectedRoute) return false;
     return todaysClients.length > 0 && todaysClients.every(c => c.visitStatus === 'Completado');
-  }, [todaysClients, isAdmin]);
+  }, [todaysClients, isAdmin, selectedRoute]);
 
   const activeClient = useMemo(() => activeOriginalIndex !== null ? selectedRoute?.clients[activeOriginalIndex] : null, [activeOriginalIndex, selectedRoute]);
   
@@ -296,13 +295,16 @@ function RouteManagementContent() {
 
   if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-10 mx-auto" /></div>;
 
+  // PANEL DE FELICITACIÓN RESTAURADO
   if (allRouteFinished && !activeOriginalIndex && !isAdmin) {
       return (
           <div className="flex flex-col items-center justify-center min-h-[70vh] text-center p-6 animate-in zoom-in duration-500">
-              <div className="bg-white p-8 rounded-[3rem] shadow-2xl relative border-4 border-primary"><ThumbsUp className="h-24 w-24 text-primary mx-auto animate-bounce" /></div>
+              <div className="bg-white p-8 rounded-[3rem] shadow-2xl relative border-4 border-primary">
+                <ThumbsUp className="h-24 w-24 text-primary mx-auto animate-bounce" />
+              </div>
               <h1 className="text-5xl font-black text-slate-950 uppercase tracking-tighter mt-8 mb-4">¡LO LOGRASTE!</h1>
-              <p className="text-xl font-bold text-slate-500 uppercase">Jornada completada con éxito.</p>
-              <Button className="mt-10 font-black h-12 px-8 uppercase" onClick={() => { if(user?.id) localStorage.removeItem(`activeRouteId_${user.id}`); setSelectedRouteId(undefined); }}>CAMBIAR RUTA</Button>
+              <p className="text-xl font-bold text-slate-500 uppercase">Has gestionado todos los clientes del día.</p>
+              <Button className="mt-10 font-black h-12 px-8 uppercase rounded-2xl shadow-xl" onClick={() => { if(user?.id) localStorage.removeItem(`activeRouteId_${user.id}`); setSelectedRouteId(undefined); }}>CAMBIAR RUTA O DÍA</Button>
           </div>
       );
   }
