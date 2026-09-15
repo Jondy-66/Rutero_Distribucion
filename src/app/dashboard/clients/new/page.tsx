@@ -17,10 +17,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
-import { ArrowLeft, LoaderCircle, UserCircle } from 'lucide-react';
+import { ArrowLeft, LoaderCircle, UserCircle, MapPin, Plus, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { addClient } from '@/lib/firebase/firestore';
 import { useAuth } from '@/hooks/use-auth';
+import type { Branch } from '@/lib/types';
 
 export default function NewClientPage() {
   const router = useRouter();
@@ -38,6 +39,7 @@ export default function NewClientPage() {
     latitud: '',
     longitud: '',
   });
+  const [branches, setBranches] = useState<Omit<Branch, 'id'>[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Auto-completar ejecutivo si el usuario es vendedor
@@ -47,209 +49,143 @@ export default function NewClientPage() {
     }
   }, [user]);
 
-  // Obtener lista de ejecutivos disponibles según el rol
   const availableExecutives = useMemo(() => {
     if (!user || !users) return [];
-    
-    if (user.role === 'Administrador') {
-      // Admin ve a todos los roles operativos
-      return users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
-    }
-    
-    if (user.role === 'Supervisor') {
-      // Supervisor ve solo a su equipo asignado
-      return users.filter(u => u.supervisorId === user.id);
-    }
-    
+    if (user.role === 'Administrador') return users.filter(u => u.role === 'Usuario' || u.role === 'Telemercaderista');
+    if (user.role === 'Supervisor') return users.filter(u => u.supervisorId === user.id);
     return [];
   }, [user, users]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { id, value } = e.target;
-    
-    // Validación específica para RUC/Identificación: Solo números y máx 13 dígitos
     if (id === 'ruc') {
-        const numericValue = value.replace(/\D/g, ''); // Eliminar cualquier cosa que no sea número
-        if (numericValue.length <= 13) {
-            setFormData(prev => ({ ...prev, [id]: numericValue }));
-        }
+        const numericValue = value.replace(/\D/g, '');
+        if (numericValue.length <= 13) setFormData(prev => ({ ...prev, [id]: numericValue }));
         return;
     }
-    
     setFormData(prev => ({ ...prev, [id]: value }));
   };
 
-  const updateField = (id: string, value: string) => {
-    setFormData(prev => ({ ...prev, [id]: value }));
+  const handleAddBranch = () => {
+    setBranches(prev => [...prev, { name: '', address: '' }]);
+  };
+
+  const handleRemoveBranch = (index: number) => {
+    setBranches(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleBranchChange = (index: number, field: keyof Omit<Branch, 'id'>, value: string) => {
+    setBranches(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
   };
 
   const handleCreateClient = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!formData.ejecutivo) {
-        toast({ title: "Error", description: "Debes seleccionar o asignar un ejecutivo.", variant: "destructive" });
-        return;
-    }
-    
-    if (!formData.ruc || !formData.nombre_cliente) {
-        toast({ title: "Error", description: "RUC y Nombre del Cliente son campos obligatorios.", variant: "destructive" });
+    if (!formData.ejecutivo || !formData.ruc || !formData.nombre_cliente) {
+        toast({ title: "Error", description: "Campos obligatorios faltantes.", variant: "destructive" });
         return;
     }
 
-    // Validación de longitud para identificación ecuatoriana
     const rucLength = formData.ruc.length;
     if (rucLength !== 10 && rucLength !== 13) {
-        toast({ 
-            title: "Identificación Inválida", 
-            description: "La identificación debe tener exactamente 10 dígitos (Cédula) o 13 dígitos (RUC).", 
-            variant: "destructive" 
-        });
+        toast({ title: "Identificación Inválida", description: "Debe tener 10 o 13 dígitos.", variant: "destructive" });
         return;
     }
 
     setIsLoading(true);
     try {
+      const branchesWithId = branches.map((b, idx) => ({ ...b, id: `br-${Date.now()}-${idx}` }));
       await addClient({
         ...formData,
         latitud: parseFloat(formData.latitud) || 0,
         longitud: parseFloat(formData.longitud) || 0,
         status: 'active',
+        branches: branchesWithId,
       });
-      
       await refetchData('clients');
       toast({ title: "Éxito", description: "Cliente creado correctamente." });
       router.push('/dashboard/clients');
-
     } catch (error: any) {
-      console.error(error);
       toast({ title: "Error", description: error.message || "No se pudo crear el cliente.", variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
   };
 
-  const isSeller = user?.role === 'Usuario' || user?.role === 'Telemercaderista';
-
   return (
     <>
-      <PageHeader
-        title="Crear Nuevo Cliente"
-        description="Completa el formulario para añadir un nuevo cliente al sistema."
-      >
-        <Link href="/dashboard/clients">
-          <Button variant="outline">
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Volver a Clientes
-          </Button>
-        </Link>
+      <PageHeader title="Crear Nuevo Cliente" description="Completa el formulario para añadir un nuevo cliente.">
+        <Link href="/dashboard/clients"><Button variant="outline"><ArrowLeft className="mr-2 h-4 w-4" />Volver</Button></Link>
       </PageHeader>
-      
       <form onSubmit={handleCreateClient}>
-        <Card className="shadow-lg border-t-4 border-t-primary">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-                <UserCircle className="h-5 w-5 text-primary" />
-                Información del Cliente
-            </CardTitle>
-            <CardDescription>
-              Proporciona los detalles del nuevo cliente y asígnalo a un ejecutivo.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            <div className="space-y-2">
-              <Label htmlFor="ejecutivo" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Ejecutivo Asignado</Label>
-              {isSeller ? (
-                <div className="relative">
-                    <Input 
-                        id="ejecutivo" 
-                        value={formData.ejecutivo} 
-                        disabled 
-                        className="bg-muted font-black text-primary uppercase h-11"
-                    />
-                    <Badge variant="secondary" className="absolute right-3 top-2.5 text-[9px] font-black uppercase">Tu Perfil</Badge>
-                </div>
+        <div className="grid gap-6">
+          <Card className="shadow-lg border-t-4 border-t-primary">
+            <CardHeader><CardTitle className="flex items-center gap-2"><UserCircle className="h-5 w-5 text-primary" />Información Matriz</CardTitle></CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <Label className="font-black uppercase text-[10px] text-slate-950">Ejecutivo Asignado</Label>
+                {user?.role === 'Usuario' || user?.role === 'Telemercaderista' ? (
+                  <Input value={formData.ejecutivo} disabled className="bg-muted font-black uppercase h-11" />
+                ) : (
+                  <Select value={formData.ejecutivo} onValueChange={(v) => setFormData(p => ({...p, ejecutivo: v}))}>
+                    <SelectTrigger className="h-11 font-black"><SelectValue placeholder="Seleccionar..." /></SelectTrigger>
+                    <SelectContent>{availableExecutives.map(e => <SelectItem key={e.id} value={e.name} className="font-bold">{e.name}</SelectItem>)}</SelectContent>
+                  </Select>
+                )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="ruc" className="font-black uppercase text-[10px] text-slate-950">RUC / Identificación</Label>
+                <Input id="ruc" value={formData.ruc} onChange={handleInputChange} required className="h-11 font-mono font-bold" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="nombre_cliente" className="font-black uppercase text-[10px] text-slate-950">Nombre / Razón Social</Label>
+                <Input id="nombre_cliente" value={formData.nombre_cliente} onChange={handleInputChange} required className="h-11 font-black uppercase" />
+              </div>
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="direccion" className="font-black uppercase text-[10px] text-slate-950">Dirección Matriz</Label>
+                <Input id="direccion" value={formData.direccion} onChange={handleInputChange} className="h-11 font-bold" />
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="shadow-lg border-t-4 border-t-accent">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2"><MapPin className="h-5 w-5 text-accent" />Sucursales Adicionales</CardTitle>
+                <CardDescription>Añade otras ubicaciones o sucursales de este cliente.</CardDescription>
+              </div>
+              <Button type="button" onClick={handleAddBranch} variant="outline" className="font-black border-accent text-accent hover:bg-accent/5"><Plus className="mr-1 h-4 w-4" /> Añadir Sucursal</Button>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {branches.length > 0 ? (
+                branches.map((branch, idx) => (
+                  <div key={idx} className="p-4 bg-slate-50 border-2 rounded-2xl space-y-4 relative group">
+                    <Button type="button" onClick={() => handleRemoveBranch(idx)} variant="ghost" size="icon" className="absolute top-2 right-2 text-destructive hover:bg-red-50"><Trash2 className="h-4 w-4" /></Button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase">Nombre de Sucursal</Label>
+                        <Input value={branch.name} onChange={e => handleBranchChange(idx, 'name', e.target.value)} placeholder="Ej: Sucursal Centro" className="h-10 font-bold bg-white" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase">Dirección de Sucursal</Label>
+                        <Input value={branch.address} onChange={e => handleBranchChange(idx, 'address', e.target.value)} placeholder="Ej: Av. Principal 123" className="h-10 font-bold bg-white" />
+                      </div>
+                    </div>
+                  </div>
+                ))
               ) : (
-                <Select 
-                    value={formData.ejecutivo} 
-                    onValueChange={(value) => updateField('ejecutivo', value)}
-                    disabled={isLoading || authLoading}
-                >
-                    <SelectTrigger className="h-11 font-black text-slate-950">
-                        <SelectValue placeholder="Seleccionar un ejecutivo..." />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {availableExecutives.length > 0 ? (
-                            availableExecutives.map(exec => (
-                                <SelectItem key={exec.id} value={exec.name} className="font-bold">
-                                    {exec.name} ({exec.role})
-                                </SelectItem>
-                            ))
-                        ) : (
-                            <SelectItem value="none" disabled>No hay ejecutivos disponibles</SelectItem>
-                        )}
-                    </SelectContent>
-                </Select>
+                <div className="text-center py-10 opacity-30 uppercase font-black text-xs italic tracking-widest">Sin sucursales registradas</div>
               )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="ruc" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">RUC / Identificación</Label>
-              <Input 
-                id="ruc" 
-                placeholder="Ej: 1792233445001" 
-                value={formData.ruc} 
-                onChange={handleInputChange} 
-                required 
-                disabled={isLoading} 
-                className="h-11 font-mono font-bold text-slate-950" 
-                inputMode="numeric"
-              />
-              <p className="text-[9px] text-muted-foreground font-bold uppercase">Solo números (10 para Cédula, 13 para RUC)</p>
-            </div>
-
-             <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="nombre_cliente" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Nombre o Razón Social</Label>
-              <Input id="nombre_cliente" placeholder="Ej: Supermercados La Favorita" value={formData.nombre_cliente} onChange={handleInputChange} required disabled={isLoading} className="h-11 font-black uppercase text-slate-950" />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="nombre_comercial" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Nombre Comercial</Label>
-              <Input id="nombre_comercial" placeholder="Ej: Supermaxi" value={formData.nombre_comercial} onChange={handleInputChange} disabled={isLoading} className="h-11 font-black uppercase text-slate-950" />
-            </div>
-
-             <div className="space-y-2">
-              <Label htmlFor="provincia" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Provincia</Label>
-              <Input id="provincia" placeholder="Ej: Pichincha" value={formData.provincia} onChange={handleInputChange} disabled={isLoading} className="h-11 font-bold text-slate-950" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="canton" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Cantón</Label>
-              <Input id="canton" placeholder="Ej: Quito" value={formData.canton} onChange={handleInputChange} disabled={isLoading} className="h-11 font-bold text-slate-950" />
-            </div>
-
-            <div className="space-y-2 md:col-span-2">
-              <Label htmlFor="direccion" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Dirección Exacta</Label>
-              <Input id="direccion" placeholder="Ej: Av. de los Shyris y Naciones Unidas" value={formData.direccion} onChange={handleInputChange} disabled={isLoading} className="h-11 font-bold text-slate-950" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="latitud" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Latitud (GPS)</Label>
-              <Input id="latitud" type="number" step="any" placeholder="Ej: -0.1762" value={formData.latitud} onChange={handleInputChange} disabled={isLoading} className="h-11 font-mono font-bold text-slate-950" />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="longitud" className="font-bold uppercase text-[10px] tracking-widest text-slate-950">Longitud (GPS)</Label>
-              <Input id="longitud" type="number" step="any" placeholder="Ej: -78.4847" value={formData.longitud} onChange={handleInputChange} disabled={isLoading} className="h-11 font-mono font-bold text-slate-950" />
-            </div>
-          </CardContent>
-          <CardFooter className="bg-muted/30 border-t p-6">
-            <Button type="submit" disabled={isLoading} className="w-full sm:w-auto font-black px-10 h-12 shadow-md">
-              {isLoading ? <LoaderCircle className="animate-spin mr-2" /> : null}
-              CREAR CLIENTE
-            </Button>
-          </CardFooter>
-        </Card>
+            </CardContent>
+          </Card>
+          
+          <div className="flex justify-end p-4">
+            <Button type="submit" disabled={isLoading} className="h-14 px-12 font-black uppercase shadow-xl rounded-2xl">{isLoading ? <LoaderCircle className="animate-spin" /> : "Crear Cliente con Sucursales"}</Button>
+          </div>
+        </div>
       </form>
     </>
   );

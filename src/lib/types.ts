@@ -54,6 +54,12 @@ export type Notification = {
     createdAt: Date | Timestamp;
 };
 
+export type Branch = {
+  id: string;
+  name: string;
+  address: string;
+};
+
 export type Client = {
   id: string;
   ejecutivo: string;
@@ -67,6 +73,7 @@ export type Client = {
   longitud: number;
   status?: 'active' | 'inactive';
   createdAt?: any;
+  branches?: Branch[];
 };
 
 export type ClientInRoute = {
@@ -90,6 +97,7 @@ export type ClientInRoute = {
     promociones?: number;
     medicacionFrecuente?: number;
     removalObservation?: string;
+    selectedBranch?: string; // ID o nombre de la sucursal seleccionada
 };
 
 export type RoutePlan = {

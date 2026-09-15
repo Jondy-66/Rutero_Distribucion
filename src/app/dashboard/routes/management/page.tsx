@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect, useMemo, Suspense } from 'react';
@@ -7,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, MapPin, LoaderCircle, Phone, AlertTriangle, ThumbsUp, Users as UsersIcon, Clock, Sparkles, CheckCircle2, PlusCircle, Search, ArrowLeft } from 'lucide-react';
+import { Route, MapPin, LoaderCircle, Phone, AlertTriangle, ThumbsUp, Users as UsersIcon, Clock, Sparkles, CheckCircle2, PlusCircle, Search, ArrowLeft, Building2 } from 'lucide-react';
 import { updateRoute, addNotification } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -62,7 +63,8 @@ const sanitizeClients = (clients: ClientInRoute[]): any[] => {
             valorCobro: parseMoney(c.valorCobro),
             devoluciones: parseMoney(c.devoluciones),
             promociones: parseMoney(c.promociones),
-            medicacionFrecuente: parseMoney(c.medicacionFrecuente)
+            medicacionFrecuente: parseMoney(c.medicacionFrecuente),
+            selectedBranch: c.selectedBranch || 'Matriz'
         };
         const d = ensureDate(c.date);
         cleaned.date = Timestamp.fromDate(d);
@@ -94,6 +96,7 @@ function RouteManagementContent() {
   const [localVenta, setLocalVenta] = useState('');
   const [localCobro, setLocalCobro] = useState('');
   const [localDevol, setLocalDevol] = useState('');
+  const [localBranch, setLocalBranch] = useState('Matriz');
 
   const isAdmin = user?.role === 'Administrador';
 
@@ -102,10 +105,8 @@ function RouteManagementContent() {
         const urlId = searchParams.get('routeId');
         const savedId = localStorage.getItem(`activeRouteId_${user.id}`);
         const savedIndex = localStorage.getItem(`activeClientIndex_${user.id}`);
-        
-        if (urlId) {
-            setSelectedRouteId(urlId);
-        } else if (savedId) {
+        if (urlId) setSelectedRouteId(urlId);
+        else if (savedId) {
             setSelectedRouteId(savedId);
             if (savedIndex) setActiveOriginalIndex(parseInt(savedIndex));
         }
@@ -113,14 +114,9 @@ function RouteManagementContent() {
   }, [user?.id, searchParams]);
 
   useEffect(() => {
-    if (user?.id && selectedRouteId) {
-        localStorage.setItem(`activeRouteId_${user.id}`, selectedRouteId);
-    }
-    if (user?.id && activeOriginalIndex !== null) {
-        localStorage.setItem(`activeClientIndex_${user.id}`, String(activeOriginalIndex));
-    } else if (user?.id) {
-        localStorage.removeItem(`activeClientIndex_${user.id}`);
-    }
+    if (user?.id && selectedRouteId) localStorage.setItem(`activeRouteId_${user.id}`, selectedRouteId);
+    if (user?.id && activeOriginalIndex !== null) localStorage.setItem(`activeClientIndex_${user.id}`, String(activeOriginalIndex));
+    else if (user?.id) localStorage.removeItem(`activeClientIndex_${user.id}`);
   }, [selectedRouteId, activeOriginalIndex, user?.id]);
 
   useEffect(() => {
@@ -144,12 +140,10 @@ function RouteManagementContent() {
       const now = new Date();
       let limitHour = 19;
       let limitMinute = 0;
-
       if (selectedRoute?.extendedClosingTime) {
         const [h, m] = selectedRoute.extendedClosingTime.split(':').map(Number);
         if (!isNaN(h)) { limitHour = h; limitMinute = m; }
-      } 
-      else {
+      } else {
         const routeOwner = allUsers.find(u => u.id === selectedRoute?.createdBy);
         const userToCheck = routeOwner || user;
         if (userToCheck?.extendedClosingTime && userToCheck?.extendedClosingDays?.includes(now.getDay())) {
@@ -157,7 +151,6 @@ function RouteManagementContent() {
             if (!isNaN(h)) { limitHour = h; limitMinute = m; }
         }
       }
-
       const currentMin = now.getHours() * 60 + now.getMinutes();
       setIsExpired(currentMin >= (limitHour * 60 + limitMinute));
     };
@@ -179,6 +172,12 @@ function RouteManagementContent() {
   }, [todaysClients, isAdmin]);
 
   const activeClient = useMemo(() => activeOriginalIndex !== null ? selectedRoute?.clients[activeOriginalIndex] : null, [activeOriginalIndex, selectedRoute]);
+  
+  const catalogClient = useMemo(() => {
+    if (!activeClient) return null;
+    return catalogClients.find(c => c.ruc === activeClient.ruc);
+  }, [activeClient, catalogClients]);
+
   const clientInManagement = useMemo(() => todaysClients.find(c => c.checkInTime && !c.checkOutTime), [todaysClients]);
 
   useEffect(() => {
@@ -188,6 +187,7 @@ function RouteManagementContent() {
           setLocalVenta(activeClient.valorVenta ? String(activeClient.valorVenta) : '');
           setLocalCobro(activeClient.valorCobro ? String(activeClient.valorCobro) : '');
           setLocalDevol(activeClient.devoluciones ? String(activeClient.devoluciones) : '');
+          setLocalBranch(activeClient.selectedBranch || 'Matriz');
       }
   }, [activeOriginalIndex, activeClient?.ruc]);
 
@@ -214,7 +214,12 @@ function RouteManagementContent() {
     const timeStr = format(new Date(), 'HH:mm:ss');
     const proceed = (coords?: {lat: number, lng: number}) => {
         const next = [...selectedRoute.clients];
-        next[activeOriginalIndex!] = { ...next[activeOriginalIndex!], checkInTime: timeStr, checkInLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null };
+        next[activeOriginalIndex!] = { 
+            ...next[activeOriginalIndex!], 
+            checkInTime: timeStr, 
+            selectedBranch: localBranch,
+            checkInLocation: coords ? new GeoPoint(coords.lat, coords.lng) : null 
+        };
         updateRoute(selectedRoute.id, { clients: sanitizeClients(next), status: 'En Progreso' });
         setIsSaving(false);
     };
@@ -349,6 +354,24 @@ function RouteManagementContent() {
                     <CardContent className="p-4 sm:p-8">
                         {activeClient ? (
                             <div className="space-y-8">
+                                {catalogClient?.branches && catalogClient.branches.length > 0 && (
+                                    <div className="space-y-2 p-4 bg-slate-50 rounded-2xl border-2 border-slate-100">
+                                        <Label className="text-[10px] font-black uppercase text-slate-500">Ubicación de Gestión</Label>
+                                        <Select value={localBranch} onValueChange={setLocalBranch} disabled={isEditDisabled || !!activeClient.checkInTime}>
+                                            <SelectTrigger className="h-11 font-black"><Building2 className="mr-2 h-4 w-4 text-primary" /><SelectValue /></SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="Matriz" className="font-bold">Sede Principal (Matriz)</SelectItem>
+                                                {catalogClient.branches.map(b => (
+                                                    <SelectItem key={b.id} value={b.name} className="font-bold">{b.name}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-[9px] font-bold text-slate-400 italic">
+                                            {localBranch === 'Matriz' ? catalogClient.direccion : catalogClient.branches.find(b => b.name === localBranch)?.address}
+                                        </p>
+                                    </div>
+                                )}
+
                                 <div className={cn("p-6 rounded-[2rem] border-2 flex items-center justify-between", activeClient.checkInTime ? "bg-green-50 border-green-200" : "bg-slate-50 border-dashed border-slate-200")}>
                                     <div><p className="text-[10px] font-black uppercase text-slate-400">Hora de Ingreso</p><p className="text-3xl font-black text-slate-950">{activeClient.checkInTime || "--:--:--"}</p></div>
                                     {!activeClient.checkInTime && <Button onClick={handleCheckIn} disabled={isSaving || !!clientInManagement || isEditDisabled} className="font-black h-14 px-10 uppercase rounded-2xl shadow-xl">{isSaving ? <LoaderCircle className="animate-spin h-6 w-6" /> : "Marcar Entrada (GPS)"}</Button>}
