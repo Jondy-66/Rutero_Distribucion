@@ -19,7 +19,6 @@ if (typeof window !== 'undefined') {
     require('@geoman-io/leaflet-geoman-free');
 }
 
-// Estilos CSS para marcadores animados
 const markerStyles = `
   .user-marker-container {
     position: relative;
@@ -74,9 +73,6 @@ const markerStyles = `
   }
 `;
 
-/**
- * Crea un icono de Leaflet personalizado y estético para los usuarios.
- */
 const createUserIcon = (isOutOfRoute: boolean) => {
     return L.divIcon({
         className: 'custom-div-icon',
@@ -134,9 +130,7 @@ function GeomanControl({ onZoneCreated }: { onZoneCreated: (json: any) => void }
 
 function SmoothMarker({ location }: { location: ActiveLocation }) {
     if (!isFinite(location.lat) || !isFinite(location.lng)) return null;
-    
     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${location.lat},${location.lng}`;
-
     return (
         <Marker position={[location.lat, location.lng]} icon={createUserIcon(!!location.is_out_of_route)}>
             <Popup className="custom-popup">
@@ -153,14 +147,12 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
                             Precisión: {location.accuracy?.toFixed(1) || '0'}m
                         </p>
                     </div>
-                    
                     <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-100 space-y-1.5">
                         <p className="text-[9px] font-black uppercase text-slate-500">Ubicación Actual</p>
                         <p className="text-[10px] font-bold text-slate-600 leading-tight line-clamp-2 italic">
                             {location.address_text || 'Dirección no reportada...'}
                         </p>
                     </div>
-
                     <Button 
                         size="sm" 
                         className="h-10 w-full bg-slate-950 hover:bg-slate-900 text-white font-black uppercase text-[10px] rounded-xl shadow-xl flex items-center justify-center gap-2 group transition-all active:scale-95"
@@ -186,7 +178,6 @@ export function SupervisorMap() {
 
   useEffect(() => {
     setIsMounted(true);
-
     const unsubLocs = onSnapshot(collection(db, 'active_locations'), (snap) => {
         const locs = snap.docs.map(d => ({
             ...d.data(),
@@ -194,11 +185,9 @@ export function SupervisorMap() {
         } as ActiveLocation)).filter(l => isFinite(l.lat) && isFinite(l.lng));
         setActiveLocations(locs);
     });
-
     const unsubZones = onSnapshot(collection(db, 'zones'), (snap) => {
         setZones(snap.docs.map(d => ({ id: d.id, ...d.data() } as Zone)));
     });
-    
     return () => { 
         unsubLocs(); 
         unsubZones();
@@ -248,7 +237,6 @@ export function SupervisorMap() {
   return (
     <div className="flex flex-col h-full gap-4">
         <style dangerouslySetInnerHTML={{ __html: markerStyles }} />
-        
         <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 scrollbar-hide">
             {activeLocations.length > 0 ? (
                 activeLocations.map(loc => (
@@ -269,7 +257,6 @@ export function SupervisorMap() {
                 <div className="text-[10px] font-black uppercase text-slate-400 p-2 italic">Esperando señales...</div>
             )}
         </div>
-
         <div className="flex-1 rounded-[1.5rem] lg:rounded-[2.5rem] overflow-hidden border-2 lg:border-4 border-slate-100 shadow-2xl relative bg-slate-50">
             <MapContainer 
                 key={`supervisor-map-instance-${selectedUserId || 'main'}`}
@@ -281,22 +268,18 @@ export function SupervisorMap() {
             >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapViewController center={mapCenter} />
-                
                 {activeLocations.map(loc => (
                     <SmoothMarker key={loc.userId} location={loc} />
                 ))}
-
                 {zones.map(zone => {
                     try {
                         const positions = zone.geoJson.geometry.coordinates[0].map((c: any) => [c[1], c[0]]);
                         return <Polygon key={zone.id} positions={positions} pathOptions={{ color: 'purple', fillOpacity: 0.1, weight: 2, dashArray: '5, 5' }} />;
                     } catch(e) { return null; }
                 })}
-
                 {historyPath.length > 1 && (
                     <Polyline positions={historyPath} pathOptions={{ color: '#011688', weight: 4, opacity: 0.8 }} />
                 )}
-
                 <GeomanControl onZoneCreated={handleZoneCreated} />
             </MapContainer>
         </div>

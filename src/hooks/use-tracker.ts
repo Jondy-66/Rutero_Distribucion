@@ -56,7 +56,7 @@ export function useTracker() {
     if (isManual && isDenied) {
         toast({
             title: "Acceso Bloqueado",
-            description: "Por favor, permite el acceso a la ubicación en la configuración de tu navegador (clic en el candado junto a la URL).",
+            description: "Por favor, permite el acceso a la ubicación en la configuración de tu navegador.",
             variant: "destructive"
         });
     }
@@ -70,9 +70,6 @@ export function useTracker() {
     }).catch(() => {});
   }, [user, toast]);
 
-  /**
-   * Función para disparar la petición de permiso y actualización inmediata.
-   */
   const requestPermission = useCallback((isManual: boolean = false) => {
     if (typeof window === 'undefined' || !navigator.geolocation) return;
     
@@ -104,10 +101,8 @@ export function useTracker() {
   useEffect(() => {
     if (!user || user.role === 'Auditor' || user.role === 'Administrador') return;
 
-    // 1. CAPTURA INICIAL
     requestPermission();
 
-    // 2. MONITOREO DE MOVIMIENTO Y SEÑAL
     const watchId = navigator.geolocation.watchPosition(
       (position) => {
         setIsPermissionDenied(false);
@@ -115,7 +110,7 @@ export function useTracker() {
         setGpsEnabled(true);
         
         const { latitude: lat, longitude: lng, accuracy, heading } = position.coords;
-        if (accuracy > 100) return; // Filtro de ruido excesivo
+        if (accuracy > 100) return;
 
         let distance = 0;
         if (lastPosition.current) {
@@ -132,21 +127,19 @@ export function useTracker() {
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
     );
 
-    // 3. HEARTBEAT RESILIENTE (CADA 3 MINUTOS)
     const heartbeatInterval = setInterval(() => {
         if (document.visibilityState === 'visible' && !isPermissionDenied) {
             requestPermission();
         }
     }, 3 * 60 * 1000);
 
-    // 4. ACTUALIZACIÓN POR RE-ENTRADA (MÁXIMA PRIORIDAD)
     const handleVisibilityChange = () => {
         if (document.visibilityState === 'visible' && !isPermissionDenied) requestPermission();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 5. MONITOR DE PERMISOS (CHROME/FIREFOX) - Con protección para móviles (Safari/iOS)
-    if (typeof window !== 'undefined' && 'permissions' in navigator) {
+    // Verificación segura de permisos (evita crash en Safari/iOS)
+    if (typeof window !== 'undefined' && navigator.permissions && typeof navigator.permissions.query === 'function') {
         try {
             navigator.permissions.query({ name: 'geolocation' as any }).then((status) => {
                 status.onchange = () => {
@@ -159,10 +152,10 @@ export function useTracker() {
                     }
                 };
             }).catch(() => {
-                // Silenciamos fallos en navegadores que no permiten el query de geolocalización
+                // Navegador no soporta query de geolocalización, se ignora silenciosamente
             });
         } catch (e) {
-            // Protección contra fallos de implementación de API de permisos en móviles
+            // Protección contra fallos de implementación en navegadores antiguos
         }
     }
 
