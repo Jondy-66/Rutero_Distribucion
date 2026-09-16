@@ -14,7 +14,6 @@ import { Timestamp } from 'firebase/firestore';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 
-// Solo importar Geoman si estamos en el cliente
 if (typeof window !== 'undefined') {
     require('@geoman-io/leaflet-geoman-free');
 }
@@ -155,12 +154,12 @@ function SmoothMarker({ location }: { location: ActiveLocation }) {
                     </div>
                     <Button 
                         size="sm" 
-                        className="h-10 w-full bg-slate-950 hover:bg-slate-900 text-white font-black uppercase text-[10px] rounded-xl shadow-xl flex items-center justify-center gap-2 group transition-all active:scale-95"
+                        className="h-10 w-full bg-slate-950 hover:bg-slate-900 text-white font-black uppercase text-[10px] rounded-xl shadow-xl flex items-center justify-center gap-2"
                         onClick={() => window.open(googleMapsUrl, '_blank')}
                     >
                         <Navigation className="h-3.5 w-3.5" />
-                        Iniciar Navegación
-                        <ExternalLink className="h-3 w-3 ml-auto opacity-50 group-hover:opacity-100" />
+                        Navegar
+                        <ExternalLink className="h-3 w-3 ml-auto opacity-50" />
                     </Button>
                 </div>
             </Popup>
@@ -238,28 +237,24 @@ export function SupervisorMap() {
     <div className="flex flex-col h-full gap-4">
         <style dangerouslySetInnerHTML={{ __html: markerStyles }} />
         <div className="flex gap-2 shrink-0 overflow-x-auto pb-2 scrollbar-hide">
-            {activeLocations.length > 0 ? (
-                activeLocations.map(loc => (
-                    <Button 
-                        key={loc.userId} 
-                        variant={selectedUserId === loc.userId ? "default" : "outline"}
-                        className={cn(
-                            "font-black uppercase text-[9px] h-9 border-2 shrink-0 rounded-xl px-4 transition-all",
-                            selectedUserId === loc.userId ? "bg-primary text-white border-primary shadow-lg" : "bg-white text-slate-950 border-slate-100"
-                        )}
-                        onClick={() => fetchUserHistory(loc.userId)}
-                    >
-                        {loc.userName || 'Usuario'}
-                        {isHistoryLoading && selectedUserId === loc.userId && <LoaderCircle className="ml-2 h-3 w-3 animate-spin" />}
-                    </Button>
-                ))
-            ) : (
-                <div className="text-[10px] font-black uppercase text-slate-400 p-2 italic">Esperando señales...</div>
-            )}
+            {activeLocations.map(loc => (
+                <Button 
+                    key={loc.userId} 
+                    variant={selectedUserId === loc.userId ? "default" : "outline"}
+                    className={cn(
+                        "font-black uppercase text-[9px] h-9 border-2 shrink-0 rounded-xl px-4",
+                        selectedUserId === loc.userId ? "bg-primary text-white border-primary shadow-lg" : "bg-white text-slate-950 border-slate-100"
+                    )}
+                    onClick={() => fetchUserHistory(loc.userId)}
+                >
+                    {loc.userName || 'Usuario'}
+                    {isHistoryLoading && selectedUserId === loc.userId && <LoaderCircle className="ml-2 h-3 w-3 animate-spin" />}
+                </Button>
+            ))}
         </div>
-        <div className="flex-1 rounded-[1.5rem] lg:rounded-[2.5rem] overflow-hidden border-2 lg:border-4 border-slate-100 shadow-2xl relative bg-slate-50">
+        <div className="flex-1 rounded-[2.5rem] overflow-hidden border-4 border-slate-100 shadow-2xl relative bg-slate-50">
             <MapContainer 
-                key={`supervisor-map-instance-${selectedUserId || 'main'}`}
+                key="supervisor-map-stable"
                 center={[-1.8312, -78.1834]} 
                 zoom={7} 
                 scrollWheelZoom={true}
