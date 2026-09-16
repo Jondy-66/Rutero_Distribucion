@@ -295,8 +295,8 @@ function RouteManagementContent() {
 
   if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-10 mx-auto" /></div>;
 
-  // PANEL DE FELICITACIÓN RESTAURADO - Sin botón por solicitud del usuario
-  if (allRouteFinished && !activeOriginalIndex) {
+  // PANEL DE FELICITACIÓN: Los administradores NO ven este panel bloqueante para poder seguir supervisando
+  if (allRouteFinished && !activeOriginalIndex && !isAdmin) {
       return (
           <div className="flex flex-col items-center justify-center min-h-[70vh] text-center p-6 animate-in zoom-in duration-500">
               <div className="bg-white p-8 rounded-[3rem] shadow-2xl relative border-4 border-primary">

@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useEffect, useRef, useState, useCallback } from 'react';
@@ -146,19 +145,25 @@ export function useTracker() {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // 5. MONITOR DE PERMISOS (CHROME/FIREFOX)
+    // 5. MONITOR DE PERMISOS (CHROME/FIREFOX) - Con protección para móviles (Safari/iOS)
     if (typeof window !== 'undefined' && 'permissions' in navigator) {
-        navigator.permissions.query({ name: 'geolocation' as any }).then((status) => {
-            status.onchange = () => {
-                if (status.state === 'denied') {
-                    setIsPermissionDenied(true);
-                    setGpsEnabled(false);
-                } else if (status.state === 'granted') {
-                    setIsPermissionDenied(false);
-                    requestPermission();
-                }
-            };
-        });
+        try {
+            navigator.permissions.query({ name: 'geolocation' as any }).then((status) => {
+                status.onchange = () => {
+                    if (status.state === 'denied') {
+                        setIsPermissionDenied(true);
+                        setGpsEnabled(false);
+                    } else if (status.state === 'granted') {
+                        setIsPermissionDenied(false);
+                        requestPermission();
+                    }
+                };
+            }).catch(() => {
+                // Silenciamos fallos en navegadores que no permiten el query de geolocalización
+            });
+        } catch (e) {
+            // Protección contra fallos de implementación de API de permisos en móviles
+        }
     }
 
     return () => {
