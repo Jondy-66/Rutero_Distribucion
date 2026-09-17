@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useAuth } from '@/hooks/use-auth';
 import { useToast } from '@/hooks/use-toast';
 import type { RoutePlan, ClientInRoute } from '@/lib/types';
-import { Download, Users, MoreHorizontal, Eye, Calendar as CalendarIcon, ClipboardCheck, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Download, Users, MoreHorizontal, Eye, Calendar as CalendarIcon, ClipboardCheck, AlertCircle, CheckCircle2, Clock, MapPin, Phone, Building2 } from 'lucide-react';
 import { format, startOfDay, endOfDay, startOfMonth, isBefore } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -61,10 +61,6 @@ type DailyLog = {
     clients: ClientInRoute[];
 };
 
-/**
- * Función auxiliar de agrupación definida fuera del componente para evitar 
- * errores de sintaxis JSX con los caracteres genéricos.
- */
 function groupBy<T, K extends string | number | symbol>(list: T[], getKey: (item: T) => K) {
   return list.reduce((previous, currentItem) => {
     const group = getKey(currentItem);
@@ -98,16 +94,6 @@ export default function SellerReportsPage() {
       'Auditor': ['dashboard', 'admin-dashboard', 'clients', 'locations', 'map', 'reports', 'seller-reports', 'audit-detail', 'tracking', 'routes'],
     };
     return (roleDefaults[currentUser.role] || []).includes(id);
-  };
-
-  const formatLoc = (loc: any) => {
-    if (!loc) return 'N/A';
-    const lat = loc.latitude ?? loc.lat ?? loc._lat;
-    const lng = loc.longitude ?? loc.lng ?? loc._long;
-    if (typeof lat === 'number' && typeof lng === 'number') {
-        return `${lat.toFixed(6)}, ${lng.toFixed(6)}`;
-    }
-    return 'N/A';
   };
 
   const managedSellers = useMemo(() => {
@@ -206,6 +192,11 @@ export default function SellerReportsPage() {
         });
 
         for (const client of sortedClients) {
+            const latIn = client.checkInLocation?.latitude ?? (client.checkInLocation as any)?.lat ?? (client.checkInLocation as any)?._lat ?? '';
+            const lngIn = client.checkInLocation?.longitude ?? (client.checkInLocation as any)?.lng ?? (client.checkInLocation as any)?._long ?? '';
+            const latOut = client.checkOutLocation?.latitude ?? (client.checkOutLocation as any)?.lat ?? (client.checkOutLocation as any)?._lat ?? '';
+            const lngOut = client.checkOutLocation?.longitude ?? (client.checkOutLocation as any)?.lng ?? (client.checkOutLocation as any)?._long ?? '';
+
             dataToExport.push({
                 'Vendedor': dailyLog.sellerName,
                 'Ruta': dailyLog.routeName,
@@ -213,12 +204,19 @@ export default function SellerReportsPage() {
                 'Estado Día': dailyLog.status,
                 'RUC': client.ruc,
                 'Cliente': client.nombre_comercial,
-                'Gestión': client.visitStatus === 'Completado' ? 'OK' : 'PENDIENTE',
+                'Sucursal': client.selectedBranch || 'Matriz',
+                'Tipo Gestión': client.visitType === 'presencial' ? 'Presencial' : (client.visitType === 'telefonica' ? 'Telefónica' : 'N/A'),
+                'Estado Gestión': client.visitStatus === 'Completado' ? 'OK' : 'PENDIENTE',
                 'H. Entrada': client.checkInTime || 'N/A',
                 'H. Salida': client.checkOutTime || 'N/A',
+                'Latitud Entrada': latIn,
+                'Longitud Entrada': lngIn,
+                'Latitud Salida': latOut,
+                'Longitud Salida': lngOut,
                 'Venta ($)': client.valorVenta || 0,
                 'Cobro ($)': client.valorCobro || 0,
                 'Devol. ($)': client.devoluciones || 0,
+                'Promociones ($)': client.promociones || 0,
                 'Observación': client.visitObservation || client.callObservation || '',
                 'Justificación Extra': client.reAdditionObservation || ''
             });
@@ -227,13 +225,13 @@ export default function SellerReportsPage() {
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Auditoría");
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Auditoría Detallada");
     
     const seller = allUsers.find(u => u.id === selectedSellerId);
     const name = selectedSellerId === 'all' ? 'todos' : (seller?.name || 'vendedor').replace(/ /g, '_');
     
-    XLSX.writeFile(workbook, `auditoria_${name}.xlsx`);
-    toast({ title: "Descarga Iniciada" });
+    XLSX.writeFile(workbook, `auditoria_fuerza_ventas_${name}.xlsx`);
+    toast({ title: "Descarga Iniciada", description: "El reporte detallado se está procesando." });
 };
 
   if (authLoading) {
@@ -248,7 +246,7 @@ export default function SellerReportsPage() {
       >
         <Button onClick={handleDownloadExcel} disabled={dailyReports.length === 0} className="font-black">
           <Download className="mr-2 h-4 w-4" />
-          Exportar Auditoría
+          Exportar Auditoría Completa
         </Button>
       </PageHeader>
       
@@ -380,12 +378,27 @@ export default function SellerReportsPage() {
                         <h5 className="font-black text-sm uppercase text-slate-950 truncate leading-tight">{client.nombre_comercial}</h5>
                         <p className="text-[9px] font-mono font-bold text-slate-400 mt-1 uppercase">RUC: {client.ruc}</p>
                       </div>
-                      <Badge variant={client.visitStatus === 'Completado' ? 'success' : 'destructive'} className="font-black text-[8px] uppercase">
-                        {client.visitStatus === 'Completado' ? 'GESTIONADO' : 'PENDIENTE'}
-                      </Badge>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant={client.visitStatus === 'Completado' ? 'success' : 'destructive'} className="font-black text-[8px] uppercase">
+                            {client.visitStatus === 'Completado' ? 'GESTIONADO' : 'PENDIENTE'}
+                        </Badge>
+                        {client.visitStatus === 'Completado' && client.visitType && (
+                            <Badge variant="outline" className="font-black text-[7px] uppercase border-primary text-primary flex items-center gap-1">
+                                {client.visitType === 'presencial' ? <MapPin className="h-2 w-2" /> : <Phone className="h-2 w-2" />}
+                                {client.visitType === 'presencial' ? 'PRESENCIAL' : 'TELEFÓNICA'}
+                            </Badge>
+                        )}
+                      </div>
                     </div>
                     {client.visitStatus === 'Completado' && (
                       <div className="grid grid-cols-2 gap-4 mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                        <div className="col-span-2 space-y-1 mb-2 pb-2 border-b border-slate-200">
+                            <p className="text-[8px] font-black uppercase text-slate-400">Sucursal de Gestión</p>
+                            <div className="flex items-center gap-1.5 text-slate-900">
+                                <Building2 className="h-3 w-3 text-primary" />
+                                <span className="text-[10px] font-black uppercase">{client.selectedBranch || 'Matriz'}</span>
+                            </div>
+                        </div>
                         <div className="space-y-1">
                           <p className="text-[8px] font-black uppercase text-slate-400">Entrada / Salida</p>
                           <p className="text-[11px] font-black text-slate-950 uppercase">{client.checkInTime || '--:--'} / {client.checkOutTime || '--:--'}</p>
