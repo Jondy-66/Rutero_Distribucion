@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Route, MapPin, LoaderCircle, Phone, AlertTriangle, ThumbsUp, Users as UsersIcon, Clock, Sparkles, CheckCircle2, PlusCircle, Search, ArrowLeft, Building2 } from 'lucide-react';
+import { Route, MapPin, LoaderCircle, Phone, AlertTriangle, ThumbsUp, Users as UsersIcon, Clock, Sparkles, CheckCircle2, PlusCircle, Search, ArrowLeft, Building2, Trash2, RefreshCw } from 'lucide-react';
 import { updateRoute, addNotification } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -89,6 +89,10 @@ function RouteManagementContent() {
   const [reAddSearchTerm, setReAddSearchTerm] = useState('');
   const [reAddJustification, setReAddJustification] = useState('');
   const [tempSelectedClient, setTempSelectedClient] = useState<Client | null>(null);
+
+  // Estados para eliminación administrativa
+  const [isAdminRemovalDialogOpen, setIsAdminRemovalDialogOpen] = useState(false);
+  const [adminRemovalReason, setAdminRemovalReason] = useState('');
 
   const [localVisitObs, setLocalVisitObs] = useState('');
   const [localCallObs, setLocalCallObs] = useState('');
@@ -231,6 +235,53 @@ function RouteManagementContent() {
     } else { proceed(); }
   };
 
+  const handleResetCheckIn = async () => {
+      if (!selectedRoute || activeOriginalIndex === null || !isAdmin) return;
+      setIsSaving(true);
+      try {
+          const next = [...selectedRoute.clients];
+          next[activeOriginalIndex!] = { 
+              ...next[activeOriginalIndex!], 
+              checkInTime: null, 
+              checkInLocation: null,
+              selectedBranch: 'Matriz',
+              visitType: null,
+              visitStatus: 'Pendiente'
+          };
+          await updateRoute(selectedRoute.id, { clients: sanitizeClients(next) });
+          toast({ title: "Gestión Reseteada", description: "El cliente ha vuelto al estado inicial." });
+          setIsSaving(false);
+      } catch (e) {
+          setIsSaving(false);
+          toast({ title: "Error", variant: "destructive" });
+      }
+  };
+
+  const handleConfirmAdminRemoval = async () => {
+      if (!selectedRoute || activeOriginalIndex === null || !isAdmin || !adminRemovalReason.trim()) return;
+      setIsSaving(true);
+      try {
+          const next = [...selectedRoute.clients];
+          next[activeOriginalIndex!] = { 
+              ...next[activeOriginalIndex!], 
+              status: 'Eliminado', 
+              removalObservation: adminRemovalReason,
+              visitStatus: 'Pendiente',
+              checkInTime: null,
+              checkOutTime: null
+          };
+          await updateRoute(selectedRoute.id, { clients: sanitizeClients(next) });
+          setActiveOriginalIndex(null);
+          setIsAdminRemovalDialogOpen(false);
+          setAdminRemovalReason('');
+          toast({ title: "Cliente Quitado", description: "La parada ha sido eliminada de la jornada." });
+      } catch (e) {
+          toast({ title: "Error", variant: "destructive" });
+      } finally {
+          setIsSaving(false);
+      }
+  };
+
   const handleCheckOut = () => {
     if (!selectedRoute || activeOriginalIndex === null || isObservationMissing || isEditDisabled) return;
     setIsSaving(true);
@@ -295,7 +346,6 @@ function RouteManagementContent() {
 
   if (authLoading) return <div className="p-20 text-center"><LoaderCircle className="animate-spin h-10 mx-auto" /></div>;
 
-  // PANEL DE FELICITACIÓN: Los administradores NO ven este panel bloqueante para poder seguir supervisando
   if (allRouteFinished && !activeOriginalIndex && !isAdmin) {
       return (
           <div className="flex flex-col items-center justify-center min-h-[70vh] text-center p-6 animate-in zoom-in duration-500">
@@ -351,7 +401,20 @@ function RouteManagementContent() {
                 </Card>
 
                 <Card className={cn("lg:col-span-2 shadow-2xl border-t-4 border-t-primary rounded-[2.5rem] overflow-hidden bg-white", activeOriginalIndex === null ? "hidden lg:block" : "block")}>
-                    <CardHeader className="bg-slate-50 border-b p-6 flex flex-row items-center gap-4"><Button variant="ghost" size="icon" className="lg:hidden rounded-full h-10 w-10" onClick={() => setActiveOriginalIndex(null)}><ArrowLeft className="h-6 w-6" /></Button><div className="flex-1 min-w-0"><CardTitle className="uppercase text-primary font-black tracking-tighter truncate text-xl">{activeClient?.nombre_comercial || "Selecciona un cliente"}</CardTitle></div></CardHeader>
+                    <CardHeader className="bg-slate-50 border-b p-6 flex flex-row items-center gap-4"><Button variant="ghost" size="icon" className="lg:hidden rounded-full h-10 w-10" onClick={() => setActiveOriginalIndex(null)}><ArrowLeft className="h-6 w-6" /></Button><div className="flex-1 min-w-0"><CardTitle className="uppercase text-primary font-black tracking-tighter truncate text-xl">{activeClient?.nombre_comercial || "Selecciona un cliente"}</CardTitle></div>
+                    {isAdmin && activeClient && (
+                        <div className="flex gap-2">
+                             {activeClient.checkInTime && activeClient.visitStatus !== 'Completado' && (
+                                <Button variant="outline" size="sm" onClick={handleResetCheckIn} className="text-orange-600 border-orange-200 font-black uppercase text-[10px] bg-orange-50 hover:bg-orange-100 shadow-sm">
+                                    <RefreshCw className="mr-1 h-3 w-3" /> Resetear Ingreso
+                                </Button>
+                             )}
+                             <Button variant="outline" size="sm" onClick={() => setIsAdminRemovalDialogOpen(true)} className="text-red-600 border-red-200 font-black uppercase text-[10px] bg-red-50 hover:bg-red-100 shadow-sm">
+                                <Trash2 className="mr-1 h-3 w-3" /> Quitar Parada
+                             </Button>
+                        </div>
+                    )}
+                    </CardHeader>
                     <CardContent className="p-4 sm:p-8">
                         {activeClient ? (
                             <div className="space-y-8">
@@ -380,11 +443,11 @@ function RouteManagementContent() {
                                 <div className={cn("space-y-8", !activeClient.checkInTime && "opacity-20 pointer-events-none")}>
                                     <div className="space-y-4"><Label className="text-[11px] font-black uppercase text-slate-500">Tipo de Gestión</Label><RadioGroup value={activeClient.visitType || undefined} onValueChange={v => { if (!isEditDisabled) { const next = [...selectedRoute.clients]; next[activeOriginalIndex!].visitType = v as any; updateRoute(selectedRoute.id, { clients: sanitizeClients(next) }); } }} className="grid grid-cols-2 gap-4"><Label className={cn("flex flex-col items-center p-6 border-2 rounded-[2rem] cursor-pointer transition-all", activeClient.visitType === 'presencial' ? "border-primary bg-primary/5" : "bg-slate-50")}><RadioGroupItem value="presencial" className="sr-only" /><MapPin className="h-8 w-8 mb-3" /><span className="text-xs font-black uppercase">Presencial</span></Label><Label className={cn("flex flex-col items-center p-6 border-2 rounded-[2rem] cursor-pointer transition-all", activeClient.visitType === 'telefonica' ? "border-primary bg-primary/5" : "bg-slate-50")}><RadioGroupItem value="telefonica" className="sr-only" /><Phone className="h-8 w-8 mb-3" /><span className="text-xs font-black uppercase">Telefónica</span></Label></RadioGroup></div>
                                     <div className="grid grid-cols-3 gap-3"><div className="space-y-2"><Label className="text-[8px] font-black text-center block uppercase">Venta ($)</Label><Input value={localVenta} onChange={e => setLocalVenta(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" /></div><div className="space-y-2"><Label className="text-[8px] font-black text-center block uppercase">Cobro ($)</Label><Input value={localCobro} onChange={e => setLocalCobro(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" /></div><div className="space-y-2"><Label className="text-[8px] font-black text-center block uppercase">Devol. ($)</Label><Input value={localDevol} onChange={e => setLocalDevol(e.target.value)} disabled={isEditDisabled} className="h-14 font-black text-center text-primary text-xl border-2 rounded-2xl" placeholder="0.00" /></div></div>
-                                    <div className="space-y-2"><Label className={cn("text-[10px] font-black uppercase", isObservationMissing && "text-red-600")}>Observaciones de Gestión {isObservationMissing && "(OBLIGATORIA)"}</Label><Textarea value={localVisitObs} onChange={e => setLocalVisitObs(e.target.value)} disabled={isEditDisabled} className="border-2 rounded-[1.5rem] p-4 text-base font-bold min-h-[120px]" placeholder="Resultado de la gestión..." /></div>
+                                    <div className="space-y-2"><Label className={cn("text-[10px] font-black uppercase text-slate-950", isObservationMissing && "text-red-600")}>Observaciones de Gestión {isObservationMissing && "(OBLIGATORIA)"}</Label><Textarea value={localVisitObs} onChange={e => setLocalVisitObs(e.target.value)} disabled={isEditDisabled} className="border-2 rounded-[1.5rem] p-4 text-base font-black text-slate-950 min-h-[120px]" placeholder="Resultado de la gestión..." /></div>
                                     {activeClient.visitStatus !== 'Completado' ? <Button onClick={handleCheckOut} disabled={isSaving || isObservationMissing || !activeClient.visitType || isEditDisabled} className="w-full h-16 text-xl font-black uppercase shadow-2xl rounded-[1.5rem] bg-slate-950 hover:bg-slate-900">{isSaving ? <LoaderCircle className="animate-spin h-8 w-8" /> : "Finalizar Gestión"}</Button> : <div className="p-8 bg-green-50 border-2 border-green-200 rounded-[2rem] text-center"><CheckCircle2 className="h-10 w-10 text-green-600 mx-auto mb-3" /><p className="text-xl font-black text-green-900 uppercase">Gestión Finalizada</p></div>}
                                 </div>
                             </div>
-                        ) : <div className="text-center py-24 flex flex-col items-center gap-6 opacity-30"><UsersIcon className="h-20 w-20" /><p className="font-black text-2xl uppercase tracking-widest">Selecciona un cliente de la lista</p></div>}
+                        ) : <div className="text-center py-24 flex flex-col items-center gap-6 opacity-30"><UsersIcon className="h-20 w-20" /><p className="font-black text-2xl uppercase tracking-widest text-slate-950">Selecciona un cliente de la lista</p></div>}
                     </CardContent>
                 </Card>
             </div>
@@ -407,7 +470,7 @@ function RouteManagementContent() {
                             <Label className="text-[10px] font-black uppercase text-primary">Justificación Obligatoria</Label>
                             <Textarea 
                                 placeholder="Escribe el motivo..." 
-                                className="border-2 rounded-2xl h-24" 
+                                className="border-2 rounded-2xl h-24 font-black text-slate-950" 
                                 value={reAddJustification} 
                                 onChange={e => setReAddJustification(e.target.value)} 
                             />
@@ -415,6 +478,40 @@ function RouteManagementContent() {
                     )}
                 </div>
                 <DialogFooter className="p-8 bg-slate-50 border-t flex justify-end gap-4"><Button variant="ghost" className="font-black uppercase" onClick={() => setIsReAddDialogOpen(false)}>CANCELAR</Button><Button disabled={!tempSelectedClient || !reAddJustification.trim() || isSaving} onClick={handleConfirmReAdd} className="font-black px-8 h-12 shadow-xl uppercase rounded-xl">Confirmar Adición</Button></DialogFooter>
+            </DialogContent>
+        </Dialog>
+
+        <Dialog open={isAdminRemovalDialogOpen} onOpenChange={setIsAdminRemovalDialogOpen}>
+            <DialogContent className="sm:max-w-[500px] rounded-3xl border-none shadow-2xl p-0 overflow-hidden">
+                <DialogHeader className="p-8 pb-4 bg-red-50 border-b">
+                    <DialogTitle className="text-xl font-black uppercase text-red-600 flex items-center gap-2">
+                        <Trash2 className="h-6 w-6" /> Quitar Parada de Jornada
+                    </DialogTitle>
+                </DialogHeader>
+                <div className="p-8 space-y-4">
+                    <p className="text-xs font-bold text-slate-500 uppercase leading-relaxed">
+                        Como administrador, puedes eliminar una parada programada (incluso si está "En curso") si el vendedor no puede completarla.
+                    </p>
+                    <div className="space-y-2">
+                        <Label className="text-[10px] font-black uppercase text-red-600">Justificación Técnica Obligatoria</Label>
+                        <Textarea 
+                            placeholder="Ej: Cliente cerrado por feriado, vendedor reporta siniestro..." 
+                            className="h-32 border-2 border-red-100 rounded-2xl font-black text-slate-950 text-sm focus:ring-red-500/20"
+                            value={adminRemovalReason}
+                            onChange={e => setAdminRemovalReason(e.target.value)}
+                        />
+                    </div>
+                </div>
+                <DialogFooter className="p-8 bg-slate-50 border-t flex justify-end gap-3">
+                    <DialogClose asChild><Button variant="ghost" className="font-black uppercase">Cancelar</Button></DialogClose>
+                    <Button 
+                        disabled={!adminRemovalReason.trim() || isSaving} 
+                        onClick={handleConfirmAdminRemoval}
+                        className="bg-red-600 hover:bg-red-700 text-white font-black px-8 h-12 shadow-xl uppercase rounded-xl"
+                    >
+                        {isSaving ? <LoaderCircle className="animate-spin mr-2 h-4 w-4" /> : "Confirmar Eliminación"}
+                    </Button>
+                </DialogFooter>
             </DialogContent>
         </Dialog>
     </div>
