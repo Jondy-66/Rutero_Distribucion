@@ -11,7 +11,7 @@ import { Route, MapPin, LoaderCircle, Phone, AlertTriangle, ThumbsUp, Users as U
 import { updateRoute, addNotification } from '@/lib/firebase/firestore';
 import type { Client, ClientInRoute, RoutePlan } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { format, isSameDay, startOfWeek, isBefore, startOfDay } from 'date-fns';
+import { format, isSameDay, startOfWeek, isBefore, startOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/hooks/use-auth';
@@ -426,12 +426,12 @@ function RouteManagementContent() {
                                             <SelectContent>
                                                 <SelectItem value="Matriz" className="font-bold">Sede Principal (Matriz)</SelectItem>
                                                 {catalogClient.branches.map(b => (
-                                                    <SelectItem key={b.id} value={b.name} className="font-bold">{b.name}</SelectItem>
+                                                    <SelectItem key={b.id} value={b.name || b.id} className="font-bold">{b.name || `Sucursal ${b.id.slice(-4)}`}</SelectItem>
                                                 ))}
                                             </SelectContent>
                                         </Select>
                                         <p className="text-[9px] font-bold text-slate-400 italic">
-                                            {localBranch === 'Matriz' ? catalogClient.direccion : catalogClient.branches.find(b => b.name === localBranch)?.address}
+                                            {localBranch === 'Matriz' ? catalogClient.direccion : (catalogClient.branches.find(b => b.name === localBranch || b.id === localBranch)?.address)}
                                         </p>
                                     </div>
                                 )}

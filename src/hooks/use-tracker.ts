@@ -138,7 +138,7 @@ export function useTracker() {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
-    // Verificación segura de permisos (evita crash en Safari/iOS)
+    // Verificación segura de permisos con try/catch para máxima compatibilidad móvil
     if (typeof window !== 'undefined' && navigator.permissions && typeof navigator.permissions.query === 'function') {
         try {
             navigator.permissions.query({ name: 'geolocation' as any }).then((status) => {
@@ -152,10 +152,10 @@ export function useTracker() {
                     }
                 };
             }).catch(() => {
-                // Navegador no soporta query de geolocalización, se ignora silenciosamente
+                // Navegador no soporta query de geolocalización o lanza error silencioso
             });
         } catch (e) {
-            // Protección contra fallos de implementación en navegadores antiguos
+            // Protección contra fallos de implementación en navegadores antiguos (iOS/Safari)
         }
     }
 

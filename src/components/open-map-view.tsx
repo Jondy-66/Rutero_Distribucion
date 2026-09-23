@@ -63,7 +63,7 @@ export function OpenMapView({ clients }: { clients: Client[] }) {
   return (
     <div className="h-full w-full relative z-0">
       <MapContainer 
-        key="open-map-view-stable"
+        key="open-map-view-stable-container"
         center={viewState.center} 
         zoom={viewState.zoom} 
         style={{ height: '100%', width: '100%' }} 
