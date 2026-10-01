@@ -117,12 +117,23 @@ export default function NewRoutePage() {
   }, []);
 
   const filteredDialogClients = useMemo(() => {
-    const term = dialogSearchTerm.toLowerCase();
+    const term = dialogSearchTerm.toLowerCase().trim();
     return (clients || [])
-      .filter(c => c.ejecutivo === currentUser?.name)
-      .filter(c => c.nombre_cliente.toLowerCase().includes(term) || c.ruc.includes(term))
+      .filter(c => {
+          // Filtrado de seguridad por ejecutivo asignado para roles operativos
+          if (isSellerRole && currentUser?.name) {
+              return (c.ejecutivo || '').trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+          }
+          return true;
+      })
+      .filter(c => {
+          const name = (c.nombre_cliente || '').toLowerCase();
+          const comm = (c.nombre_comercial || '').toLowerCase();
+          const ruc = (c.ruc || '').toLowerCase();
+          return name.includes(term) || comm.includes(term) || ruc.includes(term);
+      })
       .filter(c => !selectedClients.some(sc => sc.ruc === c.ruc && sc.status !== 'Eliminado'));
-  }, [clients, dialogSearchTerm, selectedClients, currentUser]);
+  }, [clients, dialogSearchTerm, selectedClients, currentUser, isSellerRole]);
 
   const handleOpenAddDialog = (date: Date) => {
     if (isFormLocked) return;
@@ -385,8 +396,13 @@ export default function NewRoutePage() {
             <DialogHeader className="p-6 pb-2"><DialogTitle className="text-2xl font-black text-primary uppercase">Buscador de Clientes</DialogTitle></DialogHeader>
             <div className="p-6 space-y-4">
                 <div className="relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-slate-950 font-black" />
-                    <Input placeholder="Buscar por RUC o Nombre..." className="pl-10 h-12 border-2" value={dialogSearchTerm} onChange={(e) => setDialogSearchTerm(e.target.value)} />
+                    <Search className="absolute left-3 top-3.5 h-5 w-5 text-slate-400" />
+                    <Input 
+                        placeholder="BUSCAR POR NOMBRE O RUC..." 
+                        className="pl-12 h-12 border-2 font-black uppercase text-xs rounded-xl" 
+                        value={dialogSearchTerm} 
+                        onChange={(e) => setDialogSearchTerm(e.target.value)} 
+                    />
                 </div>
                 <ScrollArea className="h-[40vh] pr-2">
                     <div className="space-y-3">
@@ -394,11 +410,14 @@ export default function NewRoutePage() {
                             <div key={client.ruc} className={cn("flex items-center space-x-4 p-4 rounded-xl border-2 transition-all cursor-pointer", dialogSelectedClients.some(s => s.ruc === client.ruc) ? "bg-primary/5 border-primary" : "bg-slate-50 border-transparent")} onClick={() => setDialogSelectedClients(prev => prev.some(s => s.ruc === client.ruc) ? prev.filter(c => c.ruc !== client.ruc) : [...prev, client])}>
                                 <Checkbox checked={dialogSelectedClients.some(s => s.ruc === client.ruc)} className="h-5 w-5 border-primary" />
                                 <div className="flex-1">
-                                    <p className="text-sm font-black text-slate-950 uppercase">{client.nombre_comercial}</p>
-                                    <p className="text-[9px] font-black text-slate-500 mt-1">{client.ruc}</p>
+                                    <p className="text-sm font-black text-slate-950 uppercase leading-tight">{client.nombre_comercial}</p>
+                                    <p className="text-[9px] font-bold text-slate-400 mt-1 uppercase">RUC: {client.ruc}</p>
                                 </div>
                             </div>
                         ))}
+                        {filteredDialogClients.length === 0 && (
+                            <div className="py-10 text-center opacity-30 uppercase font-black text-xs tracking-widest">Sin resultados encontrados</div>
+                        )}
                     </div>
                 </ScrollArea>
             </div>
