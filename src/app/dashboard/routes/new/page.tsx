@@ -1,3 +1,4 @@
+
 'use client';
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
@@ -76,6 +77,7 @@ export default function NewRoutePage() {
     return users.filter(u => u.role === 'Supervisor' || u.role === 'Administrador');
   }, [users]);
 
+  // RESOLUCIÓN DE SUPERVISOR
   useEffect(() => {
     const sid = currentUser?.supervisorId?.trim();
     if (!sid || !isSellerRole) {
@@ -96,7 +98,20 @@ export default function NewRoutePage() {
     resolveSupervisor();
   }, [currentUser?.supervisorId, users, isSellerRole]);
 
+  // CARGA DE ESTADO PERSISTENTE (Refresco o Predicción IA)
   useEffect(() => {
+    if (!currentUser?.id || users.length === 0) return;
+    
+    // 1. Intentar cargar desde el autoguardado por refresco
+    const saved = localStorage.getItem(`newRouteDraft_${currentUser.id}`);
+    let initialState: any = null;
+    if (saved) {
+        try {
+            initialState = JSON.parse(saved);
+        } catch (e) { console.error("Error al cargar borrador:", e); }
+    }
+
+    // 2. Comprobar si venimos de una nueva predicción de IA (esto sobreescribe el borrador)
     const predictionDataStr = localStorage.getItem('predictionRoute');
     if (predictionDataStr) {
         try {
@@ -112,15 +127,62 @@ export default function NewRoutePage() {
             setIsFromPrediction(true);
             setPredictedDateStrings(dateStrings);
             localStorage.removeItem('predictionRoute');
-        } catch (e) { console.error(e); }
+            return; // Detenemos la carga del borrador si hay una predicción nueva
+        } catch (e) { console.error("Error al cargar predicción:", e); }
     }
-  }, []);
+
+    // 3. Si no hay predicción nueva, restauramos el borrador guardado
+    if (initialState) {
+        if (initialState.routeName) setRouteName(initialState.routeName);
+        if (initialState.routeDate) setRouteDate(new Date(initialState.routeDate));
+        if (initialState.selectedSupervisorId) setSelectedSupervisorId(initialState.selectedSupervisorId);
+        
+        if (initialState.selectedClients) {
+            setSelectedClients(initialState.selectedClients.map((c: any) => ({
+                ...c,
+                date: c.date ? new Date(c.date) : new Date()
+            })));
+        }
+        
+        if (initialState.stagedRoutes) {
+            setStagedRoutes(initialState.stagedRoutes.map((r: any) => ({
+                ...r,
+                date: r.date ? new Date(r.date) : new Date()
+            })));
+        }
+        
+        if (initialState.isFromPrediction) setIsFromPrediction(true);
+        if (initialState.predictedDateStrings) setPredictedDateStrings(new Set(initialState.predictedDateStrings));
+    }
+  }, [currentUser?.id, users]);
+
+  // AUTOGUARDADO REACTIVO
+  useEffect(() => {
+    if (!currentUser?.id || isSaving) return;
+    
+    const stateToSave = {
+        routeName,
+        routeDate: routeDate?.toISOString(),
+        selectedSupervisorId,
+        selectedClients: selectedClients.map(c => ({
+            ...c,
+            date: ensureDate(c.date).toISOString()
+        })),
+        stagedRoutes: stagedRoutes.map(r => ({
+            ...r,
+            date: ensureDate(r.date).toISOString()
+        })),
+        isFromPrediction,
+        predictedDateStrings: Array.from(predictedDateStrings)
+    };
+
+    localStorage.setItem(`newRouteDraft_${currentUser.id}`, JSON.stringify(stateToSave));
+  }, [routeName, routeDate, selectedSupervisorId, selectedClients, stagedRoutes, isFromPrediction, predictedDateStrings, currentUser?.id, isSaving]);
 
   const filteredDialogClients = useMemo(() => {
     const term = dialogSearchTerm.toLowerCase().trim();
     return (clients || [])
       .filter(c => {
-          // Filtrado de seguridad por ejecutivo asignado para roles operativos
           if (isSellerRole && currentUser?.name) {
               return (c.ejecutivo || '').trim().toLowerCase() === currentUser.name.trim().toLowerCase();
           }
@@ -192,7 +254,7 @@ export default function NewRoutePage() {
   const handleAddToStage = () => {
     const finalSupervisorId = selectedSupervisorId || resolvedSupervisor?.id;
     if (!routeName || !finalSupervisorId || selectedClients.length === 0) {
-      toast({ title: 'Faltan datos', variant: 'destructive' });
+      toast({ title: 'Faltan datos', description: 'Asegúrate de tener un nombre, supervisor y clientes asignados.', variant: 'destructive' });
       return;
     }
     const supervisor = users.find(u => u.id === finalSupervisorId) || resolvedSupervisor;
@@ -206,6 +268,10 @@ export default function NewRoutePage() {
         supervisorName: supervisor?.name || 'Supervisor Asignado',
         createdBy: currentUser!.id,
     }]);
+    
+    // Al añadir al stage, limpiamos el formulario principal para el siguiente
+    setRouteName('');
+    setSelectedClients([]);
   }
 
   const handleSaveAllRoutes = async (sendForApproval: boolean) => {
@@ -246,6 +312,9 @@ export default function NewRoutePage() {
                 }
             });
         }
+        
+        // Limpiamos el borrador al guardar con éxito
+        localStorage.removeItem(`newRouteDraft_${currentUser!.id}`);
         
         toast({ title: 'Rutas Guardadas', description: "Tu plan de ruta ha sido registrado correctamente." });
         await refetchData('routes');
@@ -364,7 +433,7 @@ export default function NewRoutePage() {
             </div>
           </CardContent>
            <CardFooter>
-            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase shadow-lg" disabled={activeClientsWithIndex.length === 0 || isFormLocked}>Guardar Cambios de la Ruta</Button>
+            <Button onClick={handleAddToStage} className="w-full h-12 font-black uppercase shadow-lg" disabled={activeClientsWithIndex.length === 0 || isFormLocked}>Preparar esta Ruta</Button>
           </CardFooter>
         </Card>
         
