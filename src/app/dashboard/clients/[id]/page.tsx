@@ -22,6 +22,7 @@ import { getClient, updateClient } from '@/lib/firebase/firestore';
 import type { Client, Branch } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/hooks/use-auth';
+import { cn } from '@/lib/utils';
 
 export default function EditClientPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: clientId } = use(params);
@@ -123,6 +124,20 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
                   </Select>
                 )}
               </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="status" className="font-black uppercase text-[10px] text-slate-500">Estado de la Ficha</Label>
+                <Select value={client.status || 'active'} onValueChange={(v: 'active' | 'inactive') => setClient(p => p ? ({...p, status: v}) : null)}>
+                  <SelectTrigger id="status" className={cn("h-11 font-black", (client.status || 'active') === 'inactive' && "text-destructive border-destructive/50")}>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active" className="font-bold">ACTIVO (En Cartera)</SelectItem>
+                    <SelectItem value="inactive" className="font-bold text-destructive">INACTIVO (Fuera de Ruta)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="ruc" className="font-black uppercase text-[10px] text-slate-500">RUC / Identificación</Label>
                 <Input id="ruc" value={client.ruc} onChange={handleInputChange} required className="h-11 font-mono font-bold" />
@@ -176,7 +191,10 @@ export default function EditClientPage({ params }: { params: Promise<{ id: strin
             </CardContent>
           </Card>
           
-          <Button type="submit" disabled={isSaving} className="h-14 font-black uppercase shadow-xl rounded-2xl">GUARDAR CAMBIOS</Button>
+          <Button type="submit" disabled={isSaving} className="h-14 font-black uppercase shadow-xl rounded-2xl">
+            {isSaving ? <LoaderCircle className="animate-spin mr-2" /> : null}
+            GUARDAR CAMBIOS
+          </Button>
         </div>
       </form>
     </>
