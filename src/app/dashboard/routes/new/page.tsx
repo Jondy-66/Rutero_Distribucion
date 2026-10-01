@@ -127,9 +127,9 @@ export default function NewRoutePage() {
           return true;
       })
       .filter(c => {
-          const name = (c.nombre_cliente || '').toLowerCase();
-          const comm = (c.nombre_comercial || '').toLowerCase();
-          const ruc = (c.ruc || '').toLowerCase();
+          const name = String(c.nombre_cliente || '').toLowerCase();
+          const comm = String(c.nombre_comercial || '').toLowerCase();
+          const ruc = String(c.ruc || '').toLowerCase();
           return name.includes(term) || comm.includes(term) || ruc.includes(term);
       })
       .filter(c => !selectedClients.some(sc => sc.ruc === c.ruc && sc.status !== 'Eliminado'));
